@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ErrorState, OfflineState, ThreadSkeleton } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,22 +47,29 @@ function ClientMessages() {
   const [confirm, setConfirm] = useState<null | "call" | "sms">(null);
   const qc = useQueryClient();
 
-  const { data: client } = useQuery({
-    queryKey: ["my-client-id", portalUserId],
+  const clientQ = useQuery({
+    // Its own key: ["my-client-id"] holds only the id elsewhere (Purchases, the
+    // Nutrition Update), and sharing it left this page without the call / text
+    // switches or the coach when it was opened after one of them.
+    queryKey: ["my-client-messaging", portalUserId],
     enabled: !!portalUserId,
     // A person's client row id doesn't change: don't make every open wait on this lookup.
     staleTime: 30 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("clients")
         .select(
           "id, full_name, coach_call_access_enabled, coach_sms_access_enabled, assigned_coach_id",
         )
         .eq("user_id", portalUserId!)
         .maybeSingle();
+      if (error) throw error;
       return data;
     },
   });
+  const client = clientQ.data;
+  // Waiting, offline or failed is never "Your coach hasn't set up your profile yet"
+  const clientState = queryView(clientQ as any).kind;
 
   // Viewing as the client must not show them as online in the coach's inbox.
   const viewingAsClient = useViewingAsClient();
@@ -221,7 +230,13 @@ function ClientMessages() {
           </DropdownMenu>
         )}
       </header>
-        {!client ? (
+        {!client && clientState === "loading" ? (
+          <ThreadSkeleton />
+        ) : !client && clientState === "offline" ? (
+          <div className="p-6"><OfflineState what="your messages" /></div>
+        ) : !client && clientState === "error" ? (
+          <div className="p-6"><ErrorState error={clientQ.error} what="your messages" onRetry={() => clientQ.refetch()} retrying={clientQ.isFetching} /></div>
+        ) : !client ? (
           <div className="p-6">
             <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
               Your coach hasn't set up your profile yet. Messaging will be available once they do.

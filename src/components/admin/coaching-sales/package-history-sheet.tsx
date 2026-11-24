@@ -18,7 +18,7 @@ export function PackageHistorySheet({ pkg, onClose }: { pkg: AdminPackage | null
         <SheetHeader>
           <SheetTitle>{pkg?.name} · history</SheetTitle>
         </SheetHeader>
-        {q.isLoading && <div className="mt-4 h-24 animate-pulse rounded-xl bg-muted" />}
+        {q.isLoading && <div className="mt-4 h-24 jf-skeleton rounded-xl bg-muted" />}
         {q.error && <p className="mt-4 text-[14px] text-destructive">{(q.error as Error).message}</p>}
         <ol className="mt-4 space-y-4">
           {(q.data ?? []).map((v) => (

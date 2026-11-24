@@ -289,7 +289,12 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       if (next && !post.is_mine) fireAppEvent("community_activity", post.id);
     },
     onMutate: async (next) => {
-      await qc.cancelQueries({ queryKey: ["community-feed"] });
+      // Stop a refresh that would paint over the like, but never a next page being
+      // read while they scroll (cancelling it lost the page under their thumb).
+      await qc.cancelQueries({
+        queryKey: ["community-feed"],
+        predicate: (q) => !(q.state as { fetchMeta?: { fetchMore?: unknown } | null }).fetchMeta?.fetchMore,
+      });
       const snapshot = qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] });
       const me = myCachedAuthor(qc);
       patchPost(qc, post.id, (p) => {
@@ -305,11 +310,14 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       });
       return { snapshot };
     },
-    onError: (_e, _v, ctx) => ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onError: (_e, _v, ctx) => {
+      ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data));
+      // only a failed like needs the feeds read again, to put them back as they are
+      qc.invalidateQueries({ queryKey: ["community-feed"] });
+    },
     onSettled: () => {
-      // the feed already shows the like (onMutate): marked stale, never refetched page by page under a finger
-      // that's still swiping (a double-tap used to reload every page of posts loaded so far)
-      qc.invalidateQueries({ queryKey: ["community-feed"], refetchType: "none" });
+      // A like that landed is already on every feed (patchPost above): re-reading every
+      // loaded page of every feed after each tap cost a page's worth of posts per like.
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
       qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
     },

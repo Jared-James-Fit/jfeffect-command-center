@@ -142,7 +142,7 @@ export function CompetitionProfileEditor({ clientId, as, preview = false }: { cl
     void save({ age_classes: next });
   };
 
-  if (isLoading) return <div className="h-40 animate-pulse rounded-xl bg-muted" aria-hidden />;
+  if (isLoading) return <div className="h-40 jf-skeleton rounded-xl bg-muted" aria-hidden />;
   const updated = updatedLine(profile, as);
   return (
     <div className="space-y-5" data-competition-profile>

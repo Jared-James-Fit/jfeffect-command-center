@@ -1,4 +1,6 @@
 import { guardNativeHold } from "@/lib/hold-guard";
+import { ErrorState, OfflineState, ThreadSkeleton } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { flushSync } from "react-dom";
 import { MessageEditRow, type MessageEditRowHandle } from "@/components/message-edit-row";
 import { CommunityPostChatCard, PostReplyText, postReplyCard } from "@/components/community/post-chat-card";
@@ -170,7 +172,7 @@ export function GroupMessageThread({
 
   /* ---------------- Data ---------------- */
 
-  const { data: rawMessages = [] } = useQuery({
+  const groupMessagesQ = useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: () => listGroupMessages(groupId),
     // Cached history shows instantly; re-check because realtime for this
@@ -178,6 +180,9 @@ export function GroupMessageThread({
     refetchOnMount: "always",
     refetchInterval: 300_000,
   });
+  const rawMessages = useMemo(() => groupMessagesQ.data ?? [], [groupMessagesQ.data]);
+  // A first open waits in the shape of a thread; a failed or offline one says so (never "say hi" over history that didn't load)
+  const groupMessagesState = queryView(groupMessagesQ as any).kind;
 
   const { data: rawReactions = [] } = useQuery({
     queryKey: ["group-reactions", groupId],
@@ -668,7 +673,17 @@ export function GroupMessageThread({
         onTouchEnd={onSwipeTouchEnd}
         onTouchCancel={onSwipeTouchEnd}
       >
-        {messages.length === 0 ? (
+        {messages.length === 0 && groupMessagesState === "loading" ? (
+          <ThreadSkeleton className="h-full justify-end" />
+        ) : messages.length === 0 && (groupMessagesState === "error" || groupMessagesState === "offline") ? (
+          <div className="grid h-full place-items-center px-4">
+            {groupMessagesState === "offline" ? (
+              <OfflineState what="this chat" />
+            ) : (
+              <ErrorState error={groupMessagesQ.error} what="this chat" onRetry={() => groupMessagesQ.refetch()} retrying={groupMessagesQ.isFetching} />
+            )}
+          </div>
+        ) : messages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
             No messages yet — say hi 👋
           </div>

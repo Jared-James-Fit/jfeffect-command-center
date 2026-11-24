@@ -248,7 +248,7 @@ export function ScheduleSheet({
             </SheetDescription>
           </SheetHeader>
           {isLoading ? (
-            <div className="h-24 animate-pulse rounded-xl bg-muted" />
+            <div className="h-24 jf-skeleton rounded-xl bg-muted" />
           ) : types.length === 0 ? (
             <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
               Nothing is taking online bookings yet. Turn it on for a type under Calendar → Booking.
@@ -504,7 +504,7 @@ export function BookingInviteCard({ att, mine }: { att: Partial<BookingInviteAtt
       {att.request_note && <p className="mt-2 whitespace-pre-wrap text-[13px]">{att.request_note}</p>}
       <div className="mt-2.5 border-t border-border pt-2.5">
         {isLoading ? (
-          <div className="h-9 animate-pulse rounded-lg bg-muted" />
+          <div className="h-9 jf-skeleton rounded-lg bg-muted" />
         ) : live ? (
           <div className="space-y-2">
             {!mine && booked?.session ? (

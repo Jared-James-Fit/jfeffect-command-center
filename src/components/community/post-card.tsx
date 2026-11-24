@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
+import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
@@ -50,8 +50,7 @@ import { FeedCaption } from "@/components/community/feed-caption";
 import { PostExtras } from "@/components/community/post-attach";
 import { NoteCaption, PICTURE_CAPTION_LIMITS } from "@/components/community/note-caption";
 import { PollCard } from "@/components/community/poll";
-import { PostShareSheet } from "@/components/community/post-share-sheet";
-import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { InstagramShareSheet, PostShareSheet, preloadShareSheets } from "@/components/community/lazy-sheets";
 import { PostArtImage } from "@/components/community/post-art";
 import { instagramPlan } from "@/lib/instagram-export";
 import { PostScoreChip, PostScoreRow } from "@/components/community/post-score";
@@ -1198,6 +1197,8 @@ export function ReactionBar({
   // a coach can send any post out to his own Instagram (never in View as client)
   const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;
   const [ig, setIg] = useState<boolean | null>(null);
+  // the share sheets load on their own: fetched in idle time so the first ✈️ opens at once
+  useEffect(() => preloadShareSheets(canInstagram), [canInstagram]);
   // the reactions that rise out of the heart
   const kinds = reactionKinds(post);
   const openLikes = onOpenLikes ?? (() => setListFor(post.id));
@@ -1217,6 +1218,7 @@ export function ReactionBar({
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
       {/* mounted on the first ✈️, so a feed of posts doesn't carry a sheet each */}
       {sharing !== null && (
+        <Suspense fallback={null}>
         <PostShareSheet
           post={post}
           open={sharing}
@@ -1225,8 +1227,13 @@ export function ReactionBar({
           onStory={canStory ? () => window.setTimeout(() => openStoryShare({ post }), 200) : undefined}
           onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}
         />
+        </Suspense>
       )}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+      {canInstagram && ig !== null && (
+        <Suspense fallback={null}>
+          <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />
+        </Suspense>
+      )}
     </>
   );
   const shareTap = () => setSharing(true);
@@ -1384,7 +1391,7 @@ export function PostMedia({
           />
         ) : (
           <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
-            {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+            {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
           </div>
         )}
       </FitBox>
@@ -1395,7 +1402,7 @@ export function PostMedia({
   if (leads.length) return <div className="relative w-full overflow-hidden bg-muted" style={frame}>{leads[0]}</div>;
   return (
     <div className={cn("relative w-full overflow-hidden", clipCover ? "bg-black" : "bg-muted")} style={frame} data-clip-frame={clipCover ? "" : undefined}>
-      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
     </div>
   );
 }
@@ -1553,7 +1560,7 @@ function SlideMedia({
       ) : page && !shrunk && fit === "cover" ? (
         // framed for the whole screen (9:16, screenFit): it fills it edge to edge like a clip, the words over its foot
         <div data-pinch-zoom className="absolute inset-0" data-photo-fit="cover">
-          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
         </div>
       ) : page && !shrunk && zoom ? (
         // between Crew's bar and the words: the full width, a slightly taller photo zoomed a little (photoZoomBox), never stretched;
@@ -1562,7 +1569,7 @@ function SlideMedia({
           <AmbientFill src={thumbUrl ?? src} />
           <div data-pinch-zoom className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-photo-fit="zoom">
             <div className="absolute" style={zoom}>
-              {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+              {src ? <FadeImg src={src} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
             </div>
           </div>
         </>
@@ -1571,7 +1578,7 @@ function SlideMedia({
         <>
           {page && !shrunk && <AmbientFill src={thumbUrl ?? src} />}
           <div data-pinch-zoom className="absolute inset-0" style={page ? BETWEEN_BARS : undefined}>
-            {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+            {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
           </div>
         </>
       )}
@@ -1704,7 +1711,7 @@ function FadeImg({ src, position, whole = false }: { src: string; position?: str
   }, [shown]);
   return (
     <>
-      {!loaded && <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden />}
+      {!loaded && <div className="absolute inset-0 jf-skeleton bg-muted" aria-hidden />}
       <img
         ref={ref}
         src={shown}

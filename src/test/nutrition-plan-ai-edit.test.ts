@@ -368,8 +368,10 @@ describe("wiring", () => {
   );
 
   it("the Current plan card shows each day's meals and the AI change box", () => {
-    expect(panel).toContain(
-      "<PlanAiChange clientId={clientId} plan={plan} firstName={firstName} />",
+    // the change box lives in Cleo's docked panel beside the plan (Nov 23 2026); the card opens it
+    expect(panel).toContain("<NutritionCleoEntry clientId={clientId} />");
+    expect(readFileSync("src/components/nutrition/nutrition-cleo-dock.tsx", "utf8")).toContain(
+      "<PlanAiChange clientId={clientId} plan={plan as any} firstName={firstName} seed={dock.seed} />",
     );
     expect(panel).toContain("meals: day.notes ?? null");
     // the one red button is the decision: putting a written change on the plan

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { isNative } from "@/platform";
 import { myBillingKey, useMyBilling, usePortalClientId } from "@/components/billing/use-my-billing";
+import { ErrorState, OfflineState, SlowNote, useQueryView } from "@/components/loading";
 import { MyPurchasesBody, SummaryPanel } from "@/components/billing/my-purchases-view";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases")({
@@ -26,8 +27,11 @@ function MyPurchases() {
   const search = useSearch({ from: "/_authenticated/portal/purchases" });
   const native = isNative();
   const qc = useQueryClient();
-  const { clientId, loading: clientLoading } = usePortalClientId();
-  const { view, isLoading, isError, refetch, isFetching, today } = useMyBilling(clientId);
+  const portal = usePortalClientId();
+  const { clientId } = portal;
+  const billing = useMyBilling(clientId);
+  const { view, refetch, isFetching, today } = billing;
+  const billingState = useQueryView(billing).kind;
 
   // Back from Stripe Checkout: Stripe tells the app in a few seconds; look again twice, then stop.
   useEffect(() => {
@@ -37,22 +41,25 @@ function MyPurchases() {
     return () => timers.forEach(clearTimeout);
   }, [search.checkout, native, qc, clientId]);
 
-  const loading = clientLoading || (!!clientId && isLoading);
+  // Who they are, then their billing: each can be waiting, offline or failed, and none of those is "No purchases yet".
+  const state = portal.state !== "ready" && portal.state !== "empty" ? portal.state : clientId ? billingState : "empty";
+  const loading = state === "loading";
+  const retry = () => (portal.state === "error" ? portal.retry() : refetch());
   return (
     <>
       <PageHeader title="My purchases" />
       <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-4 md:px-6 md:py-6">
         {loading ? (
           <div className="space-y-3" aria-busy="true">
-            <div className="h-36 animate-pulse rounded-2xl bg-muted" />
-            <div className="h-28 animate-pulse rounded-2xl bg-muted" />
-            <div className="h-40 animate-pulse rounded-2xl bg-muted" />
+            <div className="h-36 jf-skeleton rounded-2xl bg-muted" />
+            <div className="h-28 jf-skeleton rounded-2xl bg-muted" />
+            <div className="h-40 jf-skeleton rounded-2xl bg-muted" />
+            <SlowNote active onRetry={retry} what="your purchases" />
           </div>
-        ) : isError ? (
-          <div className="space-y-2 rounded-2xl border border-border p-5 text-center">
-            <p className="text-[14px] text-muted-foreground">Your purchases couldn't be loaded.</p>
-            <Button size="sm" variant="outline" className="h-10" disabled={isFetching} onClick={() => refetch()}>Try again</Button>
-          </div>
+        ) : state === "offline" ? (
+          <OfflineState what="your purchases" />
+        ) : state === "error" ? (
+          <ErrorState error={portal.state === "error" ? portal.error : billing.error} what="your purchases" onRetry={retry} retrying={isFetching} />
         ) : !view ? (
           <SummaryPanel s={{ outstandingCents: 0, overdueCents: 0, noDatesCents: 0, paidCents: 0, next: null, actions: [], state: "nothing", taxIncluded: false }} money={() => ""} />
         ) : (

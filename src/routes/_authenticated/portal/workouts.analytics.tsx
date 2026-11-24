@@ -15,7 +15,7 @@ import {
   type AnalyticsBlock,
   normalizeAnalyticsBlock,
 } from "@/lib/analytics/blocks";
-import { ClientAnalyticsDashboard, parseAnalyticsView } from "@/components/analytics/client-analytics-dashboard";
+import { ClientAnalyticsDashboard, viewFromSearch } from "@/components/analytics/client-analytics-dashboard";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 
 /**
@@ -99,7 +99,7 @@ function PortalAnalytics() {
             preferredUnit={preferredUnit}
             initialFilter={initialFilter}
             onFilterChange={handleFilterChange}
-            initialView={parseAnalyticsView(search.view)}
+            initialView={viewFromSearch(search.view)}
             onViewChange={(v) => navigate({ search: (prev: any) => ({ ...prev, view: v === "overview" ? "" : v }), replace: true })}
             viewAllPRsNode={
               <Link

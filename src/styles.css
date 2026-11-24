@@ -648,6 +648,20 @@ html, body { @variant max-md { overflow-x: hidden; } }
   to { opacity: 1; }
 }
 .jf-arrive { animation: jf-arrive 240ms ease-out both; }
+/* The loading system (components/loading, lib/loading/load-state.ts). A placeholder holds its
+   space from the first frame but stays invisible for LOAD_TIMING.showAfterMs, so an answer that
+   lands at once never flashes a skeleton or a spinner; a slower one fades its placeholder in. */
+.jf-load-reveal { animation: jf-arrive 180ms ease-out 200ms both; }
+/* A button's work (`<Button loading>`): spinning at once, seen only after 150ms. */
+@keyframes jf-btn-spin { to { transform: rotate(360deg); } }
+@keyframes jf-btn-spinner-in { from { opacity: 0; } to { opacity: 1; } }
+.btn-spinner { animation: jf-btn-spin 0.9s linear infinite, jf-btn-spinner-in 120ms ease-out 150ms both; }
+/* An upload or a long run whose size isn't known yet: a stripe moving along, never a made-up percent */
+@keyframes jf-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.jf-indeterminate { animation: jf-indeterminate 1.3s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
 /* Crew's camera (share-studio.tsx): it sits left of the feed, Instagram's way, so the + pushes the feed off to
    the right and the camera comes in under it, a third slower, clipped at the feed's edge (swipe-to-create.ts
    cameraUnderFeed); closing runs it backwards; switched to from the New post screen, it fades in place */
@@ -673,6 +687,9 @@ html, body { @variant max-md { overflow-x: hidden; } }
   .jf-skeleton::after { animation: none; opacity: 0; }
   .jf-arrive { animation: none; }
   .jf-recap-nudge { animation: none; }
+  .jf-load-reveal { animation: jf-arrive 1ms linear 200ms both; }
+  .btn-spinner { animation: jf-btn-spin 1.8s linear infinite, jf-btn-spinner-in 1ms linear 150ms both; }
+  .jf-indeterminate { animation-duration: 2.6s; }
 }
 
 /* Avatar shimmer — lightweight CSS-only loading state */
@@ -1745,6 +1762,13 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
    (CVD ΔE ≥ 9.2) on the light card and stepped for the dark one. */
 :root { --money-in: #2a78d6; --money-out: #eb6834; --money-profit: #1baf7a; }
 .dark { --money-in: #3987e5; --money-out: #d95926; --money-profit: #199e70; }
+
+/* Cardio planned vs done (Cardio tab, Nov 23 2026): one measure, so one blue
+   hue as an ordinal pair, validated (--ordinal: monotone, ΔL ≥ 0.06, the light
+   end ≥ 2:1 on the card): what was planned recedes, what was done stands out.
+   On dark the steps swap so "done" is still the strong one. */
+:root { --chart-planned: #86b6ef; --chart-done: #1c5cab; }
+.dark { --chart-planned: #1c5cab; --chart-done: #86b6ef; }
 
 /* Hall of Strength splits (strength-split.ts): squat, bench, deadlift, always
    these three, in this order. The same validated slots as the money charts

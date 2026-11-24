@@ -24,7 +24,7 @@ describe("optimistic set results (instant suggestion updates)", () => {
     expect(applyOptimisticSetResult(undefined, { row_id: "r1", set_index: 1 }, null)).toBeUndefined();
   });
   it("is wired before the write, with a rollback on failure", () => {
-    const src = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const src = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
     // the patch is the payload (plus a typed velocity's source, so a video's mark comes off at once)
     const patchAt = src.indexOf("applyOptimisticSetResult(old, cachePatch, existing?.id ?? null)");
     const writeAt = src.indexOf("adapter.upsertPlRowResultRaw(payload, existing.id)");
@@ -48,10 +48,10 @@ describe("smoothed bodyweight", () => {
 });
 
 describe("history feeding suggestions", () => {
-  const src = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+  const src = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
   it("uses confirmed sets only, paged past the 1,000-row cap", () => {
     expect(src).toMatch(/\.not\("completed_at", "is", null\)\s+\.order\("completed_at", \{ ascending: false \}\)/);
-    expect(src).toContain("fetchAllPages((from, to) =>");
+    expect(src).toMatch(/fetchAllPages\(\s*\(from, to\) =>/);
   });
   it("passes bodyweight into the model and recomputes when it changes", () => {
     expect(src).toContain("warmups: warmupsList, bodyweightKg,");

@@ -172,7 +172,7 @@ function MemberAgreementSheet({
 }
 
 // Pages a member can always use without being asked (billing, support, account).
-const ALLOW = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade"];
+const ALLOW = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade", "/portal/plan"];
 const DISMISS_KEY = (uid: string) => `membership-agreement:not-now:${uid}`;
 
 function uiIsClear() {

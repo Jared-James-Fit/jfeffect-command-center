@@ -180,7 +180,6 @@ describe("every screen that reads logged sets is marked stale", () => {
       "my-workouts",
       "workout-progress",
       "pl-day-completion",
-      "performance-sources",
       "pl-results",
       "pl-results-all",
       "exercise-history-cards",

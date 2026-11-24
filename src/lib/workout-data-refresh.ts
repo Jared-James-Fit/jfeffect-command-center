@@ -43,14 +43,12 @@ export const WORKOUT_DATA_KEYS: readonly string[] = [
   "planner-history",
   "client-peek-record",
   "checkin-training-wins",
-  // analytics (the performance lab, block summaries, recovery, cardio, running)
-  "performance-sources",
+  // analytics (block summaries, recovery, cardio, running)
   "training-load-days",
   "training-load-plan",
   "training-readiness",
   "training-time",
   "recovery-trends",
-  "recovery-patterns",
   "client-recovery",
   "my-client-analytics",
   "client-analytics-head",

@@ -1,11 +1,12 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold cursor-pointer transition-colors active:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold cursor-pointer transition-[color,background-color,border-color,opacity,scale] duration-150 ease-out active:scale-[0.98] active:opacity-80 motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -34,13 +35,51 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /**
+   * The button's work is running (a mutation's `isPending`, a save in flight):
+   * it's disabled at once (no second submit), says so to screen readers, and its
+   * icon gives way to a spinner that only fades in after a beat (`.btn-spinner`),
+   * so an instant answer never flashes one. The label stays, so nothing jumps.
+   */
+  loading?: boolean;
+  /** What the label says while `loading` ("Saving…"); defaults to the label itself. */
+  loadingText?: React.ReactNode;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  ({ className, variant, size, asChild = false, loading = false, loadingText, disabled, children, ...props }, ref) => {
+    const classes = cn(buttonVariants({ variant, size, className }));
+    if (asChild) {
+      return (
+        <Slot
+          className={classes}
+          ref={ref}
+          aria-busy={loading || undefined}
+          data-loading={loading ? "" : undefined}
+          {...({ disabled: disabled || loading || undefined, ...props } as React.HTMLAttributes<HTMLElement>)}
+        >
+          {children}
+        </Slot>
+      );
+    }
     return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <button
+        className={cn(classes, loading && "[&>svg:not([data-btn-spinner])]:hidden")}
+        ref={ref}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        data-loading={loading ? "" : undefined}
+        {...props}
+      >
+        {loading ? (
+          <>
+            <Loader2 data-btn-spinner aria-hidden className="btn-spinner" />
+            {size === "icon" ? <span className="sr-only">Working…</span> : loadingText ?? children}
+          </>
+        ) : (
+          children
+        )}
+      </button>
     );
   },
 );

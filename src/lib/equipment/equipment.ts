@@ -216,6 +216,25 @@ export function cardEquipment(
   return current ? { equipmentId: current.equipment_id, source: "current" } : { equipmentId: null, source: "none" };
 }
 
+/**
+ * A card's equipment and setup, as its one quiet line says it ("Rogue rack ·
+ * J-hooks 9 · Safeties 4"): what its sets were logged on, else the exercise's
+ * current pick (cardEquipment), and the setup saved for that equipment. One
+ * reading for the logger and the coach's workout quick view.
+ */
+export function cardSetupView(
+  data: EquipmentData,
+  exerciseId: string | null | undefined,
+  sets: readonly CardSet[],
+  now: number = Date.now(),
+): { equipmentId: string | null; equipment: Equipment | null; setup: ExerciseSetup | null; summary: string } {
+  const current = currentSetup(data, exerciseId);
+  const shown = cardEquipment(sets, current, now);
+  const equipment = shown.equipmentId ? data.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+  const setup = shown.source === "current" ? current : shown.equipmentId ? setupFor(data, exerciseId, shown.equipmentId) : null;
+  return { equipmentId: shown.equipmentId, equipment, setup, summary: setupSummary(setup, equipment) };
+}
+
 /** A rack or a bench never changes what the weight means; a machine, a cable or a Smith does. */
 export function comparesAcrossEquipment(kind: EquipmentKind | null | undefined): boolean {
   return kind === "rack" || kind === "bench";

@@ -143,6 +143,7 @@ import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authen
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
+import { Route as AuthenticatedPortalCardioRouteImport } from './routes/_authenticated/portal/cardio'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCommunityRouteImport } from './routes/_authenticated/portal/community'
@@ -155,6 +156,7 @@ import { Route as AuthenticatedPortalMembershipRouteImport } from './routes/_aut
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
 import { Route as AuthenticatedPortalNutritionStudioRouteImport } from './routes/_authenticated/portal/nutrition-studio'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
+import { Route as AuthenticatedPortalPlanRouteImport } from './routes/_authenticated/portal/plan'
 import { Route as AuthenticatedPortalProgressRouteImport } from './routes/_authenticated/portal/progress'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
@@ -285,6 +287,8 @@ import { Route as ApiPublicHooksNutritionRoadmapTickRouteImport } from './routes
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentProofImportRouteImport } from './routes/api/public/hooks/payment-proof-import'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
+import { Route as ApiPublicHooksPlanChangesTickRouteImport } from './routes/api/public/hooks/plan-changes-tick'
+import { Route as ApiPublicHooksPlanLifecycleCheckRouteImport } from './routes/api/public/hooks/plan-lifecycle-check'
 import { Route as ApiPublicHooksPostDecksTickRouteImport } from './routes/api/public/hooks/post-decks-tick'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
@@ -1068,6 +1072,12 @@ const AuthenticatedPortalCalendarRoute =
     path: '/calendar',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalCardioRoute =
+  AuthenticatedPortalCardioRouteImport.update({
+    id: '/cardio',
+    path: '/cardio',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalCheckInRoute =
   AuthenticatedPortalCheckInRouteImport.update({
     id: '/check-in',
@@ -1140,6 +1150,11 @@ const AuthenticatedPortalNutritionTargetsRoute =
     path: '/nutrition-targets',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalPlanRoute = AuthenticatedPortalPlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
+  getParentRoute: () => AuthenticatedPortalRouteRoute,
+} as any)
 const AuthenticatedPortalProgressRoute =
   AuthenticatedPortalProgressRouteImport.update({
     id: '/progress',
@@ -1909,6 +1924,18 @@ const ApiPublicHooksPaymentReminderSmsRoute =
     path: '/api/public/hooks/payment-reminder-sms',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksPlanChangesTickRoute =
+  ApiPublicHooksPlanChangesTickRouteImport.update({
+    id: '/api/public/hooks/plan-changes-tick',
+    path: '/api/public/hooks/plan-changes-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksPlanLifecycleCheckRoute =
+  ApiPublicHooksPlanLifecycleCheckRouteImport.update({
+    id: '/api/public/hooks/plan-lifecycle-check',
+    path: '/api/public/hooks/plan-lifecycle-check',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksPostDecksTickRoute =
   ApiPublicHooksPostDecksTickRouteImport.update({
     id: '/api/public/hooks/post-decks-tick',
@@ -2268,6 +2295,7 @@ export interface FileRoutesByFullPath {
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
+  '/portal/cardio': typeof AuthenticatedPortalCardioRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
@@ -2280,6 +2308,7 @@ export interface FileRoutesByFullPath {
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
+  '/portal/plan': typeof AuthenticatedPortalPlanRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
@@ -2394,6 +2423,8 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
+  '/api/public/hooks/plan-lifecycle-check': typeof ApiPublicHooksPlanLifecycleCheckRoute
   '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
@@ -2579,6 +2610,7 @@ export interface FileRoutesByTo {
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
+  '/portal/cardio': typeof AuthenticatedPortalCardioRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
@@ -2591,6 +2623,7 @@ export interface FileRoutesByTo {
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
+  '/portal/plan': typeof AuthenticatedPortalPlanRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
@@ -2705,6 +2738,8 @@ export interface FileRoutesByTo {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
+  '/api/public/hooks/plan-lifecycle-check': typeof ApiPublicHooksPlanLifecycleCheckRoute
   '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
@@ -2896,6 +2931,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
+  '/_authenticated/portal/cardio': typeof AuthenticatedPortalCardioRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/_authenticated/portal/community': typeof AuthenticatedPortalCommunityRoute
@@ -2908,6 +2944,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/_authenticated/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
+  '/_authenticated/portal/plan': typeof AuthenticatedPortalPlanRoute
   '/_authenticated/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
@@ -3022,6 +3059,8 @@ export interface FileRoutesById {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
+  '/api/public/hooks/plan-lifecycle-check': typeof ApiPublicHooksPlanLifecycleCheckRoute
   '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
@@ -3213,6 +3252,7 @@ export interface FileRouteTypes {
     | '/portal/announcements'
     | '/portal/appointments'
     | '/portal/calendar'
+    | '/portal/cardio'
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/community'
@@ -3225,6 +3265,7 @@ export interface FileRouteTypes {
     | '/portal/messages'
     | '/portal/nutrition-studio'
     | '/portal/nutrition-targets'
+    | '/portal/plan'
     | '/portal/progress'
     | '/portal/progress-metrics'
     | '/portal/purchases'
@@ -3339,6 +3380,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/plan-changes-tick'
+    | '/api/public/hooks/plan-lifecycle-check'
     | '/api/public/hooks/post-decks-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
@@ -3524,6 +3567,7 @@ export interface FileRouteTypes {
     | '/portal/announcements'
     | '/portal/appointments'
     | '/portal/calendar'
+    | '/portal/cardio'
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/community'
@@ -3536,6 +3580,7 @@ export interface FileRouteTypes {
     | '/portal/messages'
     | '/portal/nutrition-studio'
     | '/portal/nutrition-targets'
+    | '/portal/plan'
     | '/portal/progress'
     | '/portal/progress-metrics'
     | '/portal/purchases'
@@ -3650,6 +3695,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/plan-changes-tick'
+    | '/api/public/hooks/plan-lifecycle-check'
     | '/api/public/hooks/post-decks-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
@@ -3840,6 +3887,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
     | '/_authenticated/portal/calendar'
+    | '/_authenticated/portal/cardio'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
     | '/_authenticated/portal/community'
@@ -3852,6 +3900,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/messages'
     | '/_authenticated/portal/nutrition-studio'
     | '/_authenticated/portal/nutrition-targets'
+    | '/_authenticated/portal/plan'
     | '/_authenticated/portal/progress'
     | '/_authenticated/portal/progress-metrics'
     | '/_authenticated/portal/purchases'
@@ -3966,6 +4015,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/plan-changes-tick'
+    | '/api/public/hooks/plan-lifecycle-check'
     | '/api/public/hooks/post-decks-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
@@ -4107,6 +4158,8 @@ export interface RootRouteChildren {
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentProofImportRoute: typeof ApiPublicHooksPaymentProofImportRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
+  ApiPublicHooksPlanChangesTickRoute: typeof ApiPublicHooksPlanChangesTickRoute
+  ApiPublicHooksPlanLifecycleCheckRoute: typeof ApiPublicHooksPlanLifecycleCheckRoute
   ApiPublicHooksPostDecksTickRoute: typeof ApiPublicHooksPostDecksTickRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
@@ -5074,6 +5127,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalCalendarRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/cardio': {
+      id: '/_authenticated/portal/cardio'
+      path: '/cardio'
+      fullPath: '/portal/cardio'
+      preLoaderRoute: typeof AuthenticatedPortalCardioRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/check-in': {
       id: '/_authenticated/portal/check-in'
       path: '/check-in'
@@ -5156,6 +5216,13 @@ declare module '@tanstack/react-router' {
       path: '/nutrition-targets'
       fullPath: '/portal/nutrition-targets'
       preLoaderRoute: typeof AuthenticatedPortalNutritionTargetsRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/plan': {
+      id: '/_authenticated/portal/plan'
+      path: '/plan'
+      fullPath: '/portal/plan'
+      preLoaderRoute: typeof AuthenticatedPortalPlanRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/progress': {
@@ -6068,6 +6135,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPaymentReminderSmsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/plan-changes-tick': {
+      id: '/api/public/hooks/plan-changes-tick'
+      path: '/api/public/hooks/plan-changes-tick'
+      fullPath: '/api/public/hooks/plan-changes-tick'
+      preLoaderRoute: typeof ApiPublicHooksPlanChangesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/plan-lifecycle-check': {
+      id: '/api/public/hooks/plan-lifecycle-check'
+      path: '/api/public/hooks/plan-lifecycle-check'
+      fullPath: '/api/public/hooks/plan-lifecycle-check'
+      preLoaderRoute: typeof ApiPublicHooksPlanLifecycleCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/post-decks-tick': {
       id: '/api/public/hooks/post-decks-tick'
       path: '/api/public/hooks/post-decks-tick'
@@ -6851,6 +6932,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAnnouncementsRoute: typeof AuthenticatedPortalAnnouncementsRoute
   AuthenticatedPortalAppointmentsRoute: typeof AuthenticatedPortalAppointmentsRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
+  AuthenticatedPortalCardioRoute: typeof AuthenticatedPortalCardioRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRoute
   AuthenticatedPortalCommunityRoute: typeof AuthenticatedPortalCommunityRoute
@@ -6863,6 +6945,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
   AuthenticatedPortalNutritionStudioRoute: typeof AuthenticatedPortalNutritionStudioRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
+  AuthenticatedPortalPlanRoute: typeof AuthenticatedPortalPlanRoute
   AuthenticatedPortalProgressRoute: typeof AuthenticatedPortalProgressRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
@@ -6900,6 +6983,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalAnnouncementsRoute,
     AuthenticatedPortalAppointmentsRoute: AuthenticatedPortalAppointmentsRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
+    AuthenticatedPortalCardioRoute: AuthenticatedPortalCardioRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute: AuthenticatedPortalCheckInsRoute,
     AuthenticatedPortalCommunityRoute: AuthenticatedPortalCommunityRoute,
@@ -6914,6 +6998,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalNutritionStudioRoute,
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
+    AuthenticatedPortalPlanRoute: AuthenticatedPortalPlanRoute,
     AuthenticatedPortalProgressRoute: AuthenticatedPortalProgressRoute,
     AuthenticatedPortalProgressMetricsRoute:
       AuthenticatedPortalProgressMetricsRoute,
@@ -7092,6 +7177,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentProofImportRoute: ApiPublicHooksPaymentProofImportRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
+  ApiPublicHooksPlanChangesTickRoute: ApiPublicHooksPlanChangesTickRoute,
+  ApiPublicHooksPlanLifecycleCheckRoute: ApiPublicHooksPlanLifecycleCheckRoute,
   ApiPublicHooksPostDecksTickRoute: ApiPublicHooksPostDecksTickRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,

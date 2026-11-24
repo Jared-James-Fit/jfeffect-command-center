@@ -112,6 +112,8 @@ export const decisionSchema = z.object({
 export type StrategyDecision = z.infer<typeof decisionSchema>;
 
 export const strategySchema = z.object({
+  /** What the coach would call the program ("Westerns Prep"); read by program-name.ts, never trusted as is. */
+  program_name: clip(120).optional(),
   athlete_read: clipReq(4000),
   previous_program: z.object({ intent: clip(1500), outcome: clip(2500) }),
   keep: list(item, 20),

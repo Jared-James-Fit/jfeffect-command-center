@@ -52,10 +52,10 @@ export type LiftHistory = { name: string; pr: LiftHistoryPoint | null; points: L
 
 const METRICS: { key: Metric; label: string }[] = [
   { key: "est", label: "Est. max" },
-  { key: "top", label: "Top set" },
-  { key: "volume", label: "Volume" },
+  { key: "top", label: "Best set" },
+  { key: "volume", label: "Total weight" },
   { key: "effort", label: "Effort" },
-  { key: "velocity", label: "Velocity" },
+  { key: "velocity", label: "Bar speed" },
 ];
 
 const SESSIONS_SHOWN = 3;
@@ -74,6 +74,7 @@ export function LiftProgressCard({
   conv,
   onOpenSet,
   single = false,
+  compact: bare = false,
 }: {
   history: LiftHistory[];
   displayUnit: Unit;
@@ -85,6 +86,11 @@ export function LiftProgressCard({
    * no session list (the sheet lists every day right under it).
    */
   single?: boolean;
+  /**
+   * Inside the analytics page's own card: no card of its own, and no rep
+   * maxes or session list (Records and the exercise's History have those).
+   */
+  compact?: boolean;
 }) {
   const [selectedEx, setSelectedEx] = useState("");
   // null = this lift's default: the estimated max for a squat / bench / deadlift
@@ -295,7 +301,7 @@ export function LiftProgressCard({
     .slice(0, showAllSessions ? undefined : SESSIONS_SHOWN);
 
   return (
-    <Card className="space-y-4 border-border/80 bg-card p-4" data-lift-progress={single ? "single" : undefined}>
+    <Card className={bare ? "space-y-4 border-0 bg-transparent p-0 shadow-none" : "space-y-4 border-border/80 bg-card p-4"} data-lift-progress={single ? "single" : bare ? "compact" : undefined}>
       {!single && (
       <div className="space-y-2">
         <SearchableSelect
@@ -342,7 +348,7 @@ export function LiftProgressCard({
             <span className="min-w-0 truncate" data-lift-bests>
               {mainLift && bestEst && estOf(bestEst) != null && (
                 <>
-                  Best est. max{" "}
+                  Best estimated max{" "}
                   <span className="font-bold text-foreground">
                     ~{fmtEst(estOf(bestEst)!)} {displayUnit}
                   </span>
@@ -358,7 +364,7 @@ export function LiftProgressCard({
               )}
             </span>
             <span className="shrink-0 font-semibold">
-              {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
+              {sessions.length} {sessions.length === 1 ? "workout" : "workouts"}
             </span>
           </div>
 
@@ -503,14 +509,14 @@ export function LiftProgressCard({
             </div>
           ) : (
             <p className="rounded-lg border border-dashed border-border/70 px-4 py-3 text-center text-xs text-muted-foreground">
-              Log this lift in another session to see a trend.
+              Log this exercise in another workout to see how it's changing.
             </p>
           )}
           {activeMetric === "est" && sessions.length > 1 && (
             <p className="-mt-2 text-[11px] leading-snug text-muted-foreground" data-est-note>
               {comparable
-                ? `Estimated from your hard sets (RPE 7+, up to 10 reps)${leftOut ? `. ${leftOut} lighter ${leftOut === 1 ? "session isn't" : "sessions aren't"} plotted` : ""}.`
-                : "Estimated from every set, so read it as a floor. Log RPE on your top sets for a truer read."}
+                ? `Estimated max: the most you could likely lift once, worked out from your hard sets (RPE 7 or harder, 10 reps or fewer)${leftOut ? `. ${leftOut} easier ${leftOut === 1 ? "workout isn't" : "workouts aren't"} shown` : ""}.`
+                : "Estimated from every set, so read it as a floor: your real max is probably higher. Log RPE (how hard a set felt, out of 10) on your top sets for a truer read."}
             </p>
           )}
 
@@ -522,9 +528,9 @@ export function LiftProgressCard({
                 sub={
                   trend.kind === "unclear"
                     ? trend.reason === "few"
-                      ? "Needs 4+ hard sessions"
-                      : "Needs 3+ weeks"
-                    : `${fmtEst(trend.first)} → ${fmtEst(trend.last)} ${displayUnit} since ${format(parseISO(trend.firstDate), "MMM d")}${latestLighter ? " · latest session lighter" : ""}`
+                      ? "Needs 4 or more hard workouts"
+                      : "Needs 3 or more weeks"
+                    : `Estimated max ${fmtEst(trend.first)} → ${fmtEst(trend.last)} ${displayUnit} since ${format(parseISO(trend.firstDate), "MMM d")}${latestLighter ? " · latest session lighter" : ""}`
                 }
                 tone={trend.kind === "up" ? "up" : trend.kind === "down" ? "down" : undefined}
               />
@@ -538,30 +544,30 @@ export function LiftProgressCard({
               />
             )}
             <Tile
-              label="Sets · Reps"
+              label="Sets and reps"
               value={`${totals.sets} · ${totals.reps}`}
-              sub={`${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
+              sub={`over ${sessions.length} ${sessions.length === 1 ? "workout" : "workouts"}`}
             />
             <Tile
-              label="Volume"
+              label="Total weight lifted"
               value={`${Math.round(conv(totals.tonnage)).toLocaleString()} ${displayUnit}`}
               sub={
                 sessions.length
-                  ? `≈${Math.round(conv(totals.tonnage / sessions.length)).toLocaleString()} per session`
+                  ? `weight × reps · about ${Math.round(conv(totals.tonnage / sessions.length)).toLocaleString()} a workout`
                   : undefined
               }
             />
             <Tile
-              label="Avg effort"
+              label="Average effort"
               value={totals.avgEffort == null ? "—" : fmtNum(totals.avgEffort)}
-              sub={totals.avgEffort == null ? "Not logged yet" : "All logged sets"}
+              sub={totals.avgEffort == null ? "No RPE logged yet" : "RPE, out of 10"}
             />
           </div>
 
-          {maxes.length > 0 && (
+          {maxes.length > 0 && !bare && (
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
-                Rep maxes · heaviest lifted
+                Heaviest weight for each rep count
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {maxes.map((m) => (
@@ -570,7 +576,9 @@ export function LiftProgressCard({
                     className="inline-flex items-baseline gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5"
                     title={format(new Date(m.date), "MMM d, yyyy")}
                   >
-                    <span className="text-[11px] font-bold text-muted-foreground">{m.reps}RM</span>
+                    <span className="text-[11px] font-bold text-muted-foreground">
+                      {m.reps} rep{m.reps === 1 ? "" : "s"}
+                    </span>
                     <span className="text-sm font-bold tabular-nums">{fmtLoad(m.load)}</span>
                   </span>
                 ))}
@@ -600,8 +608,8 @@ export function LiftProgressCard({
                 {format(new Date(effortChange.from.date), "MMM d")}.{" "}
                 <span className="text-muted-foreground">
                   {effortChange.delta < 0
-                    ? "Same weight, less effort: you're getting stronger."
-                    : "Same weight felt harder. Check sleep, stress and fatigue."}
+                    ? "The same weight felt easier: a sign you're getting stronger."
+                    : "The same weight felt harder. Sleep, stress and tiredness can all do this."}
                 </span>
               </p>
             </div>
@@ -609,10 +617,10 @@ export function LiftProgressCard({
 
           {velocityInsight}
 
-          {!single && (
+          {!single && !bare && (
           <div>
             <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
-              Sessions
+              Workouts
             </div>
             <ul className="space-y-1.5" data-testid="lift-session-log">
               {visibleSessions.map((s) => {
@@ -672,7 +680,7 @@ export function LiftProgressCard({
                           >
                             {delta == null || Math.abs(delta) < 0.05
                               ? "est. max"
-                              : `${delta > 0 ? "▲" : "▼"} ${fmtNum(Math.abs(delta))}`}
+                              : `${delta > 0 ? "up" : "down"} ${fmtNum(Math.abs(delta))}`}
                           </span>
                         </span>
                         <ChevronDown
@@ -725,7 +733,7 @@ export function LiftProgressCard({
                 onClick={() => setShowAllSessions((v) => !v)}
                 className="mt-1.5 h-10 w-full rounded-lg text-xs font-semibold text-foreground hover:bg-secondary"
               >
-                {showAllSessions ? "Show fewer" : `Show all ${sessions.length} sessions`}
+                {showAllSessions ? "Show fewer" : `Show all ${sessions.length} workouts`}
               </button>
             )}
           </div>
@@ -778,15 +786,15 @@ function SessionReadout({
           : fmtNum(v);
   const unit =
     metric === "est"
-      ? `${displayUnit} est. max`
+      ? `${displayUnit} estimated max`
       : metric === "top"
         ? `${displayUnit} × ${session.heaviest.reps}${heaviestEffort ? ` · ${fmtEffort(heaviestEffort)}` : ""}`
         : metric === "volume"
-          ? `${displayUnit} moved`
+          ? `${displayUnit} lifted (weight × reps)`
           : metric === "effort"
             ? v == null
-              ? "RPE not logged"
-              : "avg RPE"
+              ? "no effort rating"
+              : "average RPE, out of 10"
             : "m/s";
   // Effort going up isn't "better", so it stays neutral.
   const good = metric === "effort" ? null : delta == null ? null : delta > 0;
@@ -823,8 +831,9 @@ function SessionReadout({
               good == null ? "text-muted-foreground" : good ? "text-emerald-600 dark:text-emerald-400" : "text-foreground",
             )}
           >
-            {delta! > 0 ? "▲" : "▼"}{" "}
-            {metric === "velocity" ? Math.abs(delta!).toFixed(2) : fmtNum(Math.abs(delta!))} vs last
+            {delta! > 0 ? "up" : "down"}{" "}
+            {metric === "velocity" ? Math.abs(delta!).toFixed(2) : fmtNum(Math.abs(delta!))} from the
+            workout before
           </span>
         )}
         {isPr && metric === "est" && (
@@ -858,7 +867,7 @@ function Tile({
   tone?: "up" | "down";
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-background px-3 py-2.5">
+    <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2.5">
       <div className="truncate text-[12px] font-medium text-muted-foreground">
         {label}
       </div>
@@ -871,7 +880,7 @@ function Tile({
       >
         {value}
       </div>
-      {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
+      {sub && <div className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -993,29 +1002,29 @@ function useVelocityInsight(
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[12px] font-medium text-muted-foreground">
-            Velocity readiness
+            Bar speed compared with usual
           </div>
           <div className="mt-1 text-sm font-bold text-foreground">
             {insight.signal === "faster"
-              ? "Moving faster than your baseline"
+              ? "Faster than usual"
               : insight.signal === "slower"
-                ? "Moving slower than your baseline"
+                ? "Slower than usual"
                 : insight.signal === "normal"
-                  ? "Right on your normal baseline"
-                  : "Building your baseline"}
+                  ? "About your usual speed"
+                  : "Still learning your usual speed"}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             Latest: {insight.latest.velocity.toFixed(2)} m/s at {fmtNum(insight.latest.load)}{" "}
             {displayUnit} × {insight.latest.reps}
             {insight.deltaPct != null && insight.baseline != null
               ? ` · ${insight.deltaPct >= 0 ? "+" : ""}${insight.deltaPct.toFixed(1)}% vs ${insight.comparableCount} matched prior sets`
-              : " · log this same load/reps a few times for a strength-readiness comparison"}
+              : " · log the same weight and reps a few times to compare"}
           </div>
         </div>
         {insight.predicted1rm != null && (
           <div className="shrink-0 text-right">
             <div className="text-[12px] font-medium text-muted-foreground">
-              Velocity 1RM estimate
+              Max estimate from bar speed
             </div>
             <div className="text-lg font-bold text-foreground">
               {fmtNum(insight.predicted1rm)} {displayUnit}
@@ -1028,15 +1037,13 @@ function useVelocityInsight(
       </div>
       {insight.predicted1rm == null && insight.family && (
         <div className="mt-2 text-[11px] text-muted-foreground">
-          1RM profile needs at least 5 velocity-tracked singles across 3+ loads with a clean
-          load-velocity relationship. Current profile: {insight.singlesCount} singles ·{" "}
-          {insight.distinctLoads} load levels.
+          A max estimate from bar speed needs at least 5 tracked singles at 3 or more different
+          weights. So far: {insight.singlesCount} singles at {insight.distinctLoads} weights.
         </div>
       )}
       <div className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-        Use the same velocity device and setup each time. Mean concentric velocity is most useful
-        here as an athlete-vs-self signal at matched load/reps; it does not replace RPE or
-        competition-specific judgment.
+        Bar speed is most useful compared with yourself at the same weight and reps, measured the
+        same way each time. It doesn't replace how hard a set felt (RPE).
       </div>
     </div>
   );

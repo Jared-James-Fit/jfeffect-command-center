@@ -1,459 +1,1088 @@
 /**
- * The muscle map: the app's own anatomical drawing (the pain map's, front and
- * back side by side) with each muscle shaded by how much training it got in
- * the period, relative to the most-trained muscle. A tap (or hover) on a
- * muscle, or a row in the ranked list, opens it: sets a week, how many of
- * them aimed at it, days a week, its share, the exercises behind it and its
- * last 12 weeks. The counting rule is on screen and the athlete picks how
- * secondary muscles count. Exposure, never a measure of growth.
+ * The muscle training map (muscle-read.ts): which muscles got the most
+ * training, on a 3D body built from the app's own anatomical drawing
+ * (body3d/), turned with a finger, pinched or scrolled to zoom, a tap on a
+ * muscle for its sets. Three readings: Most trained (five levels, relative
+ * to the most-trained muscle: training, never size, strength or growth),
+ * Your goal and Progress. A 2D front-and-back drawing stands in where WebGL2
+ * isn't there, and the List is the same data as bars. How a supporting
+ * muscle counts (half a set by default) is a small settings menu, remembered
+ * on the device.
  */
-import { memo, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Check, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { InfoTip } from "@/components/analytics/info-tip";
-import { Figure, LabHeader, Seg } from "@/components/analytics/lab-ui";
-import { atlasView } from "@/lib/pain/anatomy/atlas";
-import { VIEW_W } from "@/lib/pain/anatomy/geometry";
-import {
-  SECONDARY_RULES,
-  siteMuscles,
-  type ExposureRead,
-  type MuscleExposure,
-  type SecondaryRule,
-} from "@/lib/analytics/muscle-exposure";
 import type { FineMuscle } from "@/lib/analytics/training-load";
+import {
+  DEFAULT_SUPPORT_CREDIT,
+  MUSCLE_LEVELS,
+  SUPPORT_CREDITS,
+  fmtSets,
+  isSupportCredit,
+  periodChangeWords,
+  type DevStatus,
+  type FitStatus,
+  type MuscleLevel,
+  type MuscleRead,
+  type MuscleReadRow,
+  type SupportCredit,
+} from "@/lib/analytics/muscle-read";
+import { atlasView, type ViewKey } from "@/lib/pain/anatomy/atlas";
+import { muscleOfSite } from "@/lib/body3d/muscle-sites";
+import { BODY_THEME, muscleAt, paintView } from "@/lib/body3d/paint";
+import { Segmented } from "@/components/analytics/viz";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
-const UNMAPPED = "color-mix(in oklch, var(--muted-foreground) 16%, var(--card))";
-const heat = (level: number) => (level <= 0 ? UNMAPPED : `var(--heat-${level})`);
-// the body from the head to the feet (the drawing's 920-tall frame, trimmed)
-const VIEWBOX = `0 14 ${VIEW_W} 900`;
+export type MuscleMode = "distribution" | "fit" | "development";
+export const MUSCLE_MODES: Array<{ key: MuscleMode; label: string }> = [
+  { key: "distribution", label: "Most trained" },
+  { key: "fit", label: "Your goal" },
+  { key: "development", label: "Progress" },
+];
 
-const Body = memo(function Body({
-  view,
-  levels,
-  picked,
-  onPick,
-  onHover,
-}: {
-  view: "front" | "back";
-  levels: Map<FineMuscle, number>;
-  picked: FineMuscle | null;
-  onPick: (m: FineMuscle) => void;
-  onHover: (m: FineMuscle | null) => void;
-}) {
-  const v = atlasView(view);
-  const map = useMemo(() => siteMuscles(view), [view]);
-  const muscles = v.parts.filter((p) => !p.deep && p.kind === "muscle");
-  return (
-    <svg
-      viewBox={VIEWBOX}
-      className="h-auto w-full"
-      role="img"
-      aria-label={`${view === "front" ? "Front" : "Back"} of the body, muscles shaded by training`}
-      data-muscle-body={view}
-    >
-      <path d={v.silhouette} fill="var(--muted)" stroke="var(--border)" strokeWidth={1.5} />
-      <path d={v.head} fill="var(--muted)" stroke="var(--border)" strokeWidth={1.5} />
-      {muscles.map((p) => {
-        const m = p.site ? (map.get(p.site) ?? null) : null;
-        const level = m ? (levels.get(m) ?? 0) : -1;
-        const on = !!m && picked === m;
-        return (
-          <path
-            key={p.id}
-            d={p.d}
-            fill={m ? heat(level) : UNMAPPED}
-            stroke={on ? "var(--foreground)" : "var(--card)"}
-            strokeWidth={on ? 3 : 1.2}
-            strokeLinejoin="round"
-            className={cn(
-              m && "cursor-pointer transition-[fill,opacity] duration-300",
-              picked && m !== picked && "opacity-70",
-            )}
-            data-muscle-part={m ?? undefined}
-            onClick={m ? () => onPick(m) : undefined}
-            onPointerEnter={(e) => {
-              if (m && e.pointerType === "mouse") onHover(m);
-            }}
-            onPointerLeave={(e) => {
-              if (e.pointerType === "mouse") onHover(null);
-            }}
-          />
-        );
-      })}
-    </svg>
+// The body is a 3D asset: its colours are concrete (light and dark), never
+// resolved from CSS at draw time. Levels 1–4 are one blue, lighter to darker
+// in light mode and darker to lighter in dark, so "more" always stands out.
+const PALETTE = {
+  light: {
+    levels: ["#b7cdee", "#7da6e2", "#3f7cd0", "#1c4c9f"],
+    supported: "#1baf7a",
+    look: "#e3a034",
+    gap: "#c25f22",
+    more: "#3f7cd0",
+    steady: "#8b93a1",
+  },
+  dark: {
+    levels: ["#3d5679", "#406fae", "#5b92e3", "#a5c8fb"],
+    supported: "#199e70",
+    look: "#d9962e",
+    gap: "#c96a2c",
+    more: "#5b92e3",
+    steady: "#6b7280",
+  },
+} as const;
+
+const FIT_WORD: Record<FitStatus, string> = {
+  supported: "On track for your goal",
+  look: "Lighter than your other main muscles",
+  gap: "Almost no work for it yet",
+  more: "Much more than your other muscles",
+  unknown: "Not enough training to tell yet",
+};
+const FIT_SHORT: Record<FitStatus, string> = {
+  supported: "On track",
+  look: "Lighter",
+  gap: "Almost none",
+  more: "Much more",
+  unknown: "Too early",
+};
+const DEV_WORD: Record<DevStatus, string> = {
+  strength: "Its lifts are improving",
+  opportunity: "Worth a look",
+  steady: "No clear signal",
+  unknown: "Not enough training to tell yet",
+};
+const DEV_SHORT: Record<DevStatus, string> = {
+  strength: "Improving",
+  opportunity: "Worth a look",
+  steady: "No signal",
+  unknown: "Too early",
+};
+const ROLE_WORD = {
+  prime: "A main muscle for your goal",
+  support: "A supporting muscle for your goal",
+  optional: "Optional for your goal",
+} as const;
+
+/** What each reading means, said once under its legend. */
+export function modeMeans(mode: MuscleMode, reference: number): string {
+  if (mode === "distribution")
+    return "Colours compare your muscles with each other by the sets they got. They show training, not muscle size, strength or growth.";
+  if (mode === "fit")
+    return `Each muscle against what your goal needs and what your other main muscles get${reference > 0 ? ` (about ${fmtSets(reference)} sets a week)` : ""}. Fewer sets never means a muscle is weak.`;
+  return "Shown only when two things agree: how the lifts that use a muscle are going and how much work it gets. Logs can't measure muscle growth.";
+}
+
+const CREDIT_KEY = "jf-muscle-support-credit";
+/** How a supporting muscle counts, remembered on this device (half a set until changed). */
+export function useSupportCredit(): [SupportCredit, (c: SupportCredit) => void] {
+  const [credit, setCredit] = useState<SupportCredit>(DEFAULT_SUPPORT_CREDIT);
+  useEffect(() => {
+    try {
+      const v = Number(window.localStorage.getItem(CREDIT_KEY));
+      if (window.localStorage.getItem(CREDIT_KEY) != null && isSupportCredit(v)) setCredit(v);
+    } catch {
+      /* private mode: the default */
+    }
+  }, []);
+  const set = useCallback((c: SupportCredit) => {
+    setCredit(c);
+    try {
+      if (c === DEFAULT_SUPPORT_CREDIT) window.localStorage.removeItem(CREDIT_KEY);
+      else window.localStorage.setItem(CREDIT_KEY, String(c));
+    } catch {
+      /* not remembered */
+    }
+  }, []);
+  return [credit, set];
+}
+
+function useDark() {
+  const [dark, setDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
-});
+  useEffect(() => {
+    const el = document.documentElement;
+    const mo = new MutationObserver(() => setDark(el.classList.contains("dark")));
+    mo.observe(el, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+  return dark;
+}
 
-function Bars({ values, label }: { values: Array<{ week: string; sets: number }>; label: string }) {
-  const max = Math.max(1, ...values.map((v) => v.sets));
+export function levelColor(level: MuscleLevel, dark: boolean): string | null {
+  return level > 0 ? PALETTE[dark ? "dark" : "light"].levels[level - 1] : null;
+}
+
+export function muscleColor(
+  row: MuscleReadRow | undefined,
+  mode: MuscleMode,
+  dark: boolean,
+): string | null {
+  if (!row) return null;
+  const p = PALETTE[dark ? "dark" : "light"];
+  if (mode === "distribution") return levelColor(row.level, dark);
+  if (mode === "fit") {
+    const s = row.fit.status;
+    return s === "unknown"
+      ? null
+      : s === "supported"
+        ? row.perWeek > 0
+          ? p.supported
+          : null
+        : p[s];
+  }
+  const s = row.dev.status;
+  return s === "strength"
+    ? p.supported
+    : s === "opportunity"
+      ? p.look
+      : s === "steady"
+        ? p.steady
+        : null;
+}
+
+export function MuscleMap({
+  read,
+  coached,
+  credit = DEFAULT_SUPPORT_CREDIT,
+  onCredit,
+}: {
+  read: MuscleRead;
+  coached: boolean;
+  credit?: SupportCredit;
+  onCredit?: (c: SupportCredit) => void;
+}) {
+  const dark = useDark();
+  const phone = useIsMobile();
+  const [mode, setMode] = useState<MuscleMode>("distribution");
+  const [display, setDisplay] = useState<"body" | "list">("body");
+  const rows = useMemo(() => new Map(read.rows.map((r) => [r.muscle, r])), [read]);
+  // open on what matters for the reading (a computer, where the detail sits beside the body)
+  const firstFlag = useMemo(() => {
+    if (mode === "fit")
+      return (
+        read.rows.find((r) => r.fit.status === "gap")?.muscle ??
+        read.rows.find((r) => r.fit.status === "look")?.muscle ??
+        null
+      );
+    if (mode === "development")
+      return (
+        read.rows.find((r) => r.dev.status === "opportunity")?.muscle ??
+        read.rows.find((r) => r.dev.status === "strength")?.muscle ??
+        null
+      );
+    return null;
+  }, [read, mode]);
+  const [picked, setPicked] = useState<FineMuscle | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => {
+    if (!phone) setPicked(firstFlag);
+  }, [firstFlag, phone]);
+  const colorOf = useCallback(
+    (m: FineMuscle) => muscleColor(rows.get(m), mode, dark),
+    [rows, mode, dark],
+  );
+  const pickedRow = picked ? rows.get(picked) : undefined;
+  // a phone opens a tapped muscle in a sheet; a computer shows it beside the body
+  const pickFromBody = (m: FineMuscle | null) => {
+    setPicked(m);
+    if (phone && m) setSheetOpen(true);
+  };
+
+  return (
+    <div data-muscle-map data-muscle-mode={mode}>
+      <div className="flex items-center gap-2">
+        <Segmented
+          value={mode}
+          onChange={setMode}
+          options={MUSCLE_MODES}
+          label="What the colours show"
+          size="sm"
+          className="flex-1"
+        />
+        {onCredit && <MapSettings credit={credit} onCredit={onCredit} phone={phone} />}
+      </div>
+      <ModeLegend mode={mode} dark={dark} />
+      <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground" data-muscle-means>
+        {modeMeans(mode, read.reference)}
+      </p>
+      {credit !== DEFAULT_SUPPORT_CREDIT && onCredit && (
+        <p className="mt-1 text-[12px] text-muted-foreground" data-muscle-credit-note>
+          Supporting muscles count as{" "}
+          {credit === 1 ? "a full set" : "nothing"} here.{" "}
+          <button
+            type="button"
+            onClick={() => onCredit(DEFAULT_SUPPORT_CREDIT)}
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            Back to half a set
+          </button>
+        </p>
+      )}
+      {display === "body" ? (
+        <div className="mt-2 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start">
+          <BodyView
+            colorOf={colorOf}
+            picked={picked}
+            onPick={pickFromBody}
+            dark={dark}
+            onList={() => setDisplay("list")}
+          />
+          {phone ? (
+            <p className="-mt-2 text-center text-[12px] text-muted-foreground" data-muscle-detail-empty>
+              {read.enoughData || mode === "distribution"
+                ? "Tap a muscle to see its sets. Drag to turn the body."
+                : "There isn't enough training in this period to tell yet. Pick a longer period above."}
+            </p>
+          ) : (
+            <MuscleDetail
+              row={pickedRow}
+              mode={mode}
+              coached={coached}
+              credit={credit}
+              enough={read.enoughData}
+              onClear={() => setPicked(null)}
+            />
+          )}
+        </div>
+      ) : (
+        <>
+          <MuscleList
+            read={read}
+            mode={mode}
+            dark={dark}
+            picked={picked}
+            onPick={setPicked}
+            coached={coached}
+            credit={credit}
+          />
+          <button
+            type="button"
+            onClick={() => setDisplay("body")}
+            className="mt-2 inline-flex min-h-10 items-center text-[13px] font-medium text-foreground"
+            data-muscle-show-body
+          >
+            Show the body
+          </button>
+        </>
+      )}
+      {phone && display === "body" && (
+        <Sheet open={sheetOpen && !!pickedRow} onOpenChange={setSheetOpen}>
+          <SheetContent
+            side="bottom"
+            swipeToClose
+            hideCloseButton
+            className="max-h-[82dvh] gap-0 overflow-y-auto rounded-t-[22px] p-0 pb-[max(env(safe-area-inset-bottom),1rem)]"
+            data-muscle-sheet
+          >
+            <span
+              aria-hidden
+              className="mx-auto mt-2.5 block h-1 w-10 rounded-full bg-muted-foreground/30"
+            />
+            {pickedRow && (
+              <>
+                <SheetTitle className="sr-only">{pickedRow.muscle}</SheetTitle>
+                <SheetDescription className="sr-only">
+                  The sets behind {pickedRow.muscle.toLowerCase()} this period.
+                </SheetDescription>
+                <MuscleDetail
+                  row={pickedRow}
+                  mode={mode}
+                  coached={coached}
+                  credit={credit}
+                  enough={read.enoughData}
+                  onClear={() => setSheetOpen(false)}
+                  bare
+                />
+              </>
+            )}
+          </SheetContent>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+/** The supporting-muscle setting: a small popover on a computer, a bottom sheet on a phone. */
+function MapSettings({
+  credit,
+  onCredit,
+  phone,
+}: {
+  credit: SupportCredit;
+  onCredit: (c: SupportCredit) => void;
+  phone: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const trigger = (
+    <button
+      type="button"
+      aria-label="Map settings: how supporting muscles are counted"
+      className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
+      data-muscle-settings
+      onClick={phone ? () => setOpen(true) : undefined}
+    >
+      <SlidersHorizontal className="h-4 w-4" />
+      {credit !== DEFAULT_SUPPORT_CREDIT && (
+        <span aria-hidden className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-foreground" />
+      )}
+    </button>
+  );
+  const body = (
+    <CreditChoices
+      credit={credit}
+      onPick={(c) => {
+        onCredit(c);
+        setOpen(false);
+      }}
+    />
+  );
+  if (phone)
+    return (
+      <>
+        {trigger}
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent
+            side="bottom"
+            swipeToClose
+            hideCloseButton
+            className="gap-0 rounded-t-[22px] px-5 pb-[max(env(safe-area-inset-bottom),1rem)] pt-0"
+            data-muscle-settings-sheet
+          >
+            <span
+              aria-hidden
+              className="mx-auto mt-2.5 block h-1 w-10 rounded-full bg-muted-foreground/30"
+            />
+            <SheetTitle className="mt-4 text-[17px] font-semibold">
+              How supporting muscles are counted
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Choose how a set counts for a muscle the exercise only helps.
+            </SheetDescription>
+            {body}
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-80 rounded-xl p-4" data-muscle-settings-popover>
+        <div className="text-[14px] font-semibold text-foreground">
+          How supporting muscles are counted
+        </div>
+        {body}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function CreditChoices({
+  credit,
+  onPick,
+}: {
+  credit: SupportCredit;
+  onPick: (c: SupportCredit) => void;
+}) {
+  return (
+    <div>
+      <p className="mt-2 text-[14px] leading-relaxed text-foreground/85">
+        Exercises often train more than one muscle. For example, bench press mainly trains your
+        chest but also works your triceps. We count supporting muscles as half a set by default.
+      </p>
+      <div className="mt-3 space-y-1" role="radiogroup" aria-label="Count a supporting muscle as">
+        {SUPPORT_CREDITS.map((c) => (
+          <button
+            key={c.value}
+            type="button"
+            role="radio"
+            aria-checked={credit === c.value}
+            onClick={() => onPick(c.value)}
+            className={cn(
+              "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[14px] transition",
+              credit === c.value ? "bg-secondary font-semibold text-foreground" : "hover:bg-muted/60",
+            )}
+            data-credit={c.value}
+          >
+            <span>
+              {c.label}
+              {c.value === DEFAULT_SUPPORT_CREDIT && (
+                <span className="ml-1.5 font-normal text-muted-foreground">(default)</span>
+              )}
+            </span>
+            {credit === c.value && <Check className="h-4 w-4" />}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-[12px] text-muted-foreground">
+        Changes the map, the list and the muscle numbers on this page. Saved on this device.
+      </p>
+    </div>
+  );
+}
+
+function ModeLegend({ mode, dark }: { mode: MuscleMode; dark: boolean }) {
+  const p = PALETTE[dark ? "dark" : "light"];
+  const skin = BODY_THEME[dark ? "dark" : "light"].skin;
+  const sw = (c: string, label: string, outline = false) => (
+    <span key={label} className="inline-flex items-center gap-1.5">
+      <span
+        className={cn("h-3 w-3 shrink-0 rounded-[3px]", outline && "border border-border")}
+        style={{ background: c }}
+      />
+      {label}
+    </span>
+  );
   return (
     <div
-      className="flex h-10 items-end gap-[2px]"
-      role="img"
-      aria-label={`${label}: ${values.map((v) => v.sets).join(", ")}`}
+      className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground"
+      data-muscle-legend
     >
-      {values.map((v, i) => (
-        <span
-          key={v.week}
-          className={cn(
-            "min-w-0 flex-1 rounded-t-[3px]",
-            i === values.length - 1 ? "bg-[var(--heat-3)]" : "bg-[var(--heat-2)]",
-          )}
-          style={{
-            height: `${Math.max(v.sets > 0 ? 8 : 2, (v.sets / max) * 100)}%`,
-            opacity: v.sets > 0 ? 1 : 0.35,
+      {mode === "distribution"
+        ? MUSCLE_LEVELS.map((l) => sw(levelColor(l.level, dark) ?? skin, l.label, l.level === 0))
+        : mode === "fit"
+          ? [
+              sw(p.supported, "On track"),
+              sw(p.look, "Lighter"),
+              sw(p.gap, "Almost no work"),
+              sw(p.more, "Much more"),
+              sw(skin, "Too early to tell", true),
+            ]
+          : [
+              sw(p.supported, "Lifts improving"),
+              sw(p.look, "Worth a look"),
+              sw(p.steady, "No clear signal"),
+              sw(skin, "Too early to tell", true),
+            ]}
+    </div>
+  );
+}
+
+// ── the body ───────────────────────────────────────────────────────────
+
+type ViewSnap = "front" | "side" | "back";
+const SNAP_YAW: Record<ViewSnap, number> = { front: 0.22, side: Math.PI / 2, back: Math.PI };
+
+function BodyView({
+  colorOf,
+  picked,
+  onPick,
+  dark,
+  onList,
+}: {
+  colorOf: (m: FineMuscle) => string | null;
+  picked: FineMuscle | null;
+  onPick: (m: FineMuscle | null) => void;
+  dark: boolean;
+  onList: () => void;
+}) {
+  const [mode3d, setMode3d] = useState<"loading" | "3d" | "2d">("loading");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const rendRef = useRef<import("@/lib/body3d/renderer").BodyRenderer | null>(null);
+  const animRef = useRef<number | null>(null);
+  const reduced =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const [snap, setSnap] = useState<ViewSnap>("front");
+
+  // build after the page paints: the mesh takes ~200 ms once, then it's cached
+  useEffect(() => {
+    let cancelled = false;
+    const start = () => {
+      void (async () => {
+        try {
+          const [{ bodyMesh }, { BodyRenderer, webgl2Available }] = await Promise.all([
+            import("@/lib/body3d/body-mesh"),
+            import("@/lib/body3d/renderer"),
+          ]);
+          if (cancelled) return;
+          if (!webgl2Available()) return setMode3d("2d");
+          const mesh = bodyMesh();
+          if (cancelled || !canvasRef.current) return;
+          const r = new BodyRenderer(canvasRef.current, mesh);
+          r.cam = { yaw: reduced ? SNAP_YAW.front : -0.7, pitch: 0.04, zoom: 1, panY: 0 };
+          rendRef.current = r;
+          setMode3d("3d");
+        } catch {
+          setMode3d("2d");
+        }
+      })();
+    };
+    const w = window as any;
+    const h = w.requestIdleCallback
+      ? w.requestIdleCallback(start, { timeout: 600 })
+      : window.setTimeout(start, 60);
+    return () => {
+      cancelled = true;
+      if (w.cancelIdleCallback) w.cancelIdleCallback(h);
+      else window.clearTimeout(h);
+      rendRef.current?.dispose();
+      rendRef.current = null;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const draw = useCallback(() => {
+    const r = rendRef.current;
+    const c = canvasRef.current;
+    const box = boxRef.current;
+    if (!r || !c || !box) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(box.clientWidth * dpr);
+    const h = Math.round(box.clientHeight * dpr);
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    r.render();
+  }, []);
+
+  // repaint the skin whenever the colours, the pick or the theme change
+  useEffect(() => {
+    const r = rendRef.current;
+    if (mode3d !== "3d" || !r) return;
+    const th = BODY_THEME[dark ? "dark" : "light"];
+    const views = (["front", "back", "side"] as ViewKey[]).map((k) =>
+      paintView(k, colorOf, th, picked),
+    );
+    r.setTheme(dark);
+    r.setTextures(views as [HTMLCanvasElement, HTMLCanvasElement, HTMLCanvasElement]);
+    draw();
+  }, [mode3d, colorOf, picked, dark, draw]);
+
+  // a first, gentle turn into the three-quarter view (none with reduced motion)
+  const animateTo = useCallback(
+    (target: Partial<{ yaw: number; zoom: number; panY: number; pitch: number }>, ms = 650) => {
+      const r = rendRef.current;
+      if (!r) return;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      const from = { ...r.cam };
+      // the short way round
+      let ty = target.yaw ?? from.yaw;
+      while (ty - from.yaw > Math.PI) ty -= 2 * Math.PI;
+      while (from.yaw - ty > Math.PI) ty += 2 * Math.PI;
+      const to = { ...from, ...target, yaw: ty };
+      if (reduced) {
+        r.cam = to;
+        draw();
+        return;
+      }
+      const t0 = performance.now();
+      const step = (t: number) => {
+        const k = Math.min(1, (t - t0) / ms);
+        const e = 1 - Math.pow(1 - k, 3);
+        r.cam = {
+          yaw: from.yaw + (to.yaw - from.yaw) * e,
+          pitch: from.pitch + (to.pitch - from.pitch) * e,
+          zoom: from.zoom + (to.zoom - from.zoom) * e,
+          panY: from.panY + (to.panY - from.panY) * e,
+        };
+        draw();
+        if (k < 1) animRef.current = requestAnimationFrame(step);
+      };
+      animRef.current = requestAnimationFrame(step);
+    },
+    [draw, reduced],
+  );
+  useEffect(() => {
+    if (mode3d === "3d") animateTo({ yaw: SNAP_YAW.front }, 1100);
+  }, [mode3d, animateTo]);
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => draw());
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [draw, mode3d]);
+
+  // gestures: drag turns, pinch / wheel zooms, a still tap picks a muscle
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{
+    x: number;
+    y: number;
+    t: number;
+    moved: boolean;
+    dist: number | null;
+    zoom: number;
+  } | null>(null);
+  const onDown = (e: React.PointerEvent) => {
+    const r = rendRef.current;
+    if (!r) return;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    const pts = [...ptrs.current.values()];
+    gesture.current = {
+      x: e.clientX,
+      y: e.clientY,
+      t: performance.now(),
+      moved: pts.length > 1,
+      dist: pts.length === 2 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : null,
+      zoom: r.cam.zoom,
+    };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const r = rendRef.current;
+    const g = gesture.current;
+    if (!r || !g || !ptrs.current.has(e.pointerId)) return;
+    const prev = ptrs.current.get(e.pointerId)!;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...ptrs.current.values()];
+    if (pts.length === 2 && g.dist) {
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      r.cam.zoom = Math.max(1, Math.min(3.2, (g.zoom * d) / g.dist));
+      g.moved = true;
+      draw();
+      return;
+    }
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 6) g.moved = true;
+    if (!g.moved) return;
+    r.cam.yaw += dx * 0.012;
+    if (r.cam.zoom > 1.15)
+      r.cam.panY = Math.max(-0.9, Math.min(0.9, r.cam.panY - dy * (0.004 / r.cam.zoom)));
+    else r.cam.pitch = Math.max(-0.35, Math.min(0.35, r.cam.pitch + dy * 0.006));
+    draw();
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const r = rendRef.current;
+    const g = gesture.current;
+    ptrs.current.delete(e.pointerId);
+    if (!r || !g || ptrs.current.size) return;
+    gesture.current = null;
+    if (!g.moved && performance.now() - g.t < 400) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+      if (!hit) return onPick(null);
+      const { front, back } = hit.weights;
+      const view: ViewKey =
+        front >= back && front >= hit.weights.side
+          ? "front"
+          : back >= hit.weights.side
+            ? "back"
+            : "side";
+      const [x, y, z] = hit.p;
+      const m =
+        view === "front"
+          ? muscleAt("front", x, y)
+          : view === "back"
+            ? muscleAt("back", 400 - x, y)
+            : muscleAt("side", z + 205, y);
+      onPick(m);
+    }
+  };
+  // a trackpad pinch (ctrl + wheel) or ⌘ / shift + wheel zooms; a plain wheel scrolls the page
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const onWheel = (e: WheelEvent) => {
+      const r = rendRef.current;
+      if (!r || !(e.ctrlKey || e.metaKey || e.shiftKey)) return;
+      e.preventDefault();
+      r.cam.zoom = Math.max(1, Math.min(3.2, r.cam.zoom * Math.exp(-e.deltaY * 0.0025)));
+      draw();
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, [draw, mode3d]);
+  const reset = () => animateTo({ yaw: SNAP_YAW[snap], zoom: 1, panY: 0, pitch: 0.04 });
+
+  if (mode3d === "2d")
+    return <Body2D colorOf={colorOf} picked={picked} onPick={onPick} dark={dark} />;
+  return (
+    <div className="relative" data-body3d={mode3d}>
+      <div
+        ref={boxRef}
+        className={cn(
+          "relative h-[420px] w-full touch-none select-none overflow-hidden rounded-2xl md:h-[480px]",
+          "bg-[radial-gradient(ellipse_at_50%_40%,var(--muted)_0%,transparent_70%)]",
+        )}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onDoubleClick={reset}
+        role="img"
+        aria-label="Body coloured by the selected mode. Drag to turn, pinch to zoom, tap a muscle for details."
+      >
+        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+        {mode3d === "loading" && (
+          <div className="absolute inset-0 jf-skeleton rounded-2xl bg-muted/40" aria-hidden />
+        )}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <Segmented
+          value={snap}
+          onChange={(v) => {
+            setSnap(v);
+            animateTo({ yaw: SNAP_YAW[v] });
           }}
-          title={`Week of ${v.week}: ${v.sets} sets`}
+          options={[
+            { key: "front", label: "Front" },
+            { key: "side", label: "Side" },
+            { key: "back", label: "Back" },
+          ]}
+          label="Turn the body to"
+          size="sm"
+          className="flex-1"
         />
-      ))}
+        <button
+          type="button"
+          onClick={reset}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground"
+          aria-label="Reset the view"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onList}
+          className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+          data-muscle-show-list
+        >
+          List
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The front and back drawings side by side, coloured the same way: the fallback, and lighter on old phones. */
+function Body2D({
+  colorOf,
+  picked,
+  onPick,
+  dark,
+}: {
+  colorOf: (m: FineMuscle) => string | null;
+  picked: FineMuscle | null;
+  onPick: (m: FineMuscle | null) => void;
+  dark: boolean;
+}) {
+  const th = BODY_THEME[dark ? "dark" : "light"];
+  return (
+    <div className="grid grid-cols-2 gap-2" data-body2d>
+      {(["front", "back"] as const).map((k) => {
+        const v = atlasView(k, "R");
+        return (
+          <figure key={k} className="min-w-0">
+            <svg
+              viewBox="0 0 400 920"
+              className="h-[340px] w-full"
+              role="img"
+              aria-label={`${k === "front" ? "Front" : "Back"} of the body`}
+            >
+              <path d={v.silhouette} fill={th.skin} />
+              <path d={v.head} fill={th.skin} />
+              {v.parts
+                .filter((p) => !p.deep && p.kind === "muscle" && muscleOfSite(p.site))
+                .map((p) => {
+                  const m = muscleOfSite(p.site)!;
+                  return (
+                    <path
+                      key={p.id}
+                      d={p.d}
+                      fill={colorOf(m) ?? th.skin}
+                      stroke={picked === m ? th.pickEdge : th.line}
+                      strokeWidth={picked === m ? 2.4 : 0.8}
+                      onClick={() => onPick(m)}
+                      className="cursor-pointer"
+                    >
+                      <title>{m}</title>
+                    </path>
+                  );
+                })}
+            </svg>
+            <figcaption className="text-center text-[11px] text-muted-foreground">
+              {k === "front" ? "Front" : "Back"}
+            </figcaption>
+          </figure>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── detail & list ──────────────────────────────────────────────────────
+
+function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[12px] text-muted-foreground">{label}</div>
+      <div className="text-[20px] font-semibold leading-tight tabular-nums text-foreground">{value}</div>
+      {sub && <div className="text-[11px] leading-snug text-muted-foreground">{sub}</div>}
     </div>
   );
 }
 
 function MuscleDetail({
-  m,
-  read,
-  onClose,
+  row,
+  mode,
+  coached,
+  credit,
+  enough,
+  onClear,
+  bare = false,
 }: {
-  m: MuscleExposure;
-  read: ExposureRead;
-  onClose: () => void;
+  row: MuscleReadRow | undefined;
+  mode: MuscleMode;
+  coached: boolean;
+  credit: SupportCredit;
+  enough: boolean;
+  onClear: () => void;
+  bare?: boolean;
 }) {
-  const helping = Math.round((m.perWeek - m.directPerWeek) * 10) / 10;
-  const per = read.basis.partial ? "this week" : "a week";
+  if (!row)
+    return (
+      <div
+        className="rounded-2xl bg-muted/40 p-4 text-[13px] text-muted-foreground"
+        data-muscle-detail-empty
+      >
+        {enough || mode === "distribution"
+          ? "Tap a muscle to see its sets. Drag to turn the body."
+          : "There isn't enough training in this period to tell yet. Pick a longer period above."}
+      </div>
+    );
+  const p = row.period;
+  const status =
+    mode === "fit"
+      ? FIT_WORD[row.fit.status]
+      : mode === "development"
+        ? DEV_WORD[row.dev.status]
+        : MUSCLE_LEVELS[row.level].label;
+  const change = periodChangeWords(p, p.before ? shortRange(p.before.start, p.before.end) : undefined);
+  const supportingSub =
+    p.supporting === 0
+      ? "none"
+      : credit === 0
+        ? "not counted"
+        : credit === 1
+          ? "counted in full"
+          : `counted as ${fmtSets(p.supporting * credit)}`;
   return (
     <div
-      className="jf-lab-in space-y-3 rounded-xl border border-border p-3"
-      data-muscle-detail={m.muscle}
+      className={cn("text-[13px]", bare ? "px-5 pt-4" : "rounded-2xl bg-muted/40 p-4")}
+      data-muscle-detail={row.muscle}
     >
-      <div className="flex items-center gap-2">
-        <span
-          className="h-3 w-3 shrink-0 rounded-[3px]"
-          style={{ background: heat(m.level) }}
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-foreground">
-          {m.muscle}
-        </span>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-[18px] font-semibold text-foreground">{row.muscle}</div>
+          <div className="text-[13px] text-muted-foreground">{status}</div>
+        </div>
         <button
           type="button"
-          onClick={onClose}
-          className="shrink-0 text-[12px] text-muted-foreground hover:text-foreground"
+          onClick={onClear}
+          aria-label="Close"
+          className="-mr-2 -mt-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground"
         >
-          Close
+          <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <Figure
-          label={`Sets ${per}`}
-          value={m.perWeek}
-          sub={
-            helping > 0 ? `${m.directPerWeek} aimed at it · ${helping} helping` : "all aimed at it"
-          }
-        />
-        <Figure
-          label="Days a week"
-          value={m.directPerWeek > 0 ? m.frequency : "—"}
-          sub={m.directPerWeek > 0 ? "with a set aimed at it" : "only as a helper"}
-        />
-        <Figure label="Share" value={`${Math.round(m.share * 100)}%`} sub="of all muscle sets" />
-      </div>
-      <div>
-        <div className="mb-1 text-[11px] text-muted-foreground">
-          <div>Sets each week, last 12 weeks</div>
-          {m.change && (
-            <div className="tabular-nums text-foreground">
-              {m.change.pct === 0
-                ? "No change"
-                : `${m.change.pct > 0 ? "Up" : "Down"} ${Math.abs(m.change.pct)}%`}
-              <span className="text-muted-foreground">
-                : {m.change.now} a week over the last 4 weeks, {m.change.before} the 4 before
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3" data-muscle-stats>
+        <Stat label="Total sets" value={fmtSets(p.total)} sub={row.perWeek > 0 ? `about ${fmtSets(row.perWeek)} a week` : undefined} />
+        <Stat label="Direct sets" value={p.direct} sub="aimed at it" />
+        <Stat label="Supporting sets" value={p.supporting} sub={supportingSub} />
+        <Stat label="Days trained" value={p.days} />
+        <Stat label="Exercises" value={p.exerciseCount} />
+        <Stat
+          label="Change"
+          value={
+            p.changePct != null ? (
+              <span className={p.changePct >= 5 ? "text-success" : undefined}>
+                {p.changePct > 0 ? "+" : p.changePct < 0 ? "−" : ""}
+                {Math.abs(p.changePct)}%
               </span>
-            </div>
-          )}
-        </div>
-        <Bars values={m.weekly} label={`${m.muscle}, sets each week`} />
+            ) : p.before && p.before.total <= 0 && p.total > 0 ? (
+              "New"
+            ) : (
+              "—"
+            )
+          }
+          sub={p.before ? "vs the period before" : "nothing earlier to compare"}
+        />
       </div>
-      {m.exercises.length > 0 && (
-        <div>
-          <div className="mb-1 text-[11px] text-muted-foreground">
-            Where the sets came from (this period)
-          </div>
-          <ul className="space-y-1">
-            {m.exercises.slice(0, 6).map((e) => (
-              <li key={e.name} className="flex items-baseline justify-between gap-2 text-[13px]">
-                <span className="min-w-0 truncate text-foreground">{e.name}</span>
+      {change && (
+        <p className="mt-3 text-[13px] text-foreground/85" data-muscle-change>
+          {change}
+        </p>
+      )}
+      {mode === "fit" && <p className="mt-3 text-foreground/85">{row.fit.words}</p>}
+      {mode === "development" && row.dev.why && (
+        <p className="mt-3 text-foreground/85">{row.dev.why}</p>
+      )}
+      {mode === "development" && row.dev.evidence.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5 text-[12px] text-muted-foreground">
+          {row.dev.evidence.map((e) => (
+            <li key={e}>· {e}</li>
+          ))}
+        </ul>
+      )}
+      {mode === "development" && row.dev.consider && (
+        <p className="mt-2 text-[13px]">
+          <span className="font-medium text-foreground">Something to consider: </span>
+          <span className="text-muted-foreground">{row.dev.consider}</span>
+        </p>
+      )}
+      {row.exercises.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[12px] font-medium text-muted-foreground">Exercises that trained it</div>
+          <ul className="mt-1 space-y-1">
+            {row.exercises.map((e) => (
+              <li key={e.name} className="flex justify-between gap-3">
+                <span className="min-w-0 text-foreground">{e.name}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {e.direct > 0 ? `${e.direct} set${e.direct === 1 ? "" : "s"}` : ""}
-                  {e.direct > 0 && e.indirect > 0 ? " + " : ""}
-                  {e.indirect > 0 ? `${e.indirect} helping` : ""}
+                  {e.sets} set{e.sets === 1 ? "" : "s"}
+                  {e.direct ? "" : " · supporting"}
                 </span>
               </li>
             ))}
           </ul>
-          {m.exercises.length > 6 && (
-            <div className="mt-1 text-[11px] text-muted-foreground">
-              and {m.exercises.length - 6} more
-            </div>
-          )}
         </div>
+      )}
+      {mode !== "development" && (
+        <p className="mt-3 text-[12px] text-muted-foreground">
+          {ROLE_WORD[row.role]}
+          {coached && row.role === "prime" ? "; your coach plans its work" : ""}.
+        </p>
       )}
     </div>
   );
 }
 
-export function MuscleMap({
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function shortRange(a: string, b: string): string {
+  const d = (s: string) => `${MONTHS[Number(s.slice(5, 7)) - 1]} ${Number(s.slice(8, 10))}`;
+  return a.slice(0, 7) === b.slice(0, 7) ? `${d(a)} – ${Number(b.slice(8, 10))}` : `${d(a)} – ${d(b)}`;
+}
+
+function MuscleList({
   read,
-  rule,
-  onRule,
-  rangeLabel,
-  compact = false,
-  onOpen,
+  mode,
+  dark,
+  picked,
+  onPick,
+  coached,
+  credit,
 }: {
-  read: ExposureRead;
-  rule: SecondaryRule;
-  onRule?: (r: SecondaryRule) => void;
-  rangeLabel: string;
-  /** the Overview's version: the two bodies and the top three, a tap opens Training */
-  compact?: boolean;
-  onOpen?: () => void;
+  read: MuscleRead;
+  mode: MuscleMode;
+  dark: boolean;
+  picked: FineMuscle | null;
+  onPick: (m: FineMuscle | null) => void;
+  coached: boolean;
+  credit: SupportCredit;
 }) {
-  const [picked, setPicked] = useState<FineMuscle | null>(null);
-  const [hover, setHover] = useState<FineMuscle | null>(null);
-  const [shown, setShown] = useState<"map" | "list">("map");
-  const levels = useMemo(() => new Map(read.muscles.map((m) => [m.muscle, m.level])), [read]);
-  const pick = (m: FineMuscle) => setPicked((p) => (p === m ? null : m));
-  const top = read.muscles.slice(0, 3);
-  const per = read.basis.partial ? "this week" : "a week";
-
-  if (!read.muscles.length) {
-    return compact ? null : (
-      <Card className="p-4 text-sm text-muted-foreground" data-muscle-map="empty">
-        No sets credited to a muscle in {rangeLabel.toLowerCase()} yet.
-      </Card>
-    );
-  }
-
-  if (compact) {
-    return (
-      <Card className="p-0" data-muscle-map="compact">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="block w-full rounded-2xl p-4 text-left transition active:bg-muted/40"
-          aria-label="Open Training"
-        >
-          <div className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
-            <span className="min-w-0 flex-1 truncate">Muscle emphasis · {rangeLabel}</span>
-            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
-          </div>
-          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2">
-            <div className="pointer-events-none">
-              <Body
-                view="front"
-                levels={levels}
-                picked={null}
-                onPick={() => {}}
-                onHover={() => {}}
-              />
-            </div>
-            <div className="pointer-events-none">
-              <Body
-                view="back"
-                levels={levels}
-                picked={null}
-                onPick={() => {}}
-                onHover={() => {}}
-              />
-            </div>
-            <ol className="space-y-2">
-              {top.map((m, i) => (
-                <li key={m.muscle} className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                    <span className="tabular-nums">{i + 1}</span>
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-[2px]"
-                      style={{ background: heat(m.level) }}
-                      aria-hidden
-                    />
-                  </div>
-                  <div className="truncate text-[13px] font-semibold text-foreground">
-                    {m.muscle}
-                  </div>
-                  <div className="text-[11px] tabular-nums text-muted-foreground">
-                    {m.perWeek} sets {per}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </button>
-      </Card>
-    );
-  }
-
-  const sel = read.muscles.find((m) => m.muscle === picked) ?? null;
-  const hov = hover ? (read.muscles.find((m) => m.muscle === hover) ?? null) : null;
+  const order: Record<string, number> = {
+    gap: 0,
+    look: 1,
+    more: 2,
+    opportunity: 0,
+    strength: 1,
+    supported: 3,
+    steady: 3,
+    unknown: 4,
+  };
+  const rows = [...read.rows].sort((a, b) =>
+    mode === "distribution"
+      ? b.period.total - a.period.total
+      : mode === "fit"
+        ? order[a.fit.status] - order[b.fit.status] || b.perWeek - a.perWeek
+        : order[a.dev.status] - order[b.dev.status] || b.perWeek - a.perWeek,
+  );
+  const max = Math.max(1, ...rows.map((r) => r.period.total));
+  const pickedRow = picked ? read.rows.find((r) => r.muscle === picked) : undefined;
   return (
-    <Card className="space-y-3 p-4" data-muscle-map="full" data-muscle-rule={rule}>
-      <LabHeader
-        title="Muscles"
-        sub={`Training each muscle got, ${rangeLabel.toLowerCase()}`}
-        tip={
-          <InfoTip label="How muscles are counted" title="How muscles are counted" align="start">
-            Working sets only (never warm-ups, cardio or mobility). A set gives each muscle its
-            exercise lists as primary a full set, and each secondary muscle the amount you pick
-            below (½ by default). A muscle counts once per set. Shading is relative to your
-            most-trained muscle. This is training exposure, not a measure of muscle growth.
-          </InfoTip>
-        }
-        action={
-          <Seg
-            label="Show as"
-            value={shown}
-            options={[
-              ["map", "Map"],
-              ["list", "List"],
-            ]}
-            onChange={setShown}
-            size="sm"
-            testId="muscle-shown"
-          />
-        }
-      />
-      {onRule && (
-        <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
-          <span>Secondary muscles count as</span>
-          <Seg
-            label="Secondary muscles count as"
-            value={rule}
-            options={SECONDARY_RULES}
-            onChange={(r) => onRule(r)}
-            size="sm"
-            testId="muscle-rule"
-          />
-        </div>
-      )}
-
-      {shown === "map" ? (
-        <div className="relative">
-          <div className="mx-auto grid max-w-[460px] grid-cols-2 gap-3" data-muscle-bodies>
-            {(["front", "back"] as const).map((v) => (
-              <figure key={v} className="min-w-0">
-                <Body view={v} levels={levels} picked={picked} onPick={pick} onHover={setHover} />
-                <figcaption className="mt-1 text-center text-[11px] text-muted-foreground">
-                  {v === "front" ? "Front" : "Back"}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-          {hov && hov.muscle !== picked && (
-            <div
-              className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background"
-              role="tooltip"
-            >
-              {hov.muscle} · {hov.perWeek} sets {per}
-            </div>
-          )}
-          <div
-            className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground"
-            aria-hidden
-          >
-            <span>Less</span>
-            {[1, 2, 3, 4].map((l) => (
-              <span key={l} className="h-3 w-5 rounded-[3px]" style={{ background: heat(l) }} />
-            ))}
-            <span>More (vs your most-trained)</span>
-          </div>
-          {!picked && (
-            <p className="mt-2 text-center text-[12px] text-muted-foreground">
-              Tap a muscle for its sets, days and exercises.
-            </p>
-          )}
-        </div>
-      ) : null}
-
-      {/* the ranked list: the same numbers as the map, the accessible way in */}
-      <ul
-        className={cn("space-y-1", shown === "map" && "sr-only")}
-        data-muscle-list
-        aria-label="Muscles ranked by training"
-      >
-        {read.muscles.map((m, i) => (
-          <li key={m.muscle}>
-            <button
-              type="button"
-              onClick={() => pick(m.muscle)}
-              aria-expanded={picked === m.muscle}
-              className={cn(
-                "w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted",
-                picked === m.muscle && "bg-muted",
+    <div className="mt-2" data-muscle-list>
+      <ul className="space-y-1">
+        {rows.map((r) => {
+          const c = muscleColor(r, mode, dark) ?? "var(--muted-foreground)";
+          return (
+            <li key={r.muscle}>
+              <button
+                type="button"
+                onClick={() => onPick(picked === r.muscle ? null : r.muscle)}
+                aria-pressed={picked === r.muscle}
+                aria-expanded={picked === r.muscle}
+                className={cn(
+                  "flex min-h-11 w-full items-center gap-3 rounded-lg px-1.5 text-left transition hover:bg-muted/40",
+                  picked === r.muscle && "bg-muted/60",
+                )}
+              >
+                <span className="w-24 shrink-0 truncate text-[14px] text-foreground">
+                  {r.muscle}
+                </span>
+                <span className="relative h-2.5 flex-1 rounded-full bg-muted/60">
+                  <span
+                    className="absolute inset-y-0 left-0 rounded-full"
+                    style={{
+                      width: `${(r.period.total / max) * 100}%`,
+                      background: c,
+                      minWidth: r.period.total > 0 ? 4 : 0,
+                    }}
+                  />
+                </span>
+                <span className="w-24 shrink-0 text-right text-[13px] tabular-nums text-muted-foreground">
+                  {mode === "distribution"
+                    ? `${fmtSets(r.period.total)} set${r.period.total === 1 ? "" : "s"}`
+                    : mode === "fit"
+                      ? FIT_SHORT[r.fit.status]
+                      : r.dev.status === "unknown" || r.dev.status === "steady"
+                        ? `${fmtSets(r.period.total)} sets`
+                        : DEV_SHORT[r.dev.status]}
+                </span>
+              </button>
+              {picked === r.muscle && pickedRow && (
+                <div className="mb-2 mt-1">
+                  <MuscleDetail
+                    row={pickedRow}
+                    mode={mode}
+                    coached={coached}
+                    credit={credit}
+                    enough={read.enoughData}
+                    onClear={() => onPick(null)}
+                  />
+                </div>
               )}
-              data-muscle-row={m.muscle}
-            >
-              <div className="flex items-baseline gap-2 text-[13px]">
-                <span className="w-5 shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                  {i + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                  {m.muscle}
-                </span>
-                <span className="shrink-0 tabular-nums text-foreground">
-                  <span className="font-semibold">{m.perWeek}</span>
-                  <span className="text-muted-foreground"> sets {per}</span>
-                </span>
-              </div>
-              <div className="mt-1 flex items-center gap-2 pl-7">
-                <span className="flex h-1.5 min-w-0 flex-1 gap-[2px] overflow-hidden rounded-full bg-muted">
-                  <span
-                    className="h-full rounded-full bg-[var(--heat-3)]"
-                    style={{
-                      width: `${(m.directPerWeek / Math.max(0.1, read.muscles[0].perWeek)) * 100}%`,
-                    }}
-                  />
-                  <span
-                    className="h-full rounded-full bg-[var(--heat-1)]"
-                    style={{
-                      width: `${((m.perWeek - m.directPerWeek) / Math.max(0.1, read.muscles[0].perWeek)) * 100}%`,
-                    }}
-                  />
-                </span>
-                <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
-                  {m.directPerWeek > 0 ? `${m.frequency} d/wk` : "helping only"} ·{" "}
-                  {Math.round(m.share * 100)}%
-                </span>
-              </div>
-            </button>
-            {shown === "list" && picked === m.muscle && sel && (
-              <div className="mt-1">
-                <MuscleDetail m={sel} read={read} onClose={() => setPicked(null)} />
-              </div>
-            )}
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
-      {shown === "list" && (
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground" aria-hidden>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-4 rounded-full bg-[var(--heat-3)]" /> Aimed at it
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-4 rounded-full bg-[var(--heat-1)]" /> Helping
-          </span>
-        </div>
-      )}
-      {shown === "map" && sel && (
-        <MuscleDetail m={sel} read={read} onClose={() => setPicked(null)} />
-      )}
-      {read.untagged > 0 && (
-        <p className="text-[11px] text-muted-foreground">
-          {read.untagged} set{read.untagged === 1 ? "" : "s"} in this period{" "}
-          {read.untagged === 1 ? "is" : "are"} on exercises the library hasn't tagged with muscles,
-          so {read.untagged === 1 ? "it isn't" : "they aren't"} counted here.
-        </p>
-      )}
-    </Card>
+    </div>
   );
 }

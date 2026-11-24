@@ -1,928 +1,511 @@
 /**
- * The performance calendar: training day by day, a GitHub-style grid with an
- * athlete's eye. One read (performance-calendar.ts), five ways to colour it:
- * workouts (done, not finished, missed, planned), volume (working sets on
- * the athlete's own scale), strength (the day's main lift against its own
- * recent best; a day with no hard set has no read, never "weak"), PRs and
- * consistency (each week's planned workouts done).
- *
- * Ranges: a week and a month as calendars, a block as its weeks, a year and
- * everything as a contribution grid that scrolls sideways (opening on the
- * latest week). Every day is a button: a tap (or arrow keys) picks it and
- * the day opens under the grid with its workouts, every set, its strength
- * read, PRs and check-out, and a way into the full workout; a mouse hover
- * says the day in one line first.
+ * The performance calendar: a square per day (performance-calendar.ts),
+ * coloured for the metric picked, laid out for the span (a month grid, weeks
+ * as columns, a strip per year). A tap or hover opens the day's detail under
+ * the grid, with the workout one tap away. Rest, missed, partly done, planned
+ * and no-data days each look different, and none of them is a zero.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { ChevronRight, Star, Trophy, Moon } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ChevronRight, Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { InfoTip } from "@/components/analytics/info-tip";
-import { DualWeight, Figure, LabHeader, Seg, Stepper } from "@/components/analytics/lab-ui";
+import { parseLocalDate } from "@/lib/today";
 import {
-  CALENDAR_MODES,
-  RANGE_KINDS,
-  addDays,
-  calendarRange,
-  cellLook,
-  dayLabel,
-  gridWeeks,
-  mondayOf,
-  stepRange,
-  summarizeRange,
-  type CalBlock,
-  type CalDay,
-  type CalendarMode,
-  type CellLook,
-  type PerformanceCalendar as Cal,
-  type RangeKind,
+  calendarLayout,
+  calendarTotals,
+  CALENDAR_METRICS,
+  MIN_CELL,
+  monthBlocks,
+  weekColumns,
+  type CalendarMetric,
+  type DaySummary,
 } from "@/lib/analytics/performance-calendar";
-import { loadText, volumeCompact, type Unit } from "@/lib/analytics/units";
+import { ChipRow, useWidth, LB_PER_KG } from "@/components/analytics/viz";
 
-const SLEEP_WORDS: Record<string, string> = {
-  lt5: "under 5h",
-  "5_6": "5–6h",
-  "6_7": "6–7h",
-  "7_8": "7–8h",
-  "8_9": "8–9h",
-  gte9: "9h+",
-  gte7: "7h+",
-  gte8: "8h+",
+/** Each metric's one hue (sequential: light to dark of one hue, never a rainbow). */
+const HUE: Record<CalendarMetric, string> = {
+  activity: "var(--success)",
+  strength: "var(--success)",
+  volume: "var(--chart-4)",
+  intensity: "var(--chart-2)",
+  prs: "var(--warning)",
 };
-
-/** The fill for a level in a mode. */
-function fillFor(mode: CalendarMode, look: CellLook): string {
-  if (look.level === 0) return "var(--heat-0)";
-  if (mode === "workouts" || mode === "consistency") {
-    const pct = [0, 28, 48, 72, 100][look.level];
-    return `color-mix(in oklch, var(--success) ${pct}%, var(--card))`;
-  }
-  if (mode === "prs") {
-    const pct = [0, 35, 55, 78, 100][look.level];
-    return `color-mix(in oklch, var(--warning) ${pct}%, var(--card))`;
-  }
-  return `var(--heat-${look.level})`;
+const STEPS = [0, 24, 48, 74, 100];
+export function levelColor(metric: CalendarMetric, level: number): string {
+  if (level <= 0) return "transparent";
+  return `color-mix(in oklch, ${HUE[metric]} ${STEPS[Math.min(4, level)]}%, var(--muted))`;
 }
 
+const LEGEND: Record<CalendarMetric, [string, string]> = {
+  activity: ["Fewer sets", "More sets"],
+  strength: ["Below your best", "New best"],
+  volume: ["Less weight", "More weight"],
+  intensity: ["Easier", "Harder"],
+  prs: ["1 record", "3 or more"],
+};
+/** What the shading means, in a sentence, for each metric. */
+const MEANS: Record<CalendarMetric, string> = {
+  activity: "Darker days had more sets.",
+  strength: "Darker days came closer to your best estimated max on a main lift.",
+  volume: "Darker days had more total weight lifted (weight × reps, added up).",
+  intensity: "Darker days felt harder on average (RPE: how hard a set felt, out of 10).",
+  prs: "Days you set a new record, and how many.",
+};
+
+export type DayMeta = { title: string | null; block: string | null; week: number | null };
+
+const fmt = (d: string, f: string) => {
+  const x = parseLocalDate(d);
+  return x ? format(x, f) : d;
+};
+
 function Cell({
-  day,
-  look,
-  mode,
+  d,
+  metric,
   size,
-  selected,
+  picked,
   today,
-  label,
   onPick,
-  onHover,
-  children,
-  className,
+  showDate,
 }: {
-  day: string;
-  look: CellLook;
-  mode: CalendarMode;
-  size: "dot" | "box";
-  selected: boolean;
-  today: boolean;
-  label: string;
-  onPick: (d: string) => void;
-  onHover?: (d: string | null, el?: HTMLElement) => void;
-  children?: ReactNode;
-  className?: string;
+  d: DaySummary | null;
+  metric: CalendarMetric;
+  size: number;
+  picked: boolean;
+  today: string;
+  onPick: (d: DaySummary) => void;
+  showDate?: boolean;
 }) {
+  if (!d) return <span style={{ width: size, height: size }} aria-hidden />;
+  const filled = d.level > 0;
+  const radius = Math.max(2, Math.round(size / 5));
+  const style: React.CSSProperties = { width: size, height: size, borderRadius: radius };
+  let cls = "";
+  if (d.state === "done" || d.state === "partial") style.background = levelColor(metric, d.level);
+  else if (d.state === "rest") cls = "bg-muted/60";
+  else if (d.state === "missed") cls = "border-[1.5px] border-destructive/55";
+  else if (d.state === "planned" || d.state === "today")
+    cls = "border border-dashed border-muted-foreground/45";
+  else if (d.state === "future") cls = "bg-muted/25";
+  else cls = "bg-muted/20";
+  const label = `${fmt(d.day, "EEE, MMM d")}: ${
+    d.state === "done"
+      ? `${d.sets} sets`
+      : d.state === "partial"
+        ? `partly done, ${d.sets} of ${d.plannedSets} sets`
+        : d.state === "missed"
+          ? "missed"
+          : d.state === "rest"
+            ? "rest"
+            : d.state === "planned" || d.state === "today"
+              ? "planned"
+              : "no data"
+  }${d.prs.length ? `, ${d.prs.length} record${d.prs.length > 1 ? "s" : ""}` : ""}`;
   return (
     <button
       type="button"
-      data-cal-day={day}
-      data-cal-level={look.level}
-      data-cal-missed={look.missed ? "" : undefined}
-      aria-label={label}
-      aria-pressed={selected}
-      tabIndex={selected ? 0 : -1}
-      onClick={() => onPick(day)}
+      onClick={() => onPick(d)}
       onPointerEnter={(e) => {
-        if (e.pointerType === "mouse") onHover?.(day, e.currentTarget);
+        if (e.pointerType === "mouse") onPick(d);
       }}
-      onPointerLeave={(e) => {
-        if (e.pointerType === "mouse") onHover?.(null);
-      }}
+      aria-label={label}
+      aria-pressed={picked}
       className={cn(
-        "relative shrink-0 outline-none transition-[box-shadow,transform] focus-visible:ring-2 focus-visible:ring-foreground",
-        size === "dot" ? "h-[13px] w-[13px] rounded-[3px]" : "rounded-lg",
-        look.missed &&
-          "shadow-[inset_0_0_0_1.5px_color-mix(in_oklch,var(--destructive)_70%,transparent)]",
-        look.upcoming &&
-          "shadow-[inset_0_0_0_1px_var(--border)] [background-image:repeating-linear-gradient(135deg,transparent_0_3px,color-mix(in_oklch,var(--muted-foreground)_18%,transparent)_3px_4px)]",
-        look.noRead && "shadow-[inset_0_0_0_1px_var(--border)]",
-        selected && "z-10 shadow-[0_0_0_2px_var(--card),0_0_0_3.5px_var(--foreground)]",
-        today && !selected && "shadow-[0_0_0_1.5px_var(--foreground)]",
-        className,
+        "relative shrink-0 outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring",
+        cls,
+        picked && "ring-2 ring-foreground ring-offset-1 ring-offset-card",
+        d.day === today && !picked && "ring-1 ring-foreground/70",
       )}
-      style={{ background: fillFor(mode, look) }}
+      style={style}
+      data-cal-day={d.day}
+      data-cal-state={d.state}
+      data-cal-level={d.level}
     >
-      {look.star && size === "dot" && (
+      {d.state === "partial" && filled && (
         <span
-          className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--warning)] ring-1 ring-[var(--card)]"
           aria-hidden
+          className="absolute inset-0 rounded-[inherit]"
+          style={{
+            background: "linear-gradient(135deg, transparent 50%, var(--card) 50%)",
+            opacity: 0.55,
+          }}
         />
       )}
-      {children}
+      {showDate && (
+        <span
+          className={cn(
+            "absolute left-1 top-0.5 text-[10px] font-medium tabular-nums",
+            d.level >= 3 ? "text-background" : "text-muted-foreground",
+          )}
+        >
+          {Number(d.day.slice(8, 10))}
+        </span>
+      )}
+      {showDate && d.prs.length > 0 && (
+        <Trophy className="absolute bottom-1 right-1 h-2.5 w-2.5 text-warning" aria-hidden />
+      )}
     </button>
   );
 }
 
-function Legend({ mode }: { mode: CalendarMode }) {
-  const levels = [1, 2, 3, 4] as const;
-  const words: Record<CalendarMode, [string, string]> = {
-    workouts: ["Not finished", "Finished"],
-    volume: ["Fewer sets", "More sets (your own range)"],
-    strength: ["Under your recent best", "At or past it"],
-    prs: ["1 PR", "3+ PRs"],
-    consistency: ["Little of the week's plan", "Whole week done"],
-  };
-  const swatch = (bg: string, extra?: string) => (
-    <span className={cn("inline-block h-3 w-3 rounded-[3px]", extra)} style={{ background: bg }} />
-  );
-  return (
-    <div
-      className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground"
-      data-cal-legend={mode}
-    >
-      <span className="inline-flex items-center gap-1">
-        <span>{words[mode][0]}</span>
-        {(mode === "workouts" ? ([2, 4] as const) : levels).map((l) => (
-          <span key={l}>{swatch(fillFor(mode, { level: l }))}</span>
-        ))}
-        <span>{words[mode][1]}</span>
-      </span>
-      <span className="inline-flex items-center gap-1">
-        {swatch(
-          "var(--heat-0)",
-          "shadow-[inset_0_0_0_1.5px_color-mix(in_oklch,var(--destructive)_70%,transparent)]",
-        )}{" "}
-        Missed
-      </span>
-      <span className="inline-flex items-center gap-1">
-        {swatch(
-          "var(--heat-0)",
-          "shadow-[inset_0_0_0_1px_var(--border)] [background-image:repeating-linear-gradient(135deg,transparent_0_3px,color-mix(in_oklch,var(--muted-foreground)_18%,transparent)_3px_4px)]",
-        )}{" "}
-        Planned
-      </span>
-      {mode === "strength" && (
-        <>
-          <span className="inline-flex items-center gap-1">
-            {swatch("var(--heat-0)", "shadow-[inset_0_0_0_1px_var(--border)]")} Trained, no hard set
-            to read
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" /> New best estimate
-          </span>
-        </>
-      )}
-      {mode === "prs" && (
-        <span className="inline-flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" /> Competition-lift PR
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * Text on a filled day: the dataviz palette's rule (white in a strong fill,
- * near-black on amber and on the light top of the dark theme's ramps).
- */
-function inkFor(mode: CalendarMode, level: number): { num: string; sub: string } {
-  if (level < 3) return { num: "text-foreground", sub: "text-muted-foreground" };
-  if (mode === "prs") return { num: "text-[#0b0b0b]", sub: "text-[#0b0b0b]/80" };
-  if (level === 4)
-    return { num: "text-white dark:text-[#0b0b0b]", sub: "text-white/90 dark:text-[#0b0b0b]/80" };
-  return { num: "text-white", sub: "text-white/90" };
-}
-
-const WEEKDAY_SHORT = ["M", "T", "W", "T", "F", "S", "S"];
-const WEEKDAY = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 export function PerformanceCalendar({
-  cal,
-  blocks,
+  days: allDays,
+  metric,
+  onMetric,
+  today,
   unit,
-  coach = false,
-  clientId,
-  compact = false,
-  onOpen,
-  initialRange,
+  dayMeta,
+  onOpenWorkout,
 }: {
-  cal: Cal;
-  blocks: CalBlock[];
-  unit: Unit;
-  coach?: boolean;
-  clientId: string;
-  /** the Overview's strip: the last 16 weeks, workouts, a tap opens the Calendar */
-  compact?: boolean;
-  onOpen?: () => void;
-  initialRange?: RangeKind;
+  days: DaySummary[];
+  metric: CalendarMetric;
+  onMetric: (m: CalendarMetric) => void;
+  today: string;
+  unit: "lb" | "kg";
+  dayMeta?: Map<string, DayMeta>;
+  onOpenWorkout?: (dayId: string) => void;
 }) {
-  const today = cal.today;
-  const [kind, setKind] = useState<RangeKind>(compact ? "all" : (initialRange ?? "month"));
-  const [anchor, setAnchor] = useState(today);
-  const [blockId, setBlockId] = useState<string | null>(null);
-  const [mode, setMode] = useState<CalendarMode>("workouts");
+  const [wrapRef, width] = useWidth<HTMLDivElement>();
   const [picked, setPicked] = useState<string | null>(null);
-  const [hover, setHover] = useState<{ day: string; x: number; y: number } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  // days before the first logged workout aren't drawn (the period says where it starts)
+  const days = useMemo(() => {
+    const i = allDays.findIndex((d) => d.state !== "none");
+    return i > 0 ? allDays.slice(i) : allDays;
+  }, [allDays]);
+  const start = days[0]?.day ?? today;
+  const end = days[days.length - 1]?.day ?? today;
+  const layout = calendarLayout(start, end, width);
+  const totals = useMemo(() => calendarTotals(days), [days]);
+  const pickedDay = days.find((d) => d.day === picked) ?? null;
 
-  const range = useMemo(() => {
-    if (compact) {
-      const start = addDays(mondayOf(today), -15 * 7);
-      return {
-        kind: "all" as const,
-        start,
-        end: addDays(mondayOf(today), 6),
-        label: "Last 16 weeks",
-      };
-    }
-    return calendarRange(kind, anchor, { blocks, blockId, first: cal.first, today });
-  }, [compact, kind, anchor, blocks, blockId, cal.first, today]);
-  const weeks = useMemo(() => gridWeeks(range), [range]);
-  const summary = useMemo(() => summarizeRange(cal, range), [cal, range]);
-  const step = (dir: -1 | 1) => {
-    const s = stepRange(range, dir, { blocks, today, first: cal.first });
-    if (!s) return null;
-    // never step past the first week on file or a year past today
-    if (dir === -1 && cal.first && range.start <= cal.first) return null;
-    if (dir === 1 && range.end >= addDays(today, 7) && range.kind !== "block") return null;
-    return () => {
-      setAnchor(s.anchor);
-      if (s.blockId !== undefined) setBlockId(s.blockId ?? null);
-      setPicked(null);
-    };
-  };
-
-  // the grid opens on the latest week (a year or everything scrolls sideways)
-  const strip = compact || kind === "year" || kind === "all";
-  useEffect(() => {
-    const el = gridRef.current?.querySelector<HTMLElement>("[data-cal-scroll]");
-    if (!el || !strip) return;
-    // the latest week (today's) in view at the right edge
-    const todayCell = el.querySelector<HTMLElement>(`[data-cal-day="${today}"]`);
-    if (!todayCell) {
-      el.scrollLeft = el.scrollWidth;
-      return;
-    }
-    const r = todayCell.getBoundingClientRect();
-    const c = el.getBoundingClientRect();
-    el.scrollLeft += r.right - c.right + 24;
-  }, [strip, range.start, range.end, today]);
-
-  const pick = (d: string) => setPicked((p) => (p === d ? null : d));
-  const onKey = (e: React.KeyboardEvent) => {
-    const cur = picked ?? (today >= range.start && today <= range.end ? today : range.end);
-    const moves: Record<string, number> = strip
-      ? { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }
-      : { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
-    const m = moves[e.key];
-    if (m == null) return;
-    e.preventDefault();
-    const next = addDays(cur, m);
-    if (next < range.start || next > range.end) return;
-    setPicked(next);
-    requestAnimationFrame(() =>
-      gridRef.current?.querySelector<HTMLElement>(`[data-cal-day="${next}"]`)?.focus(),
-    );
-  };
-  const onHover = (d: string | null, el?: HTMLElement) => {
-    if (!d || !el) return setHover(null);
-    const box = el.getBoundingClientRect();
-    const host = gridRef.current?.parentElement?.getBoundingClientRect();
-    if (!host) return;
-    setHover({ day: d, x: box.left - host.left + box.width / 2, y: box.top - host.top });
-  };
-  const lookOf = (d: string) => cellLook(cal, d, mode);
-  const labelOf = (d: string) => dayLabel(cal.days.get(d), d);
-
-  const grid = strip ? (
-    <ContributionGrid
-      weeks={weeks}
-      lookOf={lookOf}
-      labelOf={labelOf}
-      mode={mode}
-      picked={picked}
-      today={today}
-      onPick={compact ? () => onOpen?.() : pick}
-      onHover={compact ? undefined : onHover}
-    />
-  ) : (
-    <MonthGrid
-      weeks={weeks}
-      lookOf={lookOf}
-      labelOf={labelOf}
-      mode={mode}
-      picked={picked}
-      today={today}
-      onPick={pick}
-      onHover={onHover}
-      cal={cal}
-      kind={kind}
-      unit={unit}
-    />
-  );
-
-  if (compact) {
-    return (
-      <Card className="p-0" data-performance-calendar="compact">
-        <div className="p-4">
-          <button
-            type="button"
-            onClick={onOpen}
-            className="flex w-full items-center gap-2 text-left text-[13px] font-medium text-muted-foreground"
-            aria-label="Open Calendar"
-          >
-            <span className="min-w-0 flex-1 truncate">Training calendar · last 16 weeks</span>
-            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
-          </button>
-          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
-            <span className="whitespace-nowrap text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-              {summary.plannedPast
-                ? `${summary.plannedDone} of ${summary.plannedPast}`
-                : summary.trainingDays}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {summary.plannedPast ? "planned workouts done" : "training days"}
-            </span>
-          </div>
-          <div className="mt-0.5 text-[13px] text-muted-foreground">
-            {[
-              summary.daysPerWeek != null ? `${summary.daysPerWeek} days a week` : null,
-              summary.streakWeeks ? `${summary.streakWeeks}-week streak` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
-          <div ref={gridRef} className="relative mt-3">
-            {grid}
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  const day = picked ? cal.days.get(picked) : undefined;
-  return (
-    <Card
-      className="space-y-3 p-4"
-      data-performance-calendar="full"
-      data-cal-range={kind}
-      data-cal-mode={mode}
-    >
-      <LabHeader
-        title="Training calendar"
-        tip={
-          <InfoTip label="About the calendar" title="Training calendar" align="start">
-            Every day you trained or had a workout written. Workouts: finished (Finish tapped),
-            logged but not finished, missed (a written workout never trained by a day that's over;
-            optional ones are never missed) and planned. Volume: working sets, shaded on your own
-            range. Strength: your best estimated max that day on its main lift against that
-            exercise's best in the 6 months before (hard sets only; a day with no hard set has no
-            read). PRs: all-time records. Consistency: how much of each week's plan was done.
-          </InfoTip>
-        }
-      />
-      <Seg
-        label="Range"
-        value={kind}
-        options={RANGE_KINDS}
-        onChange={(k) => {
-          setKind(k);
-          setAnchor(today);
-          setBlockId(null);
-          setPicked(null);
-        }}
-        stretch
-        testId="cal-range"
-      />
-      {kind !== "all" && <Stepper label={range.label} onPrev={step(-1)} onNext={step(1)} />}
-      <Seg
-        label="Show"
-        value={mode}
-        options={CALENDAR_MODES}
-        onChange={setMode}
-        size="sm"
-        stretch="auto"
-        testId="cal-mode"
-      />
-
-      <div className="grid grid-cols-3 gap-3 border-y border-border/60 py-3" data-cal-summary>
-        <Figure
-          label="Workouts"
-          value={
-            summary.plannedPast ? `${summary.plannedDone}/${summary.plannedPast}` : summary.workouts
-          }
-          sub={
-            summary.plannedPast
-              ? `planned · ${summary.missed ? `${summary.missed} missed` : "none missed"}`
-              : "none written"
-          }
-        />
-        <Figure
-          label="Training days"
-          value={summary.trainingDays}
-          sub={summary.daysPerWeek != null ? `${summary.daysPerWeek} a week` : "no full week yet"}
-        />
-        {mode === "prs" ? (
-          <Figure label="PRs" value={summary.prs} sub="all-time records" />
-        ) : mode === "volume" ? (
-          <Figure
-            label="Working sets"
-            value={summary.sets.toLocaleString()}
-            sub={`${volumeCompact(summary.volumeLb, unit)} ${unit} lifted`}
-          />
-        ) : (
-          <Figure
-            label="Streak"
-            value={summary.streakWeeks ? `${summary.streakWeeks} wk` : "—"}
-            sub={`longest ${summary.longestStreakWeeks} wk`}
-          />
-        )}
-      </div>
-
-      <div className="relative" onKeyDown={onKey}>
-        <div ref={gridRef}>{grid}</div>
-        {hover && hover.day !== picked && (
-          <div
-            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background shadow-sm"
-            style={{ left: hover.x, top: hover.y - 6 }}
-            role="tooltip"
-          >
-            {labelOf(hover.day)}
-          </div>
-        )}
-      </div>
-      <Legend mode={mode} />
-
-      {summary.standouts.length > 0 && !picked && (
-        <div className="space-y-1" data-cal-standouts>
-          <div className="text-[12px] font-medium text-muted-foreground">Standout days</div>
-          {summary.standouts.map((s) => (
-            <button
-              key={`${s.day}-${s.kind}`}
-              type="button"
-              onClick={() => setPicked(s.day)}
-              className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[13px] hover:bg-muted"
-            >
-              {s.kind === "pr" ? (
-                <Trophy className="h-3.5 w-3.5 shrink-0 text-[var(--warning)]" />
-              ) : s.kind === "best" ? (
-                <Star className="h-3.5 w-3.5 shrink-0 text-[var(--warning)]" />
-              ) : (
-                <span className="h-3.5 w-3.5 shrink-0 rounded-[3px] bg-[var(--heat-4)]" />
-              )}
-              <span className="min-w-0 flex-1 truncate text-foreground">{s.text}</span>
-              <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
-                {format(new Date(`${s.day}T12:00:00`), "MMM d")}
-              </span>
-            </button>
+  const gap = layout === "month" ? 6 : 3;
+  let grid: React.ReactNode;
+  if (layout === "month") {
+    const cols = weekColumns(days);
+    const size = Math.min(46, Math.floor((width - gap * 6) / 7));
+    grid = (
+      <div>
+        <div
+          className="mb-1 grid text-center text-[10px] font-medium text-muted-foreground"
+          style={{ gridTemplateColumns: `repeat(7, ${size}px)`, columnGap: gap }}
+        >
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+            <span key={d}>{d.slice(0, size < 34 ? 1 : 3)}</span>
           ))}
         </div>
-      )}
-
-      {picked && (
-        <DayDetail
-          day={picked}
-          d={day}
-          unit={unit}
-          coach={coach}
-          clientId={clientId}
-          onClose={() => setPicked(null)}
-        />
-      )}
-    </Card>
-  );
-}
-
-function ContributionGrid({
-  weeks,
-  lookOf,
-  labelOf,
-  mode,
-  picked,
-  today,
-  onPick,
-  onHover,
-}: {
-  weeks: ReturnType<typeof gridWeeks>;
-  lookOf: (d: string) => CellLook;
-  labelOf: (d: string) => string;
-  mode: CalendarMode;
-  picked: string | null;
-  today: string;
-  onPick: (d: string) => void;
-  onHover?: (d: string | null, el?: HTMLElement) => void;
-}) {
-  return (
-    <div className="flex gap-1.5" data-cal-grid="strip">
-      <div
-        className="flex shrink-0 flex-col gap-[3px] pt-[18px] text-[9px] leading-[13px] text-muted-foreground"
-        aria-hidden
-      >
-        {WEEKDAY_SHORT.map((w, i) => (
-          <span key={i} className={cn("h-[13px]", i % 2 === 1 && "opacity-0")}>
-            {w}
-          </span>
-        ))}
+        <div className="flex flex-col" style={{ rowGap: gap }}>
+          {cols.map((w, i) => (
+            <div key={i} className="flex" style={{ columnGap: gap }}>
+              {w.map((d, j) => (
+                <Cell
+                  key={j}
+                  d={d}
+                  metric={metric}
+                  size={size}
+                  picked={picked === d?.day}
+                  today={today}
+                  onPick={(x) => setPicked(x.day)}
+                  showDate
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
-      <div
-        className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        data-cal-scroll
-      >
-        <div className="inline-flex gap-[3px]" role="grid" aria-label="Training days">
-          {weeks.map((w, wi) => {
-            const first = w.days.find(Boolean)!;
-            const showMonth =
-              wi === 0 ||
-              first.slice(5, 7) !== (weeks[wi - 1].days.find(Boolean) ?? "").slice(5, 7);
+    );
+  } else if (layout === "weeks") {
+    // weeks as columns (Monday on top), only when they fit the width
+    const cols = weekColumns(days);
+    const labelW = 14;
+    const size = Math.max(MIN_CELL, Math.min(18, Math.floor((width - labelW) / cols.length) - gap));
+    let lastMonth = "";
+    grid = (
+      <div data-cal-weeks>
+        <div className="flex" style={{ columnGap: gap, marginLeft: labelW }}>
+          {cols.map((c, i) => {
+            const first = c.find(Boolean)!;
+            const m = first.day.slice(0, 7);
+            const show = m !== lastMonth && (first.day.slice(8, 10) <= "07" || i === 0);
+            if (show) lastMonth = m;
             return (
-              <div key={w.monday} className="flex flex-col gap-[3px]" role="row">
-                <span
-                  className="h-[15px] whitespace-nowrap text-[10px] leading-[15px] text-muted-foreground"
-                  aria-hidden
-                >
-                  {showMonth ? format(new Date(`${first}T12:00:00`), "MMM") : ""}
-                </span>
-                {w.days.map((d, i) =>
-                  d ? (
-                    <Cell
-                      key={d}
-                      day={d}
-                      look={lookOf(d)}
-                      mode={mode}
-                      size="dot"
-                      selected={picked === d}
-                      today={d === today}
-                      label={labelOf(d)}
-                      onPick={onPick}
-                      onHover={onHover}
-                      className={d > today ? "opacity-60" : undefined}
-                    />
-                  ) : (
-                    <span key={i} className="h-[13px] w-[13px]" />
-                  ),
-                )}
-              </div>
+              <span
+                key={i}
+                className="relative h-3.5 text-[10px] text-muted-foreground"
+                style={{ width: size }}
+              >
+                {show ? (
+                  <span className="absolute left-0 whitespace-nowrap">{fmt(first.day, "MMM")}</span>
+                ) : null}
+              </span>
             );
           })}
         </div>
+        <div className="flex" style={{ columnGap: gap }}>
+          <div
+            className="flex flex-col text-[9px] leading-none text-muted-foreground"
+            style={{ width: labelW - gap, rowGap: gap }}
+          >
+            {["M", "", "W", "", "F", "", ""].map((l, i) => (
+              <span key={i} className="flex items-center" style={{ height: size }}>
+                {l}
+              </span>
+            ))}
+          </div>
+          {cols.map((col, i) => (
+            <div key={i} className="flex flex-col" style={{ rowGap: gap }}>
+              {col.map((d, j) => (
+                <Cell
+                  key={j}
+                  d={d}
+                  metric={metric}
+                  size={size}
+                  picked={picked === d?.day}
+                  today={today}
+                  onPick={(x) => setPicked(x.day)}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
+    );
+  } else {
+    // small month calendars that wrap: a year on a phone stays readable
+    const months = monthBlocks(days);
+    const perRow = Math.max(2, Math.min(4, Math.floor((width + 16) / 112)));
+    const colW = (width - 16 * (perRow - 1)) / perRow;
+    const size = Math.max(MIN_CELL, Math.min(16, Math.floor((colW - 6 * 2) / 7)));
+    const multiYear = days[0]?.day.slice(0, 4) !== days[days.length - 1]?.day.slice(0, 4);
+    grid = (
+      <div
+        className="grid gap-x-4 gap-y-3"
+        style={{ gridTemplateColumns: `repeat(${perRow}, minmax(0, 1fr))` }}
+        data-cal-months
+      >
+        {months.map((m) => (
+          <div key={m.key} className="min-w-0">
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">
+              {fmt(
+                `${m.key}-01`,
+                multiYear && (m.key.endsWith("-01") || m === months[0]) ? "MMM yyyy" : "MMM",
+              )}
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: `repeat(7, ${size}px)`, gap: 2 }}>
+              {m.cells.map((d, i) => (
+                <Cell
+                  key={i}
+                  d={d}
+                  metric={metric}
+                  size={size}
+                  picked={picked === d?.day}
+                  today={today}
+                  onPick={(x) => setPicked(x.day)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const summary = [
+    `${totals.trained} workout${totals.trained === 1 ? "" : "s"}`,
+    totals.planned
+      ? `${Math.round((totals.plannedDone / totals.planned) * 100)}% of planned done`
+      : null,
+    totals.bestStreak >= 2 ? `longest streak ${totals.bestStreak} weeks` : null,
+    totals.prs ? `${totals.prs} record${totals.prs === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div data-performance-calendar data-cal-layout={layout} data-cal-metric={metric}>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[13px] text-muted-foreground">
+          {summary.join(" · ")}
+        </p>
+      </div>
+      <ChipRow
+        value={metric}
+        options={CALENDAR_METRICS}
+        onChange={(m) => onMetric(m)}
+        label="What the shading shows"
+        className="mb-2"
+      />
+      <p className="mb-3 text-[12px] leading-snug text-muted-foreground" data-cal-means>
+        {MEANS[metric]}
+      </p>
+      <div ref={wrapRef} className="w-full">
+        {grid}
+      </div>
+      <CalendarKey metric={metric} />
+      {pickedDay ? (
+        <DayDetail
+          d={pickedDay}
+          unit={unit}
+          meta={pickedDay.dayIds.map((id) => dayMeta?.get(id)).find(Boolean) ?? null}
+          onOpen={onOpenWorkout}
+          onClose={() => setPicked(null)}
+        />
+      ) : (
+        <p className="mt-3 text-[12px] text-muted-foreground">Tap a day to see the workout.</p>
+      )}
     </div>
   );
 }
 
-function MonthGrid({
-  weeks,
-  lookOf,
-  labelOf,
-  mode,
-  picked,
-  today,
-  onPick,
-  onHover,
-  cal,
-  kind,
-  unit,
-}: {
-  weeks: ReturnType<typeof gridWeeks>;
-  lookOf: (d: string) => CellLook;
-  labelOf: (d: string) => string;
-  mode: CalendarMode;
-  picked: string | null;
-  today: string;
-  onPick: (d: string) => void;
-  onHover?: (d: string | null, el?: HTMLElement) => void;
-  cal: Cal;
-  kind: RangeKind;
-  unit: Unit;
-}) {
-  const big = kind === "week";
+function CalendarKey({ metric }: { metric: CalendarMetric }) {
+  const [lo, hi] = LEGEND[metric];
   return (
-    <div data-cal-grid={kind} role="grid" aria-label="Training days">
-      <div
-        className={cn(
-          "grid gap-1.5",
-          kind === "block" ? "grid-cols-[1.75rem_repeat(7,minmax(0,1fr))]" : "grid-cols-7",
-        )}
-      >
-        {kind === "block" && <span />}
-        {WEEKDAY.map((w) => (
+    <div
+      className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground"
+      data-cal-key
+    >
+      <span className="inline-flex items-center gap-1.5">
+        {lo}
+        {[1, 2, 3, 4].map((l) => (
           <span
-            key={w}
-            className="pb-0.5 text-center text-[10px] font-medium text-muted-foreground"
-            aria-hidden
-          >
-            {big ? w : w[0]}
-          </span>
+            key={l}
+            className="h-2.5 w-2.5 rounded-[3px]"
+            style={{ background: levelColor(metric, l) }}
+          />
         ))}
-        {weeks.map((w, wi) => (
-          <div key={w.monday} className="contents" role="row">
-            {kind === "block" && (
-              <span className="flex items-center text-[10px] tabular-nums text-muted-foreground">
-                W{wi + 1}
-              </span>
-            )}
-            {w.days.map((d, i) => {
-              if (!d) return <span key={i} />;
-              const dd = cal.days.get(d);
-              const look = lookOf(d);
-              const ink = inkFor(mode, look.level);
-              return (
-                <Cell
-                  key={d}
-                  day={d}
-                  look={look}
-                  mode={mode}
-                  size="box"
-                  selected={picked === d}
-                  today={d === today}
-                  label={labelOf(d)}
-                  onPick={onPick}
-                  onHover={onHover}
-                  className={cn(
-                    "flex flex-col items-start justify-between p-1.5 text-left",
-                    big ? "h-24" : "aspect-square min-h-[38px]",
-                    d > today && "opacity-80",
-                  )}
-                >
-                  <span
-                    className={cn("text-[11px] font-semibold tabular-nums leading-none", ink.num)}
-                  >
-                    {Number(d.slice(8))}
-                  </span>
-                  {(look.star || (dd?.prs.length ?? 0) > 0) && !big && (
-                    <span
-                      className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--warning)] ring-1 ring-[var(--card)]"
-                      aria-hidden
-                    />
-                  )}
-                  {big && dd && (dd.sets > 0 || dd.plannedOpen.length > 0) && (
-                    <span className={cn("line-clamp-3 text-[10px] leading-tight", ink.sub)}>
-                      {dd.sets > 0
-                        ? mode === "strength" && dd.strength
-                          ? `${Math.round(dd.strength.ratio * 100)}% of recent best`
-                          : mode === "volume"
-                            ? `${dd.sets} sets · ${volumeCompact(dd.volumeLb, unit)} ${unit}`
-                            : mode === "prs"
-                              ? `${dd.prs.length} PR${dd.prs.length === 1 ? "" : "s"}`
-                              : `${dd.workouts[0]?.title ?? "Workout"} · ${dd.sets} sets`
-                        : dd.plannedOpen[0]?.title}
-                    </span>
-                  )}
-                </Cell>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+        {hi}
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-[3px] bg-muted/60" /> Rest
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-[3px] border-[1.5px] border-destructive/55" /> Missed
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-[3px] border border-dashed border-muted-foreground/45" />{" "}
+        Planned
+      </span>
     </div>
   );
 }
 
 function DayDetail({
-  day,
   d,
   unit,
-  coach,
-  clientId,
+  meta,
+  onOpen,
   onClose,
 }: {
-  day: string;
-  d: CalDay | undefined;
-  unit: Unit;
-  coach: boolean;
-  clientId: string;
+  d: DaySummary;
+  unit: "lb" | "kg";
+  meta: DayMeta | null;
+  onOpen?: (dayId: string) => void;
   onClose: () => void;
 }) {
-  const [all, setAll] = useState(false);
-  const date = new Date(`${day}T12:00:00`);
-  const head = format(date, "EEEE, MMMM d");
-  if (!d || (!d.sets && !d.plannedOpen.length && !d.optionalSkipped)) {
-    return (
-      <div className="jf-lab-in rounded-xl border border-border p-3" data-cal-detail={day}>
-        <DetailHead head={head} chip="Rest" onClose={onClose} />
-        <p className="mt-1 text-[13px] text-muted-foreground">
-          Nothing logged or written for this day.
-        </p>
-      </div>
-    );
-  }
-  const chip = {
-    done: "Done",
-    partial: "Logged, not finished",
-    missed: "Missed",
-    upcoming: "Planned",
-    untracked: "Not tracked",
-    rest: "Rest",
-  }[d.status];
-  const exercises = all ? d.exercises : d.exercises.slice(0, 4);
+  const conv = (lb: number) => (unit === "kg" ? lb / LB_PER_KG : lb);
+  const w = (lb: number) =>
+    `${Math.round(conv(lb) * (unit === "kg" ? 2 : 1)) / (unit === "kg" ? 2 : 1)}`;
+  const stateWord =
+    d.state === "missed"
+      ? "Missed"
+      : d.state === "rest"
+        ? "Rest day"
+        : d.state === "planned" || d.state === "today"
+          ? "Planned"
+          : d.state === "none"
+            ? "Before your first logged workout"
+            : d.state === "future"
+              ? "Nothing planned"
+              : null;
   return (
-    <div className="jf-lab-in space-y-3 rounded-xl border border-border p-3" data-cal-detail={day}>
-      <DetailHead head={head} chip={chip} tone={d.status} onClose={onClose} />
-      {d.workouts.length > 0 && (
-        <ul className="space-y-1">
-          {d.workouts.map((w) => (
-            <li
-              key={`${w.dayId}`}
-              className="flex items-baseline justify-between gap-2 text-[13px]"
-            >
-              <span className="min-w-0 truncate font-medium text-foreground">{w.title}</span>
-              <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
-                {[
-                  w.finished ? "finished" : "not finished",
-                  w.durationMin ? `${w.durationMin} min` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {d.plannedOpen.length > 0 && (
-        <p className="text-[13px] text-muted-foreground">
-          {d.status === "missed"
-            ? "Written and not trained: "
-            : d.status === "untracked"
-              ? "Written before you started logging in the app (not counted as missed): "
-              : "Written for this day: "}
-          {d.plannedOpen.map((p) => `${p.title}${p.optional ? " (optional)" : ""}`).join(", ")}
-        </p>
-      )}
+    <div
+      className="mt-3 rounded-xl bg-muted/50 p-3 text-[13px]"
+      data-cal-detail={d.day}
+      role="region"
+      aria-label={`Details for ${fmt(d.day, "EEEE, MMMM d")}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-semibold text-foreground">{fmt(d.day, "EEEE, MMM d, yyyy")}</div>
+          {meta?.title && (
+            <div className="truncate text-muted-foreground">
+              {meta.title}
+              {meta.block ? ` · ${meta.block}` : ""}
+            </div>
+          )}
+          {stateWord && <div className="text-muted-foreground">{stateWord}</div>}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="-mr-2 -mt-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Close day details"
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
       {d.sets > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <Figure
-            label="Working sets"
-            value={d.sets}
-            sub={`${d.hardSets} hard${d.unratedSets ? ` · ${d.unratedSets} unrated` : ""}`}
-          />
-          <Figure label="Reps" value={d.reps.toLocaleString()} />
-          <Figure
-            label="Volume"
-            value={<DualWeight lb={d.volumeLb} unit={unit} size="sm" stacked />}
-            sub={d.volumeLb ? undefined : "no external load"}
-          />
-        </div>
-      )}
-      {d.strength && (
-        <div className="rounded-lg bg-muted/50 p-2.5 text-[13px]" data-cal-strength>
-          <div className="flex items-center gap-1.5 font-medium text-foreground">
-            {d.strength.newBest && (
-              <Star className="h-3.5 w-3.5 text-[var(--warning)]" aria-label="New best estimate" />
-            )}
-            {d.strength.exercise}: {Math.round(d.strength.ratio * 100)}% of its recent best
-          </div>
-          <div className="mt-0.5 text-[12px] text-muted-foreground">
-            Estimated max {loadText(d.strength.e1rmLb, unit)} against{" "}
-            {loadText(d.strength.priorBestLb, unit)} (best of the 6 months before).
-            {d.strength.newBest ? " Your best estimate on file." : ""}
-          </div>
-        </div>
-      )}
-      {d.sets > 0 && !d.strength && (
-        <p className="text-[12px] text-muted-foreground">
-          No strength read: no hard set (RPE 7+, 10 reps or fewer) on a lift with enough history.
-        </p>
-      )}
-      {d.prs.length > 0 && (
-        <div className="space-y-1" data-cal-prs>
-          {d.prs.map((p, i) => (
-            <div key={i} className="flex items-center gap-2 text-[13px]">
-              <Trophy className="h-3.5 w-3.5 shrink-0 text-[var(--warning)]" />
-              <span className="min-w-0 flex-1 truncate text-foreground">{p.exercise}</span>
-              <span className="shrink-0 tabular-nums text-foreground">
-                {loadText(p.load, unit)} × {p.reps}
-                {p.rpe != null ? <span className="text-muted-foreground"> @{p.rpe}</span> : null}
+        <>
+          <div className="mt-2 grid grid-cols-3 gap-2 tabular-nums">
+            <span>
+              <span className="block text-[11px] text-muted-foreground">Sets</span>
+              <span className="font-semibold text-foreground">
+                {d.sets}
+                {d.plannedSets ? (
+                  <span className="font-normal text-muted-foreground"> / {d.plannedSets}</span>
+                ) : null}
               </span>
-            </div>
-          ))}
-        </div>
-      )}
-      {d.exercises.length > 0 && (
-        <div className="space-y-2" data-cal-exercises>
-          {exercises.map((ex) => (
-            <div key={`${ex.key}-${ex.dayId}`}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                  {ex.name}
-                </span>
-                {ex.bestE1rm != null && (
-                  <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                    est. max {loadText(ex.bestE1rm, unit)}
+            </span>
+            <span>
+              <span className="block text-[11px] text-muted-foreground">Weight lifted</span>
+              <span className="font-semibold text-foreground">
+                {Math.round(conv(d.tonnageLb)).toLocaleString()} {unit}
+              </span>
+            </span>
+            <span>
+              <span className="block text-[11px] text-muted-foreground">Effort (RPE)</span>
+              <span className="font-semibold text-foreground">{d.avgRpe ?? "—"}</span>
+            </span>
+          </div>
+          {d.topSets.length > 0 && (
+            <ul className="mt-2 space-y-0.5">
+              {d.topSets.slice(0, 3).map((t) => (
+                <li key={t.exercise} className="flex justify-between gap-2">
+                  <span className="truncate text-muted-foreground">{t.exercise}</span>
+                  <span className="shrink-0 tabular-nums text-foreground">
+                    {w(t.load)} {unit} × {t.reps}
+                    {t.rpe ? <span className="text-muted-foreground"> at RPE {t.rpe}</span> : null}
                   </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(d.prs.length > 0 || d.strength) && (
+            <div className="mt-2 space-y-0.5 text-[12px]">
+              {d.prs.map((p) => (
+                <div key={p.exercise} className="flex items-center gap-1.5 text-foreground">
+                  <Trophy className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden /> New record:{" "}
+                  {p.exercise} {w(p.load)} {unit} × {p.reps}
+                </div>
+              ))}
+              {d.strength &&
+                d.strength.pct > 0 &&
+                !d.prs.some((p) => p.exercise === d.strength!.exercise) && (
+                  <div className="text-success">
+                    {d.strength.exercise}: estimated max up {d.strength.pct}% on its recent best
+                  </div>
                 )}
-              </div>
-              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] tabular-nums text-muted-foreground">
-                {ex.sets.map((s) => (
-                  <span key={s.id} className={cn(s.pr && "font-semibold text-foreground")}>
-                    {s.loadType === "bodyweight"
-                      ? `BW × ${s.reps}`
-                      : s.loadType === "assisted"
-                        ? `−${loadText(s.assistLb ?? 0, unit)} × ${s.reps}`
-                        : s.load > 0
-                          ? `${loadText(s.load, unit)} × ${s.reps}`
-                          : `× ${s.reps}`}
-                    {s.rpe != null ? ` @${s.rpe}` : s.rir != null ? ` ${s.rir} RIR` : ""}
-                    {s.pr ? " PR" : ""}
-                  </span>
-                ))}
-              </div>
             </div>
-          ))}
-          {d.exercises.length > 4 && (
+          )}
+          {onOpen && d.dayIds[0] && (
             <button
               type="button"
-              className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
-              onClick={() => setAll((v) => !v)}
+              onClick={() => onOpen(d.dayIds[0])}
+              className="mt-2 inline-flex min-h-10 items-center gap-0.5 text-[13px] font-medium text-foreground"
+              data-cal-open
             >
-              {all ? "Show fewer" : `All ${d.exercises.length} exercises`}
+              Open workout <ChevronRight className="h-4 w-4" aria-hidden />
             </button>
           )}
-        </div>
+        </>
       )}
-      {d.checkout && (
-        <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground"
-          data-cal-checkout
-        >
-          <Moon className="h-3.5 w-3.5" aria-hidden />
-          {d.checkout.sleepBucket && (
-            <span>Slept {SLEEP_WORDS[d.checkout.sleepBucket] ?? d.checkout.sleepBucket}</span>
-          )}
-          {d.checkout.recovery != null && <span>felt {d.checkout.recovery}/5 recovered</span>}
-          {d.checkout.pain ? <span className="text-foreground">pain reported</span> : null}
-        </div>
-      )}
-      {d.workouts.some((w) => w.dayId) && (
-        <div className="flex flex-wrap gap-2">
-          {d.workouts
-            .filter((w) => w.dayId)
-            .map((w) =>
-              coach ? (
-                <Button key={w.dayId} asChild size="sm" variant="outline" className="h-10">
-                  <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
-                    Open in their program
-                  </Link>
-                </Button>
-              ) : (
-                <Button key={w.dayId} asChild size="sm" variant="outline" className="h-10">
-                  <Link to="/portal/workouts/$dayId" params={{ dayId: w.dayId! }}>
-                    Open {d.workouts.length > 1 ? w.title : "workout"}
-                  </Link>
-                </Button>
-              ),
-            )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DetailHead({
-  head,
-  chip,
-  tone,
-  onClose,
-}: {
-  head: string;
-  chip: string;
-  tone?: CalDay["status"];
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-foreground">
-        {head}
-      </span>
-      <span
-        className={cn(
-          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-          tone === "done"
-            ? "bg-[color-mix(in_oklch,var(--success)_15%,transparent)] text-[var(--success)]"
-            : tone === "missed"
-              ? "bg-[color-mix(in_oklch,var(--destructive)_12%,transparent)] text-[var(--destructive)]"
-              : "bg-muted text-muted-foreground",
-        )}
-      >
-        {chip}
-      </span>
-      <button
-        type="button"
-        onClick={onClose}
-        className="shrink-0 rounded-md px-1.5 text-[12px] text-muted-foreground hover:text-foreground"
-        aria-label="Close day"
-      >
-        Close
-      </button>
     </div>
   );
 }

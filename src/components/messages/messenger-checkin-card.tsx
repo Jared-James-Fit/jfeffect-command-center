@@ -47,6 +47,7 @@ import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/l
 import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/digestion";
 import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
 import { addPlanSteps } from "@/lib/checkin-coordination/steps";
+import { CleoRecommendationCard } from "@/components/messages/cleo-recommendation-card";
 import { CHANGE_FOLLOW_UPS, NU } from "@/lib/checkin-coordination/nutrition-fold";
 import { MEAL_CHOICE } from "@/lib/nutrition-history";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -981,6 +982,8 @@ export function MessengerCheckinSubmissionCard({
           />
 
           <CheckinPlanNote plan={(data as any).plan ?? null} />
+          {/* one coordinated read across nutrition, cardio and training: private to the coach */}
+          {taskType === "weekly_checkin" && (data as any).status === "completed" && <CleoRecommendationCard checkinId={submissionId} />}
           {(data as any).nutrition_submission_id && role === "admin" && (
             <a
               href={`/admin/clients/${(data as any).client_id}?tab=nutrition`}
@@ -1010,7 +1013,7 @@ export function MessengerCheckinSubmissionCard({
           {recapMissing ? (
             <div className="rounded-xl border border-warning/40 bg-warning/5 p-3" data-recap-missing>
               <div className="text-xs font-semibold">
-                {(data as any).ai_status === "pending" ? "Writing the recap…" : "No AI recap for this one"}
+                {(data as any).ai_status === "pending" ? "Writing the recap…" : "No recap for this one"}
               </div>
               <p className={cn("mt-1 text-xs leading-relaxed", FORM_MUTED)}>
                 {(data as any).ai_status === "pending"

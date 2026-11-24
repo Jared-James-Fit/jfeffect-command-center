@@ -1,9 +1,11 @@
 import { Loader2 } from "lucide-react";
+import { SlowNote } from "@/components/loading/load-states";
 
 /**
  * Branded full-page loading gate for layout-level guards (role resolution,
  * first mount). Used only while a layout truly cannot render yet — never
- * for ordinary in-app navigation or query refetching.
+ * for ordinary in-app navigation or query refetching. Like every wait it says
+ * when it's slow and, once stalled, offers to start over (never an endless spinner).
  */
 export function FullPageLoader({ label = "Loading…" }: { label?: string }) {
   return (
@@ -11,6 +13,7 @@ export function FullPageLoader({ label = "Loading…" }: { label?: string }) {
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
         <span className="text-sm">{label}</span>
+        <SlowNote active onRetry={() => window.location.reload()} />
       </div>
     </div>
   );

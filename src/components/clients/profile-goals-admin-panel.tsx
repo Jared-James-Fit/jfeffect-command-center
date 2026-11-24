@@ -156,7 +156,7 @@ export function ProfileGoalsAdminPanel({ clientId }: { clientId: string }) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-32 animate-pulse rounded-lg bg-muted" />
+          <div key={i} className="h-32 jf-skeleton rounded-lg bg-muted" />
         ))}
       </div>
     );

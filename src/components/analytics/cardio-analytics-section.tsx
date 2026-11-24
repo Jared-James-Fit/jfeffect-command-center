@@ -141,11 +141,9 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         <Activity className="h-5 w-5 shrink-0 text-muted-foreground" />
         <span className="truncate">Cardio</span>
         <InfoTip label="About cardio analytics" title="Cardio" align="start">
-          Prescribed cardio comes from the client's cardio targets (weekly
-          frequency × weeks the target is live in this range). Completed comes
-          from logged cardio sessions marked complete — skipped sessions never
-          count. Adherence = completed ÷ prescribed. This is the same
-          calculation Training Readiness uses.
+          Planned cardio comes from your cardio plan (sessions a week × the
+          weeks it ran in this period). Done counts the cardio you logged as
+          complete; skipped sessions never count. "Done" is done ÷ planned.
         </InfoTip>
       </h2>
       <span className="shrink-0 text-xs font-semibold text-muted-foreground">{rangeLabel}</span>
@@ -157,7 +155,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
       <section aria-label="Cardio">
         {header}
         <Card className="border-border/80 bg-card p-4">
-          <div className="h-16 animate-pulse rounded-lg bg-muted/40" />
+          <div className="h-16 jf-skeleton rounded-lg bg-muted/40" />
         </Card>
       </section>
     );
@@ -170,7 +168,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         {header}
         <Card className="border-border/80 bg-card p-4">
           <p className="text-sm font-semibold text-muted-foreground">
-            No cardio prescribed in this range.
+            No cardio planned in this period.
           </p>
         </Card>
       </section>
@@ -183,29 +181,29 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
       <Card className="border-border/80 bg-card p-4">
         {/* Summary metrics */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Cell label="Prescribed" value={summary.prescribedSessions > 0 ? String(summary.prescribedSessions) : "—"} />
-          <Cell label="Completed" value={String(summary.completedSessions)} />
+          <Cell label="Planned" value={summary.prescribedSessions > 0 ? String(summary.prescribedSessions) : "—"} />
+          <Cell label="Logged" value={String(summary.completedSessions)} />
           <Cell
-            label="Adherence"
+            label="Done"
             value={summary.adherence != null ? `${summary.adherence}%` : "—"}
             highlight={summary.adherence != null}
             tip={
-              <InfoTip label="About adherence" title="Adherence" align="end">
-                Completed prescribed cardio sessions in this range.
+              <InfoTip label="About done" title="Done" align="end">
+                Planned cardio sessions you logged as done in this period.
               </InfoTip>
             }
           />
           <Cell
-            label="Total Minutes"
+            label="Minutes"
             value={`${summary.completedMinutes} min`}
             sublabel={
               summary.prescribedMinutes > 0
-                ? `of ${summary.prescribedMinutes} min prescribed`
+                ? `of ${summary.prescribedMinutes} min planned`
                 : undefined
             }
             tip={
               <InfoTip label="About cardio minutes" title="Minutes" align="end">
-                Actual cardio minutes completed compared with prescribed minutes.
+                The cardio minutes you logged, compared with what was planned.
               </InfoTip>
             }
           />
@@ -216,7 +214,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" data-cardio-details>
             {summary.avgRpe != null && (
               <Cell
-                label="Avg effort"
+                label="Average effort"
                 value={`RPE ${summary.avgRpe}`}
                 sublabel={`${summary.rpeSessions} of ${summary.completedSessions} session${summary.completedSessions === 1 ? "" : "s"} rated`}
                 tip={
@@ -249,7 +247,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
           <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Minutes vs Target
+                Minutes against the plan
               </span>
               <span className="text-sm font-bold text-foreground">
                 {summary.completedMinutes} / {summary.prescribedMinutes} min
@@ -298,7 +296,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                     onClick={() => setMetric(m)}
                     data-cardio-metric={m}
                   >
-                    {m === "minutes" ? "Minutes" : m === "adherence" ? "Adherence %" : m === "effort" ? "Effort" : "Calories"}
+                    {m === "minutes" ? "Minutes" : m === "adherence" ? "Done %" : m === "effort" ? "Effort" : "Calories"}
                   </Button>
                 ))}
               </div>
@@ -328,7 +326,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                     <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      formatter={(v: any, n: any) => [`${v} min`, n === "minutes" ? "Completed" : "Prescribed"]}
+                      formatter={(v: any, n: any) => [`${v} min`, n === "minutes" ? "Logged" : "Planned"]}
                     />
                     <Bar dataKey="minutes" fill="var(--primary)" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -337,7 +335,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any) => [`${v}%`, "Adherence"]} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any) => [`${v}%`, "Done"]} />
                     <Line type="monotone" dataKey="adherence" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 )}
@@ -487,7 +485,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                     <span className="font-bold text-foreground">Week {w.index}</span>
                     <span className="font-semibold text-muted-foreground">
                       {w.completedSessions}/{w.prescribedSessions} · {w.completedMinutes}/{w.prescribedMinutes} min
-                      {w.adherence != null ? ` · ${w.adherence}%` : " · no cardio prescribed"}
+                      {w.adherence != null ? ` · ${w.adherence}%` : " · no cardio planned"}
                       {w.avgRpe != null ? ` · RPE ${w.avgRpe}` : ""}
                       {w.calories != null ? ` · ${w.calories} kcal` : ""}
                     </span>

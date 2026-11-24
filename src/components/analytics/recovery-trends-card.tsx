@@ -25,7 +25,7 @@ export function RecoveryTrendsCard({
   const summary = useMemo(() => (data ? recoverySummary(data) : null), [data]);
   const pattern = useMemo(() => (data ? sleepPatternInsight(data) : null), [data]);
 
-  if (isLoading) return <Card className="h-[180px] animate-pulse bg-muted/30" aria-hidden />;
+  if (isLoading) return <Card className="h-[180px] jf-skeleton bg-muted/30" aria-hidden />;
   if (!summary || summary.checkouts === 0) {
     return (
       <Card className="p-4" data-recovery-trends-empty>

@@ -643,6 +643,13 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 }
               }
 
+              // A plan bought from Manage plan (plans.server.ts): once it's paid, the plan applies
+              // (the package, the tier, the notices). Idempotent; a throw gives the event back to Stripe.
+              if (obj?.metadata?.plan_change_id) {
+                const { onPlanCheckoutCompleted } = await import("@/lib/plans/plans.server");
+                await onPlanCheckoutCompleted(supabase, obj);
+              }
+
               // ── Fixed-term subscription schedule ─────────────────────────
               // When a checkout completes for a fixed-term plan (plan_type=fixed_term
               // in price metadata), wrap the new subscription in a Subscription Schedule
@@ -848,6 +855,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   await revokeMemberFromPurchase(supabase, purchase);
                 }
               }
+              // A plan change waiting on this subscription (an upgrade's charge went through, a
+              // scheduled change kept or changed in Stripe, a plan set to end in the portal).
+              {
+                const { onPlanSubscriptionUpdated } = await import("@/lib/plans/plans.server");
+                await onPlanSubscriptionUpdated(supabase, obj);
+              }
               break;
             }
 
@@ -888,6 +901,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
                 await revokeMemberFromPurchase(supabase, purchase);
+              }
+              // A plan's subscription is over: a scheduled move to free applies now; an end
+              // nobody scheduled here ends the package and tells the coach (plans.server.ts).
+              {
+                const { onPlanSubscriptionDeleted } = await import("@/lib/plans/plans.server");
+                await onPlanSubscriptionDeleted(supabase, obj);
               }
               // Admin notification for subscription cancellation — best-effort
               try {
@@ -997,6 +1016,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   }
                   break;
                 }
+                // an upgrade's prorated charge was paid: the new plan applies (plans.server.ts)
+                const { onPlanSubscriptionUpdated } = await import("@/lib/plans/plans.server");
+                await onPlanSubscriptionUpdated(supabase, sub);
               }
               let purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: invSubId,
@@ -1228,6 +1250,15 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                       amount: obj.amount_due ? `$${(obj.amount_due / 100).toFixed(2)}` : "",
                     });
                   }
+                  break;
+                }
+              }
+              // An upgrade's prorated charge that didn't go through: the plan just didn't change
+              // (pending_if_incomplete), their subscription is fine, so the sale isn't overdue.
+              {
+                const { isPlanChangeInvoice } = await import("@/lib/plans/plans.server");
+                if (await isPlanChangeInvoice(supabase, obj)) {
+                  console.info("[stripe-webhook] plan change charge failed; plan unchanged", { invoice: obj.id });
                   break;
                 }
               }

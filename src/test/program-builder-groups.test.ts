@@ -315,7 +315,7 @@ describe("an imported top set and its back-offs", () => {
 describe("set groups reach the athlete's workouts", () => {
   const { readFileSync } = require("node:fs") as typeof import("node:fs");
   const sql = readFileSync("supabase/migrations/20270509090000_program_builder_set_groups.sql", "utf8");
-  const logger = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+  const logger = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
 
   it("saving keeps each group's role, name, group and rounding", () => {
     expect(sql).toContain("v_role := CASE WHEN e->>'role' IN ('warmup', 'top', 'backoff') THEN e->>'role' END;");
@@ -331,7 +331,9 @@ describe("set groups reach the athlete's workouts", () => {
 
   it("the logger rounds a % of the top set to the program's plates", () => {
     expect(sql).toContain("CHECK (load_round IS NULL OR load_round = 'fine')");
-    expect(logger).toContain("const step = backoffRoundStep(activeUnit, row.load_round);");
+    // backoffPlanFor (card-suggestion.ts), called with the card's unit
+    expect(logger).toContain("const step = backoffRoundStep(unit, row.load_round);");
+    expect(logger).toContain("backoffPlanFor(row, topSetBasis, activeUnit)");
     expect(logger).toContain('if (round === "fine") return unit === "kg" ? 1 : 2.5;');
   });
 });

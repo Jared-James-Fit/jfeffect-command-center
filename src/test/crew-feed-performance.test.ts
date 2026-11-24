@@ -135,13 +135,11 @@ describe("nothing blocks a swipe that isn't its own", () => {
     expect(editor).toContain("<div ref={dragRoot}");
   });
   it("a like never reloads the feed's pages under a finger", () => {
-    const react = queries.slice(
-      queries.indexOf("export function useReact("),
-      queries.indexOf("export function useReact(") + 3000,
-    );
-    expect(react).toContain(
-      'qc.invalidateQueries({ queryKey: ["community-feed"], refetchType: "none" });',
-    );
+    const at = queries.indexOf("export function useReact(");
+    const settled = queries.slice(queries.indexOf("onSettled: () => {", at), queries.indexOf("onSettled: () => {", at) + 400);
+    // the like is patched into every feed as it's tapped; only a failed one reads the feeds again
+    expect(settled).not.toContain('queryKey: ["community-feed"]');
+    expect(queries.slice(at, at + 3000)).toMatch(/onError: \(_e, _v, ctx\) => \{\s*ctx\?\.snapshot\.forEach/);
   });
   it("a post's sheets and dialogs are only mounted once they've been opened", () => {
     const hook = read("src/hooks/use-opened-once.ts");

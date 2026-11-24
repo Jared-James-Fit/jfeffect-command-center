@@ -20,6 +20,7 @@
  * coach does it.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ErrorState } from "@/components/loading";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,7 +32,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
-import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
+import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, renameIntelProgramFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
 import { generatedProgramOutcomes } from "@/lib/program-intel/outcomes";
 import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "@/lib/program-intel/recommend";
 import { DEFAULT_PROGRAM_WEEKS, MAX_PROGRAM_WEEKS } from "@/lib/program-intel/horizon";
@@ -81,6 +82,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   const retry = useServerFn(retryIntelJobFn);
   const assign = useServerFn(assignIntelDraftFn);
   const discard = useServerFn(discardIntelDraftFn);
+  const rename = useServerFn(renameIntelProgramFn);
   const [setup, setSetup] = useState<GenerationSetup | null>(null);
   const [edited, setEdited] = useState<Set<SetupField>>(new Set());
   const editedRef = useRef(edited);
@@ -234,24 +236,34 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   const outcomes = useMemo(() => (records.data ? generatedProgramOutcomes(records.data, assigned as any) : []), [records.data, assigned]);
   const recordedKeys = useMemo(() => new Set((observations.data ?? []).map((o) => o.finding_key ?? "").filter((k) => k.startsWith("outcome:"))), [observations.data]);
 
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] });
-    void qc.invalidateQueries({ queryKey: ["program-intel-observations", clientId] });
+  const refresh = async (): Promise<void> => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] }),
+      qc.invalidateQueries({ queryKey: ["program-intel-observations", clientId] }),
+    ]);
   };
+  // One action at a time, guarded before the first await, and busy until the jobs
+  // list has the new run on it: Generate, Approve and Assign were tappable again in
+  // the moment between the server answering and the list catching up.
+  const runningRef = useRef(false);
   const run = async (fn: () => Promise<unknown>, ok?: string): Promise<boolean> => {
+    if (runningRef.current) return false;
+    runningRef.current = true;
     setBusy(true);
     try {
       await fn();
       if (ok) toast.success(ok);
-      refresh();
+      await refresh().catch(() => undefined);
       return true;
     } catch (e: any) {
       toast.error(e?.message ?? "That didn't work");
       return false;
     } finally {
+      runningRef.current = false;
       setBusy(false);
     }
   };
+  const renameProgram = (jobId: string) => (name: string) => run(() => rename({ data: { jobId, name } }), "Renamed");
   type RunExtra = { strategy?: Strategy; strategyJobId?: string; setup?: GenerationSetup; edited?: string[] };
   const queueRun = (kind: "strategy" | "generate", extra: RunExtra = {}) => {
     const runSetup = extra.setup ?? setup!;
@@ -407,10 +419,14 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                 </ol>
                 {stage === "setup" && (
                   <>
-                    <Button className="h-12 w-full text-[15px]" disabled={busy || blockers.length > 0 || busyRun} onClick={() => start("generate")} data-testid="gen-fast">
+                    {/* Until the runs on file are known, Generate waits: a failed read would hide a draft that's already there */}
+                    {jobs.isError && !jobs.data && (
+                      <ErrorState error={jobs.error} what="their earlier runs" size="inline" onRetry={() => jobs.refetch()} retrying={jobs.isFetching} />
+                    )}
+                    <Button className="h-12 w-full text-[15px]" disabled={busy || blockers.length > 0 || busyRun || !jobs.data} onClick={() => start("generate")} data-testid="gen-fast">
                       {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Generate the program
                     </Button>
-                    <Button variant="outline" className="h-11 w-full" disabled={busy || blockers.length > 0 || busyRun} onClick={() => start("strategy")} data-testid="gen-review-first">
+                    <Button variant="outline" className="h-11 w-full" disabled={busy || blockers.length > 0 || busyRun || !jobs.data} onClick={() => start("strategy")} data-testid="gen-review-first">
                       <ListChecks className="mr-2 h-4 w-4" /> Review the strategy first
                     </Button>
                     {blockers.length > 0 && <p className="text-xs text-destructive">Fix the conflicts above first: {blockers.map((b) => b.title).join("; ")}.</p>}
@@ -440,6 +456,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                   onInspect={canInspect ? () => setInspecting(activeGenerate) : undefined}
                   plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: activeGenerate.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")}
                   onDiscard={() => run(() => discard({ data: { jobId: activeGenerate.id } }), "Draft discarded")}
+                  onRename={renameProgram(activeGenerate.id)}
                 />
               )}
               {activeStrategy && (running(activeStrategy) || activeStrategy.status === "error") && (
@@ -464,7 +481,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                   <summary className="cursor-pointer select-none font-medium">Earlier programs generated ({earlier.length})</summary>
                   <div className="mt-3 space-y-2">
                     {earlier.map((j) => (
-                      <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
+                      <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} onRename={renameProgram(j.id)} />
                     ))}
                   </div>
                 </details>

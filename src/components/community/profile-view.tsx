@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ErrorState, OfflineState } from "@/components/loading";
 import { Archive, Bookmark, Camera, Dumbbell, Grid3x3, Lock, MapPin, MoreHorizontal, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,8 @@ import { useSeenStories } from "@/lib/story-seen";
  * stories, with Request to follow. No reaction totals.
  */
 export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId: string; unit: "kg" | "lb"; onOpenPost: (post: CommunityPost) => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
-  const { data: profile, isLoading } = useCommunityProfile(userId);
+  const profileQ = useCommunityProfile(userId);
+  const { data: profile, isLoading } = profileQ;
   // coaches follow a private account straight away (no request), so it acts public for them
   const { role } = useAuth();
   const viewerIsStaff = role === "admin" || role === "coach";
@@ -88,6 +90,12 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   useEffect(() => () => { if (cropSrc) URL.revokeObjectURL(cropSrc); }, [cropSrc]);
 
+  if (!profile && (profileQ.isError || profileQ.fetchStatus === "paused")) {
+    // a profile that couldn't load says so, with Try again (never a skeleton forever)
+    return profileQ.fetchStatus === "paused"
+      ? <OfflineState what="this profile" />
+      : <ErrorState error={profileQ.error} what="this profile" onRetry={() => profileQ.refetch()} retrying={profileQ.isFetching} />;
+  }
   if (isLoading || !profile) {
     return (
       <div className="space-y-4">

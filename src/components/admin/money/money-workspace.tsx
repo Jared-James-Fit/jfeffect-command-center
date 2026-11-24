@@ -8,6 +8,8 @@
  * Used by Sales (the owner) and the finance login's Books page.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Camera, ChevronDown, FilePlus2, HandCoins, Landmark, Loader2, MessageCircle, Plus, Repeat } from "lucide-react";
@@ -120,14 +122,23 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
     void qc.invalidateQueries({ queryKey: RECEIVABLES_KEY });
   };
 
-  if (books.isLoading) return <MoneySkeleton />;
+  const booksState = queryView(books as any).kind;
+  if (booksState === "loading") {
+    return (
+      <>
+        <MoneySkeleton />
+        <SlowNote active onRetry={() => books.refetch()} what="the books" />
+      </>
+    );
+  }
+  if (booksState === "offline") {
+    // money is never kept on the phone, so offline there's nothing earlier to show
+    return <div className="p-4 md:p-6"><OfflineState what="the books" /></div>;
+  }
   if (books.error || !derived) {
     return (
       <div className="p-4 md:p-6">
-        <Card className="border-destructive/30 p-4 text-[14px] text-destructive">
-          Couldn't load the books: {(books.error as any)?.message ?? "unknown error"}
-          <Button variant="outline" size="sm" className="ml-3 h-9" onClick={() => void books.refetch()}>Try again</Button>
-        </Card>
+        <ErrorState error={books.error} what="the books" onRetry={() => books.refetch()} retrying={books.isFetching} />
       </div>
     );
   }
@@ -148,7 +159,11 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
     prev: derived.prev,
     snapshot: derived.snapshot,
     receivables: receivables.data ?? null,
-    receivablesError: receivables.error ? "Couldn't read client balances right now." : null,
+    receivablesError: receivables.error
+      ? "Couldn't read client balances right now."
+      : receivables.fetchStatus === "paused" && !receivables.data
+        ? "You're offline. Balances load when you're back online."
+        : null,
     setPeriod: (p) => onState({ p: encodePeriod(p) }),
     go: (v, ledger) => {
       if (ledger) setLedgerPreset({ ...ledger });

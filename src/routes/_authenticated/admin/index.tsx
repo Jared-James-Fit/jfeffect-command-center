@@ -21,6 +21,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { cn } from "@/lib/utils";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { combineQueryViews, queryView } from "@/lib/loading/load-state";
 import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 import { NewLeadsCard } from "@/components/leads/new-leads-card";
 import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
@@ -38,17 +40,19 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 /* ------------------------------------------------------------------ */
 
 function DriveSetupBanner() {
-  const { data } = useQuery({
+  const { data, isSuccess } = useQuery({
     queryKey: ["media-drive-settings-banner"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("media_drive_settings" as any)
         .select("root_folder_id,status").limit(1).maybeSingle();
+      if (error) throw error;
       return data as { root_folder_id?: string | null; status?: string | null } | null;
     },
   });
   const ready = !!data?.root_folder_id && data?.status === "Ready";
-  if (ready) return null;
+  // Only an answer can say Drive isn't set up (a failed read used to claim it wasn't).
+  if (ready || !isSuccess) return null;
   // A setup problem: an amber icon on a plain card, not a tinted box.
   return (
     <Card className="p-3">
@@ -82,7 +86,7 @@ function SnapshotGrid({ tiles, loading, otherWaiting = 0 }: { tiles: SnapshotTil
   if (loading) {
     return (
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2" aria-busy="true">
-        {tiles.map((t) => <div key={t.key} className="h-[68px] animate-pulse rounded-xl border border-border bg-card" />)}
+        {tiles.map((t) => <div key={t.key} className="h-[68px] jf-skeleton rounded-xl border border-border bg-card" />)}
       </div>
     );
   }
@@ -147,7 +151,7 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
   const scheduled = overview?.training.scheduled ?? [];
   const extra = overview?.training.unscheduled ?? [];
   const sum = trainingSummary(scheduled, extra.length);
-  if (loading) return <div className="h-[60px] animate-pulse rounded-2xl border border-border bg-card" aria-busy="true" />;
+  if (loading) return <div className="h-[60px] jf-skeleton rounded-2xl border border-border bg-card" aria-busy="true" />;
   if (sum.total === 0) return null;
   const faces = [...scheduled, ...extra].slice(0, 4);
   return (
@@ -209,16 +213,18 @@ function AdminDashboard() {
     refetchOnReconnect: true,
   } as const;
 
-  // The Clients page source: per-client flags + the roster-wide counts.
-  const { data: directory, isLoading: directoryLoading } = useQuery({
+  // The Clients page source: only its roster-wide counts are used here (they're
+  // worked out over every client whatever the page size), so it asks for the
+  // smallest page instead of 100 rows every minute.
+  const directoryQ = useQuery({
     queryKey: ["clients-directory", "dashboard"],
-    queryFn: () => listDirectory({ data: { size: 100, sort: "attention", flags: [], page: 1 } as any }),
+    queryFn: () => listDirectory({ data: { size: 5, sort: "attention", flags: [], page: 1 } as any }),
     ...liveQueueQuery,
   });
-  const rows = directory?.rows ?? [];
+  const directory = directoryQ.data;
 
   // The Messages badge source: who is genuinely waiting on staff.
-  const { data: inbox = [] } = useQuery({
+  const inboxQ = useQuery({
     queryKey: ["staff-inbox-state", "dashboard"],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("staff_inbox_state");
@@ -227,12 +233,16 @@ function AdminDashboard() {
     },
     ...liveQueueQuery,
   });
+  const inbox = useMemo(() => inboxQ.data ?? [], [inboxQ.data]);
   const waiting = useMemo(() => waitingOnMe(inbox), [inbox]);
+  // The numbers need both reads: waiting on either is loading (never "All caught up"
+  // while the replies are still on their way), and a failure is said, never zeros.
+  const snapshotState = combineQueryViews([queryView(directoryQ as any), queryView(inboxQ as any)]).kind;
   // Check-ins and forms waiting on review (the card lists them; the same query).
   const { waiting: toReview } = useReviewQueue();
 
   // Today's training: the one thing here no other page summarises.
-  const { data: overview, isLoading: overviewLoading } = useQuery({
+  const overviewQ = useQuery({
     queryKey: ["admin-dashboard-overview"],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("admin_dashboard_overview");
@@ -241,6 +251,8 @@ function AdminDashboard() {
     },
     ...liveQueueQuery,
   });
+  const overview = overviewQ.data;
+  const overviewState = queryView(overviewQ as any).kind;
 
   const snapshot = useMemo(
     () => buildSnapshot({ waitingReplies: waiting.length, counts: directory?.counts ?? {} }),
@@ -295,10 +307,26 @@ function AdminDashboard() {
         <NotificationSetupPrompt problemsOnly />
 
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
-        <SnapshotGrid tiles={snapshot} loading={directoryLoading} otherWaiting={toReview.length} />
+        {snapshotState === "error" || snapshotState === "offline" ? (
+          snapshotState === "offline"
+            ? <OfflineState what="what's waiting on you" size="inline" />
+            : <ErrorState
+                error={directoryQ.error ?? inboxQ.error}
+                what="what's waiting on you"
+                size="inline"
+                onRetry={() => Promise.all([directoryQ.refetch(), inboxQ.refetch()])}
+                retrying={directoryQ.isFetching || inboxQ.isFetching}
+              />
+        ) : (
+          <SnapshotGrid tiles={snapshot} loading={snapshotState === "loading"} otherWaiting={toReview.length} />
+        )}
 
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
-        <TrainingTodayCard overview={overview} loading={overviewLoading} />
+        {overviewState === "error" ? (
+          <ErrorState error={overviewQ.error} what="today's training" size="inline" onRetry={() => overviewQ.refetch()} retrying={overviewQ.isFetching} />
+        ) : (
+          <TrainingTodayCard overview={overview} loading={overviewState === "loading" || overviewState === "offline"} />
+        )}
       </div>
     </>
   );

@@ -756,7 +756,7 @@ function NotesPanel({
                 Couldn&apos;t load your notes. Tap to try again.
               </button>
             ) : (
-              <div className="mt-1 h-[52px] animate-pulse rounded-xl bg-card ring-1 ring-border" aria-label="Loading notes" />
+              <div className="mt-1 h-[52px] jf-skeleton rounded-xl bg-card ring-1 ring-border" aria-label="Loading notes" />
             )
           ) : shown.length === 0 ? (
             searching ? (
