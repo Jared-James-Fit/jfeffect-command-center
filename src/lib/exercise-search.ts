@@ -349,7 +349,7 @@ const EQUIVALENT_NAMES: string[][] = [
   ["good morning", "gm"],
   ["glute ham raise", "ghr"],
   ["calf raise", "heel raise"],
-  ["safety bar squat", "ssb squat", "ssb"],
+  ["safety bar squat", "safety squat bar squat", "safety squat bar", "ssb squat", "ssb"],
   ["touch go", "tng"],
   ["close grip bench press", "cgbp"],
   ["handstand pushup", "hspu"],

@@ -89,6 +89,7 @@ import { WorkoutStatusMark, dayMark, workoutMark, type WorkoutMark } from "@/com
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, programHeading, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
+import { ProgramsCard } from "@/components/athlete-programs/programs-card";
 import { ManageProgramSheet } from "@/components/athlete-programs/manage-program-sheet";
 import { useProgramHistory, useProgramOrigin } from "@/components/athlete-programs/use-my-program";
 import { PausedProgramCard } from "@/components/athlete-programs/program-history";
@@ -540,6 +541,10 @@ export function WorkoutsExperience({
           />
           </div>
         )}
+
+        {/* Programs: explore, build, import or copy one, and My programs, always one tap from Workouts
+            (a member with no program has the same ways in the empty state above). */}
+        {mode === "self" && !noProgram && !isLoading && <ProgramsCard isSelfServe={isSelfServe} />}
 
         {/* Am I making progress? The last 12 weeks, the month and one headline, one tap into analytics. */}
         {mode === "self" && !noProgram && (
@@ -1856,7 +1861,15 @@ function SelfEmptyState({ hasHistory = false }: { hasHistory?: boolean }) {
       <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
         Follow one of ours, build your own or bring one you already have. Its workouts land on your training days here.
       </p>
-      <ProgramStartOptions className="mx-auto mt-4 max-w-md" />
+      <ProgramStartOptions className="mx-auto mt-4 max-w-md" ways={["follow", "build", "import", "crew"]} />
+      <Link
+        to="/portal/programs"
+        search={{ tab: "mine" } as any}
+        className="mt-3 inline-flex min-h-10 items-center gap-1 text-[14px] font-medium text-muted-foreground hover:text-foreground"
+        data-empty-my-programs
+      >
+        My programs and drafts <ChevronRight className="h-4 w-4" aria-hidden />
+      </Link>
       {/* a program they ended or switched from can come back where they left off */}
       {hasHistory && (
         <Link

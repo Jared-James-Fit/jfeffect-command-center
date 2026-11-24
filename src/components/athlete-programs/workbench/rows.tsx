@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { GripVertical, Layers, MoreHorizontal } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -28,6 +28,8 @@ import {
   type WeekRef,
 } from "@/lib/program-plan";
 import { CELL_LABEL, type CellField } from "@/lib/program-cells";
+import { exerciseRole, ROLE_MARK } from "@/lib/exercise-role";
+import { blockEvidence, colorClass, findBlockType, inferBlockType } from "@/lib/block-types";
 import { Cell } from "./cells";
 
 /** The columns, in the order a coach writes them. */
@@ -119,6 +121,34 @@ export function ScopeBar({
       })}
     </div>
   );
+}
+
+/** A set group's quiet mark at the row's left edge (top set strong, back-offs light, warm-ups dotted). */
+function RoleBar({ e }: { e: PlanExercise }) {
+  const role = e.role ? exerciseRole({ top: e.role === "top", backoff: e.role === "backoff", warmup: e.role === "warmup" }) : null;
+  const bar = role ? ROLE_MARK[role].bar : null;
+  if (!bar) return null;
+  return <span aria-hidden className={cn("pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full", bar)} data-pb-role={role ?? undefined} />;
+}
+
+/** A block's colour, read from its name and its own sets (members' blocks have no picked type). */
+export function memberBlockTint(block: { name: string; weeks: { days: { exercises: PlanExercise[] }[] }[] }) {
+  const rows = block.weeks.flatMap((w) =>
+    w.days.flatMap((d) =>
+      d.exercises.map((e) => ({
+        sets: e.sets,
+        reps: e.reps,
+        rpe: e.rpe,
+        rir: e.rir,
+        percentage: e.pct,
+        percentage_basis: e.pct_of === "1rm" ? "1rm" : null,
+        purpose_label: e.role === "top" ? "Top set" : e.role === "backoff" ? "Back-off" : null,
+      })),
+    ),
+  );
+  const key = inferBlockType({ name: block.name, evidence: blockEvidence(rows, block.weeks.length) });
+  const type = findBlockType(key);
+  return type ? { type, cls: colorClass(type) } : null;
 }
 
 /** The line over a set group of an exercise with more than one: its name, the weight a % of the top set comes to, its ⋯. */
@@ -269,7 +299,8 @@ export function ExerciseBlock({
     return (
       <div ref={setNodeRef} style={style} className={cn(shell, "rounded-xl py-1 hover:bg-muted/30")} data-pb-unit={id} data-pb-row={head.key}>
         {unit.entries.map((e, i) => (
-          <div key={e.key} className={cn(DESK_GRID, "px-3 py-0.5")} data-pb-entry={e.key}>
+          <div key={e.key} className={cn(DESK_GRID, "relative px-3 py-0.5")} data-pb-entry={e.key}>
+            <RoleBar e={e} />
             {i === 0 ? grip : <span />}
             {i === 0 ? (
               <button type="button" onClick={onOpen} className="min-w-0 text-left" aria-label={`${head.name ?? "Exercise"}: more`}>
@@ -302,7 +333,8 @@ export function ExerciseBlock({
         {more}
       </div>
       {unit.entries.map((e) => (
-        <div key={e.key} data-pb-entry={e.key}>
+        <div key={e.key} className={cn("relative", multi && "pl-2.5")} data-pb-entry={e.key}>
+          {multi && <RoleBar e={e} />}
           {multi && <GroupCaption e={e} day={day} onOpen={() => onOpenGroup(e.key)} desktop={false} />}
           <div className={cn(PHONE_GRID, multi ? "mt-1" : "mt-1.5")}>{cells(e)}</div>
         </div>
@@ -336,6 +368,8 @@ export function WeekBar({
   const multi = plan.blocks.length > 1;
   const g = programWeek(plan, cursor);
   const total = totalWeeksOf(plan);
+  // each block's colour (by what it is), only worth working out when there's more than one
+  const tints = useMemo(() => (multi ? plan.blocks.map((bl) => memberBlockTint(bl)) : []), [multi, plan.blocks]);
 
   // the week on screen stays in view as it changes
   useEffect(() => {
@@ -369,8 +403,12 @@ export function WeekBar({
             <div key={block.key} className="flex shrink-0 items-center gap-1">
               {b > 0 && <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-border" />}
               {multi && (
-                <span className="mr-0.5 flex max-w-[5.5rem] shrink-0 items-center gap-1 truncate text-[11px] font-medium text-muted-foreground">
-                  {b === 0 && <Layers className="h-3 w-3 shrink-0" aria-hidden />}
+                <span className="mr-0.5 flex max-w-[6rem] shrink-0 items-center gap-1 truncate text-[11px] font-medium text-muted-foreground" title={tints[b]?.type.name ? `${block.name} · ${tints[b]!.type.name}` : block.name}>
+                  {tints[b] ? (
+                    <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", tints[b]!.cls.dot)} />
+                  ) : (
+                    b === 0 && <Layers className="h-3 w-3 shrink-0" aria-hidden />
+                  )}
                   <span className="truncate">{block.name}</span>
                 </span>
               )}

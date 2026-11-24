@@ -89,3 +89,17 @@ describe("no competing duration system", () => {
     expect(src).not.toMatch(/\.from\(|insert|update|localStorage/);
   });
 });
+
+describe("a session's length reads like a real session (Nov 24 2026)", () => {
+  it("never counts the rest after an exercise's last set on top of moving to the next", async () => {
+    const { estimateRowSeconds } = await import("@/lib/pl-programs");
+    expect(estimateRowSeconds({ sets: 3, rest_seconds: 90, time_profile: "accessory_isolation" })).toBe(180 + 3 * 45 + 2 * 90);
+  });
+  it("counts an exercise done one side at a time twice per set", async () => {
+    const { estimateRowSeconds, isUnilateralRow } = await import("@/lib/pl-programs");
+    const split = { sets: 3, rest_seconds: 90, time_profile: "accessory_compound" as const, exercise_name: "Bulgarian Split Squat" };
+    expect(isUnilateralRow(split)).toBe(true);
+    expect(isUnilateralRow({ exercise_name: "Back Squat" })).toBe(false);
+    expect(estimateRowSeconds(split)).toBe(180 + 3 * (45 * 2 + 15) + 2 * 90);
+  });
+});

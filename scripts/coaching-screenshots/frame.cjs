@@ -35,4 +35,34 @@ async function composeWebp(browser, pngPath, outPath) {
   await page.close();
 }
 
-module.exports = { composeWebp };
+/**
+ * A computer screenshot in a plain browser window (three dots, a slim bar, rounded
+ * corners), as WebP at the capture's own resolution.
+ */
+async function composeDesktopWebp(browser, pngPath, outPath, { width = 1280, height = 800 } = {}) {
+  const data = "data:image/png;base64," + fs.readFileSync(pngPath).toString("base64");
+  const page = await browser.newPage({ viewport: { width: width + 2, height: height + 38 }, deviceScaleFactor: 2 });
+  await page.setContent(`<!doctype html><html><head><style>
+    html,body{margin:0;background:transparent}
+    .w{width:${width}px;border:1px solid #2a2a2e;border-radius:14px;overflow:hidden;background:#0d0d0f}
+    .bar{height:36px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#18181b;border-bottom:1px solid #26262a;box-sizing:border-box}
+    .bar i{width:11px;height:11px;border-radius:50%;background:#3a3a40;display:block}
+    .url{margin-left:18px;height:22px;flex:0 0 340px;border-radius:7px;background:#232327;color:#8a8a93;font:500 12px/22px Inter,sans-serif;padding-left:10px;box-sizing:border-box}
+    img{display:block;width:${width}px;height:${height}px}
+  </style></head><body><div class="w"><div class="bar"><i></i><i></i><i></i><div class="url">jfeffect.com</div></div><img src="${data}"></div></body></html>`);
+  await page.waitForTimeout(300);
+  const png = await page.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: width + 2, height: height + 38 } });
+  const webp = await page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = "data:image/png;base64," + b64;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext("2d").drawImage(img, 0, 0);
+    return c.toDataURL("image/webp", 0.82).split(",")[1];
+  }, png.toString("base64"));
+  fs.writeFileSync(outPath, Buffer.from(webp, "base64"));
+  await page.close();
+}
+
+module.exports = { composeWebp, composeDesktopWebp };

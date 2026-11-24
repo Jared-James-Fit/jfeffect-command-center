@@ -140,3 +140,52 @@ describe("program check", () => {
     expect(w.detail).toMatch(/Bench|Overhead Press|Lateral Raise/);
   });
 });
+
+describe("a block's type is read from its sets, not its words alone (Nov 24 2026)", () => {
+  const rows = (reps: string, n: number, extra: Record<string, unknown> = {}) =>
+    Array.from({ length: n }, () => ({ sets: 3, reps_text: reps, rpe: "8", ...extra }));
+  it("a Powerbuilding block of 8–12 rep sets is hypertrophy, never Peaking", async () => {
+    const { blockEvidence, inferBlockType } = await import("@/lib/block-types");
+    const evidence = blockEvidence([...rows("8-12", 10), ...rows("5", 2, { time_profile: "main_lift" })], 4);
+    expect(inferBlockType({ name: "Powerbuilding", training_focus: "Peak", evidence })).toBe("hypertrophy");
+    expect(inferBlockType({ name: "Powerbuilding", training_focus: "Competition lifts + hypertrophy" })).toBe("hypertrophy");
+    expect(inferBlockType({ name: "Powerbuilding" })).toBeNull();
+  });
+  it("a heavy singles block reads as intensification, and peaking only with a meet close", async () => {
+    const { blockEvidence, inferBlockType } = await import("@/lib/block-types");
+    const evidence = blockEvidence(rows("1-2", 8, { time_profile: "main_lift", rpe: "9" }), 3);
+    expect(inferBlockType({ name: "Block 4", evidence })).toBe("intensification");
+    expect(inferBlockType({ name: "Block 4", evidence, meetWithinWeeks: 3 })).toBe("peaking");
+    expect(inferBlockType({ name: "Meet Peak", evidence })).toBe("peaking");
+  });
+  it("accessories at 8–12 never turn a strength block into hypertrophy", async () => {
+    const { blockEvidence, inferBlockType } = await import("@/lib/block-types");
+    const evidence = blockEvidence(
+      [
+        { sets: 1, reps_text: "3", rpe: "8", purpose_label: "Top set" },
+        { sets: 3, reps_text: "5", purpose_label: "Back-off" },
+        { sets: 1, reps_text: "3", rpe: "8", purpose_label: "Top set" },
+        { sets: 3, reps_text: "5", purpose_label: "Back-off" },
+        ...rows("8-12", 6),
+      ],
+      4,
+    );
+    expect(inferBlockType({ name: "Strength", evidence })).toBe("strength");
+    expect(inferBlockType({ name: "Block 2", evidence })).toBe("strength");
+  });
+  it("a coach's Peak of heavy triples stays a peak", async () => {
+    const { blockEvidence, inferBlockType } = await import("@/lib/block-types");
+    const evidence = blockEvidence(rows("3", 6, { purpose_label: "Top set", rpe: "8" }), 4);
+    expect(inferBlockType({ name: "Peak", evidence })).toBe("peaking");
+  });
+  it("a name the sets agree with wins; one workout says nothing", async () => {
+    const { blockEvidence, inferBlockType } = await import("@/lib/block-types");
+    expect(inferBlockType({ name: "Volume", evidence: blockEvidence(rows("8", 10), 4) })).toBe("accumulation");
+    expect(inferBlockType({ name: "Block 2", evidence: blockEvidence(rows("10", 2), 1) })).toBeNull();
+  });
+  it("reads a template's weeks of days of rows", async () => {
+    const { inferBlockType } = await import("@/lib/block-types");
+    const weeks = Array.from({ length: 4 }, () => ({ days: [{ rows: rows("10-12", 4) }] }));
+    expect(inferBlockType({ name: "Phase 1", weeks })).toBe("hypertrophy");
+  });
+});

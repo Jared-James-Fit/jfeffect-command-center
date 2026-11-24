@@ -99,13 +99,34 @@ export interface RowForEstimate {
   /** a timed row (a run, a walk, a plank) takes its own time per set */
   measurement_type?: string | null;
   duration_seconds?: number | null;
+  /** one side at a time (each set is done twice): said, or read from the exercise's name */
+  unilateral?: boolean | null;
+  exercise_name?: string | null;
+  exercise_name_override?: string | null;
+  exercises?: { name?: string | null } | null;
+}
+
+/** An exercise done one side at a time, from its name (a split squat, a single-arm row, a lunge). */
+const UNILATERAL_NAME =
+  /\b(single[- ]?(arm|leg)|one[- ]?(arm|leg)|1[- ]?(arm|leg)|unilateral|split squat|bulgarian|lunges?|step[- ]?ups?|each (side|leg|arm)|per (side|leg|arm)|alternating)\b/i;
+export function isUnilateralRow(row: RowForEstimate): boolean {
+  if (row.unilateral != null) return !!row.unilateral;
+  const name = row.exercise_name_override || row.exercise_name || row.exercises?.name || "";
+  return UNILATERAL_NAME.test(name);
 }
 
 export function profileDefaults(profile: TimeProfile | null | undefined) {
   return TIME_PROFILES.find((p) => p.value === profile) ?? TIME_PROFILES[2];
 }
 
-/** Per-row seconds: sets * (work + rest) + warmup buffer for main/secondary lifts. */
+/**
+ * Per-row seconds (Nov 24 2026): the warm-up a main or secondary lift needs,
+ * setting up, each set's work, and the rest between sets. The rest after the
+ * last set is setting up for what's next (counted once, as the change-over),
+ * never a second time; an exercise done one side at a time is each set twice
+ * with a short switch between sides; a back-off carries on from the lift above
+ * it (already warm and set up, one rest before it).
+ */
 export function estimateRowSeconds(row: RowForEstimate): number {
   if (row.estimated_seconds_override) return row.estimated_seconds_override;
   const sets = Math.max(0, row.sets ?? 0);
@@ -117,17 +138,25 @@ export function estimateRowSeconds(row: RowForEstimate): number {
   // no setup: just its sets and the recoveries between them.
   const continuous = timed && Number(row.duration_seconds) >= 60;
   const rest = row.rest_seconds ?? (continuous ? 0 : prof.defaultRest);
-  const workPerSet = timed ? Number(row.duration_seconds) : prof.value === "main_lift" ? 60 : prof.value === "warmup_mobility" ? 0 : 45;
-  const transitions = 180; // setup between exercises
+  const sides = !timed && isUnilateralRow(row) ? 2 : 1;
+  const baseWork = timed ? Number(row.duration_seconds) : prof.value === "main_lift" ? 60 : prof.value === "warmup_mobility" ? 0 : 45;
+  // one side, a short switch, the other side
+  const workPerSet = sides === 2 ? baseWork * 2 + 15 : baseWork;
+  const changeover = 180; // the rest after the last set: moving to and setting up the next exercise
   // A back-off row's load is a % of the set right above it: the same lift carrying on,
-  // already warm and set up, so it adds only its own sets (a powerlifting day of three
-  // top singles with back-offs read 130–160 min with a warm-up counted per row).
+  // already warm and set up, so it adds only its own sets and the rest before each.
   const carriesOn = row.percentage_basis === "top_set" || row.percentage_basis === "prev_set";
   if (continuous) return sets * workPerSet + Math.max(0, sets - 1) * rest;
-  return (carriesOn ? 0 : prof.warmupBuffer + transitions) + sets * (workPerSet + rest);
+  if (carriesOn) return sets * (workPerSet + rest);
+  return prof.warmupBuffer + changeover + sets * workPerSet + Math.max(0, sets - 1) * rest;
 }
 
 /** Whole-day minutes: sum rows + 10 min general warm-up; round to nearest 5. */
+/** Rows with their exercise's library name on them (so one-side exercises are counted as such). */
+export function rowsWithNames<T extends Record<string, any>>(rows: T[], nameOf: (exerciseId: string) => string | null | undefined): T[] {
+  return rows.map((r) => (r?.exercise_id && !r.exercise_name ? { ...r, exercise_name: nameOf(r.exercise_id) ?? null } : r));
+}
+
 export function estimateDayMinutes(rows: RowForEstimate[]): number {
   // a day that's all timed work (a run with its warm-up written in) has no general warm-up on top
   const general = rows.length > 0 && rows.every((r) => r.measurement_type === "time") ? 0 : 600;

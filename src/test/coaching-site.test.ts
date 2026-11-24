@@ -127,9 +127,11 @@ describe("the public site's app screens are current (Nov 23 2026)", () => {
     const scripts = read("scripts/coaching-screenshots/landing.cjs") + read("scripts/coaching-screenshots/run.cjs");
     for (const dir of ["landing", "coaching"]) {
       // the 390 / 585 px widths are made from each capture (scripts/landing/resize-shots.py), never captured
-      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp") && !/-(390|585)\.webp$/.test(x))) {
+      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp") && !/-(390|585|1280)\.webp$/.test(x))) {
         expect(scripts, f).toContain(`name: "${f.replace(".webp", "")}"`);
-        for (const w of [390, 585]) expect(existsSync(`src/assets/${dir}/${f.replace(".webp", `-${w}.webp`)}`), `${f} at ${w} px: run scripts/landing/resize-shots.py`).toBe(true);
+        // a computer screen's smaller width is 1280 px; a phone screen's 390 and 585
+        const widths = f.endsWith("-desktop.webp") ? [1280] : [390, 585];
+        for (const w of widths) expect(existsSync(`src/assets/${dir}/${f.replace(".webp", `-${w}.webp`)}`), `${f} at ${w} px: run scripts/landing/resize-shots.py`).toBe(true);
       }
     }
   });

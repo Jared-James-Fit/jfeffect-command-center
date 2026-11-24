@@ -22,6 +22,8 @@ const EX = {
   dead: { name: 'Deadlift', muscle_group: 'Back', category: 'Compound', equipment: 'Barbell', pl_lift_group: 'deadlift', is_competition_lift: true, competition_lift_type: 'deadlift', movement_family: 'hinge' },
   incline: { name: 'Incline Dumbbell Press', muscle_group: 'Chest', category: 'Compound', equipment: 'Dumbbell', movement_family: 'horizontal_push' },
   lateral: { name: 'Cable Lateral Raise', muscle_group: 'Shoulders', category: 'Isolation', equipment: 'Cable', movement_family: 'shoulder_abduction' },
+  // what an imported "SSB Squat" is in the library (the importer's shorthand match)
+  ssb: { name: 'Safety Squat Bar Squat', muscle_group: 'Quads', category: 'Compound', equipment: 'Barbell', movement_family: 'squat' },
 };
 const exercises = Object.entries(EX).map(([k, e]) => ({ id: uid('e'), key: k, archived: false, default_load_unit: 'lb', default_load_type: 'external', default_measurement_type: 'reps', exercise_category: e.category, difficulty: 'Intermediate', cues: null, video_url: null, vimeo_embed_url: null, ...e }));
 const exById = Object.fromEntries(exercises.map(e => [e.key, e]));

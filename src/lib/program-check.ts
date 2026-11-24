@@ -22,7 +22,7 @@
  * Every finding points at the workouts it's about (`at`), so a tap opens
  * the day. Workouts already trained or started are never changed (`locked`).
  */
-import { estimateDayMinutes } from "@/lib/pl-programs";
+import { estimateDayMinutes, rowsWithNames } from "@/lib/pl-programs";
 import { rowProblems, ROW_LABEL } from "@/lib/pl-template-validation";
 import { weekPurposeLabelsByDay } from "@/lib/program-editor-labels";
 import { classifyExercise, type MovementPattern } from "@/lib/exercise-classifier";
@@ -276,7 +276,7 @@ function sessionsOverLimit(input: CheckInput, limit: number): Array<{ label: str
   const out = new Map<string, { label: string; minutes: number; at: Loc; weeks: number[] }>();
   eachDay(input, (d, at, w, b) => {
     if (input.locked?.(at) || !rows(d).length) return;
-    const m = estimateDayMinutes(rows(d) as any);
+    const m = estimateDayMinutes(rowsWithNames(rows(d), (id) => input.exercises.get(id)?.name) as any);
     if (!overLimit(m, limit)) return;
     // one line per workout slot (its day in the block), whichever weeks run over
     const key = `${b.id}|${d.day_index ?? at.day}`;

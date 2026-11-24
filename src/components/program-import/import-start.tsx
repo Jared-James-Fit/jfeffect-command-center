@@ -15,6 +15,7 @@ import { startProgramImport, type StartResult } from "@/lib/program-import/impor
 import { IMPORT_PRIVACY_TEXT, IMPORT_RIGHTS_EXPLAINER, IMPORT_RIGHTS_TEXT } from "@/lib/program-import/rights";
 import { importKeys } from "@/lib/program-import/queries";
 import { OpenImports } from "./open-imports";
+import { ImportSteps } from "./import-steps";
 import type { SourceDoc } from "@/lib/program-import/types";
 
 const COST = FEATURE_COSTS.program_import;
@@ -250,12 +251,13 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-32 pt-2 md:px-8" data-import-start>
+      <ImportSteps at={1} className="mb-4" />
       <p className="text-[15px] leading-relaxed text-muted-foreground">
-        Bring a program you already follow. It comes in with its weeks, days, exercises and numbers, ready to check, edit and
-        track like any program in the app.
+        Bring a program you already follow. Its weeks, days, exercises and numbers come in as written, matched to the
+        exercise library, ready for you to check and save.
       </p>
 
-      <OpenImports className="mt-5" />
+      <OpenImports className="mt-5" importsOnly />
 
       {/* File or paste */}
       <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="How to bring it in">
@@ -459,6 +461,8 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading your program…
           </>
+        ) : usesAi ? (
+          `Import program · ${COST} credits`
         ) : (
           "Import program"
         )}
