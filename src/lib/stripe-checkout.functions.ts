@@ -232,35 +232,43 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
 const CreatePortalInput = z.object({
   /** Absolute origin URL for the return_url */
   origin: z.string().url(),
+  /** Where Stripe sends them back (an app page; defaults to Your plan). */
+  returnPath: z.string().regex(/^\/portal\/[a-z0-9/_-]*$/i).max(80).optional(),
 });
 
+/**
+ * Stripe's billing page for the signed-in client: their card, billing details,
+ * invoices and receipts. Opened with the app's own portal configuration
+ * (billing-portal.ts), so plans are never changed or cancelled there.
+ */
 export const createCustomerPortalSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => CreatePortalInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
 
-    // Look up the client's Stripe customer ID
     const { data: client } = await supabase
       .from("clients")
       .select("id, stripe_customer_id")
       .eq("user_id", userId)
       .maybeSingle();
 
-    // Also check purchase_records for a stripe_customer_id if not on clients row
-    let stripeCustomerId: string | null = client?.stripe_customer_id ?? null;
-
-    if (!stripeCustomerId && client?.id) {
+    // The customer on their newest Stripe sale (with its mode), else the one on their profile.
+    let stripeCustomerId: string | null = null;
+    let mode: "test" | "live" | null = null;
+    if (client?.id) {
       const { data: pr } = await supabase
         .from("purchase_records")
-        .select("stripe_customer_id")
+        .select("stripe_customer_id, stripe_mode")
         .eq("client_id", client.id)
         .not("stripe_customer_id", "is", null)
         .order("purchased_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       stripeCustomerId = pr?.stripe_customer_id ?? null;
+      mode = pr?.stripe_mode === "test" ? "test" : pr?.stripe_mode === "live" ? "live" : null;
     }
+    stripeCustomerId = stripeCustomerId ?? client?.stripe_customer_id ?? null;
 
     if (!stripeCustomerId) {
       throw new Error(
@@ -268,11 +276,21 @@ export const createCustomerPortalSession = createServerFn({ method: "POST" })
       );
     }
 
-    const portalSession = await stripeFetch("/billing_portal/sessions", {
+    const { getStripeKeyForMode, detectStripeKeyMode, stripeFetch: stripeFetchFor } = await import("@/lib/stripe.server");
+    const useMode = mode ?? detectStripeKeyMode(process.env.STRIPE_SECRET_KEY) ?? "live";
+    const apiKey = getStripeKeyForMode(useMode);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { portalConfigId } = await import("@/lib/plans/billing-portal.server");
+    const configuration = await portalConfigId(supabaseAdmin as any, useMode).catch(() => null);
+
+    const origin = data.origin.replace(/\/+$/, "");
+    const portalSession = await stripeFetchFor("/billing_portal/sessions", {
       method: "POST",
+      apiKey: apiKey ?? undefined,
       body: formEncode({
         customer: stripeCustomerId,
-        return_url: `${data.origin}/portal/account`,
+        return_url: `${origin}${data.returnPath ?? "/portal/plan"}`,
+        ...(configuration ? { configuration } : {}),
       }),
     });
 

@@ -187,6 +187,10 @@ const FAQ: Array<{ q: string; a: string }> = [
     a: "Applying is free and there's no card. Coaching is a paid service, and we talk on your call before you commit to anything.",
   },
   {
+    q: "Can I cancel or change my package?",
+    a: "Yes, in the app. Packages renew monthly. Moving up starts right away and you pay the difference for the rest of the month. Moving down or cancelling takes effect when your paid month ends. The app shows exactly what you'll pay and when before you confirm.",
+  },
+  {
     q: "Is there a free option?",
     a: "Yes. The JF Effect app is free: my programs, the training log, your progress and the Crew. A lot of people start there and move to coaching later, and their training history comes with them.",
   },

@@ -24,8 +24,18 @@
  *     (prorated); down a level or to free happens when the paid month ends.
  *   - "custom": anything else (session packages, a legacy or custom price with
  *     no package, a fixed term, paid another way). Changing it is a request to
- *     the coach, never a second subscription or a guess.
+ *     the coach, never a second subscription or a guess. One exception: a legacy
+ *     coaching subscription (one live monthly Stripe subscription, no fixed term,
+ *     no sessions) can be cancelled at the end of its paid month (`cancelable`).
+ *
+ * Coaching is sold by approval (Nov 24 2026): someone who isn't a coaching client
+ * applies (never coached) or asks to come back (coached before), the coach says
+ * yes (coaching_purchase_approvals), and only then can they pay for a package
+ * (`CoachingAccess`). A grandfathered or custom price is never changed without
+ * the client's consent: switching ends it (said first, and they tick that they
+ * understand), or the coach offers a switch the client accepts (`offerTerms`).
  */
+import { compareVersions } from "@/lib/coaching-agreement/version";
 
 export type PlanFamily = "free" | "membership" | "coaching";
 export type PackageKindForPlans = "free" | "membership" | "subscription" | "one_time";
@@ -225,6 +235,10 @@ export type CurrentPlan = {
   nextBillingDate: string | null;
   /** They pay something other than the advertised price (grandfathered or custom). */
   specialPrice: boolean;
+  /** A price they keep only while they stay on it (special price, or a custom plan's own price). */
+  grandfathered: boolean;
+  /** A custom plan that can still be cancelled here (a legacy monthly coaching subscription). */
+  cancelable: boolean;
   features: string[];
 };
 
@@ -265,6 +279,8 @@ export function currentPlanOf(input: {
     subscriptionId: null as string | null,
     nextBillingDate: null as string | null,
     specialPrice: false,
+    grandfathered: false,
+    cancelable: false,
   };
 
   const managedPaid = (option: PlanOption, s: PlanSale): CurrentPlan => {
@@ -281,6 +297,8 @@ export function currentPlanOf(input: {
       subscriptionId: s.stripe_subscription_id ?? null,
       nextBillingDate: s.next_billing_date ?? null,
       specialPrice: paying !== option.priceCents,
+      grandfathered: paying !== option.priceCents,
+      cancelable: true,
       features: option.features,
     };
   };
@@ -306,6 +324,8 @@ export function currentPlanOf(input: {
   if (onPackage && onPackage.family !== "free" && sale && saleIsLive(sale) && !sale.is_fixed_term_commitment && !(Number(sale.sessions_purchased ?? 0) > 0)) {
     return managedPaid(onPackage, sale);
   }
+  const billed = sale ?? input.otherLiveSale ?? null;
+  const legacy = legacyMonthly(billed);
   const reason = onPackage
     ? sale?.is_fixed_term_commitment
       ? "You're on a set term, so changes go through your coach."
@@ -313,26 +333,59 @@ export function currentPlanOf(input: {
     : input.otherLiveSale
       ? "Your plan is set up with your coach, so changes go through them."
       : "Your coaching is set up with your coach, so changes go through them.";
+  const price = enrollment?.contracted_price_cents ?? (legacy ? Math.round(Number(billed!.full_payable_amount ?? 0) * 100) || null : null);
   return {
     family: "custom",
     option: onPackage ?? null,
     // what they actually pay for first; the profile's free-text label can be out of date
     name: onPackage?.name ?? (input.otherLiveSale?.offer_name?.trim() || input.coachingLabel?.trim() || "Coaching"),
-    priceCents: enrollment?.contracted_price_cents ?? null,
+    priceCents: price,
     managed: "custom",
     customReason: reason,
-    status: "custom",
+    status: legacy && billed?.cancel_at_period_end ? "ending" : "custom",
     ...blank,
-    saleId: (sale ?? input.otherLiveSale)?.id ?? null,
-    nextBillingDate: (sale ?? input.otherLiveSale)?.next_billing_date ?? null,
+    saleId: billed?.id ?? null,
+    subscriptionId: legacy ? billed!.stripe_subscription_id ?? null : null,
+    nextBillingDate: billed?.next_billing_date ?? null,
+    specialPrice: price != null && price !== onPackage?.priceCents,
+    grandfathered: price != null,
+    cancelable: legacy,
     features: onPackage?.features ?? [],
   };
 }
 
+/**
+ * A legacy coaching subscription that can be cancelled here: one live Stripe
+ * subscription, monthly, no fixed term, no session package. Anything else is
+ * the coach's to change.
+ */
+export function legacyMonthly(sale: (PlanSale & { is_recurring?: boolean | null; payment_frequency?: string | null }) | null | undefined): boolean {
+  if (!sale || !saleIsLive(sale) || sale.is_fixed_term_commitment) return false;
+  if (Number(sale.sessions_purchased ?? 0) > 0) return false;
+  const freq = String(sale.payment_frequency ?? "").toLowerCase();
+  if (freq && !/month/.test(freq)) return false;
+  return true;
+}
+
 /* ───────────────────────── changing ───────────────────────── */
 
-export type ChangeKind = "current" | "start" | "upgrade" | "downgrade" | "cancel" | "request";
-export type ChangeAction = "checkout" | "swap_now" | "swap_later" | "cancel_later" | "request" | null;
+export type ChangeKind = "current" | "start" | "upgrade" | "downgrade" | "cancel" | "request" | "apply" | "comeback";
+export type ChangeAction = "checkout" | "swap_now" | "swap_later" | "cancel_later" | "request" | "apply" | "comeback" | null;
+
+/**
+ * May this person buy coaching? A coaching client may switch packages; anyone
+ * else needs a live approval from the coach first.
+ *   - approved: the coach said yes (for one package, or any), until it expires.
+ *   - apply / applied: never coached, so they apply (and wait).
+ *   - comeback / comeback_pending: coached before, so they ask to come back.
+ */
+export type CoachingAccess =
+  | { state: "client" }
+  | { state: "approved"; packageId: string | null; packageName: string | null; expiresAt: string }
+  | { state: "apply" }
+  | { state: "applied"; at: string; applicationId?: string }
+  | { state: "comeback" }
+  | { state: "comeback_pending"; at: string; changeId: string };
 
 export type OpenChange = {
   id: string;
@@ -360,7 +413,7 @@ export const OPEN_CHANGE_STATUSES = ["checkout", "processing", "awaiting_payment
 export function transitionFor(
   current: CurrentPlan,
   target: PlanOption,
-  ctx: { native?: boolean; open?: OpenChange | null } = {},
+  ctx: { native?: boolean; open?: OpenChange | null; coaching?: CoachingAccess } = {},
 ): Transition {
   const t = (kind: ChangeKind, action: ChangeAction, timing: Transition["timing"]): Transition => ({
     kind,
@@ -375,9 +428,11 @@ export function transitionFor(
   if (current.option?.id === target.id) return block(t("current", null, null), "Your current plan");
 
   let tr: Transition;
-  // a custom plan's change is a request (a message to the coach): it never charges or schedules anything
-  if (current.managed === "custom") return t("request", "request", null);
-  if (current.managed === "free") {
+  if (current.managed === "custom") {
+    // a legacy monthly subscription can be cancelled at its period's end; any other change is a request
+    if (!(target.family === "free" && current.cancelable)) return t("request", "request", null);
+    tr = t("cancel", "cancel_later", "period_end");
+  } else if (current.managed === "free") {
     if (target.family === "free") return block(t("current", null, null), "Your current plan");
     tr = t("start", "checkout", "after_payment");
   } else if (target.family === "free") {
@@ -389,6 +444,17 @@ export function transitionFor(
   }
 
   if (target.family !== "free" && target.problem) return block(tr, "Not available yet", target.problem);
+  // coaching is sold by approval: anyone who isn't a coaching client yet applies or asks to come back
+  if (target.family === "coaching" && current.family !== "coaching" && current.family !== "custom") {
+    const access = ctx.coaching ?? { state: "apply" };
+    if (access.state === "apply") return t("apply", "apply", null);
+    if (access.state === "applied") return block(t("apply", "apply", null), "Your application is with your coach");
+    if (access.state === "comeback") return t("comeback", "comeback", null);
+    if (access.state === "comeback_pending") return block(t("comeback", "comeback", null), "Your request is with your coach");
+    if (access.state === "approved" && access.packageId && access.packageId !== target.id) {
+      return block(tr, `Your coach approved ${access.packageName ?? "another package"}`);
+    }
+  }
   if (ctx.open && (OPEN_CHANGE_STATUSES as readonly string[]).includes(ctx.open.status)) {
     if (ctx.open.status === "scheduled") return block(tr, "Undo your scheduled change first");
     if (ctx.open.status !== "checkout") return block(tr, "A change is still going through");
@@ -517,6 +583,10 @@ export function changeVerb(kind: ChangeKind, toName: string): string {
       return `Move to ${toName}`;
     case "request":
       return `Ask about ${toName}`;
+    case "apply":
+      return `Apply for ${toName}`;
+    case "comeback":
+      return `Come back to coaching`;
     default:
       return toName;
   }
@@ -537,6 +607,9 @@ export type PlanChangeRow = {
   amount_due_now_cents?: number | null;
   next_amount_cents?: number | null;
   error?: string | null;
+  offer_expires_at?: string | null;
+  decided_at?: string | null;
+  decision_note?: string | null;
 };
 
 /** One history line ("Nov 23 · Complete Online Coaching → Coaching Plus · Done"). */
@@ -544,7 +617,16 @@ export function historyLine(r: PlanChangeRow, fmtDay: (iso: string | null) => st
   const from = r.from_label ?? "Free";
   const to = r.to_label ?? "Free";
   const when = (iso: string | null | undefined) => (iso ? fmtDay(iso.slice(0, 10)) ?? iso.slice(0, 10) : null);
-  const title = r.kind === "request" ? `Asked to change to ${to}` : r.kind === "reactivate" ? `Kept ${to}` : `${from} → ${to}`;
+  const title =
+    r.status === "offered"
+      ? `Offer: ${to}`
+      : r.kind === "request"
+        ? `Asked to change to ${to}`
+        : r.kind === "reactivate"
+          ? r.status === "requested" || r.decided_at
+            ? `Asked to come back to coaching`
+            : `Kept ${to}`
+          : `${from} → ${to}`;
   const status: Record<string, string> = {
     checkout: "Waiting for checkout",
     processing: "Going through",
@@ -554,7 +636,10 @@ export function historyLine(r: PlanChangeRow, fmtDay: (iso: string | null) => st
     cancelled: "Undone",
     failed: r.error ? `Didn't go through: ${r.error}` : "Didn't go through",
     requested: "Sent to your coach",
+    offered: r.offer_expires_at ? `Open until ${when(r.offer_expires_at)}` : "Waiting for you",
   };
+  if (r.decided_at && r.status === "applied" && r.kind === "reactivate") return { title, detail: `Approved ${when(r.decided_at)}` };
+  if (r.decided_at && r.status === "cancelled") return { title, detail: r.decision_note ? `Declined: ${r.decision_note}` : `Declined ${when(r.decided_at)}` };
   return { title, detail: status[r.status] ?? r.status };
 }
 
@@ -579,6 +664,10 @@ export type PlanPreview = {
   warnings: string[];
   /** Pass back on confirm: an upgrade is charged exactly what this preview showed. */
   prorationDate: number | null;
+  /** Their own price ends with this change: they tick that they understand before confirming. */
+  forfeit: { priceCents: number; text: string } | null;
+  /** The Coaching Agreement version they must accept first (null = nothing to sign). */
+  agreement: { version: string; signedVersion: string | null } | null;
 };
 
 export type ConfirmResult =
@@ -587,4 +676,98 @@ export type ConfirmResult =
   | { result: "scheduled"; changeId: string; effectiveDate: string | null }
   | { result: "needs_payment"; changeId: string; url: string }
   | { result: "requested"; changeId: string }
+  | { result: "agreement_required"; version: string }
   | { result: "failed"; changeId: string | null; message: string };
+
+/* ───────────────────────── agreements and consent ───────────────────────── */
+
+/**
+ * The Coaching Agreement that describes buying and switching coaching in the
+ * app. Earlier signers keep their signed copy (nobody re-signs for it); they
+ * accept this one before they buy coaching or switch packages themselves.
+ */
+export const PLAN_AGREEMENT_VERSION = "3.0";
+
+/** Must they accept the Coaching Agreement before this change? */
+export function agreementNeeded(
+  tr: Transition,
+  target: PlanOption,
+  signed: { version: string | null; exempt?: boolean },
+): { version: string; signedVersion: string | null } | null {
+  if (target.family !== "coaching") return null;
+  if (!tr.available || !tr.action || !["checkout", "swap_now", "swap_later"].includes(tr.action)) return null;
+  if (signed.exempt) return null;
+  if (signed.version && compareVersions(signed.version, PLAN_AGREEMENT_VERSION) >= 0) return null;
+  return { version: PLAN_AGREEMENT_VERSION, signedVersion: signed.version };
+}
+
+/** The words someone on their own price agrees to when they switch or cancel. */
+export function forfeitText(current: CurrentPlan): string | null {
+  if (!current.grandfathered || current.priceCents == null) return null;
+  return `I understand my current price of ${money(current.priceCents)} a month is only kept on ${current.name}, and switching or cancelling ends it for good.`;
+}
+
+/* ───────────────────────── offers ───────────────────────── */
+
+export type PlanOffer = {
+  id: string;
+  fromName: string;
+  fromPriceCents: number | null;
+  toName: string;
+  toPriceCents: number;
+  timing: "now" | "period_end";
+  expiresAt: string | null;
+  note: string | null;
+  /** They pay through a live Stripe subscription (else accepting opens a checkout). */
+  hasSubscription: boolean;
+  /** The day the new price starts (their next billing date), when known. */
+  nextBillingDate: string | null;
+  grandfathered: boolean;
+};
+
+export function offerFromRow(row: Record<string, any>, current: CurrentPlan): PlanOffer {
+  return {
+    id: row.id,
+    fromName: row.from_label ?? current.name,
+    fromPriceCents: row.from_price_cents ?? current.priceCents,
+    toName: row.to_label ?? "",
+    toPriceCents: Number(row.to_price_cents ?? 0),
+    timing: row.offer_timing === "now" ? "now" : "period_end",
+    expiresAt: row.offer_expires_at ?? null,
+    note: row.note ?? null,
+    hasSubscription: !!current.subscriptionId,
+    nextBillingDate: current.nextBillingDate,
+    grandfathered: current.grandfathered,
+  };
+}
+
+/**
+ * Everything the client is told before accepting a coach's offer, and the exact
+ * words they agree to (stored with the change). Built the same way on the
+ * screen and on the server, so what's stored is what was shown.
+ */
+export function offerTerms(o: PlanOffer, fmtDay: (iso: string | null) => string | null): { lines: string[]; consentText: string } {
+  const day = (iso: string | null) => (iso ? fmtDay(iso) ?? iso : null);
+  const next = day(o.nextBillingDate);
+  const lines: string[] = [];
+  lines.push(`${o.toName}: ${money(o.toPriceCents)} a month, plus tax.`);
+  if (o.fromPriceCents != null) lines.push(`You pay ${money(o.fromPriceCents)} a month now for ${o.fromName}.`);
+  let when: string;
+  if (!o.hasSubscription) {
+    when = "starting when you pay at checkout";
+    lines.push("Accepting opens a checkout to pay by card each month. Your coach stops the old way you pay.");
+  } else if (o.timing === "now") {
+    when = `switching today, with the new price from ${next ?? "your next billing date"}`;
+    lines.push(`It switches today. Nothing is charged or credited today; the new price starts ${next ? `on ${next}` : "on your next billing date"}.`);
+  } else {
+    when = `switching on ${next ?? "your next billing date"}`;
+    lines.push(`It switches ${next ? `on ${next}` : "on your next billing date"}. Nothing changes until then.`);
+  }
+  if (o.grandfathered && o.fromPriceCents != null) {
+    lines.push(`Your ${money(o.fromPriceCents)} price is one you keep only on ${o.fromName}. Accepting ends it, and it can't be brought back later.`);
+  }
+  lines.push("Your coach, your program and everything you've logged stay as they are.");
+  const forfeit = o.grandfathered && o.fromPriceCents != null ? ` My ${money(o.fromPriceCents)} price on ${o.fromName} ends.` : "";
+  const consentText = `I accept ${o.toName} at ${money(o.toPriceCents)} a month plus tax, ${when}.${forfeit}`;
+  return { lines, consentText };
+}

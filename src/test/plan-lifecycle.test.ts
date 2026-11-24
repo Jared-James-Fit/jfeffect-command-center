@@ -22,7 +22,21 @@ const S = await import("@/lib/plans/plans.server");
 const DAY = 86_400_000;
 const NOW = Date.parse("2026-11-23T18:00:00Z");
 
-function seed(over: { clients?: any[]; enrollments?: any[]; sales?: any[]; members?: any[]; changes?: any[]; membership?: boolean } = {}) {
+function seed(
+  over: {
+    clients?: any[];
+    enrollments?: any[];
+    sales?: any[];
+    members?: any[];
+    changes?: any[];
+    membership?: boolean;
+    /** Client ids the coach approved for coaching (and who signed the 3.0 agreement). */
+    approved?: string[];
+    /** Client ids who signed the Coaching Agreement, and which version. */
+    signed?: Record<string, string>;
+    applications?: any[];
+  } = {},
+) {
   const packages = [
     { id: "p-free", slug: "free", kind: "free", name: "Free app", price_cents: 0, status: "active", is_public: true, sort_order: 0, features: ["My programs, or build or upload your own", "Every set, PR and progression logged"] },
     { id: "p-nut", slug: "nutrition", kind: "subscription", name: "Nutrition Coaching", price_cents: 9900, currency: "CAD", billing_interval: "month", status: "active", is_public: true, product_id: "prod-nut", features: ["A nutrition plan built around the food you eat", "The full app for your own training"] },
@@ -51,6 +65,17 @@ function seed(over: { clients?: any[]; enrollments?: any[]; sales?: any[]; membe
     pt_sessions: [],
     support_alerts: [],
     messages: [],
+    coaching_purchase_approvals: (over.approved ?? []).map((id) => ({ id: `appr-${id}`, client_id: id, source: "admin", package_id: null, approved_at: "2026-11-20T00:00:00Z", expires_at: "2026-12-20T00:00:00Z", used_at: null, revoked_at: null })),
+    // Devin signed 3.0 unless a test says otherwise (switching needs it; plan-approvals tests the rule)
+    coaching_agreement_signatures: Object.entries({ "c-dev": "3.0", ...Object.fromEntries((over.approved ?? []).map((id) => [id, "3.0"])), ...(over.signed ?? {}) }).map(([id, v]) => ({
+      id: `sig-${id}`,
+      client_id: id,
+      signed_at: "2026-11-20T00:00:00Z",
+      coaching_agreement_versions: { version: v },
+    })),
+    coaching_agreement_client_state: [],
+    coaching_applications: over.applications ?? [],
+    account_lifecycle_events: [],
   });
 }
 
@@ -90,7 +115,7 @@ async function webhookCheckout(db: FakeDb, csId: string) {
 
 describe("Free → coaching (checkout, applied once paid)", () => {
   it("opens one checkout, gives nothing until Stripe says it's paid, then everything at once", async () => {
-    const db = seed({ clients: [freeMember], members: [{ id: "m-1", user_id: "u-free", email: "fiona@example.com", account_type: "jf_member", status: "Active", subscription_status: "Free" }] });
+    const db = seed({ clients: [freeMember], approved: ["c-free"], members: [{ id: "m-1", user_id: "u-free", email: "fiona@example.com", account_type: "jf_member", status: "Active", subscription_status: "Free" }] });
     const state = await S.loadPlanState(db, "c-free");
     expect(state.current.managed).toBe("free");
 
@@ -122,6 +147,9 @@ describe("Free → coaching (checkout, applied once paid)", () => {
     expect(pushes.map((p) => p.title)).toContain("Welcome to Complete Online Coaching");
     expect(emails[0]).toMatchObject({ template: "plan-change", to: "fiona@example.com" });
     expect(adminEmails[0].subject).toMatch(/started Complete Online Coaching/);
+    // the coach's yes is used up by the purchase it allowed
+    expect(db.rows("coaching_purchase_approvals")[0]).toMatchObject({ used_change_id: row.id });
+    expect(db.rows("coaching_purchase_approvals")[0].used_at).toBeTruthy();
 
     // the webhook delivered twice: still one enrollment, one set of notices
     const n = pushes.length;
@@ -131,7 +159,7 @@ describe("Free → coaching (checkout, applied once paid)", () => {
   });
 
   it("starting again replaces an unfinished checkout (never two), and an abandoned one expires", async () => {
-    const db = seed({ clients: [freeMember] });
+    const db = seed({ clients: [freeMember], approved: ["c-free"] });
     const first = await S.confirmChange(db, await S.loadPlanState(db, "c-free"), "nutrition", { actorUserId: "u-free", source: "client", origin: "https://jfeffect.com" });
     const second = await S.confirmChange(db, await S.loadPlanState(db, "c-free"), "complete", { actorUserId: "u-free", source: "client", origin: "https://jfeffect.com" });
     expect(first.result).toBe("redirect");
@@ -153,6 +181,7 @@ describe("Free → coaching (checkout, applied once paid)", () => {
       clients: [{ ...freeMember, id: "c-back", user_id: "u-back" }],
       enrollments: [{ id: "e-old", client_id: "c-back", package_id: "p-comp", status: "ended", starts_on: "2026-01-01", ends_on: "2026-05-01" }],
       changes: [{ id: "pc-old", client_id: "c-back", kind: "cancel", status: "applied", previous_coach_id: "coach-sam", created_at: "2026-05-01" }],
+      approved: ["c-back"],
     });
     db.rows("coaches").push({ id: "coach-sam", user_id: "u-sam", archived: false, created_at: "2026-02-01" });
     await S.confirmChange(db, await S.loadPlanState(db, "c-back"), "complete", { actorUserId: "u-back", source: "client", origin: "https://jfeffect.com" });
@@ -301,8 +330,17 @@ describe("Coaching → a smaller package (when the paid month ends)", () => {
   it("a legacy price is said before it's given up", async () => {
     const sub = stripe.subscribe("cus_dev", "price_comp", 3);
     const db = seed({ clients: [coached()], sales: [sale(sub.id, { full_payable_amount: 65 })], enrollments: [{ ...enrolled(), contracted_price_cents: 6500 }] });
-    const preview = await S.previewChange(db, await S.loadPlanState(db, "c-dev"), "nutrition");
-    expect(preview.warnings[0]).toMatch(/You pay \$65 a month now/);
+    const state = await S.loadPlanState(db, "c-dev");
+    const preview = await S.previewChange(db, state, "nutrition");
+    expect(preview.forfeit).toMatchObject({ priceCents: 6500 });
+    expect(preview.forfeit!.text).toMatch(/current price of \$65 a month is only kept on Complete Online Coaching/);
+    // they tick that they understand, or nothing happens
+    await expect(S.confirmChange(db, state, "nutrition", { actorUserId: "u-dev", source: "client", origin: "x" })).rejects.toThrow(/understand your current price ends/);
+    expect(stripe.calls.filter((c) => c.method === "POST" && c.path.startsWith("/subscriptions/"))).toHaveLength(0);
+    const r = await S.confirmChange(db, state, "nutrition", { actorUserId: "u-dev", source: "client", origin: "x", acknowledgeForfeit: true });
+    expect(r.result).toBe("scheduled");
+    expect(db.rows("plan_changes")[0]).toMatchObject({ consent_text: preview.forfeit!.text });
+    expect(db.rows("plan_changes")[0].consented_at).toBeTruthy();
   });
 });
 
@@ -363,7 +401,7 @@ describe("Coaching → Free (at the end of the paid month, keeping everything)",
 
 describe("Membership (once one is configured)", () => {
   it("free → membership → coaching → membership → free, one account throughout", async () => {
-    const db = seed({ clients: [freeMember], membership: true });
+    const db = seed({ clients: [freeMember], membership: true, approved: ["c-free"] });
     await S.confirmChange(db, await S.loadPlanState(db, "c-free"), "membership", { actorUserId: "u-free", source: "client", origin: "x" });
     const cs = Object.values(stripe.sessions)[0];
     expect(cs.customer_text).toBeNull(); // a membership isn't sold under the Coaching Agreement
@@ -421,7 +459,7 @@ describe("Custom arrangements, Stripe on its own, configuration", () => {
 
   it("a plan whose Stripe price doesn't match is never sold, and the admin is told", async () => {
     stripe.price("price_comp", 12000);
-    const db = seed({ clients: [freeMember] });
+    const db = seed({ clients: [freeMember], approved: ["c-free"] });
     await expect(S.confirmChange(db, await S.loadPlanState(db, "c-free"), "complete", { actorUserId: "u-free", source: "client", origin: "x" })).rejects.toThrow(/isn't available yet/);
     expect(Object.keys(stripe.sessions)).toHaveLength(0);
     expect(db.rows("support_alerts")[0]).toMatchObject({ error_type: "plan_config" });
@@ -462,5 +500,176 @@ describe("Custom arrangements, Stripe on its own, configuration", () => {
     expect(Object.values(stripe.invoices)).toHaveLength(0);
     expect(active(db)?.package_id).toBe("p-plus");
     expect(db.rows("plan_changes")[0]).toMatchObject({ source: "admin", status: "applied" });
+  });
+});
+
+describe("Coaching by approval (Nov 24 2026)", () => {
+  it("a member who's never been coached applies in the app; nothing can be bought until the coach says yes", async () => {
+    const db = seed({ clients: [freeMember] });
+    let state = await S.loadPlanState(db, "c-free");
+    expect(state.access).toEqual({ state: "apply" });
+    await expect(S.confirmChange(db, state, "complete", { actorUserId: "u-free", source: "client", origin: "x" })).rejects.toThrow(/Apply for coaching first/);
+    await S.applyInApp(db, state, { goal: "Compete in powerlifting", outcome: "A 500 total", timeline: "Right away", packageSlug: "complete" }, "u-free");
+    expect(db.rows("coaching_applications")[0]).toMatchObject({ client_id: "c-free", email: "fiona@example.com", coaching_interest: "Complete Online Coaching", application_source: "in_app_plan", status: "New" });
+    expect(pushes.some((p) => /applied for coaching/.test(p.title))).toBe(true);
+    state = await S.loadPlanState(db, "c-free");
+    expect(state.access.state).toBe("applied");
+    await expect(S.applyInApp(db, state, { goal: "x x", outcome: "y y", timeline: "now" }, "u-free")).rejects.toThrow(/already/);
+    expect(Object.keys(stripe.sessions)).toHaveLength(0);
+
+    // the coach approves: they're told, and the application is closed
+    await S.approveCoaching(db, "c-free", { actorUserId: "owner-user", packageSlug: "complete" });
+    expect(db.rows("coaching_applications")[0].status).toBe("Approved");
+    expect(pushes.some((p) => p.uid === "u-free" && p.title === "You're approved for coaching")).toBe(true);
+    state = await S.loadPlanState(db, "c-free");
+    expect(state.access).toMatchObject({ state: "approved", packageName: "Complete Online Coaching" });
+
+    // a package the coach didn't approve stays shut; the approved one opens a checkout once the agreement is accepted
+    await expect(S.confirmChange(db, state, "plus", { actorUserId: "u-free", source: "client", origin: "x" })).rejects.toThrow(/approved Complete Online Coaching/);
+    const gated = await S.confirmChange(db, state, "complete", { actorUserId: "u-free", source: "client", origin: "x" });
+    expect(gated).toEqual({ result: "agreement_required", version: "3.0" });
+    db.rows("coaching_agreement_signatures").push({ id: "sig-f", client_id: "c-free", signed_at: "2026-11-24T00:00:00Z", coaching_agreement_versions: { version: "3.0" } });
+    const r = await S.confirmChange(db, await S.loadPlanState(db, "c-free"), "complete", { actorUserId: "u-free", source: "client", origin: "x" });
+    expect(r.result).toBe("redirect");
+    await webhookCheckout(db, Object.values(stripe.sessions)[0].id);
+    expect(client(db, "c-free")).toMatchObject({ service_tier: "coaching", status: "New Client" });
+    expect(db.rows("coaching_purchase_approvals")[0].used_at).toBeTruthy();
+    // a coaching client switches packages without applying again
+    expect((await S.loadPlanState(db, "c-free")).access).toEqual({ state: "client" });
+  });
+
+  it("a former coaching client asks to come back; the coach declines or approves", async () => {
+    const db = seed({
+      clients: [{ ...freeMember, id: "c-back", user_id: "u-back" }],
+      enrollments: [{ id: "e-old", client_id: "c-back", package_id: "p-comp", status: "ended", starts_on: "2026-01-01", ends_on: "2026-05-01" }],
+    });
+    let state = await S.loadPlanState(db, "c-back");
+    expect(state.access).toEqual({ state: "comeback" });
+    const r = await S.confirmChange(db, state, "plus", { actorUserId: "u-back", source: "client", origin: "x", note: "Ready again" });
+    expect(r.result).toBe("requested");
+    const req = db.rows("plan_changes")[0];
+    expect(req).toMatchObject({ kind: "reactivate", status: "requested", to_label: "Coaching Plus", note: "Ready again" });
+    expect(adminEmails[0].subject).toMatch(/asked to come back to coaching/);
+    state = await S.loadPlanState(db, "c-back");
+    expect(state.access.state).toBe("comeback_pending");
+    await expect(S.confirmChange(db, state, "plus", { actorUserId: "u-back", source: "client", origin: "x" })).rejects.toThrow(/with your coach/);
+
+    await S.declineCoaching(db, "c-back", { actorUserId: "owner-user", requestChangeId: req.id, note: "Full until January" });
+    expect(change(db, req.id)).toMatchObject({ status: "cancelled", decided_by: "owner-user", decision_note: "Full until January" });
+    expect(pushes.some((p) => p.uid === "u-back" && p.title === "About your coaching request")).toBe(true);
+    expect((await S.loadPlanState(db, "c-back")).access).toEqual({ state: "comeback" });
+
+    await S.confirmChange(db, await S.loadPlanState(db, "c-back"), "complete", { actorUserId: "u-back", source: "client", origin: "x" });
+    const again = db.rows("plan_changes").find((x) => x.status === "requested")!;
+    await S.approveCoaching(db, "c-back", { actorUserId: "owner-user" });
+    expect(change(db, again.id)).toMatchObject({ status: "applied", decided_by: "owner-user" });
+    expect((await S.loadPlanState(db, "c-back")).access).toMatchObject({ state: "approved", packageId: null });
+  });
+
+  it("the admin can approve, take it back, and an approval runs out", async () => {
+    const db = seed({ clients: [freeMember] });
+    const { approvalId } = await S.approveCoaching(db, "c-free", { actorUserId: "owner-user" });
+    await S.revokeApproval(db, "c-free", approvalId);
+    expect((await S.loadPlanState(db, "c-free")).access.state).toBe("apply");
+    await S.approveCoaching(db, "c-free", { actorUserId: "owner-user" });
+    vi.setSystemTime(NOW + 31 * DAY);
+    expect((await S.loadPlanState(db, "c-free")).access.state).toBe("apply");
+  });
+});
+
+describe("Grandfathered prices change only with consent (Nov 24 2026)", () => {
+  const reece = () => coached({ id: "c-r", user_id: "u-r", first_name: "Reece", full_name: "Reece Robinson" });
+  const legacySale = (subId: string, over: any = {}) => sale(subId, { id: "sale-r", client_id: "c-r", offer_name: "Online Coaching — Legacy $65", full_payable_amount: 65, stripe_price_id: "price_legacy", ...over });
+
+  it("a legacy subscriber can cancel at the end of the paid month (saying their price ends), never switch", async () => {
+    stripe.price("price_legacy", 6500);
+    const sub = stripe.subscribe("cus_r", "price_legacy", 5);
+    const db = seed({ clients: [reece()], sales: [legacySale(sub.id)], signed: { "c-r": "2.2" } });
+    const state = await S.loadPlanState(db, "c-r");
+    expect(state.current).toMatchObject({ managed: "custom", cancelable: true, priceCents: 6500 });
+    const preview = await S.previewChange(db, state, "free");
+    expect(preview.transition).toMatchObject({ kind: "cancel", action: "cancel_later", available: true });
+    expect(preview.forfeit?.text).toMatch(/\$65 a month is only kept on Online Coaching — Legacy \$65/);
+    // cancelling needs no new agreement (their own still says how to cancel)
+    expect(preview.agreement).toBeNull();
+    const r = await S.confirmChange(db, state, "free", { actorUserId: "u-r", source: "client", origin: "x", acknowledgeForfeit: true });
+    expect(r.result).toBe("scheduled");
+    expect(stripe.subs[sub.id].cancel_at_period_end).toBe(true);
+    expect(stripe.subs[sub.id].items.data[0].price.id).toBe("price_legacy"); // the price itself never moved
+    // a coaching client gets the confirmation in their coach chat too
+    expect(db.rows("messages").some((m) => m.client_id === "c-r" && m.is_automated && /^Confirmed: Online Coaching — Legacy \$65 ends/.test(m.body))).toBe(true);
+  });
+
+  it("the coach offers a switch; nothing changes until they accept the exact terms, then their own subscription moves at renewal", async () => {
+    stripe.price("price_legacy", 6500);
+    const sub = stripe.subscribe("cus_r", "price_legacy", 5);
+    const db = seed({ clients: [reece()], sales: [legacySale(sub.id)], signed: { "c-r": "3.0" } });
+    let state = await S.loadPlanState(db, "c-r");
+    await S.createOffer(db, state, { targetSlug: "complete", timing: "period_end", note: "Moving everyone onto Complete", actorUserId: "owner-user" });
+    const offer = db.rows("plan_changes")[0];
+    expect(offer).toMatchObject({ status: "offered", kind: "upgrade", from_price_cents: 6500, to_price_cents: 13000, offer_timing: "period_end", stripe_subscription_id: sub.id });
+    expect(pushes.some((p) => p.uid === "u-r" && /offer from your coach/i.test(p.title))).toBe(true);
+    expect(stripe.calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    await expect(S.createOffer(db, await S.loadPlanState(db, "c-r"), { targetSlug: "plus", timing: "now", actorUserId: "owner-user" })).rejects.toThrow(/already have an offer/);
+
+    state = await S.loadPlanState(db, "c-r");
+    await expect(S.acceptOffer(db, state, offer.id, { actorUserId: "u-r", origin: "x", consentText: "I agree" })).rejects.toThrow(/changed since you opened it/);
+    const { offerFromRow, offerTerms } = await import("@/lib/plans/plan-engine");
+    const fmt = (iso: string | null) => {
+      if (!iso) return null;
+      const d = new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso);
+      return d.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Winnipeg" });
+    };
+    const terms = offerTerms(offerFromRow(state.offer!, state.current), fmt);
+    expect(terms.consentText).toMatch(/My \$65 price on Online Coaching — Legacy \$65 ends\.$/);
+    const r = await S.acceptOffer(db, state, offer.id, { actorUserId: "u-r", origin: "x", consentText: terms.consentText });
+    expect(r.result).toBe("scheduled");
+    expect(change(db, offer.id)).toMatchObject({ status: "scheduled", consent_text: terms.consentText, stripe_to_price_id: "price_comp" });
+    expect(change(db, offer.id).consented_at).toBeTruthy();
+    // nothing charged today
+    expect(Object.values(stripe.invoices).filter((i: any) => i.subscription === sub.id && i.billing_reason === "subscription_update")).toHaveLength(0);
+    expect(active(db, "c-r")).toBeUndefined(); // still on their own price until the renewal
+
+    // five days into the month: it renews 25 days from now, at the new price
+    vi.setSystemTime(NOW + 26 * DAY);
+    stripe.rollPeriod(sub.id);
+    await S.runPlanChangesTick(db);
+    expect(change(db, offer.id).status).toBe("applied");
+    expect(active(db, "c-r")).toMatchObject({ package_id: "p-comp", sale_id: "sale-r" });
+    expect(db.rows("purchase_records")[0]).toMatchObject({ offer_name: "Online Coaching — $130/month", full_payable_amount: 130 });
+    expect(client(db, "c-r").service_tier).toBe("coaching");
+  });
+
+  it("an offer they decline, or that runs out, changes nothing", async () => {
+    stripe.price("price_legacy", 6500);
+    const sub = stripe.subscribe("cus_r", "price_legacy", 5);
+    const db = seed({ clients: [reece()], sales: [legacySale(sub.id)], signed: { "c-r": "3.0" } });
+    await S.createOffer(db, await S.loadPlanState(db, "c-r"), { targetSlug: "complete", timing: "now", actorUserId: "owner-user" });
+    const first = db.rows("plan_changes")[0];
+    await S.declineOffer(db, await S.loadPlanState(db, "c-r"), first.id, "u-r");
+    expect(change(db, first.id)).toMatchObject({ status: "cancelled", decision_note: "Declined by the client" });
+    await S.createOffer(db, await S.loadPlanState(db, "c-r"), { targetSlug: "complete", timing: "now", actorUserId: "owner-user" });
+    vi.setSystemTime(NOW + 15 * DAY);
+    const out = await S.runPlanChangesTick(db);
+    expect(out.offersClosed).toBe(1);
+    expect(db.rows("plan_changes").every((r) => r.status === "cancelled")).toBe(true);
+    expect(stripe.subs[sub.id].items.data[0].price.id).toBe("price_legacy");
+  });
+
+  it("never offers a switch that could double-bill (a session package's auto-pay)", async () => {
+    const sub = stripe.subscribe("cus_m", "price_comp", 5);
+    const db = seed({ clients: [coached({ id: "c-m", user_id: "u-m", first_name: "Marc" })], sales: [sale(sub.id, { id: "sale-m", client_id: "c-m", sessions_purchased: 16, offer_name: "PT — 16 Sessions" })] });
+    await expect(S.createOffer(db, await S.loadPlanState(db, "c-m"), { targetSlug: "complete", timing: "period_end", actorUserId: "owner-user" })).rejects.toThrow(/can't change/);
+  });
+
+  it("an existing client on 2.x accepts the 3.0 agreement before switching themselves", async () => {
+    const sub = stripe.subscribe("cus_dev", "price_comp", 3);
+    const db = seed({ clients: [coached()], sales: [sale(sub.id)], enrollments: [enrolled()], signed: { "c-dev": "2.2" } });
+    const state = await S.loadPlanState(db, "c-dev");
+    expect((await S.previewChange(db, state, "plus")).agreement).toEqual({ version: "3.0", signedVersion: "2.2" });
+    expect(await S.confirmChange(db, state, "plus", { actorUserId: "u-dev", source: "client", origin: "x" })).toEqual({ result: "agreement_required", version: "3.0" });
+    expect(stripe.calls.filter((c) => c.method === "POST" && c.path.startsWith("/subscriptions/"))).toHaveLength(0);
+    // cancelling never needs it
+    expect((await S.previewChange(db, state, "free")).agreement).toBeNull();
   });
 });
