@@ -276,8 +276,9 @@ export function PlanIntelligence({
           : "See the breakdown";
 
   return (
-    <section className={cn("rounded-2xl border border-border bg-card", className)} data-plan-intelligence={domain} data-verdict={q.verdict.kind} data-provisional={q.provisional || undefined}>
-      <div className="flex flex-col gap-3 p-3 sm:p-4 md:flex-row md:items-center">
+    // laid out by its own width (a docked Cleo narrows the page), never the window's
+    <section className={cn("@container rounded-2xl border border-border bg-card", className)} data-plan-intelligence={domain} data-verdict={q.verdict.kind} data-provisional={q.provisional || undefined}>
+      <div className="flex flex-col gap-3 p-3 @lg:p-4 @3xl:flex-row @3xl:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <ScoreDial quality={q} label={q.score == null ? "Not scored" : `${heading}: ${q.score} out of 100, ${q.provisional ? "provisional" : q.band ? BAND_LABEL[q.band] : ""}`} />
           <div className="min-w-0 flex-1">
@@ -298,7 +299,7 @@ export function PlanIntelligence({
                 </span>
               )}
             </div>
-            <p className="mt-1 line-clamp-3 text-[13px] leading-snug sm:line-clamp-2" data-plan-verdict>
+            <p className="mt-1 line-clamp-3 text-[13px] leading-snug @3xl:line-clamp-2" data-plan-verdict>
               {q.verdict.headline}
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -338,7 +339,7 @@ export function PlanIntelligence({
                   <Clock className="h-3 w-3 shrink-0" aria-hidden />
                   <span className="truncate">
                     {changedWords(q.settling.days, q.settling.minor)}
-                    {q.settling.ready && <span className="hidden sm:inline"> · judge from {shortDate(q.settling.ready)}</span>}
+                    {q.settling.ready && <span className="hidden @lg:inline"> · judge from {shortDate(q.settling.ready)}</span>}
                   </span>
                 </Pill>
               )}
@@ -371,10 +372,10 @@ export function PlanIntelligence({
           </div>
         </div>
         {(canOptimize || onAskCleo || canMessage) && (
-          <div className="flex shrink-0 flex-wrap gap-2 md:flex-col lg:flex-row" data-quality-actions>
+          <div className="flex shrink-0 flex-wrap gap-2 @3xl:flex-col @5xl:flex-row" data-quality-actions>
             {canMessage && (
               <Button
-                className="h-10 flex-1 gap-1.5 md:flex-none"
+                className="h-10 flex-1 gap-1.5 @3xl:flex-none"
                 variant={q.verdict.action === "act" ? "default" : "outline"}
                 onClick={() => {
                   queueComposerInsert(messageClientId!, q.verdict.ask!);
@@ -388,13 +389,13 @@ export function PlanIntelligence({
               </Button>
             )}
             {canOptimize && (
-              <Button className="h-10 flex-1 gap-1.5 md:flex-none" variant={q.verdict.action === "act" && !canMessage ? "default" : "outline"} onClick={() => onOptimize!(q)} data-quality-optimize>
+              <Button className="h-10 flex-1 gap-1.5 @3xl:flex-none" variant={q.verdict.action === "act" && !canMessage ? "default" : "outline"} onClick={() => onOptimize!(q)} data-quality-optimize>
                 {cleo ? <CleoMark size={16} /> : null}
                 {cleo ? "Optimize with Cleo" : "Optimize"}
               </Button>
             )}
             {onAskCleo && (
-              <Button className="h-10 flex-1 gap-1.5 md:flex-none" variant="ghost" onClick={onAskCleo} data-quality-ask>
+              <Button className="h-10 flex-1 gap-1.5 @3xl:flex-none" variant="ghost" onClick={onAskCleo} data-quality-ask>
                 <MessageCircle className="h-4 w-4" aria-hidden />
                 {cleo ? "Ask Cleo" : "Ask"}
               </Button>
@@ -417,7 +418,7 @@ export function PlanIntelligence({
             <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
           </button>
           {open && (
-            <div id={panelId} className="grid gap-4 border-t border-border p-3 sm:p-4 lg:grid-cols-2" data-quality-breakdown>
+            <div id={panelId} className="grid gap-4 border-t border-border p-3 @lg:p-4 @4xl:grid-cols-2" data-quality-breakdown>
               <div className="min-w-0 space-y-4">
                 {q.concerns.length > 0 && (
                   <div>
