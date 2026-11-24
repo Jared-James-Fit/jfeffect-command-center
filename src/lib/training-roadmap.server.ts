@@ -29,6 +29,10 @@ type Admin = any;
 /** Give a coach mid-edit time to finish before re-reading the block. */
 const SETTLE_MS = 2 * 60_000;
 const PER_TICK = 6;
+/** Blocks written at once in a run. */
+const TICK_LANES = 3;
+/** No block starts after this in a run (see `runRoadmapTick`). */
+export const TICK_BUDGET_MS = 45_000;
 const MAX_ATTEMPTS = 4;
 
 function must<T>(res: { data: T | null; error: any }, what: string): T {
@@ -263,15 +267,25 @@ export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: {
   return { blockId, outcome: twin ? "reused" : "written" };
 }
 
-/** The schedule tick: settled queue entries first, a few per run. */
+/**
+ * The schedule tick: settled queue entries first, a few per run, `TICK_LANES` at a time. No block
+ * starts once the run is `TICK_BUDGET_MS` old, so it answers inside the cron's 120 s: a block's words
+ * take 20–60 s (a model call, and a second when the check sends it back), and on Nov 24 2026 runs
+ * of six one after another were cut off after the second, wasting the third. Whatever isn't started
+ * stays queued for the next run; a block cut off mid-write is written again (it only counts as done
+ * once every week carries the new hash).
+ */
 export async function runRoadmapTick(admin: Admin) {
-  const cutoff = new Date(Date.now() - SETTLE_MS).toISOString();
+  const started = Date.now();
+  const cutoff = new Date(started - SETTLE_MS).toISOString();
   const due = must<any[]>(
     await admin.from("pl_roadmap_queue").select("block_id, queued_at, attempts").lte("queued_at", cutoff).order("queued_at").limit(PER_TICK),
     "roadmap queue",
   );
   const results: Array<RoadmapResult | { blockId: string; error: string }> = [];
-  for (const item of due) {
+  let next = 0;
+  let aiDown = false;
+  const one = async (item: any) => {
     try {
       results.push(await refreshBlockRoadmap(admin, item.block_id));
       // Only clear the entry if nothing re-queued it while Cleo was writing.
@@ -284,7 +298,8 @@ export async function runRoadmapTick(admin: Admin) {
         // AI is down: the block waits in the queue (no try used) and is written once it's back;
         // dropping it would leave the athlete's roadmap describing the old program
         await admin.from("pl_roadmap_queue").update({ last_error: `Waiting for AI: ${message}`.slice(0, 500) }).eq("block_id", item.block_id).eq("queued_at", item.queued_at);
-        break;
+        aiDown = true;
+        return;
       }
       if ((item.attempts ?? 0) + 1 >= MAX_ATTEMPTS) {
         await admin.from("pl_roadmap_queue").delete().eq("block_id", item.block_id).eq("queued_at", item.queued_at);
@@ -296,6 +311,10 @@ export async function runRoadmapTick(admin: Admin) {
           .eq("queued_at", item.queued_at);
       }
     }
-  }
-  return { checked: due.length, results };
+  };
+  const lane = async () => {
+    while (!aiDown && next < due.length && Date.now() - started < TICK_BUDGET_MS) await one(due[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(TICK_LANES, due.length) }, lane));
+  return { checked: next, left: due.length - next, results };
 }
