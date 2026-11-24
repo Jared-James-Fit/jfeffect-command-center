@@ -342,6 +342,9 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(out.purpose).toBe("");
     expect(out.weeks[0]).toEqual(reply.weeks[0]);
     expect(out.weeks[1]).toEqual({ week: 2, label: "A bit heavier", focus: "Same idea as last week, a little heavier." });
+    // a plain name over a sentence that fails: both come from the week's shape, so they never disagree
+    const half = plainReply({ ...reply, weeks: [reply.weeks[0], { week: 2, label: "Heaviest week", focus: "Top sets at RPE 8." }] }, { shapes, blockWords: "" });
+    expect(half.weeks[1]).toEqual({ week: 2, label: "A bit heavier", focus: "Same idea as last week, a little heavier." });
     expect(replyProblems({ ...out, label: out.label, purpose: "Get back into the main lifts." })).toEqual([]);
     expect(plainBlockLabel("Peak / Taper", true)).toBe("Taper");
     expect(plainBlockLabel("Peak block", true)).toBe("Peak for the meet");
@@ -358,7 +361,7 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(server).toContain("Your last reply broke the plain-words rules.");
     expect(server).toContain("return plainReply(best.reply, digest, meet);");
     const { ROADMAP_PROMPT_VERSION, digestBlock: digest } = await import("@/lib/training-roadmap");
-    expect(ROADMAP_PROMPT_VERSION).toBe(5);
+    expect(ROADMAP_PROMPT_VERSION).toBe(6);
     const d = digest(block(3));
     expect(d.shapes.map((s) => s.week)).toEqual([1, 2, 3]);
     expect(d.shapes[0].start).toBe("first");
