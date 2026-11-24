@@ -33,6 +33,8 @@ import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CleoMark } from "@/components/summer/cleo-mark";
+import { openSummer } from "@/lib/cleo-open";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { ShellPageContext } from "@/components/route-pending";
@@ -290,6 +292,7 @@ export function AppShell({
   moreInHeader = false,
   simpleHeader = false,
   ownTopBarOn,
+  cleo = false,
 }: {
   items: NavItem[];
   bottomItems?: NavItem[];
@@ -313,6 +316,8 @@ export function AppShell({
    * one bar, not two; their ☰ opens More through OPEN_MORE_EVENT.
    */
   ownTopBarOn?: readonly string[];
+  /** Whoever has Cleo: a Cleo button beside search in the desktop sidebar (a phone's bar has no room; Messages' Cleo row is its way in). */
+  cleo?: boolean;
 }) {
   useKeyboardOpen();
   // the iPhone home-screen app laying fixed things out a status bar short: back to the real bottom (ios-edge.ts)
@@ -761,6 +766,21 @@ export function AppShell({
               <TooltipContent side="right">Search everything (⌘K)</TooltipContent>
             </Tooltip>
           ) : null}
+          {iconOnly && cleo ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => openSummer()}
+                  className="mx-auto mt-1.5 flex h-8 w-8 items-center justify-center rounded-md text-foreground ring-1 ring-border hover:bg-sidebar-accent"
+                  aria-label="Open Cleo"
+                  data-shell-cleo
+                >
+                  <CleoMark size={16} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Cleo (⌘⇧S)</TooltipContent>
+            </Tooltip>
+          ) : null}
           {iconOnly ? (
             <div className="mt-1.5 flex justify-center"><ThemeToggle className="origin-center scale-[0.8]" /></div>
           ) : (
@@ -774,6 +794,17 @@ export function AppShell({
                 <span className="flex-1 truncate">Search…</span>
                 <kbd className="rounded border border-border bg-background px-1 py-0.5 text-[9px] font-mono text-muted-foreground">⌘K</kbd>
               </button>
+              {cleo && (
+                <button
+                  onClick={() => openSummer()}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-foreground hover:bg-sidebar-accent"
+                  aria-label="Open Cleo"
+                  title="Cleo (⌘⇧S)"
+                  data-shell-cleo
+                >
+                  <CleoMark size={16} />
+                </button>
+              )}
               <ThemeToggle />
             </div>
           )}

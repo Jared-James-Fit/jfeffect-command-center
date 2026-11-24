@@ -153,13 +153,15 @@ describe("Cleo program history", () => {
 });
 
 describe("Cleo's models", () => {
-  it("Cleo's brain is the routing table's assistant route: the OpenAI key, a fallback, never Lovable credits by default", async () => {
+  it("Cleo's brain is the routing table's assistant route: the OpenAI key, a fallback, never Lovable credits", async () => {
     const { cleoRoute } = await import("@/lib/cleo-model.server");
     const r = cleoRoute(null);
     expect(r.models.length).toBeGreaterThan(1);
     for (const m of r.models) expect(m).toMatch(/^openai:/);
-    // an admin override wins, and a benchmark's list and effort replace the route's
-    expect(cleoRoute({ assistant: ["gateway:google/gemini-3-flash-preview"] }).models).toEqual(["gateway:google/gemini-3-flash-preview"]);
+    // an admin override naming an OpenAI model wins; one naming a gateway model is dropped (no Lovable credits, Nov 24 2026)
+    expect(cleoRoute({ assistant: ["openai:gpt-5-mini"] }).models).toEqual(["openai:gpt-5-mini"]);
+    expect(cleoRoute({ assistant: ["gateway:google/gemini-3-flash-preview"] }).models).toEqual(r.models);
+    // only the benchmark's own list compares gateway models; its list and effort replace the route's
     expect(cleoRoute(null, { models: ["openai:gpt-5-mini"], effort: "medium" })).toMatchObject({ models: ["openai:gpt-5-mini"], effort: "medium" });
     expect(cleoRoute(null, { models: ["not a model"] }).models).toEqual(r.models);
   });

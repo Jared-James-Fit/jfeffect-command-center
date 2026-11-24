@@ -248,7 +248,7 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   };
 
   const cleoPanel = (
-    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust cardio"} subtitle={`Cardio · ${view.firstName}`} branded={cleo} handle={CARDIO_CLEO_ANCHOR}>
+    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust cardio"} subtitle={`Cardio · ${view.firstName}`} branded={cleo} handle={CARDIO_CLEO_ANCHOR} conversationClientId={clientId}>
       <DockBrief dock={dock} />
       <CardioCleoPanel
         scorePlan={(p) => scoreCardioPlan(p, view.scoreCtx).score}

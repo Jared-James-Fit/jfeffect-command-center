@@ -268,6 +268,7 @@ import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './route
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
+import { Route as ApiPublicHooksCleoTurnRouteImport } from './routes/api/public/hooks/cleo-turn'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
 import { Route as ApiPublicHooksCoachingPackageStripeRouteImport } from './routes/api/public/hooks/coaching-package-stripe'
@@ -1811,6 +1812,11 @@ const ApiPublicHooksCleoBenchRoute = ApiPublicHooksCleoBenchRouteImport.update({
   path: '/api/public/hooks/cleo-bench',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksCleoTurnRoute = ApiPublicHooksCleoTurnRouteImport.update({
+  id: '/api/public/hooks/cleo-turn',
+  path: '/api/public/hooks/cleo-turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksClientCalendarsTickRoute =
   ApiPublicHooksClientCalendarsTickRouteImport.update({
     id: '/api/public/hooks/client-calendars-tick',
@@ -2404,6 +2410,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
+  '/api/public/hooks/cleo-turn': typeof ApiPublicHooksCleoTurnRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -2719,6 +2726,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
+  '/api/public/hooks/cleo-turn': typeof ApiPublicHooksCleoTurnRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -3040,6 +3048,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
+  '/api/public/hooks/cleo-turn': typeof ApiPublicHooksCleoTurnRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -3361,6 +3370,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
+    | '/api/public/hooks/cleo-turn'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
@@ -3676,6 +3686,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
+    | '/api/public/hooks/cleo-turn'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
@@ -3996,6 +4007,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
+    | '/api/public/hooks/cleo-turn'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
@@ -4139,6 +4151,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
+  ApiPublicHooksCleoTurnRoute: typeof ApiPublicHooksCleoTurnRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
   ApiPublicHooksCoachingPackageStripeRoute: typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -6002,6 +6015,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCleoBenchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/cleo-turn': {
+      id: '/api/public/hooks/cleo-turn'
+      path: '/api/public/hooks/cleo-turn'
+      fullPath: '/api/public/hooks/cleo-turn'
+      preLoaderRoute: typeof ApiPublicHooksCleoTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/client-calendars-tick': {
       id: '/api/public/hooks/client-calendars-tick'
       path: '/api/public/hooks/client-calendars-tick'
@@ -7152,6 +7172,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksCleoAttachmentsSweepRoute:
     ApiPublicHooksCleoAttachmentsSweepRoute,
   ApiPublicHooksCleoBenchRoute: ApiPublicHooksCleoBenchRoute,
+  ApiPublicHooksCleoTurnRoute: ApiPublicHooksCleoTurnRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksCoachAutomationTickRoute:

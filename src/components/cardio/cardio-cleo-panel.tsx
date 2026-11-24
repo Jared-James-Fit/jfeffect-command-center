@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { askCardioCleoFn, decideCardioProposalFn } from "@/lib/cardio/cardio.functions";
+import { useCoachVoice, VoiceButton, VoiceStatus } from "@/components/program-ai/coach-voice";
 import type { CardioProposal, CardioProposalRow } from "@/lib/cardio/types";
 import { pickChanges, type CardioPlan } from "@/lib/cardio/plan";
 
@@ -73,9 +74,12 @@ export function CardioCleoPanel({
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [turns.length]);
 
+  const busy = turns.some((t) => t.status === "thinking");
+  const voice = useCoachVoice((said) => setText((cur) => (cur.trim() ? `${cur.trim()} ${said}` : said)));
   const send = async (words?: string) => {
     const q = (words ?? text).trim();
-    if (q.length < 3) return;
+    // one ask at a time: a second Enter or tap while Cleo reads is ignored
+    if (q.length < 3 || busy) return;
     const id = `${Date.now()}`;
     setTurns((t) => [...t, { id, ask: q, status: "thinking" }]);
     setText("");
@@ -290,20 +294,24 @@ export function CardioCleoPanel({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              // Enter sends, Shift+Enter is a new line (every Cleo box, Nov 24 2026)
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && (e.nativeEvent as any).keyCode !== 229) {
                 e.preventDefault();
                 void send();
               }
             }}
+            enterKeyHint="send"
             rows={2}
             placeholder={`Ask about or change ${firstName}'s cardio…`}
             className="min-h-[44px] flex-1 resize-none text-[14px]"
             data-cardio-cleo-input
           />
-          <Button size="icon" className={cn("h-11 w-11 shrink-0")} onClick={() => void send()} disabled={text.trim().length < 3 || turns.some((t) => t.status === "thinking")} aria-label="Send to Cleo">
+          <VoiceButton voice={voice} disabled={busy} />
+          <Button size="icon" className={cn("h-11 w-11 shrink-0")} onClick={() => void send()} disabled={text.trim().length < 3 || busy || voice.recording} aria-label="Send to Cleo">
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        <VoiceStatus voice={voice} className="mt-2" />
       </div>
     </div>
   );

@@ -87,7 +87,7 @@ function AdminLayout() {
   }
 
   return (
-    <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR}>
+    <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR} cleo={cleoOn}>
       <AdminTopBar />
       <TeamPreviewBanner />
       {viewOnly && !preview && <ViewOnlyStrip />}

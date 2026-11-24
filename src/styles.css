@@ -1452,6 +1452,13 @@ html[data-program-builder] [data-mobile-bottom-nav] { @variant max-md { display:
 /* The coach's program editor on a phone: its view bar (Day · Week · Block · Program) is
    where the tab bar was, and steps aside while typing like every bar at the bottom. */
 html[data-coach-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }
+/* Cleo's panel (cleo-panel.tsx, Nov 24 2026): on a computer with room, the whole admin page gives up
+   the panel's width so nothing is hidden under it; with less room the panel sits over the page's edge. */
+html[data-cleo-panel] [data-shell-root] { padding-right: var(--cleo-panel-w, 0px); transition: padding-right 160ms ease; }
+/* a page's floating button at the right steps left of Cleo's open panel instead of sitting on it */
+html[data-cleo-open] [data-cleo-avoid] { transform: translateX(calc(-1 * var(--cleo-open-w, 0px))); }
+@media (prefers-reduced-motion: reduce) { html[data-cleo-panel] [data-shell-root] { transition: none; } }
+
 /* Cleo docked beside the builder (cleo-dock.tsx): the builder gives up the panel's width
    instead of sitting under it. Set only off a phone (phoneLayoutNow); a phone gets a sheet. */
 html[data-cleo-dock] [data-builder-page] { padding-right: var(--cleo-dock-w, 0px); transition: padding-right 160ms ease; }

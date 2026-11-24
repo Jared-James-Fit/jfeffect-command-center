@@ -70,6 +70,10 @@ const AI_AREA: Record<string, AreaKey> = {
   lesson_art: "crew",
   // Cleo
   assistant: "cleo",
+  cleo_title: "cleo",
+  cleo_memory: "cleo",
+  cleo_dictation: "cleo",
+  coach_voice: "coaching",
   // sales
   lead_reply: "sales",
   member_application: "sales",

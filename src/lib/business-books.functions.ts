@@ -568,7 +568,7 @@ export const listSummerChats = createServerFn({ method: "GET" })
     const { userId } = context as any;
     const { db: supabase } = await assertCleo(context as any);
     const { listChats } = await import("@/lib/cleo-chats.server");
-    return listChats(supabase, userId, data.q);
+    return listChats(supabase, userId, { q: data.q });
   });
 
 /** Delete one of your Cleo chats, or all of them (chatId null). */
@@ -604,33 +604,6 @@ export const askSummer = createServerFn({ method: "POST" })
     const { db: supabase, viewOnly, coach } = await assertCleo(context as any);
     const { answerSummer } = await import("@/lib/summer.server");
     return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, coach, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
-  });
-
-const VoiceInput = z.object({
-  /** Base64 audio (webm/opus on most browsers, mp4/aac on iPhone). Dictation runs up to 5 minutes. */
-  audio: z.string().min(16).max(9_000_000),
-  mime: z.string().max(80),
-  year: z.number().int().min(2000).max(2100).optional(),
-  route: z.string().max(300).optional(),
-  chatId: ChatId.nullish(),
-  attachments: AttachmentsInput.optional(),
-});
-
-/** Talk to Cleo: hear the question, answer it in voice mode. */
-export const askSummerVoice = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => VoiceInput.parse(d))
-  .handler(async ({ data, context }) => {
-    const { userId } = context as any;
-    // Whoever has Cleo (the admin; the finance login or a coach while switched on).
-    const { db: supabase, viewOnly, coach } = await assertCleo(context as any);
-    const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
-    const { data: people } = await supabase.from("clients").select("full_name").not("full_name", "is", null).limit(400);
-    const names = ((people ?? []) as Array<{ full_name: string | null }>).map((c) => (c.full_name ?? "").trim()).filter(Boolean);
-    const transcript = await transcribeAudio(data.audio, data.mime, names);
-    if (!transcript) return { transcript: "", user: null, assistant: null, chatId: data.chatId ?? null };
-    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, coach, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
-    return { transcript, ...res };
   });
 
 /** Cleo's voice for a reply. ok:false means the browser should use a device voice. */

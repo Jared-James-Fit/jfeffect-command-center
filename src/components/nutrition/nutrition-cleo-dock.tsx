@@ -129,7 +129,7 @@ export function NutritionCleoDock({ clientId }: { clientId: string }) {
   }, [clientId, dockAsk, dockOptimize]);
 
   return (
-    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo} handle={NUTRITION_CLEO_ANCHOR}>
+    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo} handle={NUTRITION_CLEO_ANCHOR} conversationClientId={clientId}>
       <DockBrief dock={dock} />
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-nutrition-cleo>
         <p className="text-[13px] leading-snug text-muted-foreground">
