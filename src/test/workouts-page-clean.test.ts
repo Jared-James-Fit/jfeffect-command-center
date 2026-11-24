@@ -39,7 +39,7 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     expect(month).not.toContain("var(--chart-4)");
     expect(month).not.toContain("<CollapsibleContent");
     expect(month).toContain("Analytics <ChevronRight");
-    expect(month).toContain('to="/portal/workouts/analytics"');
+    expect(month).toContain('analytics ?? { to: "/portal/workouts/analytics" }');
     for (const gone of ["weightComparison", "school bus", "backdrop-blur", "Athlete corner"]) {
       expect(month, gone).not.toContain(gone);
     }

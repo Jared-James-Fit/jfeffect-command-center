@@ -21,6 +21,7 @@ import { loggedSetHasInput, pickCompletion, setsForSession, type SrcCompletion }
 import { exerciseName, loggedLines, prescriptionLine, roleOf, type LoggedSet, type PrescriptionRow } from "@/lib/workouts/training-words";
 import { cardRest } from "@/lib/exercise-metadata";
 import { planCheck, type PlanCheck } from "@/lib/workouts/plan-vs-actual";
+import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 
 /* ───────────────────────────── Dates ───────────────────────────── */
 
@@ -97,7 +98,7 @@ export function trainingDaysLine(days: unknown): string | null {
 
 /** What getClientSchedule returns (the parts read here). */
 export type PeekSchedule = {
-  blocks?: Array<{ id: string; name: string | null; start_date?: string | null; end_date?: string | null; status?: string | null; client_visible?: boolean | null }>;
+  blocks?: Array<{ id: string; name: string | null; start_date?: string | null; end_date?: string | null; status?: string | null; client_visible?: boolean | null; source_template_block_key?: string | null }>;
   weeks?: Array<{ id: string; week_index: number; block_id: string }>;
   days?: Array<{ id: string; week_id: string; day_index: number; title?: string | null; subtitle?: string | null; focus?: string | null; scheduled_date?: string | null; is_optional?: boolean | null }>;
   completions?: Array<{ id?: string; day_id: string; completed_at?: string | null; in_progress_at?: string | null; started_at?: string | null; scheduled_workout_id?: string | null }>;
@@ -170,6 +171,35 @@ export function peekEntries(schedule: PeekSchedule | null | undefined, todayIso:
     .map((e, i) => ({ e, i }))
     .sort((a, b) => a.e.date.localeCompare(b.e.date) || a.i - b.i)
     .map(({ e }) => e);
+}
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * This calendar month's program workouts that are due, and how many are done,
+ * read the way the athlete's own Workouts page reads them (its Performance
+ * card's ring): from the 1st through today, today's only once it's done,
+ * never an optional session, an at-home backup or a block hidden from them.
+ * Null when nothing is due yet, so the ring never says "0 of 0".
+ */
+export function monthWorkoutsDone(
+  schedule: PeekSchedule | null | undefined,
+  todayIso: string,
+): { label: string; planned: number; done: number } | null {
+  if (!schedule) return null;
+  const backup = new Set((schedule.blocks ?? []).filter((b) => isAtHomeBackupSessionBlock(b)).map((b) => b.id));
+  const from = `${todayIso.slice(0, 7)}-01`;
+  let planned = 0;
+  let done = 0;
+  for (const e of peekEntries(schedule, todayIso)) {
+    if (e.date < from || e.date > todayIso) continue;
+    if (e.optional || (e.blockId && backup.has(e.blockId))) continue;
+    if (e.date === todayIso && e.status !== "done") continue; // today's still to do, not missed
+    planned++;
+    if (e.status === "done") done++;
+  }
+  if (!planned) return null;
+  return { label: MONTH_NAMES[Number(todayIso.slice(5, 7)) - 1], planned, done };
 }
 
 export type DefaultReason = "today" | "in_progress" | "next" | "last" | "upcoming";

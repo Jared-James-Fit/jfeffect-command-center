@@ -26,7 +26,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  AlertTriangle, Archive, BarChart3, Trash2, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
+  AlertTriangle, Archive, Trash2, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
   Download, Dumbbell, Flame, FlagOff, HeartPulse, FilePlus2, History, Layers, LineChart, Loader2, MoreHorizontal, Pencil, PenLine, Plus, SlidersHorizontal, Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -64,7 +64,8 @@ import {
 } from "@/components/clients/training-schedule-board";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { useServerFn } from "@tanstack/react-start";
-import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
+import { getClientSchedule, rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
+import { monthWorkoutsDone } from "@/lib/workout-peek";
 import { ClientNotesCard } from "@/components/messages/client-notes-log";
 import { HealthCard, useHealthProfile } from "@/components/health/HealthCard";
 import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
@@ -75,6 +76,7 @@ const ScheduleManagerShell = lazyWithRetry(() =>
   import("@/components/schedule/ScheduleManagerShell").then((m) => ({ default: m.ScheduleManagerShell })),
 );
 const ClientMaxesPanel = lazyWithRetry(() => import("@/components/client-maxes-panel").then((m) => ({ default: m.ClientMaxesPanel })));
+const PerformanceCard = lazyWithRetry(() => import("@/components/performance-card").then((m) => ({ default: m.PerformanceCard })));
 const ClientWarmupCard = lazyWithRetry(() => import("@/components/client-warmup-card").then((m) => ({ default: m.ClientWarmupCard })));
 
 type ClientRow = {
@@ -87,6 +89,8 @@ type ClientRow = {
 
 /** Element id of the schedule card; /admin/clients/$id/schedule lands here. */
 export const TRAINING_SCHEDULE_ANCHOR = "schedule";
+/** Element id of the client's Performance card (their training analytics, one tap away). */
+export const TRAINING_ANALYTICS_ANCHOR = "analytics";
 /** Element id of Athlete setup (training days, maxes): "Place them" goes there when no days are set. */
 export const ATHLETE_SETUP_ANCHOR = "athlete-setup";
 
@@ -97,7 +101,7 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
   // Missing program data's "Add maxes" / "Set days" open it on Athlete setup.
   useEffect(() => {
     const id = hash.replace(/^#/, "");
-    if (id !== TRAINING_SCHEDULE_ANCHOR && id !== ATHLETE_SETUP_ANCHOR) return;
+    if (id !== TRAINING_SCHEDULE_ANCHOR && id !== ATHLETE_SETUP_ANCHOR && id !== TRAINING_ANALYTICS_ANCHOR) return;
     const t = window.setTimeout(() => {
       document.getElementById(id)?.scrollIntoView({ block: "start" });
     }, 400);
@@ -114,19 +118,30 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
   };
   return (
+    // On a phone the two columns are one list (`contents`), ordered so their analytics sits right
+    // under the program, a tap from it; on a computer it heads the side column.
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
-      <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="lg:col-span-2" />
-      <div className="min-w-0 space-y-4 lg:space-y-5">
-        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} onFocus={setFocusId} />
-        <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="min-w-0 scroll-mt-24">
+      <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="order-1 lg:order-none lg:col-span-2" />
+      <div className="contents lg:block lg:min-w-0 lg:space-y-5">
+        <div className="order-2 min-w-0 lg:order-none">
+          <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} onFocus={setFocusId} />
+        </div>
+        <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="order-4 min-w-0 scroll-mt-24 lg:order-none">
           <Suspense fallback={<Card className="p-6 text-sm text-muted-foreground">Loading schedule…</Card>}>
             <ScheduleManagerShell clientId={clientId} mode="coach" />
           </Suspense>
         </section>
       </div>
-      <div className="min-w-0 space-y-4 lg:space-y-5">
-        <AthleteSetupCard clientId={clientId} client={client} />
-        <ClientNotesCard clientId={clientId} name={name} />
+      <div className="contents lg:block lg:min-w-0 lg:space-y-5">
+        <div className="order-3 min-w-0 lg:order-none" id={TRAINING_ANALYTICS_ANCHOR}>
+          <ClientPerformance clientId={clientId} client={client} />
+        </div>
+        <div className="order-5 min-w-0 lg:order-none">
+          <AthleteSetupCard clientId={clientId} client={client} />
+        </div>
+        <div className="order-6 min-w-0 lg:order-none">
+          <ClientNotesCard clientId={clientId} name={name} />
+        </div>
       </div>
       {/* Cleo, docked beside the tab: Adjust program's engine on their whole program. Its one way in is
           the strip's Optimize / Ask Cleo; once that's scrolled away the closed dock shows its handle. */}
@@ -139,6 +154,37 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
         handle={focusId ? TRAINING_CLEO_ANCHOR : null}
       />
     </div>
+  );
+}
+
+/* ─────────────────────────── Performance ─────────────────────────── */
+
+/**
+ * Their training analytics at a glance, one tap from the rest: the athlete's own Performance card
+ * (the last 12 weeks, the main lift's estimated max, this month's planned workouts, the latest
+ * record), opening the coach's analytics page. The month reads the Schedule's own feed and cache.
+ */
+function ClientPerformance({ clientId, client }: { clientId: string; client: ClientRow | null }) {
+  const scheduleFn = useServerFn(getClientSchedule);
+  const schedule = useQuery({
+    queryKey: ["client-schedule", clientId],
+    enabled: !!clientId,
+    staleTime: 60_000,
+    queryFn: () => scheduleFn({ data: { clientId } }),
+  });
+  const today = todayISO();
+  const month = useMemo(() => monthWorkoutsDone(schedule.data as any, today), [schedule.data, today]);
+  const first = ((client?.full_name as string | null) ?? "").split(" ")[0] || null;
+  return (
+    <Suspense fallback={<Card className="h-[176px] jf-skeleton bg-muted/30" aria-hidden />}>
+      <PerformanceCard
+        clientId={clientId}
+        unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
+        month={month}
+        analytics={{ to: "/admin/client-programs/$clientId/analytics", params: { clientId } }}
+        emptyText={`Fills in after ${first ?? "their"}${first ? "'s" : ""} first logged workout.`}
+      />
+    </Suspense>
   );
 }
 
@@ -311,9 +357,6 @@ function ProgramCard({ clientId, clientName, trainingDays, onFocus }: { clientId
               )}
               <DropdownMenuItem asChild>
                 <Link to="/admin/client-programs/$clientId/intelligence" params={{ clientId }} search={{ scope: "program", from: "", to: "", tab: "summary" }}><LineChart className="mr-2 h-4 w-4" /> Program Intelligence</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/admin/client-programs/$clientId/analytics" params={{ clientId }}><BarChart3 className="mr-2 h-4 w-4" /> Analytics &amp; PRs</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/admin/client-programs/$clientId/history" params={{ clientId }}><History className="mr-2 h-4 w-4" /> Program history</Link>
