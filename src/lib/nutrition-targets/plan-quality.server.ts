@@ -9,14 +9,18 @@ import { loadWeightManagement } from "@/lib/weight-management/load.server";
 import { observedMaintenance, weeklyAverageKcal, weightTrend } from "@/lib/nutrition-targets/nutrition-intel";
 import { allergenConflictLine, allergenConflicts, onFileRules } from "@/lib/nutrition-targets/food-history";
 import { scoreNutritionPlan, dayKindOf, mealFactsOf, type NutritionDayIn } from "@/lib/nutrition-targets/plan-quality";
-import type { QualityScore } from "@/lib/plan-quality";
+import { barriersFromCheckins, type QualityScore } from "@/lib/plan-quality";
+import { changeRead, diffNutrition, newNutritionPlanChanges, nutritionFingerprint, type NutritionDayFp, type PlanChange } from "@/lib/plan-changes";
+
+const dayFp = (d: any): NutritionDayFp => ({ label: String(d.day_label ?? "Day"), kcal: d.calories, protein: d.protein, carbs: d.carbs, fats: d.fats, steps: d.steps, notes: d.notes ?? null });
+const plusDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 const SAFETY = /(eating disorder|anorexi|bulimi|binge|arfid|pregnan|breastfeed|nursing (my|a) baby)/i;
 
-export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ quality: QualityScore | null; planId: string | null }> {
+export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ quality: QualityScore | null; planId: string | null; pending?: { at: string; count: number } | null }> {
   const { data: plan } = await sb
     .from("nutrition_targets")
-    .select("id, start_date, phase, last_updated_at, nutrition_target_days(day_label, calories, protein, carbs, fats, notes, use_on, sort_order)")
+    .select("id, start_date, phase, last_updated_at, nutrition_target_days(day_label, calories, protein, carbs, fats, steps, notes, use_on, sort_order)")
     .eq("client_id", clientId)
     .neq("status", "Archived")
     .order("start_date", { ascending: false })
@@ -27,7 +31,7 @@ export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ 
   const loaded = await loadWeightManagement(sb, clientId);
   const { input, assessment } = loaded;
   const [{ data: c }, goalsRes] = await Promise.all([
-    sb.from("clients").select("preferred_high_days").eq("id", clientId).maybeSingle(),
+    sb.from("clients").select("preferred_high_days, full_name").eq("id", clientId).maybeSingle(),
     Promise.resolve(sb.from("client_goals_setup").select("food_dislikes").eq("client_id", clientId).maybeSingle()).catch(() => ({ data: null })),
   ]);
   const dislikes = Array.isArray((goalsRes as any)?.data?.food_dislikes) ? ((goalsRes as any).data.food_dislikes as unknown[]).map(String).filter((v) => v && !/^(none|no|n\/a|nothing)$/i.test(v.trim())) : [];
@@ -77,6 +81,57 @@ export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ 
     }
     return m > 0 ? Math.round(m) : null;
   })();
+  // ── the change log: a new plan against the one before, Adjust plan edits, and in-place edits ──
+  const today = assessment.today;
+  const known: PlanChange[] = [];
+  try {
+    if (plan.start_date && plan.start_date >= plusDays(today, -90)) {
+      const { data: prevPlan } = await sb
+        .from("nutrition_targets")
+        .select("id, start_date, nutrition_target_days(day_label, calories, protein, carbs, fats, steps, notes, sort_order)")
+        .eq("client_id", clientId)
+        .neq("id", plan.id)
+        .lt("start_date", plan.start_date)
+        .order("start_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      known.push(
+        ...newNutritionPlanChanges(
+          prevPlan ? { id: prevPlan.id, start: prevPlan.start_date, days: ((prevPlan.nutrition_target_days ?? []) as any[]).map(dayFp) } : null,
+          { id: plan.id, start: plan.start_date, days: days.map(dayFp) },
+          today,
+        ),
+      );
+    }
+    const { data: edits } = await sb
+      .from("nutrition_plan_edits")
+      .select("applied_at, restore")
+      .eq("target_id", plan.id)
+      .eq("status", "applied")
+      .not("applied_at", "is", null)
+      .gte("applied_at", `${plusDays(today, -90)}T00:00:00Z`)
+      .order("applied_at", { ascending: true });
+    const applied = ((edits ?? []) as any[]).filter((e) => Array.isArray(e.restore?.days));
+    applied.forEach((e, i) => {
+      const before = (e.restore.days as any[]).map(dayFp);
+      const after = i + 1 < applied.length ? (applied[i + 1].restore.days as any[]).map(dayFp) : days.map(dayFp);
+      const on = String(e.applied_at).slice(0, 10);
+      known.push(...diffNutrition(nutritionFingerprint(plan.id, null, before), nutritionFingerprint(plan.id, null, after), on).map((c) => ({ ...c, on })));
+    });
+  } catch {
+    /* the plan's history is best effort */
+  }
+  const { trackPlanChanges } = await import("@/lib/plan-changes.server");
+  const fp = nutritionFingerprint(plan.id, plan.start_date ?? null, days.map(dayFp));
+  // an in-place edit is a change of the same plan; a new plan is read from its history above
+  const logged = await trackPlanChanges(sb, clientId, "nutrition", fp, today, { comparable: (prev) => (prev.items._plan as any)?.id === plan.id });
+  // edited in place before the change log saw it: the size isn't known, so it's listed but never holds the read
+  const editedOn = plan.last_updated_at ? String(plan.last_updated_at).slice(0, 10) : null;
+  if (editedOn && plan.start_date && editedOn > plusDays(plan.start_date, 1) && editedOn >= plusDays(today, -28) && ![...logged, ...known].some((c) => c.on === editedOn))
+    known.push({ domain: "nutrition", area: "macros", size: "minor", summary: "Plan edited", on: editedOn, unknown: true });
+  const weighIns14 = input.weighIns.filter((w) => w.date >= plusDays(today, -14)).length;
+  const changeLog = changeRead("nutrition", [...logged, ...known], today, { meetWeeksOut: assessment.meetWeeksOut, weighIns14 });
+
   const quality = scoreNutritionPlan(dayIns, {
     direction: input.goal?.type || assessment.goal || input.plan.phase ? assessment.direction : null,
     sex: input.sex,
@@ -102,6 +157,24 @@ export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ 
     // when the plan last changed: its start, or an edit since (Adjust plan, the editor)
     changedOn: [plan.start_date, plan.last_updated_at ? String(plan.last_updated_at).slice(0, 10) : null].filter((d): d is string => !!d && d <= assessment.today).sort().pop() ?? null,
     today: assessment.today,
+    changeLog,
+    barriers: barriersFromCheckins(input.checkins.slice().sort((a, b) => b.date.localeCompare(a.date))),
+    firstName: String((c as any)?.full_name ?? "").trim().split(/\s+/)[0] || null,
   });
-  return { quality, planId: plan.id };
+  // a written plan change nobody has put on the plan or discarded: the strip's reminder
+  let pending: { at: string; count: number } | null = null;
+  try {
+    const { data: ready } = await sb
+      .from("nutrition_plan_edits")
+      .select("updated_at")
+      .eq("target_id", plan.id)
+      .eq("status", "ready")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ready && Date.now() - Date.parse(ready.updated_at) >= 30 * 60_000) pending = { at: String(ready.updated_at), count: 1 };
+  } catch {
+    /* a reminder is optional */
+  }
+  return { quality, planId: plan.id, pending };
 }

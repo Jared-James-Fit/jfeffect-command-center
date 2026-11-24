@@ -53,7 +53,7 @@ import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 import { CleoDock, useCleoDock, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
-import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
+import { PlanIntelligence, pendingReminder } from "@/components/plan-quality/plan-intelligence";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { getProgramQualityFn } from "@/lib/program-quality.functions";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
@@ -216,6 +216,8 @@ function ProgramQualityStrip({ clientId, dock, hasProgram, className }: { client
       className={className}
       onOptimize={hasProgram ? (x) => dock.optimize({ domain: "training", what: "training program", quality: x }) : undefined}
       onAskCleo={hasProgram ? () => dock.ask() : undefined}
+      messageClientId={clientId}
+      pending={q.data?.pending ? pendingReminder("program", q.data.pending.at, { count: q.data.pending.count, cleo, onOpen: () => dock.ask() }) : null}
     />
   );
 }
