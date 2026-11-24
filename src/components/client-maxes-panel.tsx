@@ -18,6 +18,7 @@ import {
 } from "@/lib/pl-maxes";
 import { cn } from "@/lib/utils";
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
+import { MeetBestsRow } from "@/components/openipf/meet-bests";
 
 const COMMON_LIFTS = [
   "Competition Squat", "Competition Bench Press", "Competition Deadlift",
@@ -81,6 +82,11 @@ export function ClientMaxesPanel({ clientId, embedded = false }: { clientId: str
         <Button size="sm" className="shrink-0" onClick={openNew}>
           <Plus className="mr-1 h-4 w-4" /> Add max
         </Button>
+      </div>
+
+      {/* their best meet lifts (OpenIPF's or entered), one tap from being their 1RMs */}
+      <div className="mb-4 empty:hidden">
+        <MeetBestsRow clientId={clientId} />
       </div>
 
       {isLoading ? (
