@@ -237,6 +237,10 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
       if (!to) throw new Error(`${clientLabel(pr.client)} has no ${p.via === "email" ? "email" : "phone number"} on file.`);
       return `Send ${clientLabel(pr.client)} the payment link for ${pr.offer_name ?? "their purchase"} by ${p.via === "email" ? "email" : "text"} (${to}).`;
     }
+    case "link_openipf": {
+      const c = await client(db, p.client_id);
+      return `Link ${clientLabel(c)}'s OpenIPF profile: ${String(p.url).replace(/^https?:\/\/(www\.)?/, "")}. Their meets come in and go in the Hall of Strength.`;
+    }
     case "book_appointment": {
       const start = wallTimeToUtc(p.date, p.time, BUSINESS_TZ);
       if (start.getTime() < Date.now()) throw new Error("That time has already passed.");
@@ -308,6 +312,8 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
       }
       case "set_nutrition_targets":
         return client(p.client_id, "nutrition", "Open their nutrition");
+      case "link_openipf":
+        return p.client_id ? { href: `/admin/clients/${p.client_id}?tab=training#openipf`, label: "Open their OpenIPF" } : null;
       case "restore_program_version": {
         const { data } = await (await service()).from("pl_program_versions").select("client_id, kind").eq("id", p.version_id).maybeSingle();
         return data?.kind === "set_nutrition_targets" ? client(data?.client_id, "nutrition", "Open their nutrition") : training(data?.client_id);
@@ -476,6 +482,12 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
         },
       });
       return "Booked.";
+    }
+    case "link_openipf": {
+      const { error } = await sb.rpc("openipf_link_url", { _client: p.client_id, _athlete: null, _url: p.url });
+      if (missingFunction(error)) throw new Error("OpenIPF isn't set up in the database yet.");
+      if (error) throw new Error(error.message);
+      return `Linked. Their meets are coming in; it can be removed or added back from their profile's OpenIPF row.`;
     }
   }
 }

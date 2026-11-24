@@ -421,6 +421,11 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
                 Discard
               </Button>
             </div>
+            {target.kind === "client" && (
+              <p className="text-xs text-muted-foreground" data-edit-with-ai-next>
+                Applying changes only workouts that haven't been started; trained ones never change. Not ready? Leave it here: it stays a draft, and Program quality reminds you until you apply or discard it.
+              </p>
+            )}
           </div>
         )}
         {quickActions?.length && turns.length > 0 && !text.trim() && !working && last?.status !== "ready" ? (

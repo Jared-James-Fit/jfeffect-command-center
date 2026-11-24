@@ -39,6 +39,7 @@ export function CardioCleoPanel({
   seed,
   history,
   scorePlan,
+  onPublishDraft,
 }: {
   clientId: string;
   firstName: string;
@@ -50,6 +51,8 @@ export function CardioCleoPanel({
   history: CardioProposalRow[];
   /** The design score of a plan (scoreCardioPlan with their context), for picked changes. */
   scorePlan?: (plan: CardioPlan) => number | null;
+  /** After a proposal lands on the draft: open the publish dialog (now, or scheduled for a date). */
+  onPublishDraft?: () => void;
 }) {
   const ask = useServerFn(askCardioCleoFn);
   const decide = useServerFn(decideCardioProposalFn);
@@ -269,7 +272,19 @@ export function CardioCleoPanel({
                     />
                   </div>
                 )}
-                {t.decided && <p className="text-[12px] font-medium text-muted-foreground">{t.decided === "applied" ? "Applied to your draft" : "Turned down"}</p>}
+                {t.decided === "dismissed" && <p className="text-[12px] font-medium text-muted-foreground">Turned down</p>}
+                {t.decided === "applied" && (
+                  <div className="space-y-2 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]" data-proposal-next>
+                    <p>
+                      <span className="font-medium">On your draft.</span> Publish it now, schedule it for a date, or keep it as a draft to look at again (Cardio quality reminds you while it waits). Nothing reaches {firstName} until you publish.
+                    </p>
+                    {onPublishDraft && (
+                      <Button className="h-9" onClick={onPublishDraft} data-proposal-publish>
+                        Publish or schedule…
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
