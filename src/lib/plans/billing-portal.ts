@@ -15,7 +15,8 @@ export const PORTAL_CONFIG_TAG = "jf_billing_details_v1";
 
 export function portalConfigParams(site = "https://jfeffect.com"): Record<string, string> {
   return {
-    "business_profile[headline]": "JF Effect billing: update your card and see your receipts. Change your plan in the app.",
+    // Stripe allows 60 characters
+    "business_profile[headline]": "JF Effect billing. Change your plan in the app.",
     "business_profile[privacy_policy_url]": `${site}/privacy`,
     "business_profile[terms_of_service_url]": `${site}/coaching-agreement`,
     default_return_url: `${site}/portal/plan`,
