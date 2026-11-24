@@ -83,6 +83,7 @@ import {
   type PublicPackage,
 } from "@/lib/coaching-packages/packages";
 import { cn } from "@/lib/utils";
+import { hostedImageProps } from "@/lib/hosted-image";
 import shotLog from "@/assets/landing/app-log.webp";
 import shotHome from "@/assets/landing/app-home.webp";
 import shotFocus from "@/assets/landing/app-focus.webp";
@@ -371,7 +372,7 @@ function HeroDevices() {
   return (
     <div className="relative mx-auto w-full max-w-[340px] pb-6 sm:max-w-[420px] lg:max-w-[460px]">
       <div className="absolute left-0 top-[9%] hidden w-[52%] -rotate-[5deg] min-[380px]:block">
-        <PhoneShot src={shotHome} sizes="(min-width: 1024px) 240px, (min-width: 640px) 220px, 180px" alt="Home in the JF Effect app: today's workout on the calendar and a bodyweight trend" />
+        <PhoneShot src={shotHome} eager sizes="(min-width: 1024px) 240px, (min-width: 640px) 220px, 180px" alt="Home in the JF Effect app: today's workout on the calendar and a bodyweight trend" />
       </div>
       <div className="relative ml-auto w-[64%] min-[380px]:w-[60%]">
         <PhoneShot
@@ -805,7 +806,7 @@ export function LandingPage({ packages, programs }: { packages?: PackagesIn; pro
                   className="w-[58vw] max-w-[240px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70"
                 >
                   <img
-                    src={photo.url}
+                    {...hostedImageProps(photo.url, { sizes: "(min-width: 414px) 240px, 58vw", fallback: 480 })}
                     alt="A coaching client's before and after"
                     loading="lazy"
                     decoding="async"

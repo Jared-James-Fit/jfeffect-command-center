@@ -97,8 +97,12 @@ describe("the logo and Home on a tap", () => {
     // a new tab or window stays the browser's
     expect(header).toMatch(/e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey/);
     // the logo, the desktop Home link and the phone menu's Home row all use it
-    expect(header.match(/useHomeTap\(/g)?.length).toBeGreaterThanOrEqual(4);
-    expect(header).not.toContain("scrollHomeTop");
+    // (the menu is its own chunk, public-menu.tsx, loaded on the first tap)
+    const menu = readFileSync("src/components/sales/public-menu.tsx", "utf8");
+    expect(header.match(/useHomeTap\(/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(menu).toContain("useHomeTap(close)");
+    expect(menu).toContain('onClick={item.key === "home" ? homeTap : close}');
+    expect(header + menu).not.toContain("scrollHomeTop");
   });
 });
 

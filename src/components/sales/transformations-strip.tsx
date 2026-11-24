@@ -1,3 +1,4 @@
+import { hostedImageProps } from "@/lib/hosted-image";
 import { Section } from "./sales-page-shell";
 import { Button } from "@/components/ui/button";
 import img1 from "@/assets/transformations/1.png.asset.json";
@@ -63,7 +64,7 @@ export function TransformationsStrip({
           {TRANSFORMATION_PHOTOS.map((p, idx) => (
             <img
               key={idx}
-              src={p.url}
+              {...hostedImageProps(p.url, { sizes: "(min-width: 1024px) 288px, (min-width: 640px) 33vw, 50vw", fallback: 480 })}
               alt="Client transformation — before and after"
               loading="lazy"
               decoding="async"

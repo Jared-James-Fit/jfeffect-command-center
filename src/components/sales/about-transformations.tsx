@@ -1,3 +1,4 @@
+import { hostedImageProps } from "@/lib/hosted-image";
 import img1 from "@/assets/transformations/1.png.asset.json";
 import img2 from "@/assets/transformations/2.png.asset.json";
 import img15 from "@/assets/transformations/15.png.asset.json";
@@ -41,7 +42,7 @@ export function AboutTransformations() {
         {photos.map((photo, index) => (
           <img
             key={photo.asset_id}
-            src={photo.url}
+            {...hostedImageProps(photo.url, { sizes: "(min-width: 640px) 256px, 72vw", fallback: 480 })}
             alt={`JF Effect client transformation ${index + 1}`}
             loading="lazy"
             decoding="async"

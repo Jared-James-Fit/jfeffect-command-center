@@ -35,6 +35,7 @@ const PUBLIC_PAGES = [
   "src/routes/coaching.apply.tsx",
   "src/components/join/membership-application.tsx",
   "src/components/sales/public-header.tsx",
+  "src/components/sales/public-menu.tsx",
   "src/lib/public-nav.ts",
 ];
 

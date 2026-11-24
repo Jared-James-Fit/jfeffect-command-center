@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
+import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
@@ -48,8 +48,7 @@ import { FeedCaption } from "@/components/community/feed-caption";
 import { PostExtras } from "@/components/community/post-attach";
 import { NoteCaption, PICTURE_CAPTION_LIMITS } from "@/components/community/note-caption";
 import { PollCard } from "@/components/community/poll";
-import { PostShareSheet } from "@/components/community/post-share-sheet";
-import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { InstagramShareSheet, PostShareSheet, preloadShareSheets } from "@/components/community/lazy-sheets";
 import { PostArtImage } from "@/components/community/post-art";
 import { instagramPlan } from "@/lib/instagram-export";
 import { PostScoreChip, PostScoreRow } from "@/components/community/post-score";
@@ -1195,6 +1194,8 @@ export function ReactionBar({
   // a coach can send any post out to his own Instagram (never in View as client)
   const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;
   const [ig, setIg] = useState<boolean | null>(null);
+  // the share sheets load on their own: fetched in idle time so the first ✈️ opens at once
+  useEffect(() => preloadShareSheets(canInstagram), [canInstagram]);
   // the reactions that rise out of the heart
   const kinds = reactionKinds(post);
   const openLikes = onOpenLikes ?? (() => setListFor(post.id));
@@ -1214,6 +1215,7 @@ export function ReactionBar({
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
       {/* mounted on the first ✈️, so a feed of posts doesn't carry a sheet each */}
       {sharing !== null && (
+        <Suspense fallback={null}>
         <PostShareSheet
           post={post}
           open={sharing}
@@ -1222,8 +1224,13 @@ export function ReactionBar({
           onStory={canStory ? () => window.setTimeout(() => openStoryShare({ post }), 200) : undefined}
           onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}
         />
+        </Suspense>
       )}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+      {canInstagram && ig !== null && (
+        <Suspense fallback={null}>
+          <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />
+        </Suspense>
+      )}
     </>
   );
   const shareTap = () => setSharing(true);
