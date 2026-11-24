@@ -1,3 +1,4 @@
+import { hostedImageProps } from "@/lib/hosted-image";
 import { Section, SectionTitle } from "./sales-page-shell";
 import img1 from "@/assets/transformations/1.png.asset.json";
 import img2 from "@/assets/transformations/2.png.asset.json";
@@ -36,7 +37,7 @@ export function TransformationsGallery({
         {PHOTOS.map((p, idx) => (
           <img
             key={idx}
-            src={p.url}
+            {...hostedImageProps(p.url, { sizes: "(min-width: 1024px) 230px, (min-width: 640px) 33vw, 50vw", fallback: 480 })}
             alt="Client transformation — before and after"
             loading="lazy"
             decoding="async"

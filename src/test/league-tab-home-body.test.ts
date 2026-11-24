@@ -37,7 +37,9 @@ describe("the first tab is Crew: the feed and the rankings in one place", () => 
   it("opens on the Feed; ranking links land on Rankings (Monthly or Strength)", () => {
     expect(screen).toContain('if (rankingsFromHash()) return { kind: "rankings" };');
     expect(screen).toContain('return { kind: "feed" };');
-    expect(hub).toContain('return /(rankings|league)=strength/.test(hash) ? "strength" : "monthly";');
+    // the link reader is its own module (Crew reads a link without loading the Rankings tab)
+    expect(read("src/lib/rankings-hash.ts")).toContain('return /(rankings|league)=strength/.test(hash) ? "strength" : "monthly";');
+    expect(hub).toContain("export { rankingsFromHash, type RankingsBoard };");
     expect(read("src/components/community/share-composer.tsx")).toContain('navigate({ to: "/portal/community", hash: "feed" })');
     expect(read("src/components/community/use-workout-studio.ts")).toContain('navigate({ to: "/portal/community", hash: "feed" })');
     expect(read("src/lib/push/app-events.server.ts")).toContain('url: () => "/portal/community#feed"');

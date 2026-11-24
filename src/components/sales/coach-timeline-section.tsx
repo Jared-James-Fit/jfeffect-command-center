@@ -1,3 +1,4 @@
+import { hostedImageProps } from "@/lib/hosted-image";
 import { Section, SectionTitle } from "./sales-page-shell";
 import coachTimeline from "@/assets/coach-timeline.png.asset.json";
 
@@ -11,7 +12,7 @@ export function CoachTimelineSection() {
       />
       <div className="mx-auto max-w-5xl">
         <img
-          src={coachTimeline.url}
+          {...hostedImageProps(coachTimeline.url, { sizes: "(min-width: 1024px) 1024px, 100vw", fallback: 960 })}
           alt="Coach Jared transformation timeline — started from zero in 2014, figured it out 2018-2021, made the shift, no backup plan, 100+ clients built"
           loading="lazy"
           decoding="async"

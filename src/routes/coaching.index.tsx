@@ -18,6 +18,7 @@ import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotNutrition from "@/assets/coaching/app-nutrition.webp";
 import { trackSite } from "@/lib/site-funnel";
 import { shareMeta } from "@/lib/share-meta";
+import { hostedImageProps } from "@/lib/hosted-image";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
 import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
 import { callsPolicy, costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
@@ -280,7 +281,7 @@ function CoachingPage() {
             {TRANSFORMATION_PHOTOS.slice(0, 12).map((photo, i) => (
               <div key={i} className="w-[68vw] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70">
                 <img
-                  src={photo.url}
+                  {...hostedImageProps(photo.url, { sizes: "(min-width: 412px) 280px, 68vw", fallback: 480 })}
                   alt="Client before and after"
                   loading="lazy"
                   decoding="async"
@@ -403,7 +404,7 @@ function CoachingPage() {
           <Surface className="mx-auto max-w-4xl overflow-hidden md:grid md:grid-cols-2">
             <div className="relative md:min-h-[420px]">
               <img
-                src={jaredAsset.url}
+                {...hostedImageProps(jaredAsset.url, { sizes: "(min-width: 768px) 448px, 100vw", fallback: 960 })}
                 alt={`${COACH_NAME} deadlifting for Team Canada at an IPF competition`}
                 loading="lazy"
                 decoding="async"
