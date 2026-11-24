@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.source = { :git => 'https://github.com/jared-james-fit/jfeffect-command-center.git', :tag => "jf-photos-#{package['version']}" }
   s.source_files = 'ios/Sources/**/*.swift'
   s.ios.deployment_target = '16.0'
-  s.frameworks = 'Photos', 'UIKit', 'AVFoundation'
+  s.frameworks = 'Photos', 'PhotosUI', 'UIKit', 'AVFoundation'
   s.dependency 'Capacitor'
   s.swift_version = '5.9'
 end
