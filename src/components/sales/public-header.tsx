@@ -1,8 +1,14 @@
-import { Suspense, useEffect, useRef, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PUBLIC_NAV, activeNavKey, headerCtaFor, type PublicNavItem } from "@/lib/public-nav";
+import {
+  PUBLIC_NAV,
+  activeNavKey,
+  headerCtaFor,
+  homeTapAction,
+  type PublicNavItem,
+} from "@/lib/public-nav";
 import type { CtaChoice } from "@/lib/sticky-cta";
 import { useCtaZone } from "@/components/sales/use-cta-zone";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -64,7 +70,7 @@ export function PublicHeader({
           floating && "rounded-2xl bg-background ring-1 ring-border/70",
         )}
       >
-        <BrandLink current={active === "home"} />
+        <BrandLink />
 
         {!focused && (
           <nav aria-label="Main" className="hidden items-center gap-1 lg:flex" data-public-nav>
@@ -100,18 +106,43 @@ export function PublicHeader({
   );
 }
 
-export function BrandLink({ current }: { current: boolean }) {
-  const onHome = () => {
-    // already home: back to the top, the way a logo does
-    if (current && typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+/**
+ * The logo and Home on a plain tap (homeTapAction): on the home page, glide
+ * back to the top (a jump with reduced motion) and drop any #pricing / #app
+ * from the address so Home lights again; anywhere else, the link goes home and
+ * the page opens at its top. A link to the page you're on never scrolls by
+ * itself here (the router's scroll restoration put it back where it was), so
+ * the home page's tap is handled before the link navigates. A Cmd, Ctrl,
+ * Shift or middle click stays the browser's (a new tab or window). `onDone`
+ * closes the phone menu either way.
+ */
+export function useHomeTap(onDone?: () => void) {
+  const router = useRouter();
+  return (e: MouseEvent<HTMLAnchorElement>) => {
+    onDone?.();
+    if (typeof window === "undefined" || e.defaultPrevented) return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (homeTapAction(window.location.pathname) !== "top") return;
+    e.preventDefault();
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const toTop = () => window.scrollTo({ top: 0, left: 0, behavior: still ? "auto" : "smooth" });
+    if (window.location.hash) {
+      void router.navigate({ to: "/", replace: true, resetScroll: false }).then(toTop, toTop);
+    } else {
+      toTop();
+    }
   };
+}
+
+export function BrandLink({ onDone }: { onDone?: () => void }) {
+  const onTap = useHomeTap(onDone);
   return (
     <Link
       to="/"
-      onClick={onHome}
+      onClick={onTap}
       aria-label="JF Effect home"
       activeProps={{}}
-      className="-ml-1 flex min-h-11 w-fit items-center gap-2 rounded-lg px-1 text-[17px] font-semibold tracking-[-0.01em]"
+      className="-ml-1 flex min-h-11 w-fit items-center gap-2 rounded-lg px-1 text-[17px] font-semibold tracking-[-0.01em] transition-opacity active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       data-brand-home
     >
       <img
@@ -139,10 +170,11 @@ export function navTarget(item: PublicNavItem) {
 }
 
 function NavLink({ item, active }: { item: PublicNavItem; active: boolean }) {
+  const homeTap = useHomeTap();
   return (
     <Link
       {...(navTarget(item) as any)}
-      onClick={() => scrollHomeTop(item)}
+      onClick={item.key === "home" ? homeTap : undefined}
       activeProps={{}}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -155,12 +187,6 @@ function NavLink({ item, active }: { item: PublicNavItem; active: boolean }) {
       {item.label}
     </Link>
   );
-}
-
-/** Home from the home page goes back to the top (a router link to where you are doesn't scroll). */
-export function scrollHomeTop(item: PublicNavItem) {
-  if (typeof window === "undefined" || item.key !== "home") return;
-  if (window.location.pathname === "/") window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 export function CtaLink({
@@ -183,11 +209,6 @@ export function CtaLink({
   );
 }
 
-/**
- * The phone's menu button. The menu itself (a dialog) is its own chunk
- * (public-menu.tsx), so the landing page hydrates without the dialog library:
- * fetched in idle time or as a finger lands on the button, so it opens at once.
- */
 function PhoneMenu({
   open,
   onOpenChange,

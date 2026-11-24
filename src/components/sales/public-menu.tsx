@@ -5,7 +5,7 @@ import { ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PUBLIC_NAV } from "@/lib/public-nav";
 import type { CtaChoice } from "@/lib/sticky-cta";
-import { BrandLink, CtaLink, navTarget, scrollHomeTop } from "@/components/sales/public-header";
+import { BrandLink, CtaLink, navTarget, useHomeTap } from "@/components/sales/public-header";
 
 /**
  * The phone's menu on the public pages (public-header.tsx's menu button opens
@@ -27,6 +27,8 @@ export default function PublicMenuSheet({
   /** The menu button: focus goes back to it when the menu closes. */
   returnFocusTo: RefObject<HTMLButtonElement | null>;
 }) {
+  const close = () => onOpenChange(false);
+  const homeTap = useHomeTap(close);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -44,7 +46,7 @@ export default function PublicMenuSheet({
           <Dialog.Title className="sr-only">Menu</Dialog.Title>
           <div className="mx-auto max-w-lg px-4">
             <div className="flex h-14 items-center justify-between">
-              <BrandLink current={active === "home"} />
+              <BrandLink onDone={close} />
               <Dialog.Close
                 className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-full transition hover:bg-secondary"
                 aria-label="Close menu"
@@ -60,10 +62,7 @@ export default function PublicMenuSheet({
                   <Link
                     key={item.key}
                     {...(navTarget(item) as any)}
-                    onClick={() => {
-                      scrollHomeTop(item);
-                      onOpenChange(false);
-                    }}
+                    onClick={item.key === "home" ? homeTap : close}
                     activeProps={{}}
                     aria-current={on ? "page" : undefined}
                     className="flex min-h-[64px] items-center justify-between gap-4 py-3"
@@ -107,7 +106,7 @@ export default function PublicMenuSheet({
               )}
               <Link
                 to="/auth"
-                onClick={() => onOpenChange(false)}
+                onClick={close}
                 className="flex h-12 w-full items-center justify-center rounded-2xl text-[16px] font-medium text-muted-foreground transition hover:text-foreground"
                 data-menu-signin
               >

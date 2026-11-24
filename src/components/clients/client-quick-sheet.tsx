@@ -12,8 +12,8 @@ const AssignedProgramsCard = lazyWithRetry(() =>
 const NutritionTargetsPanel = lazyWithRetry(() =>
   import("@/components/nutrition-targets-panel").then((m) => ({ default: m.NutritionTargetsPanel })),
 );
-const CardioTargetsPanel = lazyWithRetry(() =>
-  import("@/components/cardio-targets-panel").then((m) => ({ default: m.CardioTargetsPanel })),
+const CardioQuickView = lazyWithRetry(() =>
+  import("@/components/cardio/cardio-workspace").then((m) => ({ default: m.CardioQuickView })),
 );
 
 export type QuickPanelKind = "program-view" | "nutrition" | "cardio";
@@ -57,7 +57,7 @@ export function ClientQuickSheet({ kind, clientId, clientName, onClose }: Props)
           >
             {kind === "program-view" && <AssignedProgramsCard clientId={clientId} mode="admin" />}
             {kind === "nutrition" && <NutritionTargetsPanel clientId={clientId} />}
-            {kind === "cardio" && <CardioTargetsPanel clientId={clientId} />}
+            {kind === "cardio" && <CardioQuickView clientId={clientId} />}
           </Suspense>
         </div>
       </SheetContent>
