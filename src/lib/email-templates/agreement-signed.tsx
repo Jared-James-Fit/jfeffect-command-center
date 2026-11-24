@@ -12,6 +12,8 @@ import {
   Text,
   Hr,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
+import { CONTACT } from '@/lib/email-identity'
 import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
@@ -28,7 +30,7 @@ export interface AgreementSignedProps {
 const AgreementSignedEmail = (p: AgreementSignedProps) => {
   const firstName = p.first_name?.trim() || 'there'
   const viewUrl = p.view_url || 'https://jfeffect.com/portal/agreements'
-  const support = p.support_email || 'jaredjamesfit@gmail.com'
+  const support = p.support_email || CONTACT.coaching
 
   return (
     <Html lang="en" dir="ltr">
@@ -36,6 +38,7 @@ const AgreementSignedEmail = (p: AgreementSignedProps) => {
       <Preview>Your signed JF Effect Coaching Agreement is saved in your account.</Preview>
       <Body style={main}>
         <Container style={container}>
+          <BrandHeader />
           <Heading style={h1}>You're all set, {firstName}.</Heading>
           <Text style={text}>
             Thanks for signing the JF Effect Coaching Agreement. It now covers every service and
@@ -82,6 +85,7 @@ const AgreementSignedEmail = (p: AgreementSignedProps) => {
             </Link>
             . This is a service message about your account, not marketing.
           </Text>
+          <BrandFooter />
         </Container>
       </Body>
     </Html>
@@ -89,6 +93,7 @@ const AgreementSignedEmail = (p: AgreementSignedProps) => {
 }
 
 export const template = {
+  identity: 'coaching',
   component: AgreementSignedEmail,
   subject: 'Your signed JF Effect Coaching Agreement',
   displayName: 'Coaching Agreement signed (receipt)',
@@ -99,7 +104,7 @@ export const template = {
     signed_at_label: 'October 6, 2026 at 3:05 p.m. CT',
     fingerprint: 'fb4251e1e593',
     view_url: 'https://jfeffect.com/portal/agreements',
-    support_email: 'jaredjamesfit@gmail.com',
+    support_email: CONTACT.coaching,
   },
 } satisfies TemplateEntry
 

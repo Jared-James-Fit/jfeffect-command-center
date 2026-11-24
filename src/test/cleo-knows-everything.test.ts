@@ -19,7 +19,7 @@ describe("Cleo reads the business's documents", () => {
     expect(all).not.toContain("**");
     expect(all).not.toMatch(/\{\{/);
     expect(all).toContain("[the client's coach]");
-    expect(all).toContain("jaredjamesfit@gmail.com");
+    expect(all).toContain("coaching@jfeffect.com");
   });
 
   it("'what does my coaching policy say about ending coaching?' finds the cancel and termination sections", () => {

@@ -3,7 +3,7 @@
  * that only compares versions (the status rules and the launch popup, which load on every
  * signed-in page) doesn't pull the whole text into the app's main bundle.
  */
-export const AGREEMENT_VERSION = "2.3";
+export const AGREEMENT_VERSION = "2.4";
 
 /**
  * Clients whose latest signed version is below this must sign again. Raise it only
@@ -24,6 +24,11 @@ export const AGREEMENT_VERSION = "2.3";
  * original of one a client edits or deletes (only admins see it). That is already covered for
  * everyone who signed earlier by their privacy section, which collects messages and defers to the
  * Privacy Policy (updated the same day, with notice), so earlier signers are not asked again.
+ *
+ * 2.4 changes only where written notices go: cancellations, freezes and billing questions now go
+ * to coaching@jfeffect.com (the JF Effect business inbox) instead of a personal Gmail address. Nothing
+ * else changes, so nobody is asked to sign again. Earlier signers keep the address in their signed
+ * copy, and that inbox stays monitored.
  *
  * This must stay "2.0" (the database view coaching_agreement_resign_below_version() says the
  * same, and a test checks it).

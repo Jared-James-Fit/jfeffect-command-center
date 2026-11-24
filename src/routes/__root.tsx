@@ -283,7 +283,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           url: "https://jfeffect.com",
           logo: "https://jfeffect.com/logo.png",
           image: "https://jfeffect.com/logo.png",
-          email: "jared@jfeffect.com",
+          email: "hello@jfeffect.com",
           founder: { "@type": "Person", name: "Jared McIntyre", jobTitle: "Online coach and powerlifter", url: "https://jfeffect.com/about" },
           sameAs: ["https://jaredjamesfit.com", "https://www.instagram.com/jaredmcintyre_/", "https://www.youtube.com/@jared.mcintyre"],
           areaServed: "Worldwide",

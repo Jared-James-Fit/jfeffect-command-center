@@ -7,6 +7,6 @@ export const COACH = {
   business: "JF Effect",
   operator: "Jared McIntyre",
   location: "Winnipeg, Manitoba, Canada",
-  email: "jaredjamesfit@gmail.com",
+  email: "coaching@jfeffect.com",
   timezone: "America/Winnipeg",
 } as const;

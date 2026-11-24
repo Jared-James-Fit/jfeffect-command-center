@@ -30,7 +30,7 @@ export const AGREEMENT_SLUG = "coaching-agreement";
 export const AGREEMENT_TITLE = "JF Effect Coaching Agreement";
 export const AGREEMENT_SUBTITLE =
   "Liability Waiver, Release of Claims, Assumption of Risk & Indemnity";
-export const AGREEMENT_EFFECTIVE_DATE = "2026-10-28";
+export const AGREEMENT_EFFECTIVE_DATE = "2026-11-23";
 
 // Version numbers live in ./version so the always-loaded status rules never import this file.
 export { AGREEMENT_VERSION, RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
@@ -105,7 +105,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Official email.",
-        text: "Cancellations, freeze requests, billing questions and other written notices to the Coach must be sent to **jaredjamesfit@gmail.com**.",
+        text: "Cancellations, freeze requests, billing questions and other written notices to the Coach must be sent to **coaching@jfeffect.com**.",
       },
       {
         label: "Your details.",
@@ -179,7 +179,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Cancelling recurring billing.",
-        text: "To cancel, you must give written notice by email to **jaredjamesfit@gmail.com** before your next billing date (no later than 11:59 p.m. Winnipeg time on the day before). Cancellation applies to the next billing cycle, and charges already processed are not refundable. Social media messages and Instagram DMs do not count as written notice. If you are on a fixed-term commitment or installment plan, cancelling billing does not end your payment obligations (see Section {{n:commitments}}).",
+        text: "To cancel, you must give written notice by email to **coaching@jfeffect.com** before your next billing date (no later than 11:59 p.m. Winnipeg time on the day before). Cancellation applies to the next billing cycle, and charges already processed are not refundable. Social media messages and Instagram DMs do not count as written notice. If you are on a fixed-term commitment or installment plan, cancelling billing does not end your payment obligations (see Section {{n:commitments}}).",
       },
       {
         label: "Billing errors.",
@@ -267,7 +267,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "How to request one.",
-        text: "Freeze requests must be submitted in writing to **jaredjamesfit@gmail.com** before the freeze begins. Freeze requests cannot be backdated.",
+        text: "Freeze requests must be submitted in writing to **coaching@jfeffect.com** before the freeze begins. Freeze requests cannot be backdated.",
       },
       {
         label: "What a freeze does.",
@@ -753,7 +753,7 @@ const KEY_TERMS: { title: string; text: string }[] = [
   },
   {
     title: "Cancel by email",
-    text: "Recurring plans renew automatically. To cancel, email jaredjamesfit@gmail.com before your next billing date.",
+    text: "Recurring plans renew automatically. To cancel, email coaching@jfeffect.com before your next billing date.",
   },
   {
     title: "Failed payments",
@@ -896,6 +896,7 @@ export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.1": "a5ae2ab9930c92b6637ebdfa12ee243f43cac1219aa89e4418026e2d12a729d0",
   "2.2": "6d231b21d08cd23cfea6ba7041444926ebf3d9c2a0396bad9a4a90b1209f7fc3",
   "2.3": "9fa2bd20456320164bed343be8199f08e7d3e5e777c53be4a0ab29a433e48a93",
+  "2.4": "77fae52a80171c522cf0e2f637407855ec809f5e5299b8b7baff2ac65e97201f",
 };
 
 export function sectionNumber(id: string): number {

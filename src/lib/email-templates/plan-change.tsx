@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { Body, Button, Container, Head, Heading, Hr, Html, Link, Preview, Section, Text } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
+import { CONTACT } from '@/lib/email-identity'
 import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
@@ -16,7 +18,7 @@ export interface PlanChangeProps {
 const PlanChangeEmail = (p: PlanChangeProps) => {
   const firstName = p.first_name?.trim() || 'there'
   const url = p.url || 'https://jfeffect.com/portal/plan'
-  const support = p.support_email || 'jaredjamesfit@gmail.com'
+  const support = p.support_email || CONTACT.billing
   const rows = Array.isArray(p.rows) ? p.rows : []
   return (
     <Html lang="en" dir="ltr">
@@ -24,6 +26,7 @@ const PlanChangeEmail = (p: PlanChangeProps) => {
       <Preview>{p.headline || 'Your JF Effect plan changed'}</Preview>
       <Body style={main}>
         <Container style={container}>
+          <BrandHeader />
           <Heading style={h1}>{p.headline || 'Your plan changed'}</Heading>
           <Text style={text}>Hi {firstName},</Text>
           {p.body ? <Text style={text}>{p.body}</Text> : null}
@@ -54,6 +57,7 @@ const PlanChangeEmail = (p: PlanChangeProps) => {
             </Link>
             . This is a service message about your account, not marketing.
           </Text>
+          <BrandFooter />
         </Container>
       </Body>
     </Html>
@@ -64,6 +68,7 @@ export const template = {
   component: PlanChangeEmail,
   subject: (data: Record<string, any>) => String(data?.headline || 'Your JF Effect plan changed'),
   displayName: 'Plan change',
+  identity: 'billing',
   previewData: {
     first_name: 'Jane',
     headline: 'Moving to Nutrition Coaching on Dec 9, 2026',

@@ -227,6 +227,8 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
                   to: payload.to,
                   from: payload.from,
                   sender_domain: payload.sender_domain,
+                  // Older queued messages have no reply_to; replies then go to From.
+                  reply_to: payload.reply_to || undefined,
                   subject: payload.subject,
                   html: payload.html,
                   text: payload.text,

@@ -2,6 +2,8 @@ import * as React from 'react'
 import {
   Body, Button, Container, Head, Heading, Html, Link, Preview, Section, Text, Hr,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
+import { CONTACT } from '@/lib/email-identity'
 import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
@@ -17,7 +19,7 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
   const firstName = p.first_name?.trim() || 'there'
   const appUrl = p.app_url || 'https://jfeffect.com/auth'
   const installUrl = p.install_url || 'https://jfeffect.com/install'
-  const support = p.support_email || 'jaredjamesfit@gmail.com'
+  const support = p.support_email || CONTACT.support
 
   return (
     <Html lang="en" dir="ltr">
@@ -25,6 +27,7 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
       <Preview>Finish setting up your JF Effect app — it takes about a minute.</Preview>
       <Body style={main}>
         <Container style={container}>
+          <BrandHeader />
           <Heading style={h1}>Let's finish setting up your app, {firstName}.</Heading>
           <Text style={text}>
             Your JF Effect account is ready — you just haven't installed the app or finished
@@ -60,6 +63,7 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
             Stuck on any step? Reply to this email or write to{' '}
             <Link href={`mailto:${support}`} style={link}>{support}</Link> and I'll walk you through it.
           </Text>
+          <BrandFooter />
         </Container>
       </Body>
     </Html>
@@ -67,6 +71,7 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
 }
 
 export const template = {
+  identity: 'support',
   component: SetupReminderEmail,
   subject: (data: Record<string, any>) => {
     const first = (data?.first_name || 'there').toString().trim() || 'there'
@@ -77,7 +82,7 @@ export const template = {
     first_name: 'Jane',
     app_url: 'https://jfeffect.com/auth',
     install_url: 'https://jfeffect.com/install',
-    support_email: 'jaredjamesfit@gmail.com',
+    support_email: CONTACT.support,
   },
 } satisfies TemplateEntry
 

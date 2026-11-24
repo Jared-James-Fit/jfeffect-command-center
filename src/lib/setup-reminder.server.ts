@@ -9,10 +9,7 @@
 import * as React from 'react'
 import { render } from '@react-email/components'
 import { TEMPLATES } from '@/lib/email-templates/registry'
-
-const SITE_NAME = 'jfeffect-command-center'
-const SENDER_DOMAIN = 'notify.jfeffect.com'
-const FROM_DOMAIN = 'jfeffect.com'
+import { CONTACT, emailEnvelope } from '@/lib/email-identity'
 
 type MemberLike = {
   id: string
@@ -96,7 +93,7 @@ export async function sendSetupReminderEmail(
       first_name: firstNameOf(member),
       app_url: `${baseOrigin}/auth`,
       install_url: `${baseOrigin}/install`,
-      support_email: 'jaredjamesfit@gmail.com',
+      support_email: CONTACT.support,
       custom_note: opts.customNote?.trim() || undefined,
     }
 
@@ -120,8 +117,7 @@ export async function sendSetupReminderEmail(
       payload: {
         message_id: messageId,
         to: recipient,
-        from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
-        sender_domain: SENDER_DOMAIN,
+        ...emailEnvelope('support'),
         subject,
         html,
         text: plainText,

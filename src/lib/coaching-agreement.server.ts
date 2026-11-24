@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import * as React from "react";
 import { render } from "@react-email/components";
 import { TEMPLATES } from "@/lib/email-templates/registry";
+import { emailEnvelope } from "@/lib/email-identity";
 import {
   AGREEMENT_CONTENT_JSON,
   AGREEMENT_EFFECTIVE_DATE,
@@ -117,9 +118,6 @@ export function winnipegLabel(iso: string): string {
   return `${text} CT`;
 }
 
-const SITE_NAME = "jfeffect-command-center";
-const SENDER_DOMAIN = "notify.jfeffect.com";
-const FROM_DOMAIN = "jfeffect.com";
 
 function randomToken(): string {
   const bytes = new Uint8Array(32);
@@ -225,8 +223,7 @@ export async function enqueueAgreementEmail(
       payload: {
         message_id: messageId,
         to: recipient,
-        from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
-        sender_domain: SENDER_DOMAIN,
+        ...emailEnvelope("coaching"),
         subject,
         html,
         text,

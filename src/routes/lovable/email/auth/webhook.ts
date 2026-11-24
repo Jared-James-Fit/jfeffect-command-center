@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import type { ComponentType } from 'react'
+import { emailEnvelope } from '@/lib/email-identity'
 
 const EMAIL_SUBJECTS: Record<string, string> = {
   signup: 'Confirm your email',
@@ -30,10 +31,9 @@ async function loadEmailTemplate(emailType: string) {
 }
 
 // Configuration
-const SITE_NAME = "jfeffect-command-center"
-const SENDER_DOMAIN = "notify.jfeffect.com"
+// Shown to people in the email body ("Thanks for signing up for JF Effect").
+const SITE_NAME = "JF Effect"
 const ROOT_DOMAIN = "jfeffect.com"
-const FROM_DOMAIN = "jfeffect.com"
 
 function redactEmail(email: string | null | undefined): string {
   if (!email) return '***'
@@ -191,8 +191,7 @@ export const Route = createFileRoute("/lovable/email/auth/webhook")({
             run_id,
             message_id: messageId,
             to: payload.data.email,
-            from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
-            sender_domain: SENDER_DOMAIN,
+            ...emailEnvelope('account'),
             subject: EMAIL_SUBJECTS[emailType] || 'Notification',
             html,
             text,

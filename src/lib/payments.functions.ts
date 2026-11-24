@@ -57,52 +57,27 @@ export const sendPaymentLinkEmail = createServerFn({ method: "POST" })
     if (!rec.stripe_payment_link) throw new Error("No Stripe payment link on this purchase. Attach one first.");
     if (!rec.clients?.email) throw new Error("Client has no email on file.");
 
-    const { data: settings } = await supabase
-      .from("email_sender_settings").select("*").eq("singleton", true).maybeSingle();
-
-    const subject = `Action required: Set up payment for ${rec.offer_name}`;
-    const body = [
-      `Hi ${rec.clients.full_name?.split(" ")[0] ?? "there"},`,
-      ``,
-      `Here's your payment link for ${rec.offer_name}:`,
-      rec.stripe_payment_link,
-      ``,
-      `Amount: ${rec.currency ?? "USD"} ${Number(rec.full_payable_amount ?? 0).toLocaleString()}`,
-      rec.payment_structure ? `Payment structure: ${rec.payment_structure}` : "",
-      ``,
-      `Reach out if you have any questions before completing payment.`,
-      ``,
-      `— Coach Jared / JF Effect`,
-    ].filter(Boolean).join("\n");
-
-    if (!settings || settings.provider !== "gmail" || !process.env.GOOGLE_MAIL_API_KEY || !process.env.LOVABLE_API_KEY) {
-      return { ok: false, sent: false, reason: "Email sender not configured. Copy the link manually." };
-    }
-
-    const from = `${settings.sender_name} <${settings.sender_email}>`;
-    const replyTo = settings.reply_to_email;
-    const raw = [
-      `From: ${from}`,
-      `To: ${rec.clients.email}`,
-      `Reply-To: ${replyTo}`,
-      `Subject: ${subject}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      ``,
-      body,
-    ].join("\r\n");
-    const b64 = Buffer.from(raw, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    const res = await fetch("https://connector-gateway.lovable.dev/google_mail/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": process.env.GOOGLE_MAIL_API_KEY!,
+    // Branded template on the verified notify.jfeffect.com sender (Reply-To billing@).
+    // A coach may resend a link on purpose, so no idempotency key.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
+    const amount = Number(rec.full_payable_amount ?? 0);
+    const result = await sendTemplateEmail(supabaseAdmin, {
+      template: "payment-link",
+      to: rec.clients.email,
+      data: {
+        first_name: rec.clients.full_name?.split(" ")[0] ?? "there",
+        offer_name: rec.offer_name,
+        payment_url: rec.stripe_payment_link,
+        amount_label: amount > 0 ? `${rec.currency ?? "USD"} ${amount.toLocaleString()}` : undefined,
+        payment_structure: rec.payment_structure || undefined,
       },
-      body: JSON.stringify({ raw: b64 }),
     });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(`Gmail send failed (${res.status}): ${t.slice(0, 200)}`);
+    if (!result.sent) {
+      if (result.reason === "suppressed") {
+        return { ok: false, sent: false, reason: "This client has unsubscribed from email. Copy the link and send it by DM." };
+      }
+      throw new Error(`Payment link email failed: ${result.error ?? result.reason}`);
     }
     return { ok: true, sent: true };
   });
