@@ -18,24 +18,40 @@
  * workout's own numbers, the clock). Flat colour and scrims only, never a
  * glow (the design system's rule for pictures of posts).
  */
-import { RED, INK, MUTED, display, fitDisplay, setSpacing, drawCover, plainBackdrop, SHARE_SIZES, type ShareCardMedia, type ShareFormat } from "@/lib/workout-share-card";
+import { RED, INK, MUTED, balancedLines, display, fitDisplay, setSpacing, drawCover, plainBackdrop, SHARE_SIZES, type ShareCardMedia, type ShareFormat } from "@/lib/workout-share-card";
 import { font, fitFont, ellipsize, roundRect } from "@/lib/workout-story-card";
 
 type Ctx = CanvasRenderingContext2D;
 
-export type FilterGroup = "today" | "lockin" | "train" | "block" | "fuel" | "time" | "mindset" | "vibe";
+export type FilterGroup = "fav" | "today" | "lockin" | "train" | "block" | "meet" | "rest" | "gymbro" | "memes" | "fuel" | "stims" | "time" | "mindset" | "vibe";
 
-/** The chips over the story camera's filters, in their default order. */
+/**
+ * The chips over the story camera's templates, in their default order
+ * (Nov 23 2026: the gym-culture collections joined them). Favorites leads
+ * when there are any. Vibe (the old colour grades) is no longer a template
+ * group: colour is the editor's Filters (media-grade.ts), separate from
+ * templates and combined with them; its filters stay defined so a saved key
+ * still resolves.
+ */
 export const FILTER_GROUPS: { key: FilterGroup; label: string }[] = [
+  { key: "fav", label: "Favorites" },
   { key: "today", label: "Today" },
   { key: "lockin", label: "Lock in" },
   { key: "train", label: "Train" },
   { key: "block", label: "Block" },
+  { key: "meet", label: "Meet day" },
+  { key: "rest", label: "Rest day" },
+  { key: "gymbro", label: "Gym bro" },
+  { key: "memes", label: "Brain rot" },
   { key: "fuel", label: "Fuel" },
+  { key: "stims", label: "Stims" },
   { key: "time", label: "Time" },
   { key: "mindset", label: "Mindset" },
-  { key: "vibe", label: "Vibe" },
 ];
+
+/** A template's own words, as the person wrote them (its title, a second line, a meet's numbers). */
+export type MeetNumbers = { cls?: string; s?: string; b?: string; d?: string; unit?: "kg" | "lb" };
+export type TemplateText = { title?: string; sub?: string; meet?: MeetNumbers };
 
 /** What a filter can show: only what's already the athlete's to share. */
 export type FilterContext = {
@@ -58,6 +74,8 @@ export type FilterContext = {
   block: { block: number | null; week: number | null } | null;
   /** A meal now is pre- or post-workout (mealFuelMoment). */
   fuel: "pre" | "post" | null;
+  /** What the person typed onto a template (by its id): its words in place of the template's own. */
+  custom?: Record<string, TemplateText>;
 };
 
 /** The drawing area: the card's size and the band the story's own bars leave clear. */
@@ -84,6 +102,8 @@ export type StoryFilter = {
   under?: (ctx: Ctx, A: Area, media: ShareCardMedia | null) => void;
   /** The design on top, drawn once a minute and kept. */
   over?: (ctx: Ctx, A: Area, c: FilterContext, logo: HTMLImageElement | null) => void;
+  /** Its words can be changed (the camera's chip opens them): the title, a second line, a meet's numbers. */
+  edit?: { title: string; sub?: string; meet?: boolean };
 };
 
 /* ------------------------------------------------------------------ */
@@ -1506,6 +1526,572 @@ const FILTERS: StoryFilter[] = [
   },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  The gym's own collections (Nov 23 2026)                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Meet day, rest day, gym bro, brain rot and stims: a few strong designs
+ * (a competition poster, the judges' lights, caution tape, a meme caption, a
+ * game's HUD, a supplement label, candy type, a retro sunset, clean type),
+ * each carrying its own words. Every one's title and second line can be
+ * changed (`edit`), and a meet's can carry the athlete's own numbers (their
+ * class and squat / bench / deadlift, in kg or lb): only what they type,
+ * never anything read from their records.
+ */
+
+type GymDesign = "poster" | "lights" | "tape" | "meme" | "hud" | "label" | "candy" | "retro" | "clean";
+type HudKind = "popup" | "dialogue" | "timer" | "patch" | "loading" | "quest";
+type GymSpec = {
+  id: string;
+  label: string;
+  group: FilterGroup;
+  emoji: string;
+  design: GymDesign;
+  /** The words: a "|" splits a meme's top from its bottom, a popup's number from its word. */
+  title: string;
+  sub?: string;
+  /** A poster's small line over everything (MEET DAY). */
+  kicker?: string;
+  /** The judges' lights, left to right: w(hite) or r(ed). */
+  lights?: string;
+  hud?: HudKind;
+  /** A label's rows / a patch's notes. */
+  rows?: [string, string][];
+  accent?: string;
+  meet?: boolean;
+};
+
+const NEON = "#b6ff3b";
+const CYAN = "#3ee0f5";
+const CANDY = ["#ff5fa2", "#ffd23f", "#3ee0f5", "#a78bfa", "#7cf29c", "#ff8a3d"];
+
+const upper = (t: string) => t.toUpperCase();
+/** The meet numbers the person typed, and their total when all three are numbers. */
+function meetLine(m: MeetNumbers | undefined): { cells: [string, string][]; total: string | null; unit: string; cls: string | null } | null {
+  if (!m) return null;
+  const unit = m.unit ?? "kg";
+  const cells: [string, string][] = [];
+  if (m.s?.trim()) cells.push(["SQ", m.s.trim()]);
+  if (m.b?.trim()) cells.push(["BP", m.b.trim()]);
+  if (m.d?.trim()) cells.push(["DL", m.d.trim()]);
+  const nums = [m.s, m.b, m.d].map((v) => Number(String(v ?? "").replace(",", ".")));
+  const total = nums.every((n) => Number.isFinite(n) && n > 0) ? String(Math.round(nums.reduce((a, b) => a + b, 0) * 10) / 10) : null;
+  const cls = m.cls?.trim() ? m.cls.trim() : null;
+  if (!cells.length && !cls) return null;
+  return { cells, total, unit, cls };
+}
+
+/** Lines of display type stacked up from `bottom` at one size that fits them all; returns the top of the stack. */
+function stackDisplay(ctx: Ctx, lines: string[], x: number, bottom: number, maxW: number, start: number, min: number, color: string, align: CanvasTextAlign = "left", lead = 0.9, stroke?: { color: string; width: number }) {
+  let size = start;
+  for (const l of lines) size = Math.min(size, fitDisplay(ctx, l, maxW, start, min));
+  ctx.font = display(size);
+  ctx.textAlign = align;
+  ctx.textBaseline = "alphabetic";
+  let y = bottom;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (stroke) {
+      ctx.lineWidth = stroke.width;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineJoin = "round";
+      ctx.strokeText(lines[i], x, y);
+    }
+    ctx.fillStyle = color;
+    ctx.fillText(lines[i], x, y);
+    if (i > 0) y -= size * lead;
+  }
+  return { top: y - size * 0.82, size };
+}
+/** A title as lines: its own line breaks, else balanced across two when it's long. */
+function titleLines(ctx: Ctx, text: string, maxW: number, size: number): string[] {
+  const parts = text.split("\n").map((t) => t.trim()).filter(Boolean);
+  if (parts.length > 1) return parts.slice(0, 3);
+  ctx.font = display(size);
+  return balancedLines(ctx, parts[0] ?? "", maxW).slice(0, 3);
+}
+
+/** The competition poster: the big words low on the picture, a red rule, the line under, the numbers when typed. */
+function posterDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const f = storyFilter(t.id)!;
+    const w = templateWords(f, c);
+    const m = t.meet ? meetLine(c.custom?.[t.id]?.meet) : null;
+    dim(ctx, A, 0.16);
+    scrimTop(ctx, A, A.top + 180, 0.5);
+    scrimBottom(ctx, A, 0.36, 0.92);
+    const maxW = A.SW - A.PAD * 2;
+    tag(ctx, upper(t.kicker ?? "MEET DAY"), A.PAD, A.top, { bg: t.accent ?? RED, ink: INK, size: A.story ? 28 : 24 });
+    const d = `${MONTH[c.now.getMonth()].slice(0, 3).toUpperCase()} ${c.now.getDate()}`;
+    say(ctx, m?.cls ? `${d} · ${upper(m.cls)}` : d, A.SW - A.PAD, A.top + (A.story ? 40 : 34), maxW / 2, A.story ? 30 : 26, 800, INK, "right", 4);
+    let bottom = A.bottom - 6;
+    if (m && m.cells.length) {
+      // the scoreboard: a box a lift (and the total), the numbers big
+      const cells: [string, string][] = m.total ? [...m.cells, ["TOTAL", m.total]] : m.cells;
+      const gap = 14;
+      const bw = (maxW - gap * (cells.length - 1)) / cells.length;
+      const bh = A.story ? 168 : 140;
+      const top = bottom - bh;
+      cells.forEach(([k, v], i) => {
+        const x = A.PAD + i * (bw + gap);
+        ctx.fillStyle = k === "TOTAL" ? (t.accent ?? RED) : "rgba(255,255,255,0.12)";
+        roundRect(ctx, x, top, bw, bh, 22);
+        ctx.fill();
+        say(ctx, k, x + bw / 2, top + (A.story ? 46 : 40), bw - 20, A.story ? 26 : 22, 900, k === "TOTAL" ? INK : MUTED, "center", 4);
+        big(ctx, v, x + bw / 2, top + bh - (A.story ? 30 : 24), bw - 24, A.story ? 78 : 64, INK, "center", 30);
+      });
+      say(ctx, m.unit.toUpperCase(), A.SW - A.PAD, top - 18, maxW, A.story ? 26 : 22, 800, MUTED, "right", 4);
+      bottom = top - (A.story ? 64 : 54);
+    } else if (w.sub) {
+      say(ctx, upper(w.sub), A.PAD, bottom, maxW, A.story ? 34 : 30, 800, MUTED, "left", 6);
+      bottom -= A.story ? 70 : 60;
+    }
+    rule(ctx, A.PAD, bottom, A.story ? 150 : 120, 12, t.accent ?? RED);
+    const lines = titleLines(ctx, upper(w.title), maxW, A.story ? 230 : 180);
+    stackDisplay(ctx, lines, A.PAD - 4, bottom - 30, maxW, A.story ? (lines.length > 1 ? 210 : 260) : lines.length > 1 ? 160 : 200, 70, INK);
+  };
+}
+
+/** Three lights over the platform: the judges' call, white or red. */
+function lightsDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    dim(ctx, A, 0.2);
+    scrimBottom(ctx, A, 0.45, 0.9);
+    const calls = (t.lights ?? "www").split("");
+    const r = A.story ? 78 : 60;
+    const gap = A.story ? 46 : 36;
+    const total = calls.length * r * 2 + (calls.length - 1) * gap;
+    const cy = A.top + (A.story ? 150 : 110);
+    // the lights' bar
+    ctx.fillStyle = "rgba(10,10,12,0.82)";
+    roundRect(ctx, (A.SW - total) / 2 - 36, cy - r - 30, total + 72, r * 2 + 60, r + 30);
+    ctx.fill();
+    calls.forEach((k, i) => {
+      const x = (A.SW - total) / 2 + r + i * (r * 2 + gap);
+      dot(ctx, x, cy, r, k === "r" ? RED : "#f8f8f6");
+      dot(ctx, x - r * 0.32, cy - r * 0.34, r * 0.18, k === "r" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.9)");
+    });
+    const maxW = A.SW - A.PAD * 2;
+    let bottom = A.bottom - 6;
+    if (w.sub) {
+      say(ctx, upper(w.sub), A.SW / 2, bottom, maxW, A.story ? 34 : 30, 800, MUTED, "center", 6);
+      bottom -= A.story ? 70 : 58;
+    }
+    const lines = titleLines(ctx, upper(w.title), maxW, A.story ? 220 : 170);
+    stackDisplay(ctx, lines, A.SW / 2, bottom, maxW, A.story ? (lines.length > 1 ? 200 : 240) : 170, 70, INK, "center");
+  };
+}
+
+/** Caution tape across the picture, twice. */
+function tapeDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    dim(ctx, A, 0.12);
+    tape(ctx, A, upper(w.title), A.H * 0.4, -0.2, A.story ? 132 : 110);
+    tape(ctx, A, upper(w.sub || w.title), A.H * 0.63, 0.14, A.story ? 104 : 88);
+  };
+}
+
+/** The meme: white display words with a black outline, over the top and along the foot. */
+function memeDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    const [topText, bottomText] = /[|\n]/.test(w.title) ? w.title.split(/[|\n]/) : [w.title, w.sub];
+    const maxW = A.SW - A.PAD * 2;
+    const stroke = { color: INKDARK, width: A.story ? 16 : 12 };
+    if (topText?.trim()) {
+      const size = fitDisplay(ctx, upper(topText.trim()), maxW, A.story ? 170 : 130, 64);
+      stackDisplay(ctx, [upper(topText.trim())], A.SW / 2, A.top + size * 0.86, maxW, size, 64, INK, "center", 0.9, stroke);
+    }
+    if (bottomText?.trim()) stackDisplay(ctx, [upper(bottomText.trim())], A.SW / 2, A.bottom - 6, maxW, A.story ? 170 : 130, 64, INK, "center", 0.9, stroke);
+  };
+}
+
+/** A game's screen: corner brackets, a health bar and a level, then the moment itself. */
+function hudDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    const accent = t.accent ?? NEON;
+    dim(ctx, A, 0.22);
+    // corner brackets
+    const inset = 40;
+    const arm = A.story ? 120 : 90;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 8;
+    ctx.lineCap = "square";
+    for (const [x, y, dx, dy] of [
+      [inset, inset, 1, 1],
+      [A.W - inset, inset, -1, 1],
+      [inset, A.H - inset, 1, -1],
+      [A.W - inset, A.H - inset, -1, -1],
+    ] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x, y + dy * arm);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + dx * arm, y);
+      ctx.stroke();
+    }
+    // HP and level, up top
+    const hy = A.top + 30;
+    say(ctx, "HP", A.PAD, hy, 80, 30, 900, accent, "left", 4);
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    roundRect(ctx, A.PAD + 70, hy - 26, 300, 26, 8);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    roundRect(ctx, A.PAD + 70, hy - 26, t.hud === "loading" ? 90 : 252, 26, 8);
+    ctx.fill();
+    say(ctx, `LV ${99}`, A.SW - A.PAD, hy, 200, 30, 900, INK, "right", 4);
+    const maxW = A.SW - A.PAD * 2;
+    const kind = t.hud ?? "quest";
+    if (kind === "popup") {
+      const [num, word] = /[|\n]/.test(w.title) ? w.title.split(/[|\n]/) : [w.title, w.sub];
+      const midY = A.top + (A.bottom - A.top) * 0.56;
+      const s = fitDisplay(ctx, upper(num.trim()), maxW, A.story ? 300 : 230, 90);
+      stackDisplay(ctx, [upper(num.trim())], A.SW / 2, midY, maxW, s, 90, accent, "center", 0.9, { color: INKDARK, width: 14 });
+      if (word?.trim()) say(ctx, upper(word.trim()), A.SW / 2, midY + (A.story ? 90 : 72), maxW, A.story ? 54 : 44, 900, INK, "center", 10);
+    } else if (kind === "timer") {
+      const midY = A.top + (A.bottom - A.top) * 0.55;
+      say(ctx, upper(w.sub || "REST TIMER"), A.SW / 2, midY - (A.story ? 250 : 190), maxW, A.story ? 40 : 34, 900, accent, "center", 10);
+      stackDisplay(ctx, [w.title], A.SW / 2, midY, maxW, A.story ? 320 : 250, 100, INK, "center");
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      roundRect(ctx, A.PAD + 40, midY + 60, maxW - 80, 18, 9);
+      ctx.fill();
+      ctx.fillStyle = accent;
+      roundRect(ctx, A.PAD + 40, midY + 60, (maxW - 80) * 0.82, 18, 9);
+      ctx.fill();
+    } else if (kind === "loading") {
+      const midY = A.top + (A.bottom - A.top) * 0.6;
+      const lines = titleLines(ctx, upper(w.title), maxW, A.story ? 160 : 130);
+      stackDisplay(ctx, lines, A.SW / 2, midY, maxW, A.story ? 160 : 130, 60, INK, "center");
+      // a segmented bar
+      const segs = 10;
+      const sw = (maxW - 40 - (segs - 1) * 10) / segs;
+      for (let i = 0; i < segs; i++) {
+        ctx.fillStyle = i < 3 ? accent : "rgba(255,255,255,0.16)";
+        roundRect(ctx, A.PAD + 20 + i * (sw + 10), midY + 50, sw, 44, 8);
+        ctx.fill();
+      }
+      if (w.sub) say(ctx, upper(w.sub), A.SW / 2, midY + (A.story ? 170 : 150), maxW, A.story ? 36 : 30, 800, MUTED, "center", 6);
+    } else if (kind === "dialogue" || kind === "patch") {
+      // the box along the foot: a name tab on its top edge, the words inside
+      const bh = A.story ? 400 : 330;
+      const top = A.bottom - bh;
+      ctx.fillStyle = "rgba(8,10,14,0.88)";
+      roundRect(ctx, A.PAD - 20, top, maxW + 40, bh, 26);
+      ctx.fill();
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 6;
+      roundRect(ctx, A.PAD - 20, top, maxW + 40, bh, 26);
+      ctx.stroke();
+      tag(ctx, upper(w.title), A.PAD + 10, top - 34, { bg: accent, ink: INKDARK, size: A.story ? 30 : 26 });
+      const lineSize = A.story ? 50 : 42;
+      if (kind === "patch") {
+        let y = top + 96;
+        for (const [k, v] of (t.rows ?? []).slice(0, 4)) {
+          say(ctx, `• ${k}`, A.PAD + 16, y, maxW * 0.62, lineSize, 700, INK);
+          say(ctx, v, A.SW - A.PAD - 16, y, maxW * 0.36, lineSize, 900, accent, "right");
+          y += lineSize * 1.45;
+        }
+      } else {
+        ctx.font = font(700, lineSize);
+        const words = (w.sub || "…").split(/\s+/);
+        const lines: string[] = [];
+        let cur = "";
+        for (const word of words) {
+          const next = cur ? `${cur} ${word}` : word;
+          if (ctx.measureText(next).width > maxW - 40 && cur) {
+            lines.push(cur);
+            cur = word;
+          } else cur = next;
+        }
+        if (cur) lines.push(cur);
+        lines.slice(0, 4).forEach((l, i) => say(ctx, l, A.PAD + 16, top + 100 + i * lineSize * 1.3, maxW - 32, lineSize, 700, INK));
+        say(ctx, "▼", A.SW - A.PAD - 10, A.bottom - 30, 60, 36, 900, accent, "right");
+      }
+    } else {
+      // quest complete
+      const midY = A.top + (A.bottom - A.top) * 0.62;
+      const lines = titleLines(ctx, upper(w.title), maxW, A.story ? 190 : 150);
+      const st = stackDisplay(ctx, lines, A.SW / 2, midY, maxW, A.story ? 190 : 150, 70, INK, "center", 0.9, { color: INKDARK, width: 12 });
+      say(ctx, upper(w.sub || "QUEST COMPLETE"), A.SW / 2, Math.max(A.top + 80, st.top - 34), maxW, A.story ? 40 : 34, 900, accent, "center", 10);
+      say(ctx, "+ 500 XP", A.SW / 2, midY + (A.story ? 100 : 80), maxW, A.story ? 46 : 38, 900, accent, "center", 6);
+    }
+  };
+}
+
+/** A supplement facts panel, the title its name. */
+function labelDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    dim(ctx, A, 0.1);
+    const pw = A.SW - A.PAD * 2;
+    const rows = t.rows ?? [];
+    const rowH = A.story ? 76 : 62;
+    const inner0 = pw - 80;
+    const tl = titleLines(ctx, upper(w.title), inner0, A.story ? 110 : 90);
+    const tSize = tl.length > 1 ? (A.story ? 86 : 70) : A.story ? 110 : 90;
+    // the head is as tall as its title (one line or two) and the "facts" line under it
+    const head = 56 + tl.length * tSize * 0.92 + (A.story ? 70 : 60);
+    const ph = head + rows.length * rowH + (A.story ? 110 : 86);
+    const top = A.bottom - ph;
+    const x = A.PAD;
+    ctx.fillStyle = "#fbfaf6";
+    roundRect(ctx, x, top, pw, ph, 18);
+    ctx.fill();
+    ctx.strokeStyle = INKDARK;
+    ctx.lineWidth = 8;
+    roundRect(ctx, x + 14, top + 14, pw - 28, ph - 28, 10);
+    ctx.stroke();
+    const inner = inner0;
+    stackDisplay(ctx, tl, x + 40, top + head - (A.story ? 64 : 54), inner, tSize, 44, INKDARK);
+    say(ctx, upper(w.sub || "SUPPLEMENT FACTS"), x + 40, top + head - 18, inner, A.story ? 28 : 24, 900, "#3a3a40", "left", 4);
+    ctx.fillStyle = INKDARK;
+    ctx.fillRect(x + 40, top + head, inner, 14);
+    let y = top + head + 14;
+    for (const [k, v] of rows) {
+      say(ctx, k, x + 40, y + rowH * 0.66, inner * 0.62, A.story ? 40 : 34, 700, INKDARK);
+      say(ctx, v, x + pw - 40, y + rowH * 0.66, inner * 0.38, A.story ? 40 : 34, 900, INKDARK, "right");
+      y += rowH;
+      ctx.fillRect(x + 40, y - 3, inner, 3);
+    }
+    say(ctx, "* Daily value not established.", x + 40, top + ph - (A.story ? 44 : 34), inner, A.story ? 26 : 22, 600, "#55555c");
+  };
+}
+
+/** Candy type: each letter its own colour, a little turned, sprinkles around. */
+function candyDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    dim(ctx, A, 0.14);
+    scrimBottom(ctx, A, 0.5, 0.75);
+    const maxW = A.SW - A.PAD * 2;
+    const lines = titleLines(ctx, upper(w.title), maxW, A.story ? 200 : 160);
+    let size = A.story ? 200 : 160;
+    for (const l of lines) size = Math.min(size, fitDisplay(ctx, l, maxW, A.story ? 200 : 160, 70));
+    ctx.font = display(size);
+    let k = 0;
+    const subRoom = w.sub ? (A.story ? 110 : 90) : 0;
+    lines.forEach((l, li) => {
+      const y = A.bottom - subRoom - (lines.length - 1 - li) * size * 0.95;
+      let x = (A.SW - ctx.measureText(l).width) / 2;
+      for (const ch of l) {
+        const cw = ctx.measureText(ch).width;
+        ctx.save();
+        ctx.translate(x + cw / 2, y - size * 0.35);
+        ctx.rotate(((k % 5) - 2) * 0.045);
+        ctx.lineWidth = Math.max(8, size * 0.07);
+        ctx.strokeStyle = INKDARK;
+        ctx.lineJoin = "round";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.strokeText(ch, 0, 0);
+        ctx.fillStyle = CANDY[k % CANDY.length];
+        ctx.fillText(ch, 0, 0);
+        ctx.restore();
+        if (ch !== " ") k++;
+        x += cw;
+      }
+    });
+    // sprinkles
+    let seed = 13;
+    for (let i = 0; i < 26; i++) {
+      seed = (seed * 37 + 11) % 997;
+      const sx = A.PAD + (seed % (A.SW - A.PAD * 2));
+      const sy = A.top + ((seed * 7) % Math.max(1, Math.round((A.bottom - A.top) * 0.45)));
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate((seed % 31) / 5);
+      ctx.fillStyle = CANDY[i % CANDY.length];
+      roundRect(ctx, -16, -5, 32, 10, 5);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (w.sub) tag(ctx, upper(w.sub), A.SW / 2, A.bottom - (A.story ? 64 : 54), { bg: "#ffffff", ink: INKDARK, size: A.story ? 30 : 26, align: "center" });
+  };
+}
+
+/** A retro sunset: a striped sun on a horizon, the words over it. */
+function retroDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    dim(ctx, A, 0.18);
+    scrimBottom(ctx, A, 0.42, 0.85);
+    const cx = A.SW / 2;
+    const maxW0 = A.SW - A.PAD * 2;
+    let bottom0 = A.bottom - 6;
+    if (w.sub) {
+      say(ctx, upper(w.sub), cx, bottom0, maxW0, A.story ? 36 : 30, 800, "#ffd166", "center", 8);
+      bottom0 -= A.story ? 72 : 60;
+    }
+    const tl = titleLines(ctx, upper(w.title), maxW0, A.story ? 190 : 150);
+    // (measured first, drawn last: the sun sits on a horizon just over the words)
+    let tSize = A.story ? 190 : 150;
+    for (const l of tl) tSize = Math.min(tSize, fitDisplay(ctx, l, maxW0, A.story ? 190 : 150, 64));
+    const titleTop = bottom0 - (tl.length - 1) * tSize * 0.9 - tSize * 0.82;
+    const r = A.story ? 250 : 190;
+    const horizon = Math.max(A.top + r + 20, titleTop - (A.story ? 40 : 30));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, A.W, horizon);
+    ctx.clip();
+    const bands = ["#ffd166", "#ff9f43", "#ff6b6b", "#e84393"];
+    bands.forEach((col, i) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, horizon, r, Math.PI, 0);
+      ctx.closePath();
+      ctx.clip();
+      ctx.fillStyle = col;
+      const bt = horizon - r + (i * r) / bands.length;
+      ctx.fillRect(cx - r, bt, r * 2, r / bands.length - (i ? 10 : 0));
+      ctx.restore();
+    });
+    ctx.restore();
+    ctx.fillStyle = "#ff6b6b";
+    ctx.fillRect(A.PAD, horizon, A.SW - A.PAD * 2, 8);
+    stackDisplay(ctx, tl, cx, bottom0, maxW0, tSize, 64, INK, "center", 0.9, { color: "#e84393", width: A.story ? 10 : 8 });
+  };
+}
+
+/** Clean type: a small date and tag up top, the words big and lowercase at the foot. */
+function cleanDesign(t: GymSpec) {
+  return (ctx: Ctx, A: Area, c: FilterContext) => {
+    const w = templateWords(storyFilter(t.id)!, c);
+    dim(ctx, A, 0.1);
+    scrimTop(ctx, A, A.top + 140, 0.4);
+    scrimBottom(ctx, A, 0.5, 0.85);
+    const maxW = A.SW - A.PAD * 2;
+    say(ctx, `${WEEKDAY[c.now.getDay()].slice(0, 3).toUpperCase()} · ${MONTH[c.now.getMonth()].slice(0, 3).toUpperCase()} ${c.now.getDate()}`, A.PAD, A.top + 36, maxW, 30, 800, MUTED, "left", 6);
+    let bottom = A.bottom - 6;
+    if (w.sub) {
+      say(ctx, w.sub, A.PAD, bottom, maxW, A.story ? 44 : 38, 600, MUTED);
+      bottom -= A.story ? 80 : 66;
+    }
+    // sans, heavy, as written (lowercase stays lowercase)
+    const words = w.title.split(/\s+/);
+    const start = A.story ? 132 : 108;
+    let size = start;
+    let lines: string[] = [];
+    for (; size >= 56; size -= 6) {
+      ctx.font = font(800, size);
+      lines = [];
+      let cur = "";
+      for (const word of words) {
+        const next = cur ? `${cur} ${word}` : word;
+        if (ctx.measureText(next).width > maxW && cur) {
+          lines.push(cur);
+          cur = word;
+        } else cur = next;
+      }
+      if (cur) lines.push(cur);
+      if (lines.length <= 3 && lines.every((l) => ctx.measureText(l).width <= maxW)) break;
+    }
+    lines.slice(0, 3).forEach((l, i, all) => say(ctx, l, A.PAD, bottom - (all.length - 1 - i) * size * 1.02, maxW, size, 800, INK, "left", -1));
+    rule(ctx, A.PAD, bottom - lines.slice(0, 3).length * size * 1.02 - 6, 90, 8, RED);
+  };
+}
+
+const GYM_DESIGNS: Record<GymDesign, (t: GymSpec) => NonNullable<StoryFilter["over"]>> = {
+  poster: posterDesign,
+  lights: lightsDesign,
+  tape: tapeDesign,
+  meme: memeDesign,
+  hud: hudDesign,
+  label: labelDesign,
+  candy: candyDesign,
+  retro: retroDesign,
+  clean: cleanDesign,
+};
+
+const GYM: GymSpec[] = [
+  /* ---- Meet day --------------------------------------------------- */
+  { id: "gameday", label: "Game Day", group: "meet", emoji: "🏟️", design: "poster", title: "Game day", sub: "Let's go", meet: true },
+  { id: "platformready", label: "Platform Ready", group: "meet", emoji: "🟥", design: "poster", title: "Platform\nready", sub: "Chalked · belted · locked", meet: true },
+  { id: "weighedin", label: "Weighed In", group: "meet", emoji: "⚖️", design: "poster", kicker: "Weigh-ins", title: "Weighed\nin", sub: "Made weight", meet: true },
+  { id: "attemptseason", label: "Attempt Season", group: "meet", emoji: "📋", design: "poster", title: "Attempt\nseason", sub: "Openers are in", meet: true },
+  { id: "thirddemon", label: "3rd Attempt Demon", group: "meet", emoji: "😈", design: "poster", kicker: "Third attempt", title: "3rd attempt\ndemon", sub: "All gas", meet: true },
+  { id: "whitelights", label: "White Light Hunter", group: "meet", emoji: "⚪", design: "lights", lights: "www", title: "White light\nhunter", sub: "Three for three" },
+  { id: "ninefornine", label: "9/9 Club", group: "meet", emoji: "💯", design: "lights", lights: "www", title: "9/9 club", sub: "Nine for nine" },
+  { id: "meetaura", label: "Meet Day Aura", group: "meet", emoji: "✴️", design: "hud", hud: "popup", title: "+1000|Meet day aura", accent: CYAN },
+  { id: "totalsecured", label: "Total Secured", group: "meet", emoji: "🔐", design: "poster", kicker: "Total", title: "Total\nsecured", sub: "On the board", meet: true },
+  { id: "bombrisk", label: "Bomb Out Risk", group: "meet", emoji: "💣", design: "tape", title: "Bomb out risk", sub: "Proceed with caution" },
+  { id: "pleasedontbomb", label: "Please Don't Bomb", group: "meet", emoji: "🙏", design: "tape", title: "Please don't bomb", sub: "Openers light" },
+  { id: "roadtobomb", label: "Road to a Bomb Out", group: "meet", emoji: "🛣️", design: "tape", title: "Road to a bomb out", sub: "Next exit: 3rd attempt" },
+  { id: "twoofnine", label: "2/9 But Confident", group: "meet", emoji: "😤", design: "lights", lights: "rrw", title: "2/9 but\nconfident", sub: "Still had fun" },
+  { id: "judgeshate", label: "Judges Hate Me", group: "meet", emoji: "🔴", design: "lights", lights: "rrr", title: "Judges\nhate me", sub: "Depth was there" },
+  { id: "commandviolation", label: "Command Violation", group: "meet", emoji: "✋", design: "lights", lights: "wrr", title: "Command\nviolation", sub: "Wait for the rack" },
+  { id: "misgroove", label: "Misgroove But Send It", group: "meet", emoji: "🌀", design: "meme", title: "Misgroove|but send it" },
+  { id: "savethetotal", label: "Deadlift to Save the Total", group: "meet", emoji: "🛟", design: "poster", kicker: "Last lift", title: "Deadlift to\nsave the total", sub: "One more", meet: true },
+  { id: "onepull", label: "One Pull to Glory", group: "meet", emoji: "🏆", design: "poster", kicker: "Final attempt", title: "One pull\nto glory", sub: "Make it count", meet: true },
+  { id: "missioncomplete", label: "Mission Complete", group: "meet", emoji: "✅", design: "hud", hud: "quest", title: "Mission complete", sub: "Meet day", accent: NEON },
+
+  /* ---- Rest day --------------------------------------------------- */
+  { id: "recoverymode", label: "Recovery Mode", group: "rest", emoji: "🛌", design: "retro", title: "Recovery\nmode", sub: "On" },
+  { id: "cnsreboot", label: "CNS Reboot", group: "rest", emoji: "🔄", design: "hud", hud: "loading", title: "CNS reboot", sub: "Rebooting… 34%", accent: CYAN },
+  { id: "offtheclock", label: "Off The Clock", group: "rest", emoji: "🕊️", design: "clean", title: "off the clock.", sub: "rest day" },
+  { id: "noprs", label: "No PRs Today", group: "rest", emoji: "🚫", design: "clean", title: "no PRs today.", sub: "back at it tomorrow" },
+  { id: "stillsore", label: "Still Sore", group: "rest", emoji: "🥴", design: "meme", title: "Still|sore" },
+  { id: "doingnothing", label: "Doing Nothing Professionally", group: "rest", emoji: "🛋️", design: "clean", title: "doing nothing, professionally.", sub: "rest day" },
+  { id: "activerecovery", label: "Active Recovery (Barely)", group: "rest", emoji: "🚶", design: "retro", title: "Active\nrecovery", sub: "(barely)" },
+  { id: "eatsleepgrow", label: "Eat Sleep Grow", group: "rest", emoji: "🍽️", design: "clean", title: "eat. sleep. grow.", sub: "repeat" },
+  { id: "restingforgains", label: "Resting for Gains", group: "rest", emoji: "😴", design: "retro", title: "Resting\nfor gains", sub: "Growth in progress" },
+  { id: "domswon", label: "DOMS Won", group: "rest", emoji: "🏳️", design: "meme", title: "DOMS|won" },
+
+  /* ---- Gym bro ---------------------------------------------------- */
+  { id: "heavytherapy", label: "Heavy Is Therapy", group: "gymbro", emoji: "🧠", design: "meme", title: "Heavy is|therapy" },
+  { id: "thepump", label: "The Pump", group: "gymbro", emoji: "🎈", design: "poster", kicker: "Forecast", title: "The pump", sub: "100% chance" },
+  { id: "builtdifferent", label: "Built Different", group: "gymbro", emoji: "🧱", design: "meme", title: "Built|different" },
+  { id: "rpe11", label: "RPE 11", group: "gymbro", emoji: "🔟", design: "hud", hud: "popup", title: "RPE 11|on a scale of 10", accent: "#ff5f5f" },
+  { id: "lightweight", label: "Lightweight Baby", group: "gymbro", emoji: "🪶", design: "meme", title: "Lightweight|baby" },
+  { id: "volumefailure", label: "Volume Till Failure", group: "gymbro", emoji: "📈", design: "label", title: "Volume till failure", sub: "Training facts", rows: [["Sets", "∞"], ["Reps", "till failure"], ["Rest", "0:30"], ["Regrets", "0"]] },
+  { id: "bulkmode", label: "Bulk Mode", group: "gymbro", emoji: "🍔", design: "retro", title: "Bulk\nmode", sub: "Activated" },
+  { id: "notnatural", label: "Not Natural Lighting", group: "gymbro", emoji: "💡", design: "meme", title: "Not natural|lighting" },
+  { id: "mirrorcheck", label: "Mirror Check Mandatory", group: "gymbro", emoji: "🪞", design: "tape", title: "Mirror check mandatory", sub: "Between every set" },
+  { id: "chestday", label: "Chest Day Citizen", group: "gymbro", emoji: "🫡", design: "poster", kicker: "Monday", title: "Chest day\ncitizen", sub: "Bench reserved" },
+
+  /* ---- Brain rot -------------------------------------------------- */
+  { id: "aura", label: "Aura +1000", group: "memes", emoji: "✨", design: "hud", hud: "popup", title: "+1000|Aura", accent: NEON },
+  { id: "gymnpc", label: "Gym NPC", group: "memes", emoji: "🤖", design: "hud", hud: "dialogue", title: "Gym NPC", sub: "Hey. You gonna be long on that rack?", accent: CYAN },
+  { id: "cnsleft", label: "CNS Left The Chat", group: "memes", emoji: "📴", design: "hud", hud: "dialogue", title: "System", sub: "CNS has left the chat.", accent: "#ff5f5f" },
+  { id: "finalform", label: "Bro's Final Form", group: "memes", emoji: "🦾", design: "hud", hud: "quest", title: "Bro's final form", sub: "Evolution complete", accent: NEON },
+  { id: "delulupr", label: "Delulu PR", group: "memes", emoji: "🦄", design: "candy", title: "Delulu PR", sub: "Manifesting" },
+  { id: "resttimer", label: "Rest Timer 47:32", group: "memes", emoji: "⏱️", design: "hud", hud: "timer", title: "47:32", sub: "Rest timer", accent: NEON },
+  { id: "patchnotes", label: "Patch Notes Live", group: "memes", emoji: "🛠️", design: "hud", hud: "patch", title: "Patch notes v11", accent: CYAN, rows: [["Squat", "+5 lb"], ["Knees", "nerfed"], ["The pump", "buffed"], ["Rest times", "longer"]] },
+  { id: "lockedzero", label: "Locked In (Zero Thoughts)", group: "memes", emoji: "🔒", design: "clean", title: "locked in.", sub: "(zero thoughts)" },
+  { id: "possessed", label: "Pre Workout Possessed", group: "memes", emoji: "👹", design: "meme", title: "Pre workout|possessed" },
+  { id: "barspeaking", label: "The Bar Is Speaking", group: "memes", emoji: "🗣️", design: "hud", hud: "dialogue", title: "The bar", sub: "One more rep.", accent: NEON },
+  { id: "nothoughts", label: "No Thoughts Just Lift", group: "memes", emoji: "🫥", design: "clean", title: "no thoughts. just lift.", sub: "" },
+  { id: "mentally315", label: "Mentally at 315", group: "memes", emoji: "🧘", design: "meme", title: "Mentally at 315|physically not" },
+  { id: "brainoff", label: "Brain Off Bar On", group: "memes", emoji: "🧠", design: "meme", title: "Brain off|bar on" },
+
+  /* ---- Fuel / stims ----------------------------------------------- */
+  { id: "caffeineloaded", label: "Caffeine Loaded", group: "stims", emoji: "☕", design: "label", title: "Caffeine loaded", rows: [["Serving size", "1 scoop"], ["Caffeine", "a lot"], ["Patience", "0 g"]] },
+  { id: "twohundredmg", label: "200mg to Feel Normal", group: "stims", emoji: "🥤", design: "label", title: "200mg to feel normal", rows: [["Caffeine", "200 mg"], ["Feeling", "normal"], ["Tolerance", "high"]] },
+  { id: "stimmedout", label: "Stimmed Out", group: "stims", emoji: "⚡", design: "hud", hud: "loading", title: "Stimmed out", sub: "Heart rate: yes", accent: "#ffd23f" },
+  { id: "prehitting", label: "Pre Workout Hitting", group: "stims", emoji: "🌋", design: "meme", title: "Pre workout|hitting" },
+  { id: "baddecisions", label: "Caffeine & Bad Decisions", group: "stims", emoji: "🎲", design: "label", title: "Caffeine & bad decisions", rows: [["Caffeine", "max"], ["Bad decisions", "100%"], ["Regret", "pending"]] },
+  { id: "candyfueled", label: "Candy Fueled", group: "stims", emoji: "🍬", design: "candy", title: "Candy fueled", sub: "Intra workout" },
+  { id: "sourcandypr", label: "Sour Candy PR", group: "stims", emoji: "🍭", design: "candy", title: "Sour candy PR", sub: "Fast carbs" },
+  { id: "gummybulk", label: "Gummy Bear Bulk", group: "stims", emoji: "🧸", design: "candy", title: "Gummy bear bulk", sub: "Surplus" },
+  { id: "ricekrispie", label: "Rice Krispie Powered", group: "stims", emoji: "🍚", design: "label", title: "Rice Krispie powered", rows: [["Rice Krispies", "2"], ["Carbs", "fast"], ["Power", "max"]] },
+  { id: "glucosegoblin", label: "Glucose Goblin", group: "stims", emoji: "👺", design: "candy", title: "Glucose goblin", sub: "Do not disturb" },
+  { id: "sugarrush", label: "Sugar Rush Squats", group: "stims", emoji: "🍩", design: "retro", title: "Sugar rush\nsquats", sub: "Fast carbs in" },
+  { id: "carbloaded", label: "Carb Loaded", group: "stims", emoji: "🍝", design: "label", title: "Carb loaded", rows: [["Carbs", "yes"], ["Glycogen", "full"], ["Bench", "up"]] },
+  { id: "pumpfueled", label: "Pump Fueled", group: "stims", emoji: "🎈", design: "poster", kicker: "Fuel", title: "Pump\nfueled", sub: "Carbs in, pump on" },
+  { id: "vibescaffeine", label: "Running on Vibes + Caffeine", group: "stims", emoji: "🌀", design: "label", title: "Running on vibes + caffeine", rows: [["Sleep", "4 h"], ["Caffeine", "high"], ["Vibes", "immaculate"]] },
+];
+
+for (const t of GYM)
+  FILTERS.push({
+    id: t.id,
+    label: t.label,
+    group: t.group,
+    emoji: t.emoji,
+    over: GYM_DESIGNS[t.design](t),
+    edit: { title: t.title, sub: t.sub, meet: !!t.meet },
+  });
+
 export const STORY_FILTERS: readonly StoryFilter[] = FILTERS;
 
 /** A filter by its id (the key without "fx:"). */
@@ -1516,13 +2102,13 @@ export function filterLabel(f: StoryFilter, c: FilterContext): string {
   return typeof f.label === "function" ? f.label(c) : f.label;
 }
 
-/** The order the groups go in right now: what fits the moment first. */
+/** The order the groups go in right now: what fits the moment first (Favorites, when the person has any, goes before all of it: buildFilterRow). */
 export function groupOrder(c: FilterContext): FilterGroup[] {
   const lead: FilterGroup[] = [];
   if (c.finished) lead.push("today");
   if (c.session && !c.finished) lead.push("lockin");
   if (c.fuel === "post") lead.push("fuel");
-  const rest = FILTER_GROUPS.map((g) => g.key).filter((k) => !lead.includes(k));
+  const rest = FILTER_GROUPS.map((g) => g.key).filter((k) => k !== "fav" && !lead.includes(k));
   return [...lead, ...rest];
 }
 
@@ -1530,11 +2116,18 @@ export function groupOrder(c: FilterContext): FilterGroup[] {
 export function filterRow(c: FilterContext): StoryFilter[] {
   const out: StoryFilter[] = [];
   for (const g of groupOrder(c)) {
+    if (g === "fav") continue;
     const list = FILTERS.map((f, i) => ({ f, i })).filter(({ f }) => f.group === g && (!f.when || f.when(c)));
     list.sort((a, b) => (b.f.fit?.(c) ?? 0) - (a.f.fit?.(c) ?? 0) || a.i - b.i);
     out.push(...list.map(({ f }) => f));
   }
   return out;
+}
+
+/** A template's title and second line as they'll be painted (the person's words first). */
+export function templateWords(f: StoryFilter, c: FilterContext): { title: string; sub: string } {
+  const own = c.custom?.[f.id];
+  return { title: own?.title?.trim() || f.edit?.title || "", sub: own?.sub?.trim() ?? f.edit?.sub ?? "" };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1560,7 +2153,7 @@ export function isGrade(f: StoryFilter): boolean {
 
 /** What the design shows changes with these (and the minute, for the clocks). */
 function contextKey(c: FilterContext): string {
-  return JSON.stringify([c.firstName, c.session, c.finished, c.block, c.fuel, c.now.getFullYear(), c.now.getMonth(), c.now.getDate(), c.now.getHours(), c.now.getMinutes()]);
+  return JSON.stringify([c.firstName, c.session, c.finished, c.block, c.fuel, c.custom ?? null, c.now.getFullYear(), c.now.getMonth(), c.now.getDate(), c.now.getHours(), c.now.getMinutes()]);
 }
 
 const overCache = new Map<string, HTMLCanvasElement>();

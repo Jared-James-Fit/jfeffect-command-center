@@ -35,6 +35,8 @@ export type VideoSendOptions = {
   muted?: boolean;
   /** A filter baked into the picture (media-grade.ts): always a re-encode. */
   grade?: import("@/lib/media-grade").CompiledGrade | null;
+  /** Keep 1080p (a Crew post or story on a phone that encodes it: plan.ts `caps.hd`). */
+  hd?: boolean;
 };
 
 /** How the bar is shared between the steps (a re-encode is most of the wait). */
@@ -69,7 +71,7 @@ export function createVideoSend(o: VideoSendOptions) {
   let checked: VideoCheck | null = null;
   let upMs = 0;
   const graded = !!o.grade && !o.grade.identity;
-  const plan = planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted, graded });
+  const plan = planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted, graded, hd: o.hd });
 
   const extOf = (f: File) => (f.type.includes("webm") ? "webm" : f.type.includes("quicktime") ? "mov" : "mp4");
 

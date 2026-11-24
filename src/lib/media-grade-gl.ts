@@ -6,7 +6,7 @@
  * A phone without WebGL gets the same grade from the pixel loop, so nothing
  * ever posts without the filter it showed. Nothing here leaves the phone.
  */
-import { gradePixels, type CompiledGrade } from "@/lib/media-grade";
+import { MONO_MIX, detailRadii, gradePixels, grainCells, type CompiledGrade } from "@/lib/media-grade";
 
 const VERT = `
 attribute vec2 a_pos;
@@ -28,6 +28,17 @@ uniform float u_vib;
 uniform float u_skin;
 uniform float u_sharp;
 uniform vec2 u_px;
+uniform float u_mono;
+uniform vec3 u_monoMix;
+uniform float u_clar;
+uniform vec2 u_clarR;
+uniform float u_struct;
+uniform vec2 u_structR;
+uniform float u_vig;
+uniform float u_grain;
+uniform vec2 u_grainCells;
+uniform float u_hslOn;
+uniform vec3 u_hsl[8];
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 float lut(float v, int ch) {
   vec4 t = texture2D(u_lut, vec2(clamp(v, 0.0, 1.0) * (255.0 / 256.0) + (0.5 / 256.0), 0.5));
@@ -45,6 +56,56 @@ float skinness(vec3 c) {
   float lumW = mx < 0.2 ? (mx - 0.08) / 0.12 : (mx > 0.97 ? 0.5 : 1.0);
   return clamp(hueW * satW * lumW, 0.0, 1.0);
 }
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+vec3 hsv2rgb(vec3 c) {
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+float centre(int i) {
+  if (i == 0) return 0.0;
+  if (i == 1) return 30.0 / 360.0;
+  if (i == 2) return 60.0 / 360.0;
+  if (i == 3) return 120.0 / 360.0;
+  if (i == 4) return 180.0 / 360.0;
+  if (i == 5) return 225.0 / 360.0;
+  if (i == 6) return 270.0 / 360.0;
+  return 315.0 / 360.0;
+}
+float hslWeight(float h, int i) {
+  float c = centre(i);
+  float prv = centre(i == 0 ? 7 : i - 1);
+  float nxt = centre(i == 7 ? 0 : i + 1);
+  float d = h - c;
+  d -= floor(d + 0.5);
+  float right = nxt - c;
+  if (right <= 0.0) right += 1.0;
+  float left = c - prv;
+  if (left <= 0.0) left += 1.0;
+  return d >= 0.0 ? max(0.0, 1.0 - d / right) : max(0.0, 1.0 + d / left);
+}
+vec3 applyHsl(vec3 c) {
+  vec3 hsv = rgb2hsv(c);
+  float amt = smoothstep(0.02, 0.2, hsv.y);
+  if (amt <= 0.0) return c;
+  vec3 m = vec3(0.0);
+  for (int i = 0; i < 8; i++) m += u_hsl[i] * hslWeight(hsv.x, i);
+  vec3 o = hsv2rgb(vec3(fract(hsv.x + m.x * amt), clamp(hsv.y * (1.0 + m.y * amt), 0.0, 1.0), hsv.z));
+  return clamp(o * (1.0 + m.z * 0.35 * hsv.y * amt), 0.0, 1.0);
+}
+float lumAt(vec2 uv) { return luma(texture2D(u_img, uv).rgb); }
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
 void main() {
   vec3 c0 = texture2D(u_img, v_uv).rgb;
   vec3 g = clamp(c0 * u_gain, 0.0, 1.0);
@@ -57,13 +118,39 @@ void main() {
   float sk = u_skin > 0.0 ? skinness(c0) * u_skin : 0.0;
   k = mix(k, clamp(k, 0.92, 1.06), sk);
   c = clamp(vec3(L) + (c - vec3(L)) * k, 0.0, 1.0);
+  if (u_hslOn > 0.5) c = applyHsl(c);
+  if (u_mono > 0.0) c = mix(c, vec3(dot(c, u_monoMix)), u_mono);
+  float l0 = luma(c0);
+  float d = 0.0;
   if (u_sharp > 0.0) {
-    float up = luma(texture2D(u_img, v_uv - vec2(0.0, u_px.y)).rgb);
-    float dn = luma(texture2D(u_img, v_uv + vec2(0.0, u_px.y)).rgb);
-    float lf = luma(texture2D(u_img, v_uv - vec2(u_px.x, 0.0)).rgb);
-    float rt = luma(texture2D(u_img, v_uv + vec2(u_px.x, 0.0)).rgb);
-    float d = clamp(luma(c0) - (up + dn + lf + rt) * 0.25, -0.12, 0.12) * u_sharp * 1.6;
-    c = clamp(c + vec3(d), 0.0, 1.0);
+    float up = lumAt(v_uv - vec2(0.0, u_px.y));
+    float dn = lumAt(v_uv + vec2(0.0, u_px.y));
+    float lf = lumAt(v_uv - vec2(u_px.x, 0.0));
+    float rt = lumAt(v_uv + vec2(u_px.x, 0.0));
+    d += clamp(l0 - (up + dn + lf + rt) * 0.25, -0.12, 0.12) * u_sharp * 1.6;
+  }
+  if (u_struct > 0.0) {
+    float a = lumAt(v_uv - vec2(0.0, u_structR.y)) + lumAt(v_uv + vec2(0.0, u_structR.y)) + lumAt(v_uv - vec2(u_structR.x, 0.0)) + lumAt(v_uv + vec2(u_structR.x, 0.0));
+    d += clamp(l0 - a * 0.25, -0.15, 0.15) * u_struct * 1.4;
+  }
+  if (u_clar != 0.0) {
+    float a = lumAt(v_uv + vec2(u_clarR.x, 0.0)) + lumAt(v_uv + u_clarR * vec2(0.7071, 0.7071)) + lumAt(v_uv + vec2(0.0, u_clarR.y)) + lumAt(v_uv + u_clarR * vec2(-0.7071, 0.7071))
+      + lumAt(v_uv - vec2(u_clarR.x, 0.0)) + lumAt(v_uv + u_clarR * vec2(-0.7071, -0.7071)) + lumAt(v_uv - vec2(0.0, u_clarR.y)) + lumAt(v_uv + u_clarR * vec2(0.7071, -0.7071));
+    float Lg = luma(c);
+    float mid = 1.0 - (2.0 * Lg - 1.0) * (2.0 * Lg - 1.0);
+    d += clamp(l0 - a * 0.125, -0.25, 0.25) * u_clar * 1.2 * mid;
+  }
+  c = clamp(c + vec3(d), 0.0, 1.0);
+  if (u_vig > 0.0) {
+    vec2 q = (v_uv - 0.5) * 2.0;
+    float r = length(q) / 1.41421356;
+    c *= 1.0 - u_vig * 0.7 * smoothstep(0.3, 1.0, r);
+  }
+  if (u_grain > 0.0) {
+    float Lg = luma(c);
+    float mid = 1.0 - (2.0 * Lg - 1.0) * (2.0 * Lg - 1.0);
+    float n = (hash12(floor(v_uv * u_grainCells)) - 0.5) * u_grain * 0.18 * (0.35 + 0.65 * mid);
+    c = clamp(c + vec3(n), 0.0, 1.0);
   }
   gl_FragColor = vec4(c, 1.0);
 }`;
@@ -105,7 +192,8 @@ export class GradeGL {
     const loc = gl.getAttribLocation(prog, "a_pos");
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ["u_img", "u_lut", "u_gain", "u_sat", "u_vib", "u_skin", "u_sharp", "u_px"]) this.u[n] = gl.getUniformLocation(prog, n);
+    for (const n of ["u_img", "u_lut", "u_gain", "u_sat", "u_vib", "u_skin", "u_sharp", "u_px", "u_mono", "u_monoMix", "u_clar", "u_clarR", "u_struct", "u_structR", "u_vig", "u_grain", "u_grainCells", "u_hslOn", "u_hsl"])
+      this.u[n] = gl.getUniformLocation(prog, n === "u_hsl" ? "u_hsl[0]" : n);
     const tex = () => {
       const t = gl.createTexture()!;
       gl.bindTexture(gl.TEXTURE_2D, t);
@@ -172,6 +260,20 @@ export class GradeGL {
     // sharpening reads the neighbours at the output's scale (a big photo shown small isn't over-sharpened)
     gl.uniform1f(this.u.u_sharp, c.sharpen);
     gl.uniform2f(this.u.u_px, Math.max(1 / sw, 1 / W), Math.max(1 / shh, 1 / H));
+    // the rest of the look, sized to the output (a preview and the export look alike at their sizes)
+    const rad = detailRadii(W, H);
+    gl.uniform1f(this.u.u_mono, c.mono);
+    gl.uniform3f(this.u.u_monoMix, MONO_MIX[0], MONO_MIX[1], MONO_MIX[2]);
+    gl.uniform1f(this.u.u_clar, c.clarity);
+    gl.uniform2f(this.u.u_clarR, rad.clarity / W, rad.clarity / H);
+    gl.uniform1f(this.u.u_struct, c.structure);
+    gl.uniform2f(this.u.u_structR, rad.structure / W, rad.structure / H);
+    gl.uniform1f(this.u.u_vig, c.vignette);
+    gl.uniform1f(this.u.u_grain, c.grain);
+    const cells = grainCells(W, H);
+    gl.uniform2f(this.u.u_grainCells, cells[0], cells[1]);
+    gl.uniform1f(this.u.u_hslOn, c.hsl ? 1 : 0);
+    if (c.hsl) gl.uniform3fv(this.u.u_hsl, c.hsl);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return gl.getError() === gl.NO_ERROR;
   }

@@ -24,10 +24,14 @@ import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 import { reportCameraTrouble } from "@/lib/camera-report";
-import { LookCarousel, lookItems, type LookGroup, type LookItem } from "@/components/community/look-carousel";
-import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
-import { readFilmSettings } from "@/lib/camera/film-settings";
-import { studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
+import { LookCarousel, RecordingClock, lookItems, type LookGroup, type LookItem } from "@/components/community/look-carousel";
+import { MAX_RECORD_MS, canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
+import { askOrder, pictureFits, pictureMiss, readFilmAsk, readFilmSettings, saveFilmAsk, type AskShape } from "@/lib/camera/film-settings";
+import { phoneUpright, refreshPtzAsk, studioCameraAsk, studioCameraRetryAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
+import { crewQualities, needsDownscale, qualityLabel, readCrewQuality, saveCrewQuality, type CrewQuality } from "@/lib/camera/crew-quality";
+import { PICTURE_WAIT_MS, pictureSize } from "@/lib/camera/picture-size";
+import { digitalZoomRange, easeZoom, zoomCrop, zoomDetent, zoomFromPinch, zoomFromSlide, zoomLabel, zoomRange, type ZoomRange } from "@/lib/camera/camera-zoom";
+import { canRecordCanvas } from "@/lib/camera/zoom-compositor";
 import { createCommunityPost, useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import {
@@ -52,8 +56,10 @@ import { ShareOutSheet } from "@/components/community/share-out-sheet";
 import { JF_HANDLE, promoLine, shareFileName, workoutShareCaption } from "@/lib/share-out";
 import { GradedLayer } from "@/components/community/graded-layer";
 import { statsFor, useGradeSource, loadGradeSource } from "@/components/community/use-grade-source";
-import { useFilterDefaults } from "@/lib/media-filter-prefs";
-import { compiledFor, type MediaGrade } from "@/lib/media-grade";
+import { useFilterDefaults, type FilterPreset } from "@/lib/media-filter-prefs";
+import { FILTER_LABELS, compiledFor, type MediaGrade } from "@/lib/media-grade";
+import { readShowLook, saveShowLook, saveStoryLook, storyLookLine, type StoryLook } from "@/lib/story-looks";
+import { NORMAL_KEY as NORMAL_LOOK_KEY } from "@/components/community/crew-filters";
 import { sharedGradeGL } from "@/lib/media-grade-gl";
 import { PhotoFramer } from "@/components/community/photo-framer";
 import { CoverPicker } from "@/components/community/cover-picker";
@@ -306,9 +312,13 @@ export function ShareStudio({
   const [shotGrade, setShotGrade] = useState<MediaGrade | null>(null);
   const [enhancing, setEnhancing] = useState(false);
   const [gradeLive, setGradeLive] = useState(false);
+  // Compare held in the panel: the picture as it was shot until it's let go
+  const [comparing, setComparing] = useState(false);
+  // a story says which filter and template made it (a quiet line in the viewer), unless they turn it off (this phone)
+  const [showLook, setShowLook] = useState(() => (typeof window === "undefined" ? true : readShowLook()));
   // a story's photo shown whole over a blur of itself (storyStartsWhole), else filling the story
   const [shotWhole, setShotWhole] = useState(false);
-  const { defaults: filterDefaults, setDefault: setFilterDefault } = useFilterDefaults(open);
+  const { defaults: filterDefaults, setDefault: setFilterDefault, savePreset, deletePreset, restorePreset } = useFilterDefaults(open);
   const defaultsRef = useRef(filterDefaults);
   defaultsRef.current = filterDefaults;
   const [shapeFlash, setShapeFlash] = useState(0);
@@ -323,6 +333,21 @@ export function ShareStudio({
   const [shot, setShot] = useState<Shot | null>(null);
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
+  // how sharp it films (crew-quality.ts): HD or 4K, remembered on the phone; what the camera actually gives shows on the switch
+  const [quality, setQuality] = useState<CrewQuality>(() => (typeof window === "undefined" ? "hd" : readCrewQuality()));
+  const [qualityChoices, setQualityChoices] = useState<CrewQuality[]>(["hd"]);
+  const [picture, setPicture] = useState<{ w: number; h: number } | null>(null);
+  // the zoom (pinch, or slide up and down while filming): the camera's own where it has one, else a digital zoom
+  // that's filmed too (camera-zoom.ts); where it's going and where it is live in refs, so a slide never re-renders this
+  const [zoomCaps, setZoomCaps] = useState<ZoomRange | null>(null);
+  const zoomCapsRef = useRef<ZoomRange | null>(null);
+  zoomCapsRef.current = zoomCaps;
+  const zoomTarget = useRef(1);
+  const zoomNow = useRef(1);
+  // the zoom pills' own setters (ZoomPill): only they re-render as the number changes
+  const zoomShown = useRef(new Set<(z: number) => void>());
+  // the last frame, blurred, while the camera flips or restarts (never a black flash)
+  const [still, setStill] = useState<string | null>(null);
   const [status, setStatus] = useState<"starting" | "live" | "fallback">("starting");
   // Why the live camera isn't on: switched off for the app ("denied"), or something else.
   const [camWhy, setCamWhy] = useState<"denied" | "other" | null>(null);
@@ -590,6 +615,7 @@ export function ShareStudio({
     ro.observe(barEl);
     return () => ro.disconnect();
   }, [barEl]);
+  const measured = areaSize.w > 0 && screenSize.w > 0 && barH > 0;
   const fullScreen = phase === "shoot" && screenSize.w > 0 && barH > 0 && screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2;
   // The chip's room (a lock in's, a workout's): once any filter in this open has one, it stays, empty or not, so
   // switching filters never resizes the picture for it. Over the camera full screen nothing sits under it to move.
@@ -668,6 +694,7 @@ export function ShareStudio({
   const restarts = useRef(0);
   useEffect(() => {
     if (!open) return;
+    refreshPtzAsk();
     restarts.current = 0;
     let gone = false;
     void iosAppTooOldForCamera().then((old) => !gone && setOldApp(old));
@@ -699,6 +726,7 @@ export function ShareStudio({
       return;
     }
     setStatus("starting");
+    resetZoom(null);
     let step = "asking";
     // still nothing after a while (a stuck camera): the phone's own camera instead; a late start still goes live
     const slow = setTimeout(() => {
@@ -709,18 +737,21 @@ export function ShareStudio({
     // The full-quality ask first; a camera that can't do it gets simpler ones
     // (a refusal is final: asking again only repeats it).
     const asks: MediaStreamConstraints[] = [
-      { video: studioCameraAsk(facing), audio: false },
-      { video: { facingMode: facing }, audio: false },
+      { video: studioCameraAsk(facing, null, quality), audio: false },
+      // the same size without the extras (never a bare facingMode: an iPhone answers that at 640 × 480)
+      { video: studioCameraRetryAsk(facing, quality), audio: false },
       { video: true, audio: false },
     ];
+    let usedFirstAsk = false;
     const openCamera = async (): Promise<MediaStream> => {
       let last: unknown = null;
       // The tap that opened the studio may have asked already (camera-prime.ts): on an iPhone only a
       // request from a tap reuses an "Allow" once the camera's been off a minute, so that answer is taken.
-      const primed = takePrimedCamera(studioCameraAsk(facing));
+      const primed = takePrimedCamera(studioCameraAsk(facing, null, quality));
       if (primed && "released" in primed) await primed.released;
       for (const [i, ask] of asks.entries()) {
         try {
+          usedFirstAsk = i === 0;
           if (i === 0 && primed && "stream" in primed) return await primed.stream;
           return await navigator.mediaDevices.getUserMedia(ask);
         } catch (e) {
@@ -731,19 +762,93 @@ export function ShareStudio({
       }
       throw last;
     };
-    openCamera()
+    // what the screen shows: muted + inline as attributes (iOS plays a camera inline only then)
+    const attach = (stream: MediaStream) => {
+      video.muted = true;
+      video.setAttribute("muted", "");
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "");
+      video.srcObject = stream;
+    };
+    // A story's picture is 9:16 upright. Browsers read the size asked for against different ways
+    // round, so on a phone the first frame is checked and, when it came back 3:4 or sideways (a clip
+    // that would play boxed in, the 4:5-looking story), the other way is asked once; what worked is
+    // kept on the phone (the set camera's own rule, film-settings.ts), so it's one ask from then on.
+    const upright = phoneUpright();
+    const shapes: AskShape[] = upright == null ? [] : askOrder(upright, readFilmAsk());
+    const settle = async (first: MediaStream, firstAsk: boolean): Promise<MediaStream | null> => {
+      if (!firstAsk || upright == null || !shapes.length) return first;
+      attach(first);
+      const pic = await pictureSize(video, PICTURE_WAIT_MS);
+      if (cancelled) {
+        first.getTracks().forEach((t) => t.stop());
+        return null;
+      }
+      if (!pic || pictureFits(pic.w, pic.h, upright)) {
+        if (pic) saveFilmAsk(shapes[0]);
+        return first;
+      }
+      if (shapes.length < 2) return first;
+      const miss = pictureMiss(pic.w, pic.h, upright);
+      // one camera at a time: this one goes before the other way is asked for
+      first.getTracks().forEach((t) => t.stop());
+      const reopen = (shape: AskShape) => navigator.mediaDevices.getUserMedia({ video: studioCameraAsk(facing, shape, quality), audio: false });
+      try {
+        const other = await reopen(shapes[1]);
+        if (cancelled) return other;
+        attach(other);
+        const pic2 = await pictureSize(video, PICTURE_WAIT_MS);
+        if (cancelled) return other;
+        if (pic2 && pictureMiss(pic2.w, pic2.h, upright) < miss) {
+          if (pictureFits(pic2.w, pic2.h, upright)) saveFilmAsk(shapes[1]);
+          return other;
+        }
+        other.getTracks().forEach((t) => t.stop());
+      } catch {
+        /* the other way isn't there: the first one again */
+      }
+      // neither way gave 9:16: the closer one (never no camera because the shape was off); the viewfinder crops it
+      return reopen(shapes[0]);
+    };
+    let firstAsk = false;
+    const openFirst = async () => {
+      const got = await openCamera();
+      firstAsk = usedFirstAsk;
+      return got;
+    };
+    openFirst()
+      .then((s0) => settle(s0, firstAsk))
       .then((stream) => {
+        if (!stream) return;
         if (cancelled) return stream.getTracks().forEach((t) => t.stop());
-        stop();
+        // anything still held goes (never this stream: it may already be on screen from the shape check)
+        cancelCount();
+        torchOn.current = false;
+        const held = streamRef.current;
+        if (held && held !== stream) held.getTracks().forEach((t) => t.stop());
         step = "showing";
         streamRef.current = stream;
         setTorchOk(torchSupported(stream.getVideoTracks()[0]));
+        // what this camera can film at (HD, 4K) and what it's giving now, for the quality switch
+        {
+          const track = stream.getVideoTracks()[0];
+          let caps: { width?: { max?: number }; height?: { max?: number } } | null = null;
+          try {
+            caps = (track?.getCapabilities?.() as unknown as { width?: { max?: number }; height?: { max?: number } } | undefined) ?? null;
+          } catch {
+            caps = null;
+          }
+          setQualityChoices(crewQualities(caps));
+          setPicture(null);
+        }
+        // the camera's own zoom where it has one, else a digital zoom (only where a clip can be filmed with it)
+        resetZoom(zoomRange(stream.getVideoTracks()[0]) ?? (canRecordCanvas() ? digitalZoomRange() : null));
         // iOS plays a camera inline only when the element is muted + playsinline as attributes
         video.muted = true;
         video.setAttribute("muted", "");
         video.setAttribute("playsinline", "");
         video.setAttribute("webkit-playsinline", "");
-        video.srcObject = stream;
+        if (video.srcObject !== stream) video.srcObject = stream;
         // ended by the system (not by us: stop() doesn't fire this): start again once we're back on screen
         stream.getVideoTracks()[0]?.addEventListener("ended", () => {
           if (!cancelled && streamRef.current === stream && document.visibilityState === "visible") restartCamera();
@@ -754,7 +859,9 @@ export function ShareStudio({
           if (cancelled || streamRef.current !== stream) return;
           clearTimeout(slow);
           setCamWhy(null);
+          setStill(null);
           setStatus("live");
+          if (video.videoWidth) setPicture({ w: video.videoWidth, h: video.videoHeight });
         };
         if (video.readyState >= 2) live();
         else {
@@ -780,7 +887,7 @@ export function ShareStudio({
       stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shooting, video, facing, camTry]);
+  }, [shooting, video, facing, camTry, quality]);
   // Back from another app: a camera the system ended starts again, a paused one plays on.
   useEffect(() => {
     if (!shooting) return;
@@ -859,14 +966,18 @@ export function ShareStudio({
       if (!c) return;
       let media: ShareCardData["media"] = null;
       if (status === "live" && video && video.videoWidth) {
-        if (facing === "user") {
+        // a selfie as it looks (mirrored), and a digital zoom's part of the picture, as the photo will be
+        const dz = zoomCapsRef.current?.digital ? zoomNow.current : 1;
+        if (facing === "user" || dz > 1.001) {
           const w = Math.min(960, video.videoWidth);
           const h = Math.round((w * video.videoHeight) / video.videoWidth);
           if (mirror.width !== w) mirror.width = w;
           if (mirror.height !== h) mirror.height = h;
           const m = mirror.getContext("2d")!;
-          m.setTransform(-1, 0, 0, 1, w, 0);
-          m.drawImage(video, 0, 0, w, h);
+          if (facing === "user") m.setTransform(-1, 0, 0, 1, w, 0);
+          else m.setTransform(1, 0, 0, 1, 0, 0);
+          const cr = zoomCrop(video.videoWidth, video.videoHeight, video.videoWidth, video.videoHeight, dz);
+          m.drawImage(video, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, w, h);
           media = mirror;
         } else media = video;
       }
@@ -892,7 +1003,7 @@ export function ShareStudio({
   const light = useMemo(() => (shot ? lightCopy(shot.src) : null), [shot]);
   useEffect(() => () => light?.release(), [light]);
   const shotSize = useMemo(() => (shot ? drawableSize(shot.src) : null), [shot]);
-  const shotCompiled = compiledFor(shotGrade);
+  const shotCompiled = comparing ? null : compiledFor(shotGrade);
   /** The photo as it goes under a card or posts: whole over its blur (a story's, when picked) or framed; its filter on it. */
   const shotMedia = (src: Drawable, aspect: number, width: number) =>
     story && shotWhole && Math.abs(aspect - STORY_ASPECT) < 0.01 ? wholeStoryCanvas(src, width, shotCompiled) : framedCanvas(src, framing, aspect, width, shotCompiled);
@@ -925,6 +1036,9 @@ export function ShareStudio({
   useEffect(() => {
     if (!enhanceTarget) setEnhancing(false);
   }, [enhanceTarget]);
+  useEffect(() => {
+    if (!enhancing) setComparing(false);
+  }, [enhancing]);
   // a new clip or slide starts with the person's default filter (stories' for a story, posts' otherwise)
   const defaulted = useRef(new Set<string>());
   useEffect(() => {
@@ -979,7 +1093,7 @@ export function ShareStudio({
     const raf = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cardEl, card?.look, card?.data, card?.paint, shot, logo, framing, framingLive, cardFormat, frameAspect, shotGrade, gradeLive, shotWhole]);
+  }, [phase, cardEl, card?.look, card?.data, card?.paint, shot, logo, framing, framingLive, cardFormat, frameAspect, shotGrade, gradeLive, shotWhole, comparing]);
 
   const changeLook = (dir: 1 | -1) => {
     // on the camera, a swipe walks the whole row of filters (Normal, meal, lock in, workout); a story's
@@ -1039,7 +1153,8 @@ export function ShareStudio({
     // a new photo starts with the person's default filter (Auto reads this photo); a story's wide or tall one starts whole
     const d = defaultsRef.current[story ? "story" : "post"];
     setShotGrade(d && !reply && !share ? { ...d, stats: statsFor(s.src as Drawable) } : null);
-    setShotWhole(story && !reply && !share && storyStartsWhole(drawableSize(s.src as Drawable)));
+    // (the camera's own shot starts filling it, exactly as the viewfinder showed it)
+    setShotWhole(story && !reply && !share && !s.live && storyStartsWhole(drawableSize(s.src as Drawable)));
     // the camera's shot was framed by its guide (the post's shape: 9:16 to start); a photo from the library starts at 9:16
     // when it's upright, else the shape closest to its own (startAspect)
     const own = drawableSize(s.src as Drawable);
@@ -1065,7 +1180,9 @@ export function ShareStudio({
       ctx.translate(c.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0, c.width, c.height);
+    // a digital zoom: the part of the picture the viewfinder shows, at the camera's full size
+    const cr = zoomCrop(video.videoWidth, video.videoHeight, c.width, c.height, zoomCaps?.digital ? zoomNow.current : 1);
+    ctx.drawImage(video, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, c.width, c.height);
     setFlash(true);
     setTimeout(() => setFlash(false), 140);
     if (adding) {
@@ -1119,20 +1236,37 @@ export function ShareStudio({
   const recordable = useMemo(() => canRecordClips(), []) && !card && status === "live" && canShoot && count == null;
   const hints = useHintsSeen();
   const markHint = useMarkHintSeen();
+  // what the viewfinder showed when filming started: the clip is framed exactly like that (never re-decided from its shape)
+  const recView = useRef<{ w: number; h: number; view: { w: number; h: number }; guide: { w: number; h: number } } | null>(null);
+  // where the zoom was when filming started (sliding up zooms in from there, down back out)
+  const slideFrom = useRef(1);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  videoRef.current = video;
   const recorder = useClipRecorder({
     getStream: () => streamRef.current,
     // sound only when it's switched on in the camera's settings (off on a phone), so their music keeps playing
     withSound: () => readFilmSettings().sound,
+    // a digital zoom is filmed through the canvas, so the clip zooms as the viewfinder does
+    // and so is a 4K camera, drawn down to a sharper 1080p (crew-quality.ts: a clip is never bigger than a post plays)
+    digital: () => {
+      const v = videoRef.current;
+      if (!v) return null;
+      if (zoomCapsRef.current?.digital) return { video: v, zoom: () => zoomNow.current };
+      return needsDownscale(v.videoWidth, v.videoHeight) ? { video: v, zoom: () => 1 } : null;
+    },
     onClip: (file) => {
       markHint("hold_to_film");
+      const v = recView.current;
+      // a story fills its 9:16 the way the camera did; a post's clip is framed by the camera's guide
+      const place = { whole: false, framing: !v || story ? CENTRED : framingFromGuide({ w: v.w, h: v.h }, v.view, v.guide) };
       // a clip is the post (or the next slide): it starts uploading now, and plays while you write the caption
       if (adding) {
-        void tray.add([file]);
+        void tray.add([file], place);
         backToPost();
         return;
       }
       skipPhoto();
-      void tray.add([file]);
+      void tray.add([file], place);
     },
   });
   // how to film, the first time (until the first clip); its line is kept on a short screen, where the controls sit
@@ -1143,6 +1277,20 @@ export function ShareStudio({
   // the light goes off with the clip
   useEffect(() => {
     if (!recorder.recording && torchOn.current) void torch(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.recording]);
+  // the app going to the background mid-clip ends it there, kept (iOS stops the camera, and a canvas stops drawing)
+  useEffect(() => {
+    if (!recorder.recording) return;
+    const away = () => {
+      if (document.visibilityState === "hidden") recorder.stop();
+    };
+    document.addEventListener("visibilitychange", away);
+    window.addEventListener("pagehide", away);
+    return () => {
+      document.removeEventListener("visibilitychange", away);
+      window.removeEventListener("pagehide", away);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorder.recording]);
   // off the camera, or onto a mode with a card, mid-clip: it's thrown away
@@ -1241,7 +1389,145 @@ export function ShareStudio({
     setPhase("shoot");
   };
 
-  const flip = () => status === "live" && setFacing((f) => (f === "user" ? "environment" : "user"));
+  /** The frame on screen, small and blurred, held while the camera flips (never a black flash). */
+  const holdStill = () => {
+    if (!video?.videoWidth) return;
+    const k = 180 / Math.max(video.videoWidth, video.videoHeight);
+    const c = document.createElement("canvas");
+    c.width = Math.max(2, Math.round(video.videoWidth * k));
+    c.height = Math.max(2, Math.round(video.videoHeight * k));
+    const ctx = c.getContext("2d");
+    try {
+      if (ctx) {
+        // as it looked: the selfie preview is mirrored
+        if (facing === "user") {
+          ctx.translate(c.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, c.width, c.height);
+        setStill(c.toDataURL("image/jpeg", 0.6));
+      }
+    } catch {
+      /* nothing to hold: the camera just comes back */
+    } finally {
+      releaseCanvas(c);
+    }
+  };
+  const flip = () => {
+    if (status !== "live" || recorder.recording) return;
+    holdStill();
+    feedback("tap");
+    setFacing((f) => (f === "user" ? "environment" : "user"));
+  };
+  /** HD ↔ 4K (the iPhone camera's switch): the camera opens again at that size, the last frame held meanwhile. */
+  const askedQuality = useRef<CrewQuality | null>(null);
+  const switchQuality = () => {
+    if (status !== "live" || recorder.recording || qualityChoices.length < 2) return;
+    const next: CrewQuality = quality === "4k" ? "hd" : "4k";
+    holdStill();
+    feedback("toggle");
+    askedQuality.current = next;
+    saveCrewQuality(next);
+    setQuality(next);
+  };
+  // 4K asked for and the camera came back smaller (it wouldn't say what it can): said once, and back to HD
+  useEffect(() => {
+    if (!picture || askedQuality.current !== "4k") return;
+    askedQuality.current = null;
+    if (qualityLabel(picture.w, picture.h) === "4K") return;
+    toast("This camera films in HD here");
+    saveCrewQuality("hd");
+    setQuality("hd");
+    setQualityChoices(["hd"]);
+  }, [picture]);
+  /*
+   * The zoom's glide: the finger (a slide while filming, a pinch) sets where it's going (`zoomTo`) and every
+   * frame the zoom eases there (easeZoom), so a slide up and down reads as one smooth move, never steps.
+   * The camera's own zoom gets one applyConstraints at a time (the newest value once the last lands, so a
+   * fast slide never queues up behind itself); a digital zoom scales the viewfinder from its middle, and the
+   * clip's canvas reads the same value each frame. Passing 2×, 3× or an end is a light tick.
+   */
+  const zoomLoop = useRef(0);
+  const zoomAt = useRef(0);
+  const nativeBusy = useRef(false);
+  const nativeSent = useRef<number | null>(null);
+  const paintZoom = (z: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    // the preview's scale (the selfie's mirror is its class, `scale`, which this composes with)
+    v.style.transform = zoomCapsRef.current?.digital && z > 1.0005 ? `scale(${z})` : "";
+  };
+  const sendZoom = (z: number) => {
+    if (nativeBusy.current || nativeSent.current === z) return;
+    const t = streamRef.current?.getVideoTracks()[0];
+    if (!t) return;
+    nativeBusy.current = true;
+    nativeSent.current = z;
+    void t
+      .applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] })
+      .catch(() => undefined)
+      .finally(() => {
+        nativeBusy.current = false;
+        // the glide moved on while it landed: keep going
+        if (nativeSent.current !== zoomNow.current) runZoom();
+      });
+  };
+  const runZoom = () => {
+    if (zoomLoop.current) return;
+    zoomAt.current = performance.now();
+    const step = (t: number) => {
+      zoomLoop.current = 0;
+      const caps = zoomCapsRef.current;
+      if (!caps) return;
+      const prev = zoomNow.current;
+      const next = easeZoom(prev, zoomTarget.current, t - zoomAt.current);
+      zoomAt.current = t;
+      zoomNow.current = next;
+      if (caps.digital) paintZoom(next);
+      else sendZoom(next);
+      if (zoomDetent(prev, next, caps)) feedback("detent");
+      zoomShown.current.forEach((f) => f(next));
+      if (next !== zoomTarget.current) zoomLoop.current = requestAnimationFrame(step);
+    };
+    zoomLoop.current = requestAnimationFrame(step);
+  };
+  const zoomTo = (z: number) => {
+    const caps = zoomCapsRef.current;
+    if (!caps) return;
+    zoomTarget.current = Math.min(caps.max, Math.max(caps.min, z));
+    runZoom();
+  };
+  /** A new camera (or none): its range, at its widest, the viewfinder unscaled. */
+  function resetZoom(r: ZoomRange | null) {
+    cancelAnimationFrame(zoomLoop.current);
+    zoomLoop.current = 0;
+    zoomCapsRef.current = r;
+    setZoomCaps(r);
+    zoomTarget.current = zoomNow.current = r?.now ?? 1;
+    nativeSent.current = r && !r.digital ? r.now : null;
+    nativeBusy.current = false;
+    paintZoom(1);
+    zoomShown.current.forEach((f) => f(zoomNow.current));
+  }
+  useEffect(() => () => cancelAnimationFrame(zoomLoop.current), []);
+  // two fingers on the viewfinder zoom (never a look swipe or a flip)
+  const pinch = useRef<{ d: number; z: number } | null>(null);
+  const pinched = useRef(false);
+  const touchDist = (e: React.TouchEvent) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  const onPinchStart = (e: React.TouchEvent) => {
+    if (phase !== "shoot" || e.touches.length !== 2) return;
+    pinched.current = true;
+    swipe.current = null;
+    if (zoomCaps) pinch.current = { d: touchDist(e), z: zoomTarget.current };
+  };
+  const onPinchMove = (e: React.TouchEvent) => {
+    const p = pinch.current;
+    if (!p || e.touches.length !== 2 || !zoomCaps) return;
+    zoomTo(zoomFromPinch(p.z, p.d, touchDist(e), zoomCaps));
+  };
+  const onPinchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) pinch.current = null;
+  };
   /** Type (Instagram's Create): a story of words on a colour, the keyboard up; the colour wheel changes the colour. */
   const startTyped = () => {
     cancelCount();
@@ -1254,6 +1540,9 @@ export function ShareStudio({
     setRequest({ kind: "text", n: Date.now() });
   };
   const onDown = (e: React.PointerEvent) => {
+    // a second finger is a pinch, never the start of a swipe
+    if (!e.isPrimary) return void (swipe.current = null);
+    pinched.current = false;
     if ((e.target as Element).closest("button, input, textarea")) return void (swipe.current = null);
     swipe.current = { x: e.clientX, y: e.clientY };
     if (editRing) startPeek(e.clientX, e.clientY);
@@ -1279,7 +1568,7 @@ export function ShareStudio({
   const onUp = (e: React.PointerEvent) => {
     const st = swipe.current;
     swipe.current = null;
-    if (!st) return;
+    if (!st || pinched.current) return;
     const dx = e.clientX - st.x;
     const dy = e.clientY - st.y;
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);
@@ -1389,6 +1678,21 @@ export function ShareStudio({
     if (card || shot) setItems((list) => [...list, mentionStickerItem(a.user_id, tagHandle(a), list.filter((i) => i.mention).length)]);
   };
 
+  /**
+   * What a story was made with, for the viewer's attribution line: the colour
+   * filter on the photo or clip (its name, never Original or plain
+   * adjustments) and the template on it (the ring's name, never Normal).
+   */
+  const storyLook = useMemo((): StoryLook | null => {
+    if (!story || reply || share || typed) return null;
+    const g = shot ? shotGrade : clip0?.grade ?? null;
+    const colour = g && g.filter !== "original" && g.intensity > 0 ? g.filter : null;
+    const onKey = showCard && filter && filter !== NORMAL_LOOK_KEY ? filter : null;
+    const tplLabel = onKey ? (filters?.find((f) => f.key === onKey)?.label ?? null) : null;
+    const look: StoryLook = { colourKey: colour, colourLabel: colour ? FILTER_LABELS[colour] : null, templateKey: onKey, templateLabel: tplLabel };
+    return storyLookLine(look) ? look : null;
+  }, [story, reply, share, typed, shot, shotGrade, clip0?.grade, showCard, filter, filters]);
+
   /** STORY: the picture (or the clip) goes to your story, never the feed. */
   const postStory = async () => {
     if (!user?.id) throw new Error("Sign in again to post");
@@ -1408,6 +1712,8 @@ export function ShareStudio({
     const id = await createCommunityPost(qc, { userId: user.id, caption: withTags("", tags), visibility: audience, photo, extras, story: true, sharedPostId });
     if (!photo) tray.commit();
     else tray.discard();
+    // its filter and template's names ride on it as metadata (never drawn on the picture), when they're shown
+    if (storyLook && showLook) void saveStoryLook(id, storyLook);
     if (live) {
       try {
         await setPostSticker(id, live);
@@ -1606,15 +1912,25 @@ export function ShareStudio({
           <div
             // the shot settles into the editor (opening and retaking snap straight to full screen)
             className={cn("relative shrink-0", phase === "edit" && "transition-[width,height] duration-300 ease-out")}
-            style={{ width: box.w, height: box.h }}
+            // shooting, it shows once the screen and the bar under it are measured, at its real size (never a smaller
+            // box that then jumps to full screen); the camera starts underneath meanwhile
+            style={{ width: box.w, height: box.h, visibility: phase === "shoot" && !measured ? "hidden" : undefined }}
             data-studio-frame
           >
             <div
-              className="absolute inset-0 touch-pan-y select-none overflow-hidden rounded-[22px] bg-zinc-900"
+              // the camera takes every finger (a pinch zooms it, a swipe changes the look; nothing scrolls under it)
+              className={cn("absolute inset-0 select-none overflow-hidden rounded-[22px] bg-zinc-900", phase === "shoot" ? "touch-none" : "touch-pan-y")}
               onPointerDown={onDown}
               onPointerUp={onUp}
               onPointerCancel={() => (swipe.current = null)}
+              onTouchStart={onPinchStart}
+              onTouchMove={onPinchMove}
+              onTouchEnd={onPinchEnd}
+              onTouchCancel={onPinchEnd}
             >
+              {phase === "shoot" && still && status !== "live" && (
+                <img src={still} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-80 blur-xl" data-camera-still />
+              )}
               {phase === "shoot" && (
                 <video
                   ref={setVideo}
@@ -1639,7 +1955,7 @@ export function ShareStudio({
                   box={box}
                   whole={clipWhole}
                   sound={hear && !clip0.muted}
-                  grade={compiledFor(clip0.grade)}
+                  grade={comparing ? null : compiledFor(clip0.grade)}
                   onFraming={(f) => tray.setFraming(clip0.id, f)}
                   onClaim={() => (swipe.current = null)}
                 />
@@ -1923,17 +2239,39 @@ export function ShareStudio({
               <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-2.5">
                 {phase === "shoot" ? (
                   <>
+                    {/* while it films only the clip's time shows up here (Instagram's: the rest steps away, keeping its place) */}
+                    {recorder.recording && recorder.startedAt != null && (
+                      <span className="pointer-events-none absolute left-1/2 top-2.5 z-10 -translate-x-1/2 animate-in fade-in" data-recording-clock>
+                        <RecordingClock startedAt={recorder.startedAt} locked={recorder.locked} />
+                      </span>
+                    )}
                     {adding ? (
-                      <button type="button" onClick={backToPost} className={pill} aria-label="Back to your post">
+                      <button type="button" onClick={backToPost} className={cn(pill, "transition-opacity duration-200", recorder.recording && "pointer-events-none opacity-0")} aria-label="Back to your post">
                         <ChevronLeft className="h-6 w-6" />
                       </button>
                     ) : (
-                      <button type="button" onClick={requestLeave} className={pill} aria-label="Close" data-studio-close>
+                      <button type="button" onClick={requestLeave} className={cn(pill, "transition-opacity duration-200", recorder.recording && "pointer-events-none opacity-0")} aria-label="Close" data-studio-close>
                         <X className="h-6 w-6" />
                       </button>
                     )}
+                    {/* how sharp it films (the iPhone camera's HD · 4K), top right: what the camera is giving now, a tap to switch where it can */}
+                    {status === "live" && (
+                      <button
+                        type="button"
+                        onClick={switchQuality}
+                        disabled={qualityChoices.length < 2}
+                        className={cn(
+                          "absolute right-2.5 top-2.5 flex h-11 min-w-11 items-center justify-center rounded-full bg-black/40 px-3 text-[13px] font-semibold tracking-wide text-white backdrop-blur transition-opacity duration-200 active:scale-95 disabled:active:scale-100",
+                          recorder.recording && "pointer-events-none opacity-0",
+                        )}
+                        aria-label={`Quality: ${qualityLabel(picture?.w, picture?.h) ?? (quality === "4k" ? "4K" : "HD")}${qualityChoices.length > 1 ? `. Tap for ${quality === "4k" ? "HD" : "4K"}` : ""}`}
+                        data-studio-quality={qualityLabel(picture?.w, picture?.h) ?? quality}
+                      >
+                        {qualityLabel(picture?.w, picture?.h) ?? (quality === "4k" ? "4K" : "HD")}
+                      </button>
+                    )}
                     {/* the flash, in the middle (Instagram's): the back camera's light where it has one, the screen for a selfie */}
-                    {status === "live" && (facing === "user" || torchOk) && (
+                    {status === "live" && (facing === "user" || torchOk) && !recorder.recording && (
                       <button
                         type="button"
                         onClick={() => {
@@ -2049,7 +2387,7 @@ export function ShareStudio({
             </div>
             {/* Enhance: the filters and adjustments over the picture's foot (the picture shows every change at once) */}
             {enhancing && enhanceTarget && (
-              <div className="absolute inset-x-0 bottom-0 z-[7] rounded-t-2xl bg-black/85 px-4 pb-3 pt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-studio-enhance-panel>
+              <div className="absolute inset-x-0 bottom-0 z-[7] rounded-t-2xl bg-black/80 px-3 pb-2 pt-1.5 backdrop-blur-md animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-studio-enhance-panel>
                 <StudioEnhance
                   target={enhanceTarget}
                   grade={enhanceTarget === "shot" ? shotGrade : (clip0?.grade ?? null)}
@@ -2065,6 +2403,17 @@ export function ShareStudio({
                   onClearDefault={() => {
                     setFilterDefault(story ? "story" : "post", null);
                     toast.message("Default removed", { description: "New photos and clips start as shot." });
+                  }}
+                  onCompare={setComparing}
+                  presets={filterDefaults.presets}
+                  onSavePreset={(g) => {
+                    const p = savePreset(g);
+                    if (p) toast.message(`Saved as ${p.name}`, { description: "It's first in Filters on every photo and clip." });
+                  }}
+                  onDeletePreset={(p) => {
+                    const at = (filterDefaults.presets ?? []).findIndex((x) => x.id === p.id);
+                    deletePreset(p.id);
+                    toast.message(`${p.name} deleted`, { action: { label: "Undo", onClick: () => restorePreset(p, at) } });
                   }}
                   onDone={() => setEnhancing(false)}
                 />
@@ -2087,7 +2436,7 @@ export function ShareStudio({
 
         {/* Bottom: shoot controls over the camera's foot (Instagram's), or caption + post */}
         <div
-          className={phase !== "shoot" ? "shrink-0 px-4 pt-2.5" : fullScreen ? "pointer-events-none absolute inset-x-0 bottom-0 z-10" : "shrink-0 pt-2"}
+          className={phase !== "shoot" ? "shrink-0 px-4 pt-2.5" : fullScreen ? "pointer-events-none absolute inset-x-0 bottom-0 z-10" : "relative shrink-0 pt-2"}
           style={phase === "shoot" ? undefined : { paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
           data-camera-controls={phase === "shoot" ? (fullScreen ? "over" : "under") : undefined}
         >
@@ -2111,6 +2460,8 @@ export function ShareStudio({
           )}
           {phase === "shoot" ? (
             <>
+              {/* the zoom over the controls; while it films, just over the recording button instead (LookCarousel `zoom`) */}
+              {zoomCaps && !recorder.recording && <ZoomPill caps={zoomCaps} bus={zoomShown} now={zoomNow} onReset={() => zoomTo(zoomCaps.min)} />}
               <div className="pointer-events-auto">
                 {/* first time on a plain post's camera: how to film, until the first clip (its line kept under the
                     camera while a filter's on, so switching never moves the picture) */}
@@ -2129,17 +2480,26 @@ export function ShareStudio({
                   disabled={!canShoot}
                   counting={count != null}
                   showName={fullScreen}
+                  zoom={zoomCaps && recorder.recording ? <ZoomPill caps={zoomCaps} bus={zoomShown} now={zoomNow} onReset={() => zoomTo(zoomCaps.min)} inline /> : null}
                   hold={
                     recordable || recorder.recording
                       ? {
                           onStart: () => {
                             // the flash on a clip: the light stays on while it films (a selfie keeps the screen for the picture)
                             if (flashOn && facing === "environment" && torchOk) void torch(true);
+                            recView.current = video?.videoWidth ? { w: video.videoWidth, h: video.videoHeight, view: { w: box.w, h: box.h }, guide: { w: band.w, h: band.h } } : null;
+                            slideFrom.current = zoomTarget.current;
                             void recorder.start();
                           },
                           onEnd: recorder.release,
-                          progress: recorder.recording ? recorder.progress : null,
-                          seconds: recorder.seconds,
+                          onStop: () => recorder.stop(),
+                          recording: recorder.recording,
+                          startedAt: recorder.startedAt,
+                          limitMs: MAX_RECORD_MS,
+                          // up zooms in, down back out (reaching the widest by the screen's foot), as often as they like
+                          onSlide: zoomCaps ? (_dx, dy, below) => zoomTo(zoomFromSlide(slideFrom.current, dy, zoomCaps, below)) : undefined,
+                          onLock: recorder.lock,
+                          locked: recorder.locked,
                         }
                       : undefined
                   }
@@ -2147,7 +2507,7 @@ export function ShareStudio({
               </div>
               {/* under the camera: the library, then everything you can share, all in view */}
               <div ref={setBarEl} className="pointer-events-auto mt-2 flex items-center gap-2 bg-black px-4 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.6rem)" }} data-camera-bar>
-                <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-white/85 bg-white/10 active:scale-95 disabled:opacity-30" aria-label="Choose from your library">
+                <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-white/85 bg-white/10 transition-opacity duration-200 active:scale-95 disabled:opacity-30", recorder.recording && "pointer-events-none invisible opacity-0")} aria-label="Choose from your library">
                   <Images className="h-5 w-5" />
                 </button>
                 <div className="flex min-w-0 flex-1 justify-center">
@@ -2166,6 +2526,26 @@ export function ShareStudio({
             </>
           ) : (
             <div className="space-y-2">
+              {story && storyLook && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    feedback("toggle");
+                    setShowLook((on) => {
+                      saveShowLook(!on);
+                      return !on;
+                    });
+                  }}
+                  aria-pressed={showLook}
+                  className="mx-auto flex h-8 max-w-full items-center gap-2 rounded-full px-3 text-[12px] font-semibold text-white/75 active:bg-white/10"
+                  data-story-look-toggle={showLook ? "on" : "off"}
+                >
+                  <span className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", showLook ? "bg-white" : "bg-white/25")} aria-hidden>
+                    <span className={cn("absolute top-0.5 h-3 w-3 rounded-full transition-[left]", showLook ? "left-[14px] bg-black" : "left-0.5 bg-white")} />
+                  </span>
+                  <span className="truncate">{showLook ? `Shows "${storyLookLine(storyLook)}" on your story` : "Filter name hidden on your story"}</span>
+                </button>
+              )}
               {/* a story is one picture with its words on it: no slides, caption, GIF or voice memo */}
               {!story && (
                 <>
@@ -2455,6 +2835,10 @@ function StudioEnhance({
   defaultGrade,
   onSaveDefault,
   onClearDefault,
+  onCompare,
+  presets,
+  onSavePreset,
+  onDeletePreset,
   onDone,
 }: {
   target: "shot" | "clip";
@@ -2466,6 +2850,10 @@ function StudioEnhance({
   defaultGrade: MediaGrade | null;
   onSaveDefault: (g: MediaGrade | null) => void;
   onClearDefault: () => void;
+  onCompare: (on: boolean) => void;
+  presets?: FilterPreset[];
+  onSavePreset: (g: MediaGrade) => void;
+  onDeletePreset: (p: FilterPreset) => void;
   onDone: () => void;
 }) {
   const poster = useGradeSource(target === "clip" ? clipPoster : null);
@@ -2473,24 +2861,22 @@ function StudioEnhance({
   const source = target === "shot" ? shotSrc : poster.img;
   const size = source ? drawableSize(source as Drawable) : null;
   return (
-    <div className="text-white">
-      <FilterPanel
-        grade={grade}
-        stats={target === "shot" ? shotStats : poster.stats}
-        onChange={onChange}
-        onLive={onLive}
-        source={source as CanvasImageSource | null}
-        sourceSize={size}
-        defaultGrade={defaultGrade}
-        onSaveDefault={() => onSaveDefault(grade)}
-        onClearDefault={onClearDefault}
-      />
-      <div className="mt-2 flex justify-end">
-        <button type="button" onClick={onDone} className="h-9 rounded-full bg-white px-5 text-[13px] font-semibold text-black active:scale-95" data-studio-enhance-done>
-          Done
-        </button>
-      </div>
-    </div>
+    <FilterPanel
+      grade={grade}
+      stats={target === "shot" ? shotStats : poster.stats}
+      onChange={onChange}
+      onLive={onLive}
+      onCompare={onCompare}
+      source={source as CanvasImageSource | null}
+      sourceSize={size}
+      defaultGrade={defaultGrade}
+      onSaveDefault={() => onSaveDefault(grade)}
+      onClearDefault={onClearDefault}
+      presets={presets}
+      onSavePreset={onSavePreset}
+      onDeletePreset={onDeletePreset}
+      onDone={onDone}
+    />
   );
 }
 
@@ -2570,6 +2956,43 @@ function StoryClipStage({
       {it.preview && <img src={it.preview} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl" />}
       {it.video && <TrimmedVideo key={it.video} src={it.video} trim={it.trim} poster={it.preview ?? undefined} sound={sound} videoRef={setEl} style={at} className={cn("max-w-none object-fill", grade && "opacity-0")} />}
       {grade && <GradedLayer source={el} grade={grade} style={at} />}
+    </div>
+  );
+}
+
+/**
+ * The zoom while it's past the widest ("2.4×"), over the shutter's controls, never in their flow (so it never
+ * moves the viewfinder or the shutter); a tap goes back out. It has its own state, fed by the zoom's glide a
+ * tenth at a time, so the camera never re-renders while the zoom moves.
+ */
+function ZoomPill({ caps, bus, now, onReset, inline = false }: { caps: ZoomRange; bus: React.MutableRefObject<Set<(z: number) => void>>; now: React.MutableRefObject<number>; onReset: () => void; inline?: boolean }) {
+  const [z, setZ] = useState(() => Math.round(now.current * 10) / 10);
+  useEffect(() => {
+    const set = (v: number) => setZ(Math.round(v * 10) / 10);
+    const all = bus.current;
+    all.add(set);
+    set(now.current);
+    return () => {
+      all.delete(set);
+    };
+  }, [bus, now]);
+  const label = zoomLabel(z, caps);
+  return (
+    <div className={cn("pointer-events-none flex justify-center", !inline && "absolute inset-x-0 bottom-full z-20 mb-2")} data-camera-zoom-slot>
+      <button
+        type="button"
+        onClick={onReset}
+        tabIndex={label ? 0 : -1}
+        className={cn(
+          "h-8 min-w-12 rounded-full bg-black/45 px-3 text-[13px] font-bold tabular-nums text-white backdrop-blur-md transition-opacity duration-200 active:scale-95",
+          label ? "pointer-events-auto opacity-100" : "opacity-0",
+        )}
+        aria-label={label ? `Zoom ${label}. Tap to zoom back out` : "Zoom"}
+        aria-hidden={!label}
+        data-camera-zoom={label ?? undefined}
+      >
+        {label ?? "1.0×"}
+      </button>
     </div>
   );
 }

@@ -676,6 +676,15 @@ html, body { @variant max-md { overflow-x: hidden; } }
 @media (prefers-reduced-motion: reduce) {
   [data-share-studio] { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+/* The filming shutter (look-carousel.tsx RecordSurface): its ring fills once over the clip limit, from the top
+   (r 60: 2π·60 ≈ 377, the circle's length), driven by CSS so nothing re-renders while it films; the clock's dot
+   blinks softly (still under reduced motion) */
+@keyframes jf-rec-ring { from { stroke-dashoffset: 377; } to { stroke-dashoffset: 0; } }
+@keyframes jf-rec-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.jf-rec-dot { animation: jf-rec-dot 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .jf-rec-dot { animation: none; }
+}
 /* "Swipe for workout" (a workout post's recap tip): the chevrons lean the way to swipe, twice, then rest.
    Only the little icon moves, never the post's screen (a moving screen is a layer an iPhone paints in strips). */
 @keyframes jf-recap-nudge {

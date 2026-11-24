@@ -154,7 +154,8 @@ describe("Crew's create flow, wired", () => {
     expect(composer).not.toContain("function KindPill");
   });
   it("the flash is offered only where it can fire: the back camera's light, or the screen for a selfie", () => {
-    expect(studio).toContain('{status === "live" && (facing === "user" || torchOk) && (');
+    // (and steps away while it films: only the clip's time sits there then)
+    expect(studio).toContain('{status === "live" && (facing === "user" || torchOk) && !recorder.recording && (');
     expect(studio).toContain("setTorchOk(torchSupported(stream.getVideoTracks()[0]));");
     expect(studio).toContain("data-studio-screen-flash");
     // in the middle of the top, Instagram's

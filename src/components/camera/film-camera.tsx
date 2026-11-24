@@ -39,34 +39,12 @@ import {
   type Lens,
 } from "@/lib/camera/film-settings";
 
+import { PICTURE_WAIT_MS, pictureSize } from "@/lib/camera/picture-size";
+
 export { canFilmInApp } from "@/lib/camera/film-settings";
 
 /** Recordings shorter than this are a slip of the thumb, not a clip. */
 const MIN_RECORDING_MS = 700;
-/** How long to wait for the first frame's size before judging the picture's shape. */
-const PICTURE_WAIT_MS = 1_500;
-
-
-/** The picture's size as it's shown (turned the way the phone is held), once the first frame is in. */
-function pictureSize(v: HTMLVideoElement, ms: number): Promise<{ w: number; h: number } | null> {
-  return new Promise((resolve) => {
-    const read = () => (v.videoWidth && v.videoHeight ? { w: v.videoWidth, h: v.videoHeight } : null);
-    const now = read();
-    if (now) return resolve(now);
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      clearTimeout(t);
-      v.removeEventListener("loadedmetadata", finish);
-      v.removeEventListener("resize", finish);
-      resolve(read());
-    };
-    const t = setTimeout(finish, ms);
-    v.addEventListener("loadedmetadata", finish);
-    v.addEventListener("resize", finish);
-  });
-}
 
 type Status = "starting" | "live" | "denied" | "unavailable";
 type Rec = { recorder: MediaRecorder; mic: MediaStream | null; restore: (() => void) | null; startedAt: number; keep: boolean };

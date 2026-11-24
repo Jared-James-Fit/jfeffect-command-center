@@ -27,6 +27,7 @@ import { captureVideoPoster } from "@/lib/video-poster";
 import type { VideoContext } from "@/lib/video-edit/limits";
 import { pickVideo, preloadVideoEngine, retrimVideo, type PickedVideo, type TrimFn } from "@/lib/video-edit/pick";
 import { createVideoSend, videoErrorMessage, type VideoSend } from "@/lib/video-edit/pipeline";
+import { canEncodeHd } from "@/lib/video-edit/probe";
 
 export const COMMUNITY_BUCKET = "community-media" as const;
 /** A post picture that ships with the app instead of living in the bucket ("app:community/x.jpg" → /community/x.jpg). */
@@ -259,8 +260,14 @@ async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: nu
   let entry = clipSends.get(m);
   if (!entry || entry.userId !== userId) {
     const stem = `${userId}/${Date.now()}-${crypto.randomUUID()}`;
-    entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null }), poster: null };
-    clipSends.set(m, entry);
+    // a post's or story's clip keeps 1080p where this phone encodes it (a comment's stays 720p)
+    const hd = v.canEncode && v.context !== "comment" && (await canEncodeHd(v.info.width, v.info.height).catch(() => false));
+    const again = clipSends.get(m);
+    if (again && again.userId === userId) entry = again;
+    else {
+      entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null, hd }), poster: null };
+      clipSends.set(m, entry);
+    }
   }
   const e = entry;
   // a missing poster only costs feed speed: never fails the post
