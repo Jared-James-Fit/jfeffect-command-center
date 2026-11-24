@@ -19,7 +19,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { BuilderSheet } from "./builder-sheet";
 import {
-  completenessWord,
   LEVEL_TITLE,
   programCheck,
   programCompleteness,
@@ -50,6 +49,12 @@ const LEVEL_ICON: Record<CheckLevel, React.ReactNode> = {
   decision: <MessageCircle className="h-4 w-4 text-muted-foreground" />,
   safe: <ShieldCheck className="h-4 w-4 text-success" />,
 };
+
+/** "Filled in" · "3 to fill in": what's left, counted in things to do. */
+export function fillWords(c: Completeness): string {
+  const left = c.items.reduce((n, it) => n + (it.status === "ok" ? 0 : Math.max(1, it.gaps.length)), 0);
+  return left === 0 ? "Filled in" : `${left} to fill in`;
+}
 
 export function ProgramStatusStrip({
   input,
@@ -84,12 +89,12 @@ export function ProgramStatusStrip({
         onClick={() => setOpenScore(true)}
         className={cn("inline-flex items-center gap-1.5 rounded-full text-xs font-medium hover:bg-muted", compact ? "h-8 pl-0.5 pr-2" : "h-9 gap-2 pl-1 pr-3")}
         data-completeness={completeness.score}
-        title={`${completeness.score}% complete: ${completenessWord(completeness.score).toLowerCase()}`}
-        aria-label={`Program ${completeness.score}% complete: see what's missing`}
+        title={`${fillWords(completeness)}: see what's left to fill in`}
+        aria-label={`${fillWords(completeness)}: see what's left to fill in`}
       >
         <ScoreRing score={completeness.score} size={compact ? 18 : undefined} />
-        <span className="tabular-nums">{completeness.score}%</span>
-        {compact ? null : <span className="text-muted-foreground max-sm:hidden">{completenessWord(completeness.score)}</span>}
+        {/* how much is left, in things to do, never a precise-looking score */}
+        <span className={cn(compact && "@max-[40rem]/tb:sr-only")}>{fillWords(completeness)}</span>
       </button>
       {compact ? null : <span className="flex-1" />}
       <Button size="sm" variant={compact ? "ghost" : "outline"} className={cn("gap-1.5", compact ? "h-8 px-2 text-xs" : "h-9")} onClick={() => setOpenCheck(true)} data-program-check-open title="Check program: tidy what's safe, ask about the rest">
@@ -103,14 +108,14 @@ export function ProgramStatusStrip({
 
 function CompletenessSheet({ open, onOpenChange, completeness, onGo, onFix }: { open: boolean; onOpenChange: (o: boolean) => void; completeness: Completeness; input: CheckInput; onGo: (at: Loc) => void; onFix: (g: CompletenessGap) => void }) {
   return (
-    <BuilderSheet open={open} onOpenChange={onOpenChange} title={`${completeness.score}% complete`} description="How fully the program is filled in for this athlete. It says nothing about how good it is: that's Check program." wide>
+    <BuilderSheet open={open} onOpenChange={onOpenChange} title={fillWords(completeness) === "Filled in" ? "Everything's filled in" : `${fillWords(completeness)}`} description="What the program still needs written in for this athlete, item by item. It says nothing about how good the program is: that's Check program." wide>
       <ul className="space-y-2" data-completeness-list>
         {completeness.items.map((it) => (
           <li key={it.key} className="rounded-xl border border-border p-3">
             <div className="flex items-center gap-2">
               {it.status === "ok" ? <Check className="h-4 w-4 shrink-0 text-success" /> : <ScoreRing score={Math.round(it.score * 100)} size={18} />}
               <span className="min-w-0 flex-1 text-sm font-semibold">{it.label}</span>
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{Math.round(it.score * 100)}%</span>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{it.status === "ok" ? "Done" : `${it.gaps.length || "Some"} to fill in`}</span>
             </div>
             <p className="mt-0.5 pl-6 text-xs text-muted-foreground">{it.detail}</p>
             {it.gaps.length > 0 && (

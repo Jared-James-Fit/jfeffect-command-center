@@ -19,8 +19,10 @@ import { postedToast, useWorkoutStudio } from "@/components/community/use-workou
 
 import { PostComposer, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
 import { opensLibraryOnTap, useComposerPicker } from "@/components/community/composer-pick";
-import { NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
-import { primeCamera, studioCameraAsk } from "@/lib/camera/camera-prime";
+import { FX, NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
+import { TemplateChip, TemplateTextSheet, useTemplateFavorites, useTemplateText } from "@/components/community/template-tools";
+import { storyFilter } from "@/lib/story-filters";
+import { primeCamera, refreshPtzAsk, studioCameraAsk } from "@/lib/camera/camera-prime";
 
 type Mode = "post" | "meal" | "lockin" | "workout" | "fx";
 /** A plain post (any photo or video, no workout on it): one per person at a time while it's being made. */
@@ -130,10 +132,14 @@ export function ShareWorkoutButton({
   const { data: finishedTitle } = usePublicSessionTitle({ completionId: target?.completion_id }, active && !!target && !today);
   const lockCard = useMemo(() => (today ? lockInCameraCard({ workoutTitle: publicTitle ?? "Workout", athleteName: today.athleteName, plan: plan ?? [] }) : null), [today, plan, publicTitle]);
 
-  // What the story filters can show (story-filters.ts): the athlete's own, already-public things.
+  // What the story filters can show (story-filters.ts): the athlete's own, already-public things, and the words they typed on a template.
   const wd = workout.card?.data;
+  const favs = useTemplateFavorites();
+  const tplText = useTemplateText();
+  const [editingTpl, setEditingTpl] = useState(false);
   const filterCtx = useFilterContext({
     enabled: active,
+    custom: tplText.text,
     firstName: (today?.athleteName ?? target?.athlete_name ?? "").trim().split(/\s+/)[0] || null,
     session: today ? { title: publicTitle ?? "Today's session", started: today.started } : null,
     finished:
@@ -213,6 +219,8 @@ export function ShareWorkoutButton({
     setCapturing(true);
   };
   const begin = () => (story ? beginStory() : beginPost());
+  // the camera's own zoom on Android is asked for only when it adds no question (camera-prime.ts): read before the tap
+  useEffect(() => refreshPtzAsk(), []);
   // Crew's swipe to create: the story camera, from the touch that ends the swipe
   useEffect(() => {
     if (!cameraRef) return;
@@ -301,10 +309,27 @@ export function ShareWorkoutButton({
               : []
           : [],
         fuel: group("meal", mealCard.looks),
-      }),
+      }, { favorites: favs.favorites }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filterCtx, today, lockCard, target, isLoading, workout.card?.looks.join("|"), mealCard.looks.join("|")],
+    [filterCtx, today, lockCard, target, isLoading, workout.card?.looks.join("|"), mealCard.looks.join("|"), favs.favorites.join("|")],
   );
+  // the template on (a story filter): its chip over the shutter (Edit its words, star it), and the words' sheet
+  const tpl = activeMode === "fx" && fx ? storyFilter(fx.slice(FX.length)) : undefined;
+  const tplItem = tpl ? row.items.find((it) => it.key === fx) : undefined;
+  const tplChip = tpl ? (
+    <>
+      <TemplateChip
+        filter={tpl}
+        label={tplItem?.label ?? (typeof tpl.label === "string" ? tpl.label : "")}
+        emoji={tpl.emoji}
+        favorite={favs.favorites.includes(fx!)}
+        // (the star filling in says it; no popup)
+        onFavorite={() => void favs.toggle(fx!)}
+        onEdit={tpl.edit ? () => setEditingTpl(true) : undefined}
+      />
+      <TemplateTextSheet open={editingTpl} onClose={() => setEditingTpl(false)} filter={tpl} value={tplText.text[tpl.id]} onSave={(t) => tplText.set(tpl.id, t)} />
+    </>
+  ) : null;
   const filterOn =
     activeMode === "post"
       ? NORMAL_KEY
@@ -474,7 +499,7 @@ export function ShareWorkoutButton({
             open={composing}
             onClose={() => setComposing(false)}
             incoming={incoming}
-            onPick={(how) => (how === "camera" ? picker.camera() : picker.library())}
+            onPick={picker.open}
             filters={{ items: row.items, groups: row.groups, on: filterOn, pick: onFilter, card: cameraCard, gradeOnly: fxOn?.grade ?? false }}
             post={composerPost}
             plainPost={plainPost}
@@ -529,10 +554,14 @@ export function ShareWorkoutButton({
             allowNoPhoto={activeMode !== "meal" && activeMode !== "fx"}
             card={activeMode === "post" ? null : cameraCard}
             post={activeMode === "lockin" ? lockPost : activeMode === "workout" ? workout.post : activeMode === "meal" ? mealPost : plainPost}
+            // the chip's room stays under the picture while a lock in's or workout's filter is in the row (so switching never resizes it)
+            chipRoom={row.items.some((i) => i.key.startsWith("lockin:") || i.key.startsWith("workout:"))}
             // the lock in's and the workout's say what they're for; the rest need no chip (the filter's name is over the shutter)
             chip={
               activeMode === "lockin" && today ? (
                 <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Your story starts your session"} />
+              ) : tplChip ? (
+                tplChip
               ) : activeMode !== "workout" ? undefined : target ? (
                 <CameraChip
                   icon={sessionWhen(target.completed_at).group === "today" ? "🔥" : "🏋️"}

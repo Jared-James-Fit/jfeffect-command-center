@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Body, Container, Head, Heading, Html, Preview, Text } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
 import type { TemplateEntry } from './registry'
 
 /*
@@ -16,6 +17,7 @@ const TwoStepCodeEmail = (p: Props) => (
     <Preview>Your JF Effect sign-in code: {p.code || ''}</Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Your sign-in code</Heading>
         <Text style={text}>Enter this to confirm it's you signing in to JF Effect.</Text>
         <Text style={codeStyle}>{p.code || '000000'}</Text>
@@ -24,12 +26,14 @@ const TwoStepCodeEmail = (p: Props) => (
           Didn't just sign in? Someone has your password. Change it now in Account, and use Face ID or a text to
           sign in.
         </Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>
 )
 
 export const twoStepCodeTemplate = {
+  identity: 'account',
   component: TwoStepCodeEmail,
   subject: (d: Record<string, any>) => `${String(d?.code ?? '').trim() || 'Your'} is your JF Effect sign-in code`,
   displayName: 'Two-step sign-in code',

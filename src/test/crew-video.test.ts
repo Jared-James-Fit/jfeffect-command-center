@@ -36,7 +36,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
   it("uploads only the trimmed part, cut and shrunk on the phone, resumably, then checked by the server", () => {
     const media = read("src/lib/community-media.ts");
     expect(media).toContain("if (m.kind === \"video\") return uploadVideo(m, userId, onProgress, signal);");
-    expect(media).toContain("createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null })");
+    expect(media).toContain("createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null, hd })");
     // one send per picked clip: a retry carries on from what's done
     expect(media).toContain("const clipSends = new WeakMap<PickedMedia,");
     const pipe = read("src/lib/video-edit/pipeline.ts");
@@ -69,7 +69,8 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(studio).toContain("data-studio-clip");
     const shutter = read("src/components/community/look-carousel.tsx");
     expect(shutter).toContain("holdRef.current?.onStart();");
-    expect(shutter).toContain("conic-gradient(rgb(239 68 68)");
+    // the shutter grows into the recording surface, its ring filling over the clip limit (CSS, from when it started)
+    expect(shutter).toContain("animation: `jf-rec-ring ${hold!.limitMs}ms linear ${-elapsed}ms forwards`");
     // Normal in the ring of filters films too: the same element keeps the finger (no swap mid-hold)
     expect(shutter).toContain("{...(on && !pick ? h.handlers : {})}");
   });

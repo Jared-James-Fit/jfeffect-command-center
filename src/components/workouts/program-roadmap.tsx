@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -388,13 +388,30 @@ function ProgramPlanSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" swipeToClose className="max-h-[90dvh] overflow-y-auto rounded-t-2xl p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <div className="mx-auto max-w-lg px-4 pb-8 pt-3" data-plan-sheet data-plan-mode={mode}>
+      <SheetContent
+        side="bottom"
+        swipeToClose
+        hideCloseButton
+        className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-lg"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="mx-auto max-w-lg px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-2" data-plan-sheet data-plan-mode={mode}>
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
-          <SheetHeader className="text-left">
-            <SheetTitle className="text-lg leading-snug">{name}</SheetTitle>
-            <SheetDescription className="text-[13px] tabular-nums">{line}</SheetDescription>
-          </SheetHeader>
+          {/* the app's bottom-sheet header: the program on the left, Done on the right */}
+          <div className="flex items-start gap-3">
+            <SheetHeader className="min-h-0 min-w-0 flex-1 space-y-0.5 p-0 text-left">
+              <SheetTitle className="break-words text-[20px] font-semibold leading-tight">{name}</SheetTitle>
+              {line && <SheetDescription className="text-[13px] tabular-nums">{line}</SheetDescription>}
+            </SheetHeader>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="-mr-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-plan-done
+            >
+              Done
+            </button>
+          </div>
           {browsing && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-secondary/60 px-3 py-2 text-[12px] text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> Viewing only. Your schedule is unchanged.</span>
@@ -481,6 +498,7 @@ export function PlanFocus({
   const go = (d: number) => onAt(Math.max(0, Math.min(weeks.length - 1, at + d)));
   const p = weekParts(cur.week);
   const title = p.name ?? `Week ${cur.n}`;
+  const dates = weekRange(cur.week.start, cur.week.end);
   const blockName = blockTitle(cur.block);
   return (
     <div className="mt-4" data-plan-focus>
@@ -530,12 +548,12 @@ export function PlanFocus({
             {blockName ? ` · ${blockName}` : ""}
           </div>
         )}
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[13px] tabular-nums text-muted-foreground">
-            Week {cur.n}
-            {weekRange(cur.week.start, cur.week.end) ? ` · ${weekRange(cur.week.start, cur.week.end)}` : ""}
+        <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
+          {/* a week with no name of its own yet is titled "Week 7" below: its number isn't said twice */}
+          <span className="text-[13px] tabular-nums text-muted-foreground" data-plan-week-when>
+            {[p.name ? `Week ${cur.n}` : null, dates].filter(Boolean).join(" · ")}
           </span>
-          <WeekStatus week={cur.week} dated={!!weekRange(cur.week.start, cur.week.end)} />
+          <WeekStatus week={cur.week} dated={!!dates} />
         </div>
         <h3 className="mt-1 text-[22px] font-semibold leading-tight tracking-tight" data-plan-week-title>{title}</h3>
         {cur.week.focus && <p className="mt-1.5 text-[15px] leading-snug text-foreground/85" data-plan-week-focus>{cur.week.focus}</p>}
@@ -578,8 +596,15 @@ export function PlanFocus({
 /** Every week in one line, grouped by block. A tap opens that week in Focus. */
 export function PlanList({ roadmap, weeks, onWeek }: { roadmap: ProgramRoadmap; weeks: PlanWeek[]; onWeek?: (i: number) => void }) {
   const multi = roadmap.blocks.length > 1;
+  // a long program opens on this week, not at its first block
+  const listRef = useRef<HTMLOListElement>(null);
+  const nowId = weeks.find((w) => w.week.status === "current")?.week.id ?? null;
+  useEffect(() => {
+    const row = nowId ? listRef.current?.querySelector<HTMLElement>('[data-plan-now="true"]') : null;
+    if (row && typeof row.scrollIntoView === "function") row.scrollIntoView({ block: "center" });
+  }, [nowId]);
   return (
-    <ol className="mt-4 space-y-4" aria-label="Blocks" data-plan-list>
+    <ol ref={listRef} className="mt-4 space-y-4" aria-label="Blocks" data-plan-list>
       {roadmap.blocks.map((b, bi) => (
         <li key={b.id} data-plan-block={b.id}>
           <div className="flex items-baseline justify-between gap-2">
@@ -600,10 +625,11 @@ export function PlanList({ roadmap, weeks, onWeek }: { roadmap: ProgramRoadmap; 
                     <span className="w-16 shrink-0 text-[13px] tabular-nums text-muted-foreground">Week {pw?.n ?? p.number}</span>
                     <span className={cn("min-w-0 flex-1 truncate text-[14px]", w.status === "current" ? "font-semibold" : "font-medium")}>{p.name ?? ""}</span>
                     <WeekStatus week={w} />
+                    {onWeek && i >= 0 && <ChevronRight className="-mr-1 h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden />}
                   </>
                 );
                 return (
-                  <li key={w.id} className={cn(w.status === "current" && "bg-secondary/60")}>
+                  <li key={w.id} className={cn(w.status === "current" && "bg-secondary/60")} data-plan-now={w.status === "current" ? "true" : undefined}>
                     {onWeek && i >= 0 ? (
                       <button type="button" onClick={() => onWeek(i)} className="flex min-h-11 w-full items-center gap-2 px-3 text-left transition hover:bg-secondary/40" data-plan-list-week={pw.n}>
                         {row}

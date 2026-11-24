@@ -17,11 +17,11 @@ describe("Cardio is its own tab", () => {
     expect(LEGACY_WORKSPACE_TABS.cardio).toBeUndefined();
   });
 
-  it("the Nutrition tab no longer carries cardio; it gets plan quality and Cleo beside the plan", () => {
+  it("the Nutrition tab no longer carries cardio; plan quality leads it and Cleo docks beside the plan", () => {
     const page = read("src/route-pages/_authenticated/admin/clients.$id.tsx");
     const nutrition = page.slice(page.indexOf('<TabsContent value="nutrition"'), page.indexOf('<TabsContent value="cardio"'));
     expect(nutrition).not.toMatch(/CardioTargetsPanel/);
-    expect(nutrition).toMatch(/<NutritionQualityCard clientId=\{id\} \/>/);
+    expect(nutrition).toMatch(/<NutritionQualityCard clientId=\{id\} className="md:col-span-3" \/>/);
     expect(nutrition).toMatch(/<NutritionCleoDock clientId=\{id\} \/>/);
     expect(nutrition).toMatch(/data-builder-page/);
     expect(page).toMatch(/<CardioWorkspace clientId=\{id\} \/>/);

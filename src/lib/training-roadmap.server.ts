@@ -29,6 +29,12 @@ type Admin = any;
 /** Give a coach mid-edit time to finish before re-reading the block. */
 const SETTLE_MS = 2 * 60_000;
 const PER_TICK = 6;
+/** Blocks written at once in a run. */
+const TICK_LANES = 3;
+/** No block starts after this in a run (see `runRoadmapTick`). */
+export const TICK_BUDGET_MS = 45_000;
+/** Every model call in a run finishes by this, so the run answers inside the cron's 120 s. */
+export const TICK_LIMIT_MS = 100_000;
 const MAX_ATTEMPTS = 4;
 
 function must<T>(res: { data: T | null; error: any }, what: string): T {
@@ -119,7 +125,18 @@ async function loadBlock(admin: Admin, blockId: string) {
  * fails hands over to the next. Whatever still isn't plain is swapped for plain words
  * (`plainReply`), so the athlete never reads "RPE 6, 7 at 90% top_set".
  */
-async function askCleo(admin: Admin, digest: ReturnType<typeof digestBlock>, meet: boolean): Promise<RoadmapReply> {
+/** A block that ran out of the run's time before it had any usable words: it waits for the next run, no try used. */
+export class RoadmapOutOfTime extends Error {
+  constructor() {
+    super("out of time for this run");
+    this.name = "RoadmapOutOfTime";
+  }
+}
+
+/** Below this, a model call isn't started: it would most likely be cut off. */
+const MIN_CALL_MS = 15_000;
+
+async function askCleo(admin: Admin, digest: ReturnType<typeof digestBlock>, meet: boolean, deadline = Infinity): Promise<RoadmapReply> {
   const { callModel } = await import("@/lib/ai/model-client.server");
   const { resolveRoute } = await import("@/lib/ai/routing");
   const { data: cfg } = await admin.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
@@ -137,6 +154,13 @@ async function askCleo(admin: Admin, digest: ReturnType<typeof digestBlock>, mee
   for (const model of route.models) {
     let feedback = "";
     for (let attempt = 0; attempt < 2; attempt++) {
+      // a call that couldn't finish inside the run is never started: the best words so far stand
+      // (then the plain fallback), or with none the block waits for the next run
+      const left = deadline - Date.now();
+      if (left < MIN_CALL_MS) {
+        if (best) return plainReply(best.reply, digest, meet);
+        throw new RoadmapOutOfTime();
+      }
       try {
         const r = await callModel(model, {
           system: ROADMAP_SYSTEM_PROMPT,
@@ -144,7 +168,7 @@ async function askCleo(admin: Admin, digest: ReturnType<typeof digestBlock>, mee
           effort: route.effort,
           maxOutputTokens: route.maxOutputTokens,
           temperature: 0.3,
-          timeoutMs: 90_000,
+          timeoutMs: Math.min(90_000, left - 2_000),
           tag: "roadmap",
         });
         lastText = r.text;
@@ -224,7 +248,7 @@ export type RoadmapResult = { blockId: string; outcome: "written" | "reused" | "
  * Bring one block's roadmap words up to date. `force` asks Cleo again even
  * when nothing changed (the coach's "Rewrite" button).
  */
-export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: { force?: boolean } = {}): Promise<RoadmapResult> {
+export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: { force?: boolean; deadline?: number } = {}): Promise<RoadmapResult> {
   const loaded = await loadBlock(admin, blockId);
   if (!loaded || loaded.block.archived || loaded.block.status === "Archived") return { blockId, outcome: "gone" };
   // At-home backup sessions aren't part of the program roadmap.
@@ -252,7 +276,7 @@ export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: {
   }
 
   const twin = opts.force ? null : await reuse(admin, digest.hash, blockId, digest.weekIndexes);
-  const reply = twin ?? (await askCleo(admin, digest, loaded.meet));
+  const reply = twin ?? (await askCleo(admin, digest, loaded.meet, opts.deadline));
 
   await writeNote(admin, key(null), { ai_label: reply.label || null, ai_summary: reply.purpose || null, ai_style: reply.style }, digest.hash);
   const byIndex = new Map(reply.weeks.map((w) => [w.week, w]));
@@ -263,20 +287,37 @@ export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: {
   return { blockId, outcome: twin ? "reused" : "written" };
 }
 
-/** The schedule tick: settled queue entries first, a few per run. */
+/**
+ * The schedule tick: settled queue entries first, a few per run, `TICK_LANES` at a time. No block
+ * starts once the run is `TICK_BUDGET_MS` old, so it answers inside the cron's 120 s: a block's words
+ * take 20–60 s (a model call, and a second when the check sends it back), and on Nov 24 2026 runs
+ * of six one after another were cut off after the second, wasting the third. Every model call also
+ * ends by `TICK_LIMIT_MS` (calls take ~13 s, 30 s at the 90th percentile, up to 90 s, and a block can
+ * need four): one that couldn't finish isn't started, so the block keeps its best plain words so far
+ * or waits for the next run with no try used. Whatever isn't started stays queued; a block cut off
+ * mid-write is written again (it only counts as done once every week carries the new hash).
+ */
 export async function runRoadmapTick(admin: Admin) {
-  const cutoff = new Date(Date.now() - SETTLE_MS).toISOString();
+  const started = Date.now();
+  const cutoff = new Date(started - SETTLE_MS).toISOString();
   const due = must<any[]>(
     await admin.from("pl_roadmap_queue").select("block_id, queued_at, attempts").lte("queued_at", cutoff).order("queued_at").limit(PER_TICK),
     "roadmap queue",
   );
-  const results: Array<RoadmapResult | { blockId: string; error: string }> = [];
-  for (const item of due) {
+  const results: Array<RoadmapResult | { blockId: string; error: string } | { blockId: string; outcome: "later" }> = [];
+  let next = 0;
+  let aiDown = false;
+  const one = async (item: any) => {
     try {
-      results.push(await refreshBlockRoadmap(admin, item.block_id));
+      results.push(await refreshBlockRoadmap(admin, item.block_id, { deadline: started + TICK_LIMIT_MS }));
       // Only clear the entry if nothing re-queued it while Cleo was writing.
       await admin.from("pl_roadmap_queue").delete().eq("block_id", item.block_id).eq("queued_at", item.queued_at);
     } catch (e: any) {
+      if (e instanceof RoadmapOutOfTime) {
+        // nothing went wrong: the next run writes it
+        results.push({ blockId: item.block_id, outcome: "later" });
+        return;
+      }
       const message = String(e?.message ?? e).slice(0, 500);
       results.push({ blockId: item.block_id, error: message });
       const { classifyAiError, isProviderFailure } = await import("@/lib/ai/ai-errors");
@@ -284,7 +325,8 @@ export async function runRoadmapTick(admin: Admin) {
         // AI is down: the block waits in the queue (no try used) and is written once it's back;
         // dropping it would leave the athlete's roadmap describing the old program
         await admin.from("pl_roadmap_queue").update({ last_error: `Waiting for AI: ${message}`.slice(0, 500) }).eq("block_id", item.block_id).eq("queued_at", item.queued_at);
-        break;
+        aiDown = true;
+        return;
       }
       if ((item.attempts ?? 0) + 1 >= MAX_ATTEMPTS) {
         await admin.from("pl_roadmap_queue").delete().eq("block_id", item.block_id).eq("queued_at", item.queued_at);
@@ -296,6 +338,10 @@ export async function runRoadmapTick(admin: Admin) {
           .eq("queued_at", item.queued_at);
       }
     }
-  }
-  return { checked: due.length, results };
+  };
+  const lane = async () => {
+    while (!aiDown && next < due.length && Date.now() - started < TICK_BUDGET_MS) await one(due[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(TICK_LANES, due.length) }, lane));
+  return { checked: next, left: due.length - next, results };
 }

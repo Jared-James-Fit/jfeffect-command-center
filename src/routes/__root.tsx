@@ -48,12 +48,10 @@ import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 import "@/lib/offline/data-handlers";
 import "@/lib/offline/workout-completion-sync";
 import { SITE_NAME, shareImageMeta, shareMeta } from "@/lib/share-meta";
-// HTML5 drag-and-drop polyfill for touch devices. Loaded only in the browser
-// because the package touches `document` at module scope and crashes SSR.
-if (typeof document !== "undefined") {
-  // @ts-expect-error - no types shipped
-  import("drag-drop-touch");
-}
+// The HTML5 drag-and-drop polyfill for touch screens is loaded only by the one
+// screen that drags natively (the program template editor, useDragDropTouch),
+// never here: its document-wide touch listeners made every touch in the app
+// wait on the main thread (Nov 23 2026).
 
 function NotFoundComponent() {
   return (
@@ -285,7 +283,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           url: "https://jfeffect.com",
           logo: "https://jfeffect.com/logo.png",
           image: "https://jfeffect.com/logo.png",
-          email: "jared@jfeffect.com",
+          email: "hello@jfeffect.com",
           founder: { "@type": "Person", name: "Jared McIntyre", jobTitle: "Online coach and powerlifter", url: "https://jfeffect.com/about" },
           sameAs: ["https://jaredjamesfit.com", "https://www.instagram.com/jaredmcintyre_/", "https://www.youtube.com/@jared.mcintyre"],
           areaServed: "Worldwide",

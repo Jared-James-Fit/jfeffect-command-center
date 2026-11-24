@@ -111,9 +111,11 @@ describe("the owner's commercial terms are preserved", () => {
   });
 
   it("names the coach, location and official email", () => {
-    expect(COACH.email).toBe("jaredjamesfit@gmail.com");
+    expect(COACH.email).toBe("coaching@jfeffect.com");
     expect(COACH.location).toContain("Winnipeg");
-    expect(text).toContain("jaredjamesfit@gmail.com");
+    expect(text).toContain("coaching@jfeffect.com");
+    // 2.4: notices go to the business inbox, never a personal Gmail.
+    expect(text).not.toMatch(/@gmail\.com/i);
     expect(text).toContain("Winnipeg");
   });
 
@@ -142,6 +144,9 @@ describe("2.3: messages are kept as coaching records", () => {
     const joined = AGREEMENT_CONTENT.sections.flatMap((s) => s.clauses.map((c) => c.text)).join(" ");
     expect(joined).toMatch(/if you edit or delete a message, it changes in the chat for both of you, but the Coach keeps the original, which only JF Effect’s administrators can see/);
     expect(joined).toMatch(/payment, tax, agreement and message records/);
+  });
+  it("keeps 2.3 exactly as signed in the archive", () => {
+    expect(createHash("sha256").update(readFileSync("supabase/agreement-archive/2.3.json", "utf8")).digest("hex")).toBe(PUBLISHED_CONTENT_HASHES["2.3"]);
   });
   it("keeps 2.2 exactly as signed in the archive", () => {
     expect(createHash("sha256").update(readFileSync("supabase/agreement-archive/2.2.json", "utf8")).digest("hex")).toBe(PUBLISHED_CONTENT_HASHES["2.2"]);
@@ -193,8 +198,8 @@ describe("naming the Coach (version 2.1)", () => {
 
   it("names the individual who carries on the business, not the old trade name", () => {
     expect(json).not.toMatch(/jared james fit/i);
-    // The only "jaredjamesfit" left is the working email address people send notices to.
-    expect(json.replace(/jaredjamesfit@gmail\.com/gi, "")).not.toMatch(/jaredjamesfit/i);
+    // From 2.4 notices go to coaching@jfeffect.com, so no "jaredjamesfit" is left at all.
+    expect(json).not.toMatch(/jaredjamesfit/i);
     expect(text).toContain(
       "Jared McIntyre (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada",
     );
@@ -215,12 +220,13 @@ describe("people who signed an earlier version are left exactly as they are", ()
     resolveAgreementState({ latestSignature: sig(version), exempt: null, resignRequestedAt: null, resignNote: null }).state;
 
   it("does not ask anyone who signed 2.0 to sign again", () => {
-    expect(AGREEMENT_VERSION).toBe("2.3");
+    expect(AGREEMENT_VERSION).toBe("2.4");
     expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
     expect(state("2.0")).toBe("signed");
     expect(state("2.1")).toBe("signed");
     expect(state("2.2")).toBe("signed");
     expect(state("2.3")).toBe("signed");
+    expect(state("2.4")).toBe("signed");
     expect(state("1.0")).toBe("needs_signature");
   });
 

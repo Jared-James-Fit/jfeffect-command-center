@@ -73,7 +73,8 @@ describe("photos on every post, same rules as sharing a workout", () => {
   it("the coach's + Post takes photos (the New post screen: up to 10, uploaded as they're picked)", () => {
     const hub = read("src/components/community/admin-community-hub.tsx");
     expect(hub).toContain("<PostComposer");
-    expect(hub).toContain("onPick={(how) => (how === \"camera\" ? picker.camera() : picker.library())}");
+    // the library, photos only, videos only or the camera (Nov 23 2026: composer-pick.tsx's open)
+    expect(hub).toContain("onPick={picker.open}");
     expect(read("src/components/community/post-composer.tsx")).toContain("const tray = useSlideTray({ open, initial: null, resetKey: draftKey, coverCount: 0, videoContext });");
   });
 });

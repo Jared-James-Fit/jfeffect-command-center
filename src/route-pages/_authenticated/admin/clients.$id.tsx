@@ -810,17 +810,18 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         {/*
-          Nutrition: the AI update (one line unless it needs the coach), then what to
-          keep in mind (Food & diet: allergies, diet, notes) and the plan's quality beside
-          the plan (targets, then meals), how it's going (bodyweight, check-ins, water).
-          Cleo docks beside it (the page gives up its width). Cardio has its own tab.
+          Nutrition: plan quality first (the design score, how it's followed, Optimize with
+          Cleo; the same strip as Training and Cardio), the AI update (one line unless it
+          needs the coach), then what to keep in mind (Food & diet: allergies, diet, notes)
+          beside the plan (targets, then meals), how it's going (bodyweight, check-ins,
+          water). Cleo docks beside it (the page gives up its width). Cardio has its own tab.
         */}
         <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS} data-builder-page>
           <Suspense fallback={<TabFallback />}>
+            <NutritionQualityCard clientId={id} className="md:col-span-3" />
             <NutritionRequestPanel clientId={id} />
             <div className="min-w-0 space-y-4 md:col-span-1 md:self-start">
               <FoodNotesCard clientId={id} />
-              <NutritionQualityCard clientId={id} />
             </div>
             <NutritionTargetsPanel clientId={id} className="md:col-span-2" />
             <RoadmapCoachCard clientId={id} className="md:col-span-3" />

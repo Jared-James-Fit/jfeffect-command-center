@@ -107,7 +107,8 @@ describe("the Plan Library lives in the portal", () => {
     expect(workouts).toContain('if (mode === "self") return <SelfEmptyState hasHistory={hasHistory} />;');
     expect(workouts).toContain("Your coach will publish your block soon.");
     // Follow a program · Build my own · Import a program, one tap each (program-start-options.tsx)
-    expect(workouts).toContain('<ProgramStartOptions className="mx-auto mt-4 max-w-md" />');
+    // and copying one from the crew, with My programs (and its drafts) a tap away (Nov 24 2026)
+    expect(workouts).toContain('<ProgramStartOptions className="mx-auto mt-4 max-w-md" ways={["follow", "build", "import", "crew"]} />');
     const pick = read("src/components/portal/pick-plan-card.tsx");
     expect(pick).toContain('<ProgramStartOptions className="mt-3" />');
     const ways = read("src/components/program-import/program-start-options.tsx");

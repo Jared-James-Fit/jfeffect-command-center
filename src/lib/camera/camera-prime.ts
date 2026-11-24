@@ -13,8 +13,9 @@
  * (`takePrimedCamera`). Nothing held is ever left on: an answer the camera
  * doesn't take is let go after `PRIME_TTL_MS`.
  */
-import { askOrder, constraintLadder, readFilmAsk, readFilmSettings, type AskShape } from "@/lib/camera/film-settings";
+import { askOrder, constraintLadder, readFilmAsk, readFilmSettings, videoConstraints, type AskShape } from "@/lib/camera/film-settings";
 import { isPhone, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
+import { readCrewQuality, type CrewQuality } from "@/lib/camera/crew-quality";
 
 /** How long an answer waits for the camera to take it before it's let go. */
 export const PRIME_TTL_MS = 8_000;
@@ -43,10 +44,70 @@ let primed: { key: string; promise: Promise<MediaStream>; timer: ReturnType<type
 /**
  * The Crew studio's first request (share-studio.tsx asks for exactly this
  * first), so the tap that opens it can ask the same (`primeCamera`).
+ *
+ * On a phone it's a story's picture (Nov 23 2026): 9:16 upright at 1080p,
+ * written the way that worked on this phone before (the set camera's
+ * `askOrder`, `readFilmAsk`), so the photo and the clip are exactly what the
+ * 9:16 viewfinder shows. It used to ask every phone for 1920 × 1440, a 3:4
+ * picture the viewfinder cropped: a clip came back 3:4 and a story showed it
+ * boxed in. `shape` is the other way round, when the first one wasn't 9:16.
+ * A tablet or a computer keeps 4:3 (a landscape webcam keeps more of its
+ * height under the 9:16 crop that way).
  */
-export function studioCameraAsk(facing: "environment" | "user"): MediaTrackConstraints {
-  return { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } };
+export function studioCameraAsk(facing: "environment" | "user", shape?: AskShape | null, quality: CrewQuality = readCrewQuality()): MediaTrackConstraints {
+  const upright = phoneUpright();
+  if (upright == null) return LEGACY_STUDIO_ASK(facing, quality);
+  const s = shape ?? askOrder(upright, readFilmAsk())[0];
+  // the quality picked in the camera (crew-quality.ts): HD, or 4K where the camera can
+  const ask = videoConstraints({ quality: quality === "4k" ? "4k" : "1080p", fps: 30, facing }, null, s);
+  return ptzAsk ? ({ ...ask, zoom: true } as MediaTrackConstraints) : ask;
 }
+
+/**
+ * The studio's second ask, when the first one failed (a camera still busy a
+ * moment after another app had it): the same size without the extras, never
+ * a bare `{ facingMode }`, which an iPhone answers at 640 × 480 for the rest
+ * of the visit.
+ */
+export function studioCameraRetryAsk(facing: "environment" | "user", quality: CrewQuality = readCrewQuality()): MediaTrackConstraints {
+  const long = quality === "4k" ? 3840 : 1920;
+  const short = quality === "4k" ? 2160 : 1080;
+  const upright = phoneUpright();
+  return upright
+    ? { facingMode: facing, width: { ideal: short }, height: { ideal: long } }
+    : { facingMode: facing, width: { ideal: long }, height: { ideal: short } };
+}
+
+/**
+ * The camera's own zoom on Android (Nov 23 2026). Chrome shows a track's
+ * `zoom` only to a page that asked for it (`zoom: true`, its pan-tilt-zoom
+ * permission); without it the Crew camera zooms digitally. Asking adds that
+ * permission to the camera's question, so it's asked only when it can't add
+ * a question: the camera was never allowed here (one question either way), or
+ * the zoom already was. Someone who allowed the camera before keeps the
+ * digital zoom rather than being asked again. Read once the studio's about to
+ * open (`refreshPtzAsk`); never on an iPhone (WebKit has no such permission).
+ */
+let ptzAsk = false;
+export function refreshPtzAsk(): void {
+  if (typeof navigator === "undefined" || !/Android/i.test(navigator.userAgent || "")) return;
+  const q = navigator.permissions?.query?.bind(navigator.permissions);
+  if (!q) return;
+  void Promise.all([q({ name: "camera" as PermissionName }), q({ name: "camera", panTiltZoom: true } as unknown as PermissionDescriptor)])
+    .then(([cam, ptz]) => {
+      ptzAsk = ptz.state === "granted" || cam.state === "prompt";
+    })
+    .catch(() => {
+      ptzAsk = false;
+    });
+}
+/** For tests. */
+export function setPtzAskForTests(on: boolean): void {
+  ptzAsk = on;
+}
+/** The 4:3 ask, for a tablet or a computer (4K's: 3840 × 2880, where the webcam goes that far). */
+const LEGACY_STUDIO_ASK = (facing: "environment" | "user", quality: CrewQuality = "hd"): MediaTrackConstraints =>
+  quality === "4k" ? { facingMode: { ideal: facing }, width: { ideal: 3840 }, height: { ideal: 2880 } } : { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } };
 
 /**
  * Call inside the tap that opens a camera: the film camera's first ask, or

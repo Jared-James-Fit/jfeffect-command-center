@@ -2,6 +2,8 @@ import * as React from 'react'
 import {
   Body, Button, Container, Head, Heading, Html, Link, Preview, Section, Text, Hr,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
+import { CONTACT } from '@/lib/email-identity'
 import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
@@ -28,7 +30,7 @@ const MembershipOnboardingEmail = (p: MembershipOnboardingProps) => {
   const price = p.monthly_price_display || '$29 USD/month plus applicable tax'
   const trialEnd = p.trial_end_display
   const firstBilling = p.first_billing_display
-  const support = p.support_email || 'jaredjamesfit@gmail.com'
+  const support = p.support_email || CONTACT.support
   const welcome = p.welcome_message ||
     "You're officially in. JF Membership gives you Jared's training brain — programs, recipes, articles, and the tools to keep training intelligently for the long haul."
   const nextStep = p.next_step ||
@@ -42,6 +44,7 @@ const MembershipOnboardingEmail = (p: MembershipOnboardingProps) => {
       <Preview>Welcome to {productName} — your trial is live.</Preview>
       <Body style={main}>
         <Container style={container}>
+          <BrandHeader />
           <Heading style={h1}>Welcome, {firstName}.</Heading>
           <Text style={text}>{welcome}</Text>
 
@@ -75,6 +78,7 @@ const MembershipOnboardingEmail = (p: MembershipOnboardingProps) => {
             Questions? Reply to this email or write to{' '}
             <Link href={`mailto:${support}`} style={link}>{support}</Link>.
           </Text>
+          <BrandFooter />
         </Container>
       </Body>
     </Html>
@@ -82,6 +86,7 @@ const MembershipOnboardingEmail = (p: MembershipOnboardingProps) => {
 }
 
 export const template = {
+  identity: 'support',
   component: MembershipOnboardingEmail,
   subject: (data: Record<string, any>) => {
     const first = (data?.first_name || 'there').toString().trim() || 'there'
@@ -96,7 +101,7 @@ export const template = {
     monthly_price_display: '$29 USD/month plus applicable tax',
     trial_end_display: 'June 18, 2026',
     first_billing_display: 'June 18, 2026',
-    support_email: 'jaredjamesfit@gmail.com',
+    support_email: CONTACT.support,
   },
 } satisfies TemplateEntry
 

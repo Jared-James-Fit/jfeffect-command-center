@@ -63,7 +63,7 @@ Answer with ONE JSON object and nothing else:
       "enabled": true
     }
   ] | null,
-  "reasons": ["one line per change: what and why"],
+  "reasons": ["one line per change, most important first: what it is now → what you'd change it to, why, and what it should do for them"],
   "nutrition_note": string | null,
   "confidence": "high" | "moderate" | "low"
 }`;
@@ -162,7 +162,8 @@ export async function askCardioCleo(
       .maybeSingle();
     id = data?.id ?? null;
   }
-  return { id, answer, change: !!plan, plan, changeLines, reasons, nutritionNote, problems, confidence, quality, model: reply.model };
+  const grouped = changes.filter((c) => c.kind !== "note").map((c) => ({ key: c.key, kind: c.kind, lines: c.lines }));
+  return { id, answer, change: !!plan, plan, changeLines, changes: grouped, reasons, nutritionNote, problems, confidence, quality, model: reply.model };
 }
 
 /** The coach's call on a proposal: applied to the draft, or turned down (with why, for next time). */

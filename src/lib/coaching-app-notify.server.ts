@@ -146,43 +146,34 @@ export async function sendApplicantConfirmationEmail(
     .eq("source", dedupeKey).limit(1).maybeSingle();
   if (existing) return { skipped: true };
 
-  const subject = "We received your JF Effect application";
-  const body = [
-    `Hi ${args.firstName},`,
-    ``,
-    `Thanks for applying to JF Effect coaching — your application is in.`,
-    ``,
-    `Submitted: ${args.submittedAtStr}`,
-    `Main goal: ${args.mainGoal}`,
-    `Reference #: ${args.applicationId}`,
-    ``,
-    `Coach Jared (or a member of the team) will personally review your answers and reach out within 24–48 hours to follow up on next steps.`,
-    ``,
-    `If you need to reach us in the meantime, just reply to this email.`,
-    ``,
-    `— Coach Jared`,
-    `JF Effect`,
-    `https://jfeffect.com`,
-  ].join("\n");
-
-  try {
-    await sendEmailViaProvider(supabaseAdmin, args.to, subject, body);
+  // Branded template on the verified notify.jfeffect.com sender (Reply-To coaching@).
+  const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
+  const subject = "Your JF Effect coaching application is in";
+  const result = await sendTemplateEmail(supabaseAdmin, {
+    template: "application-received",
+    to: args.to,
+    idempotencyKey: dedupeKey,
+    data: {
+      first_name: args.firstName,
+      submitted_at: args.submittedAtStr,
+      main_goal: args.mainGoal,
+      reference: args.applicationId,
+    },
+  });
+  const status = result.sent ? "sent" : result.reason === "already_sent" ? null : "failed";
+  if (status) {
     try {
       await supabaseAdmin.from("communication_log").insert({
         channel: "email", recipient: args.to,
-        subject, body, status: "sent", source: dedupeKey,
+        subject, body: `template:application-received${result.sent ? "" : ` (${result.reason})`}`,
+        status, source: dedupeKey,
       });
     } catch { /* schema variance */ }
-    return { sent: true };
-  } catch (e: any) {
-    try {
-      await supabaseAdmin.from("communication_log").insert({
-        channel: "email", recipient: args.to,
-        subject, body, status: "failed", source: dedupeKey,
-      });
-    } catch { /* schema variance */ }
-    throw e;
   }
+  if (!result.sent && result.reason === "failed") {
+    throw new Error(result.error || "Applicant confirmation email failed");
+  }
+  return result.sent ? { sent: true } : { skipped: true, reason: result.reason };
 }
 
 /* ─────────────────────────────────────────────────────────────

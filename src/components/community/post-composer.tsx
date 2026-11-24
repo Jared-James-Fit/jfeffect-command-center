@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, pickerAudience, type CommunityAuthor, type CommunityVisibility, type PostSlide } from "@/lib/community";
 import { MAX_SLIDES } from "@/lib/community";
+import type { ComposerPickHow } from "@/components/community/composer-pick";
 import { pickMedia, releasePicked, uploadPicked } from "@/lib/community-media";
 import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, startAspect, nextAspect, placement, clampFraming, type PostAspect } from "@/lib/photo-frame";
 import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
@@ -128,7 +129,7 @@ export function PostComposer({
   /** Files picked in the tap that opened it, or added since (`n` bumps each time). */
   incoming: { files: File[]; live: boolean; n: number } | null;
   /** Open the phone's library or camera (their files come back through `incoming`). */
-  onPick: (how: "library" | "camera") => void;
+  onPick: (how: ComposerPickHow) => void;
   filters: ComposerFilters;
   /** What Share does (a member): the post the filter and workout link make it. */
   post: StudioPost | null;
@@ -176,7 +177,10 @@ export function PostComposer({
   const [request, setRequest] = useState<StickerRequest>(null);
   const [tool, setTool] = useState<ComposerTool>("filters");
   // the person's default filter for posts: on every new photo or clip (never one already on the post)
-  const { defaults: filterDefaults, setDefault: setFilterDefault } = useFilterDefaults(open);
+  const filterPrefs = useFilterDefaults(open);
+  const { defaults: filterDefaults, setDefault: setFilterDefault } = filterPrefs;
+  // Compare held in the colour panel: the pictures as shot until it's let go
+  const [comparing, setComparing] = useState(false);
   const [slide, setSlide] = useState(0);
   const [coverFor, setCoverFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -207,11 +211,10 @@ export function PostComposer({
     setBusy(false);
     setPosted(false);
     setCoverLive(false);
-    // a caption written before (the app closed, a post that didn't go) comes back
+    // a caption written before (the app closed, a post that didn't go) comes back, quietly (never over one being typed)
     void loadDraft(draftKey).then((d) => {
       if (!d?.caption) return;
-      setCaption(d.caption);
-      toast.message("Your caption is back", { action: { label: "Clear", onClick: () => setCaption("") } });
+      setCaption((c) => (c.trim() ? c : d.caption));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -296,7 +299,7 @@ export function PostComposer({
 
   /** The first photo as it'll be posted (or shown, smaller): framed at the post's shape, its filter on it. */
   const drawCover = (out: HTMLCanvasElement, width: number, src: Drawable) => {
-    const media = framedCanvas(src, clampFraming(coverFraming, drawableSize(src), { w: shape, h: 1 }), shape, width, compiledFor(coverImage?.grade));
+    const media = framedCanvas(src, clampFraming(coverFraming, drawableSize(src), { w: shape, h: 1 }), shape, width, comparing && width < 1080 ? null : compiledFor(coverImage?.grade));
     try {
       if (useCard && card) {
         const size = aspect === "full" ? "full" : aspect === "portrait" ? "feed" : { w: 1080, h: Math.round(1080 / shape) };
@@ -322,7 +325,7 @@ export function PostComposer({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverEl, light, step, card, useCard, coverFraming, aspect, lockedIn, logo, coverImage?.grade]);
+  }, [coverEl, light, step, card, useCard, coverFraming, aspect, lockedIn, logo, coverImage?.grade, comparing]);
 
   // a new photo or clip starts with the person's default filter (read from the picture itself for Auto)
   const defaulted = useRef(new Set<string>());
@@ -577,6 +580,9 @@ export function PostComposer({
                   hideLoadsOn={!!post?.showHideLoads && hideLoads && !!card && !card.paint}
                   filterDefaults={filterDefaults}
                   setFilterDefault={setFilterDefault}
+                  filterPrefs={filterPrefs}
+                  comparing={comparing}
+                  onCompare={setComparing}
                 />
               )}
             </section>
@@ -799,17 +805,21 @@ function SelectStep({
   aspect: PostAspect;
   onAspect: () => void;
   gridFlash: number;
-  onPick: (how: "library" | "camera") => void;
+  onPick: (how: ComposerPickHow) => void;
   onWrite?: () => void;
 }) {
   const shape = POST_ASPECTS[aspect];
   const [vh, setVh] = useState(800);
   useEffect(() => setVh(window.innerHeight), []);
-  const stage = useStage(shape, Math.round(vh * 0.5));
+  // the gallery swipes up over the preview (more picks in view) and back down, Instagram's way
+  const [expanded, setExpanded] = useState(false);
+  const stageH = Math.round(vh * (expanded && list.length ? 0.3 : 0.5));
+  const stage = useStage(shape, stageH);
+  const swipeY = useRef<number | null>(null);
   const framable = focused && focused.w && focused.h && (focused.kind === "image" ? focused.preview : focused.video);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={stage.ref} className="relative flex shrink-0 items-center justify-center bg-zinc-950" style={{ height: Math.round(vh * 0.5) }} data-composer-stage>
+      <div ref={stage.ref} className="relative flex shrink-0 items-center justify-center bg-zinc-950 transition-[height] duration-300 ease-out motion-reduce:transition-none" style={{ height: stageH }} data-composer-stage>
         {!focused ? (
           <div className="flex flex-col items-center gap-4 px-8 text-center animate-in fade-in-0 duration-300">
             <div className="grid h-20 w-20 place-items-center rounded-full border-2 border-white/80">
@@ -859,12 +869,56 @@ function SelectStep({
           </div>
         )}
       </div>
-      <div className="flex items-center justify-between px-4 pb-2 pt-3">
-        <span className="text-[17px] font-semibold">
-          {list.length ? "Selected" : "Recents"}
-          {list.length > 0 && <span className="ml-1.5 text-[14px] font-medium text-white/50">{list.length}/{MAX_SLIDES}</span>}
-        </span>
-        {list.length > 1 && <span className="text-[12px] text-white/50">Hold one and drag to reorder</span>}
+      {/* the gallery's head: a grip (tap, or swipe up / down), what's picked, and the phone's picker by kind */}
+      <div
+        className="touch-none select-none"
+        onPointerDown={(e) => {
+          if ((e.target as Element).closest("[data-composer-source]")) return;
+          swipeY.current = e.clientY;
+          // the finger's lift lands here wherever it went (a swipe up ends over the preview)
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* fine */
+          }
+        }}
+        onPointerUp={(e) => {
+          const y0 = swipeY.current;
+          swipeY.current = null;
+          if (y0 == null || !list.length) return;
+          const dy = e.clientY - y0;
+          if (Math.abs(dy) < 8) setExpanded((x) => !x);
+          else if (dy < -24) setExpanded(true);
+          else if (dy > 24) setExpanded(false);
+        }}
+        onPointerCancel={() => (swipeY.current = null)}
+        data-composer-gallery-head={expanded ? "expanded" : "collapsed"}
+      >
+        {list.length > 0 && <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-white/30" aria-hidden />}
+        <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2">
+          <span className="min-w-0 text-[17px] font-semibold">
+            {list.length ? "Selected" : "Add from"}
+            {list.length > 0 && <span className="ml-1.5 text-[14px] font-medium text-white/50">{list.length}/{MAX_SLIDES}</span>}
+            {list.length > 1 && <span className="ml-2 hidden whitespace-nowrap text-[12px] font-normal text-white/45 min-[430px]:inline">hold to reorder</span>}
+          </span>
+          {/* the phone's own picker, straight to one kind (its Albums and Favorites are in it) */}
+          <span className="flex shrink-0 gap-1.5" data-composer-source>
+            {(["photos", "videos"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                disabled={list.length >= MAX_SLIDES}
+                onClick={() => onPick(k)}
+                className="inline-flex h-8 items-center gap-1 rounded-full bg-white/10 px-3 text-[13px] font-semibold active:bg-white/20 disabled:opacity-30"
+                aria-label={k === "photos" ? "Add photos" : "Add videos"}
+                data-composer-pick={k}
+              >
+                {k === "photos" ? <Images className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
+                {k === "photos" ? "Photos" : "Videos"}
+              </button>
+            ))}
+          </span>
+        </div>
       </div>
       <PickGrid tray={tray} list={list} focused={focused?.id ?? null} onFocus={onFocus} onPick={onPick} />
     </div>
@@ -876,7 +930,7 @@ function SelectStep({
  * with its number in the post (hold and drag to move it), the one in focus
  * dimmed with a ✕ to take it off.
  */
-function PickGrid({ tray, list, focused, onFocus, onPick }: { tray: ReturnType<typeof useSlideTray>; list: TrayItem[]; focused: string | null; onFocus: (id: string) => void; onPick: (how: "library" | "camera") => void }) {
+function PickGrid({ tray, list, focused, onFocus, onPick }: { tray: ReturnType<typeof useSlideTray>; list: TrayItem[]; focused: string | null; onFocus: (id: string) => void; onPick: (how: ComposerPickHow) => void }) {
   const grid = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; over: number } | null>(null);
   const hold = useRef<{ id: string; t: number; x0: number; y0: number } | null>(null);
@@ -1025,6 +1079,9 @@ function EditStep({
   hideLoadsOn,
   filterDefaults,
   setFilterDefault,
+  filterPrefs,
+  comparing,
+  onCompare,
 }: {
   active: boolean;
   tray: ReturnType<typeof useSlideTray>;
@@ -1050,8 +1107,15 @@ function EditStep({
   hideLoadsOn: boolean;
   filterDefaults: FilterDefaults;
   setFilterDefault: (kind: FilterKind, g: MediaGrade | null) => void;
+  filterPrefs: ReturnType<typeof useFilterDefaults>;
+  comparing: boolean;
+  onCompare: (on: boolean) => void;
 }) {
   const shape = POST_ASPECTS[aspect];
+  // leaving the colour panel lets go of Compare
+  useEffect(() => {
+    if (tool !== "enhance") onCompare(false);
+  }, [tool, onCompare]);
   const enhanceable = (it: TrayItem | null | undefined): it is TrayItem => !!it && !it.existing && it.canGrade !== false && (it.kind === "image" || videoGradeReady());
   const [vh, setVh] = useState(800);
   useEffect(() => setVh(window.innerHeight), []);
@@ -1098,7 +1162,7 @@ function EditStep({
                   <StickerLayer items={items} setItems={setItems} width={stage.box.w} height={stage.box.h} context={stickerContext} request={request} />
                 </>
               ) : (
-                <SlideView it={it} box={stage.box} shape={shape} playing={active && i === slide} />
+                <SlideView it={it} box={stage.box} shape={shape} playing={active && i === slide} compare={comparing} />
               )}
             </div>
           ))}
@@ -1121,13 +1185,14 @@ function EditStep({
             <LookCarousel looks={filters.items} groups={filters.groups} look={filters.on} onLook={filters.pick} />
           </div>
         )}
-        {tool === "enhance" && enhanceable(cur) && <EnhanceTool tray={tray} it={cur} list={list} defaults={filterDefaults} setDefault={setFilterDefault} />}
+        {tool === "enhance" && enhanceable(cur) && <EnhanceTool key={cur.id} tray={tray} it={cur} list={list} defaults={filterDefaults} setDefault={setFilterDefault} prefs={filterPrefs} onCompare={onCompare} onDone={() => setTool(null)} />}
         {cur?.kind === "video" && tool !== "enhance" && <ClipTools tray={tray} it={cur} onCover={() => onCover(cur.id)} />}
       </div>
       <div className="shrink-0 px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
         <div className="flex justify-around pb-3">
-          {enhanceable(cur) && <Tool icon={<SlidersHorizontal className="h-5 w-5" />} label="Enhance" on={tool === "enhance"} onClick={() => setTool(tool === "enhance" ? null : "enhance")} />}
-          {onCoverSlide && filters.items.length > 1 && <Tool icon={<Blend className="h-5 w-5" />} label="Filter" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
+          {/* colour (Filters: the look of the picture itself) and Templates (a card, words and numbers over it) are two tools */}
+          {enhanceable(cur) && <Tool icon={<SlidersHorizontal className="h-5 w-5" />} label="Filters" on={tool === "enhance"} onClick={() => setTool(tool === "enhance" ? null : "enhance")} />}
+          {onCoverSlide && filters.items.length > 1 && <Tool icon={<Blend className="h-5 w-5" />} label="Templates" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
           {onCoverSlide && <Tool icon={<Type className="h-5 w-5" />} label="Text" onClick={() => setRequest({ kind: "text", n: Date.now() })} />}
           {onCoverSlide && <Tool icon={<Smile className="h-5 w-5" />} label="Stickers" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} />}
           <Tool icon={<AtSign className="h-5 w-5" />} label={tags ? `Tagged ${tags}` : "Tag"} on={tags > 0} onClick={onTag} />
@@ -1160,19 +1225,19 @@ function EditStep({
 }
 
 /** A slide that isn't the first photo: framed as it'll go (a clip plays, muted, only while it's on screen). */
-function SlideView({ it, box, shape, playing }: { it: TrayItem; box: { w: number; h: number }; shape: number; playing: boolean }) {
+function SlideView({ it, box, shape, playing, compare = false }: { it: TrayItem; box: { w: number; h: number }; shape: number; playing: boolean; compare?: boolean }) {
   if (!it.w || !it.h) return <div className="grid h-full w-full place-items-center"><Loader2 className="h-6 w-6 animate-spin text-white/60" /></div>;
   const size = { w: it.w, h: it.h };
   const f = clampFraming(it.framing ?? CENTRED, size, { w: shape, h: 1 });
   const p = placement(f, size, box);
   const style = { position: "absolute" as const, width: p.w, height: p.h, left: p.x, top: p.y, maxWidth: "none" };
-  return <SlideMedia it={it} style={style} playing={playing} />;
+  return <SlideMedia it={it} style={style} playing={playing} compare={compare} />;
 }
 
 /** A slide's photo or clip, its filter graded live over it (the same program the post bakes in). */
-function SlideMedia({ it, style, playing }: { it: TrayItem; style: React.CSSProperties; playing: boolean }) {
+function SlideMedia({ it, style, playing, compare = false }: { it: TrayItem; style: React.CSSProperties; playing: boolean; compare?: boolean }) {
   const [el, setEl] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
-  const grade = compiledFor(it.grade);
+  const grade = compare ? null : compiledFor(it.grade);
   const media =
     it.kind === "video" && it.video && playing ? (
       <TrimmedVideo key={it.video} src={it.video} trim={it.trim} poster={it.preview ?? undefined} style={style} className={cn("object-cover", grade && "opacity-0")} videoRef={setEl} />
@@ -1197,7 +1262,25 @@ function videoGradeReady(): boolean {
  * default for posts, and putting the same filter on other slides (Auto reads
  * each picture, pulled a little toward the set so the post looks like one).
  */
-function EnhanceTool({ tray, it, list, defaults, setDefault }: { tray: ReturnType<typeof useSlideTray>; it: TrayItem; list: TrayItem[]; defaults: FilterDefaults; setDefault: (kind: FilterKind, g: MediaGrade | null) => void }) {
+function EnhanceTool({
+  tray,
+  it,
+  list,
+  defaults,
+  setDefault,
+  prefs,
+  onCompare,
+  onDone,
+}: {
+  tray: ReturnType<typeof useSlideTray>;
+  it: TrayItem;
+  list: TrayItem[];
+  defaults: FilterDefaults;
+  setDefault: (kind: FilterKind, g: MediaGrade | null) => void;
+  prefs: ReturnType<typeof useFilterDefaults>;
+  onCompare: (on: boolean) => void;
+  onDone: () => void;
+}) {
   const { img, stats } = useGradeSource(it.preview);
   const others = list.filter((x) => !x.existing && x.canGrade !== false && (x.kind === "image" || videoGradeReady()));
   const applyTo = async (ids: string[]) => {
@@ -1205,15 +1288,27 @@ function EnhanceTool({ tray, it, list, defaults, setDefault }: { tray: ReturnTyp
     const targets = others.filter((x) => ids.includes(x.id));
     const read = await Promise.all(targets.map((x) => (x.preview ? loadGradeSource(x.preview) : Promise.resolve(null))));
     const all = read.map((r) => r?.stats ?? null);
-    targets.forEach((x, i) => tray.setGrade(x.id, { filter: g.filter, intensity: g.intensity, adjust: g.adjust, stats: g.filter === "auto" ? consistentStats(all[i], all) : all[i] }));
+    targets.forEach((x, i) => tray.setGrade(x.id, { filter: g.filter, intensity: g.intensity, adjust: g.adjust, hsl: g.hsl, stats: g.filter === "auto" ? consistentStats(all[i], all) : all[i] }));
     toast.message(targets.length === others.length ? "On every slide" : `On ${targets.length} slide${targets.length === 1 ? "" : "s"}`, { description: "Change any one on its own any time." });
   };
   return (
-    <div className="px-4 pt-3 animate-in fade-in-0 duration-200" data-composer-enhance>
+    <div className="px-4 pt-2 animate-in fade-in-0 duration-200" data-composer-enhance>
       <FilterPanel
         grade={it.grade ?? null}
         stats={stats}
         onChange={(g) => tray.setGrade(it.id, g)}
+        onCompare={onCompare}
+        onDone={onDone}
+        presets={defaults.presets}
+        onSavePreset={(g) => {
+          const p = prefs.savePreset(g);
+          if (p) toast.message(`Saved as ${p.name}`, { description: "It's first in Filters on every photo and clip." });
+        }}
+        onDeletePreset={(p) => {
+          const at = (defaults.presets ?? []).findIndex((x) => x.id === p.id);
+          prefs.deletePreset(p.id);
+          toast.message(`${p.name} deleted`, { action: { label: "Undo", onClick: () => prefs.restorePreset(p, at) } });
+        }}
         source={img}
         sourceSize={img ? { w: img.naturalWidth, h: img.naturalHeight } : null}
         defaultGrade={defaults.post}

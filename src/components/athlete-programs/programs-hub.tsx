@@ -17,7 +17,7 @@ import { OpenImports } from "@/components/program-import/open-imports";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
 import { useServiceTier } from "@/lib/service-tier";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
@@ -195,6 +195,7 @@ function MyPrograms({
 }) {
   const { clientId } = useServiceTier();
   const userId = usePortalUserId();
+  const previewing = useViewingAsClient();
   const current = useMyCurrentProgram(clientId, userId);
   const own = usePrograms("mine", {});
   const saved = useSavedPlans(isSelfServe);
@@ -221,8 +222,8 @@ function MyPrograms({
         <PausedProgramCard entry={paused} chooseAnother={false} />
       )}
 
-      {/* a program being imported, or read and waiting to be checked */}
-      <OpenImports />
+      {/* drafts: a program being built (kept from any device) or imported, not saved yet */}
+      <OpenImports enabled={!previewing} />
 
       {own.isError && (
         <Empty

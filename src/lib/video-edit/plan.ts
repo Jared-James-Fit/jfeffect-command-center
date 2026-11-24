@@ -33,6 +33,19 @@ export type VideoTrim = { start: number; end: number };
 
 /** 720p: sharp enough to judge depth and bar path, small enough for a gym's signal. */
 export const TARGET_LONG_EDGE = 1280;
+/**
+ * A Crew post's or story's clip (Nov 23 2026, `caps.hd`): 1080p, a phone's
+ * own screen, whenever the place's budget gives it the bits to look better
+ * than 720p would (`HD_MIN_BITRATE`). A 60 s story, a 90 s post and anything
+ * shorter; longer posts still squeeze into 720p.
+ */
+export const HD_LONG_EDGE = 1920;
+/** What a 1080p re-encode aims for (an iPhone films 1080p30 at ~10 Mbps; 6 is clean for a phone screen). */
+export const HD_VIDEO_BITRATE = 6_000_000;
+/** Under this a 1080p encode looks worse than 720p at the same bits, so it goes 720p. */
+export const HD_MIN_BITRATE = 4_000_000;
+/** A clip at 1080p or under, no heavier than this, goes up as it is (the Crew camera's own recordings, ~6 Mbps). */
+export const HD_LEAN_BITRATE = 9_000_000;
 /** The long edge when a long clip has to squeeze into its budget. */
 export const SMALL_LONG_EDGE = 960;
 export const TARGET_VIDEO_BITRATE = 2_500_000;
@@ -90,13 +103,27 @@ export function copyBytes(src: Pick<SourceInfo, "bytes" | "duration">, trim: Vid
   return Math.ceil(bytesPerSecond(src) * (sel.end - sel.start) * MUX_OVERHEAD) + 64 * 1024;
 }
 
-/** Lean already: no bigger than 720p-ish at a modest bitrate (re-encoding would only cost time and quality). */
-export function isLean(src: SourceInfo): boolean {
+/**
+ * Lean already: no bigger than 720p-ish at a modest bitrate (re-encoding
+ * would only cost time and quality). Where the place takes 1080p (`hd`),
+ * a 1080p clip at a phone camera's own bitrate counts too.
+ */
+export function isLean(src: SourceInfo, hd = false): boolean {
   const longEdge = Math.max(src.width, src.height);
   const bitrate = bytesPerSecond(src) * 8;
   const highFps = !!src.fps && src.fps > MAX_FPS + 2;
-  return longEdge <= TARGET_LONG_EDGE && !highFps && bitrate <= TARGET_VIDEO_BITRATE * 1.5;
+  if (highFps) return false;
+  if (longEdge <= TARGET_LONG_EDGE && bitrate <= TARGET_VIDEO_BITRATE * 1.5) return true;
+  return hd && longEdge <= HD_LONG_EDGE && bitrate <= HD_LEAN_BITRATE;
 }
+
+export type PlanCaps = {
+  canEncode: boolean;
+  muted?: boolean;
+  graded?: boolean;
+  /** The place takes 1080p (a Crew post or story) and this phone's encoder does 1080p. */
+  hd?: boolean;
+};
 
 /** Plays as it is in the app's players. */
 function sendable(src: SourceInfo): boolean {
@@ -145,7 +172,7 @@ export function outputSize(src: Pick<SourceInfo, "width" | "height">, longEdge: 
  * is: the audio track is left out of a copy (still a remux, ~instant) or a
  * re-encode, and the re-encode spends the audio's bits on the picture.
  */
-export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean; graded?: boolean }): VideoPlan {
+export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: PlanCaps): VideoPlan {
   const plan = planSelection(src, trim, ctx, caps);
   if (!caps.muted || !src.hasAudio || plan.mode === "reject") return plan;
   if (plan.mode === "original") {
@@ -161,7 +188,7 @@ export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, c
  * fallback (a copy) is never offered: a copy would post the clip without the
  * filter it showed. A phone that can't encode never offers a filter on a clip.
  */
-function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean; graded?: boolean }): VideoPlan {
+function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: PlanCaps): VideoPlan {
   const sel = selectionOf(src, trim);
   const len = sel.end - sel.start;
   const limit = videoLimit(ctx);
@@ -183,7 +210,8 @@ function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx:
 
   // Nothing to gain from work on the phone.
   const graded = !!caps.graded && caps.canEncode;
-  if (!graded && copyFits && (small || isLean(src)) && (exactCopy || !caps.canEncode)) {
+  const hd = !!caps.hd && caps.canEncode;
+  if (!graded && copyFits && (small || isLean(src, hd)) && (exactCopy || !caps.canEncode)) {
     return whole ? { mode: "original" } : { mode: "copy", start: sel.start, end: sel.end, estBytes: copy };
   }
   if (!caps.canEncode) {
@@ -197,7 +225,11 @@ function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx:
   const fitBitrate = Math.floor((budget.target * 8) / MUX_OVERHEAD / Math.max(len, 1)) - audio;
   let videoBitrate = Math.min(TARGET_VIDEO_BITRATE, fitBitrate);
   let longEdge = TARGET_LONG_EDGE;
-  if (videoBitrate < 1_200_000) longEdge = SMALL_LONG_EDGE;
+  if (hd && Math.min(HD_VIDEO_BITRATE, fitBitrate) >= HD_MIN_BITRATE && Math.max(src.width, src.height) > TARGET_LONG_EDGE) {
+    // 1080p while the budget gives it enough bits to beat 720p (never upscaled: a 720p source stays 720p)
+    videoBitrate = Math.min(HD_VIDEO_BITRATE, fitBitrate);
+    longEdge = HD_LONG_EDGE;
+  } else if (videoBitrate < 1_200_000) longEdge = SMALL_LONG_EDGE;
   if (videoBitrate < MIN_VIDEO_BITRATE) videoBitrate = MIN_VIDEO_BITRATE;
   const { width, height } = outputSize(src, longEdge);
   const estBytes = Math.ceil((((videoBitrate + audio) * len) / 8) * MUX_OVERHEAD);

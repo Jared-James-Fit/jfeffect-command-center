@@ -13,13 +13,14 @@
 //              RPE already filled in, last time on the card
 // app-insights Training analytics, Overview: estimated maxes, PRs, volume, consistency
 // app-food     Nutrition: their own meal plan and macros
-// app-build    the program builder
-// app-import   an imported spreadsheet being checked before it's saved
+// app-build    the program builder on a phone: the Strength block's Lower A, a top set and its back-offs
+// app-build-desktop  the same program in the builder on a computer
+// app-import   an imported spreadsheet, every exercise matched, ready to save
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 const { run } = require("./harness.cjs");
-const { composeWebp } = require("./frame.cjs");
+const { composeWebp, composeDesktopWebp } = require("./frame.cjs");
 const F = require("./fixtures.cjs");
 
 const OUT = path.join(process.cwd(), "src/assets/landing");
@@ -81,48 +82,79 @@ const ex = (name) => {
 };
 const key = (s) => s.replace(/[^a-z0-9]/gi, "").slice(0, 12) + Math.random().toString(36).slice(2, 6);
 
-/* ---------- the builder: a 12 week upper / lower program ---------- */
+/* ---------- the builder: a 12 week program in three blocks ---------- */
 const PROG_ID = "f1111111-2222-4333-8444-555555555555";
-const DAYS = [
-  ["Lower A", [["Back Squat", 4, "5", "7", 180], ["Romanian Deadlift", 3, "8", "7", 150], ["Leg Press", 3, "10-12", "8", 120], ["Seated Leg Curl", 3, "12", "8", 75]]],
-  ["Upper A", [["Bench Press", 4, "5", "7", 180], ["Chest Supported Row", 3, "8-10", "8", 120], ["Seated Dumbbell Shoulder Press", 3, "8-10", "8", 90], ["Cable Lateral Raise", 3, "12-15", "9", 60]]],
-  ["Lower B", [["Deadlift", 4, "4", "7", 180], ["Bulgarian Split Squat", 3, "8", "8", 90], ["Seated Leg Curl", 3, "10-12", "8", 75]]],
-  ["Upper B", [["Incline Dumbbell Press", 4, "8", "8", 120], ["Lat Pulldown", 4, "10", "8", 90], ["Cable Lateral Raise", 3, "15", "9", 60]]],
+// each block's days: [name, sets, reps, rpe, rest, role?, pct?] (a top set and its back-offs share a group)
+const BLOCKS = [
+  {
+    name: "Hypertrophy",
+    topRpe: ["7", "7.5", "8", "6"],
+    days: [
+      ["Lower A", [["Back Squat", 4, "8", "7", 150], ["Romanian Deadlift", 3, "10", "7", 120], ["Leg Press", 3, "12-15", "8", 90], ["Seated Leg Curl", 3, "12-15", "9", 60]]],
+      ["Upper A", [["Bench Press", 4, "8", "7", 150], ["Chest Supported Row", 3, "10-12", "8", 90], ["Seated Dumbbell Shoulder Press", 3, "10-12", "8", 90], ["Cable Lateral Raise", 3, "15-20", "9", 60]]],
+      ["Lower B", [["Deadlift", 3, "6", "7", 180], ["Bulgarian Split Squat", 3, "10", "8", 90], ["Seated Leg Curl", 3, "12", "9", 60]]],
+      ["Upper B", [["Incline Dumbbell Press", 4, "10", "8", 120], ["Lat Pulldown", 4, "10-12", "8", 90], ["Cable Lateral Raise", 3, "15", "9", 60]]],
+    ],
+  },
+  {
+    name: "Strength",
+    topRpe: ["7.5", "8", "8.5", "6"],
+    days: [
+      ["Lower A", [["Back Squat", 1, "3", "8", 240, "top"], ["Back Squat", 3, "5", null, 180, "backoff", 85], ["Romanian Deadlift", 3, "6", "7", 150], ["Leg Press", 3, "8-10", "8", 120], ["Seated Leg Curl", 3, "10", "8", 75]]],
+      ["Upper A", [["Bench Press", 1, "3", "8", 240, "top"], ["Bench Press", 3, "5", null, 180, "backoff", 85], ["Chest Supported Row", 3, "8", "8", 120], ["Cable Lateral Raise", 3, "12-15", "9", 60]]],
+      ["Lower B", [["Deadlift", 1, "2", "8", 240, "top"], ["Deadlift", 2, "4", null, 180, "backoff", 85], ["Bulgarian Split Squat", 3, "8", "8", 90]]],
+      ["Upper B", [["Incline Dumbbell Press", 4, "6-8", "8", 120], ["Lat Pulldown", 4, "8-10", "8", 90]]],
+    ],
+  },
+  {
+    name: "Peak",
+    topRpe: ["8.5", "9", "9", "6"],
+    days: [
+      ["Lower A", [["Back Squat", 1, "1", "9", 300, "top"], ["Back Squat", 2, "3", null, 180, "backoff", 90], ["Romanian Deadlift", 2, "5", "7", 150]]],
+      ["Upper A", [["Bench Press", 1, "1", "9", 300, "top"], ["Bench Press", 2, "3", null, 180, "backoff", 90], ["Chest Supported Row", 3, "8", "7", 120]]],
+      ["Lower B", [["Deadlift", 1, "1", "8.5", 300, "top"], ["Deadlift", 2, "2", null, 180, "backoff", 90]]],
+      ["Upper B", [["Incline Dumbbell Press", 3, "6", "7", 120], ["Lat Pulldown", 3, "8", "7", 90]]],
+    ],
+  },
 ];
+const DAYS = BLOCKS[0].days;
 const dayKeys = DAYS.map(([t]) => key(t));
-const exKeys = DAYS.map(([, rows]) => rows.map(([n]) => key(n)));
-const RPE_WEEK = ["7", "7", "7.5", "8", "6", "7.5", "8", "8.5", "6", "8", "8.5", "9"];
 const plan = {
   v: 1,
-  blocks: [
-    {
-      key: key("block"),
-      name: "Block 1",
-      weeks: RPE_WEEK.map((top, w) => ({
-        key: key(`w${w}`),
-        days: DAYS.map(([title, rows], d) => ({
+  blocks: BLOCKS.map((bl) => {
+    const groupKeys = bl.days.map(() => key("g"));
+    const exKeys = bl.days.map(([, rows]) => rows.map(([n]) => key(n)));
+    return {
+      key: key(bl.name),
+      name: bl.name,
+      weeks: bl.topRpe.map((top, w) => ({
+        key: key(`${bl.name}${w}`),
+        days: bl.days.map(([title, rows], d) => ({
           key: dayKeys[d],
           title,
           focus: null,
-          exercises: rows.map(([n, sets, reps, rpe, rest], i) => ({
+          exercises: rows.map(([n, sets, reps, rpe, rest, role, pct], i) => ({
             key: exKeys[d][i],
             exercise_id: ex(n).id,
-            sets,
+            // the deload week (the block's 4th) drops a set off everything but a top set
+            sets: w === 3 && role !== "top" ? Math.max(1, sets - 1) : sets,
             reps,
-            rpe: i === 0 ? top : rpe,
+            rpe: role === "backoff" ? null : i === 0 ? top : w === 3 ? "6" : rpe,
             rir: null,
             load: null,
             unit: null,
-            pct: null,
-            pct_of: null,
+            pct: role === "backoff" ? pct : null,
+            pct_of: role === "backoff" ? "top_set" : null,
             rest_seconds: rest,
             tempo: null,
             notes: null,
+            role: role ?? null,
+            group: role ? groupKeys[d] : null,
           })),
         })),
       })),
-    },
-  ],
+    };
+  }),
 };
 const exercise_info = Object.fromEntries(
   F.fixtures.exercises.map((e) => [e.id, { name: e.name, muscle_group: e.muscle_group, equipment: e.equipment }]),
@@ -135,7 +167,7 @@ const detail = {
   goal: "strength",
   level: "intermediate",
   weeks: 12,
-  blocks: 1,
+  blocks: 3,
   days_per_week: 4,
   exercise_count: 14,
   visibility: "private",
@@ -169,7 +201,7 @@ const importWeeks = PCT.map((pct, w) => ({
   notes: null,
   days: [
     { title: "Lower A", notes: null, exercises: [E("Back Squat", w === 3 || w === 7 ? 3 : 5, "5", { pct, pct_of: "1rm", rest_seconds: 180 }), E("RDL", 3, "8", { rpe: "7", rest_seconds: 150 }), E("Leg Press", 3, "10-12", { rir: "2" }), E("Seated Leg Curl", 3, "12", { rir: "2" })] },
-    { title: "Upper A", notes: null, exercises: [E("Bench Press", w === 3 || w === 7 ? 3 : 5, "5", { pct, pct_of: "1rm", rest_seconds: 180 }), E("Chest Supported Row", 3, "8-10", { rir: "2" }), E("DB Shoulder Press", 3, "8-10", { rir: "2" }), E("Cable Lateral Raise", 3, "15", { rir: "1" })] },
+    { title: "Upper A", notes: null, exercises: [E("Bench Press", w === 3 || w === 7 ? 3 : 5, "5", { pct, pct_of: "1rm", rest_seconds: 180 }), E("Chest Supported Row", 3, "8-10", { rir: "2" }), E("Seated DB Shoulder Press", 3, "8-10", { rir: "2" }), E("Cable Lateral Raise", 3, "15", { rir: "1" })] },
     { title: "Lower B", notes: null, exercises: [E("Deadlift", 4, "3", { pct: pct + 5, pct_of: "1rm", rest_seconds: 180 }), E("SSB Squat", 3, "6", { rpe: "7" }), E("Seated Leg Curl", 3, "10", { rir: "2" })] },
     { title: "Upper B", notes: null, exercises: [E("Incline DB Press", 4, "8", { rir: "2" }), E("Lat Pulldown", 4, "10", { rir: "2" }), E("Cable Lateral Raise", 3, "15", { rir: "1" })] },
   ],
@@ -322,20 +354,43 @@ const SHOTS = [
     },
   },
   {
+    // the Strength block's first week: a top set with its back-offs, the blocks' colours along the bottom
     name: "app-build",
     path: `/portal/programs/new?edit=${PROG_ID}`,
-    rpc: { athlete_program_detail: detail },
+    rpc: { athlete_program_detail: detail, athlete_program_drafts: null },
+    fixtures: { athlete_program_drafts: [], athlete_program_versions: [] },
     afterLoad: async (p) => {
       await closeToasts(p);
+      await p.click('[data-week-tab="1:0"]').catch(() => {});
+      await p.waitForTimeout(800);
       await blur(p);
     },
   },
   {
-    name: "app-import",
-    path: `/portal/programs/import?id=${IMP_ID}`,
-    fixtures: { program_imports: [importRow] },
+    name: "app-build-desktop",
+    desktop: true,
+    width: 1280,
+    height: 800,
+    path: `/portal/programs/new?edit=${PROG_ID}`,
+    rpc: { athlete_program_detail: detail },
+    fixtures: { athlete_program_drafts: [], athlete_program_versions: [] },
     afterLoad: async (p) => {
       await closeToasts(p);
+      await p.click('[data-week-tab="1:0"]').catch(() => {});
+      await p.waitForTimeout(800);
+      await blur(p);
+    },
+  },
+  {
+    // every exercise matched (shorthand too: "SSB Squat", "RDL"), nothing to fix, Save one tap away
+    name: "app-import",
+    path: `/portal/programs/import?id=${IMP_ID}`,
+    fixtures: { program_imports: [importRow], athlete_program_drafts: [] },
+    afterLoad: async (p) => {
+      await closeToasts(p);
+      // the matches it made, shorthand included ("SSB Squat" → Safety Squat Bar Squat)
+      await p.click('[data-import-group="matched"] button').catch(() => {});
+      await p.waitForTimeout(500);
       await blur(p);
     },
   },
@@ -349,6 +404,7 @@ const SHOTS = [
     const raw = path.join(TMP, `${s.name}.png`);
     await run({
       ...common,
+      ...(s.desktop ? { desktop: true, width: s.width, height: s.height, scale: 2 } : {}),
       rpc: { ...common.rpc, ...(s.rpc ?? {}) },
       path: s.path,
       out: raw,
@@ -359,7 +415,8 @@ const SHOTS = [
     });
     if (process.env.RAW) fs.copyFileSync(raw, path.join(process.env.RAW, `${s.name}.png`));
     const out = path.join(OUT, `${s.name}.webp`);
-    await composeWebp(browser, raw, out);
+    if (s.desktop) await composeDesktopWebp(browser, raw, out, { width: s.width, height: s.height });
+    else await composeWebp(browser, raw, out);
     console.log(`${s.name}.webp  ${Math.round(fs.statSync(out).size / 1024)} KB`);
   }
   await browser.close();

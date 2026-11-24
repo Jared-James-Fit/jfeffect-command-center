@@ -536,6 +536,27 @@ export function diffPlans(before: CardioPlan, after: CardioPlan, ctx: PlanContex
   return out;
 }
 
+/**
+ * A proposal with only the picked changes on the base plan (Cleo's per-change approval): a picked
+ * added or changed session is taken as proposed, a picked removal is dropped, and everything not
+ * picked stays exactly as it was on the base. Keys are diffPlans' (the proposed session's key, a
+ * removed session's own key).
+ */
+export function pickChanges(base: CardioPlan, proposed: CardioPlan, keys: ReadonlySet<string>): CardioPlan {
+  const same = (a: CardioSession, b: CardioSession) => a.key === b.key || (!!a.id && a.id === b.id);
+  const out: CardioSession[] = [];
+  for (const p of proposed.sessions) {
+    const b = base.sessions.find((x) => same(p, x));
+    if (keys.has(p.key)) out.push(p);
+    else if (b) out.push(b);
+  }
+  for (const b of base.sessions) {
+    if (proposed.sessions.some((p) => same(p, b))) continue;
+    if (!keys.has(b.key)) out.push(b);
+  }
+  return { sessions: out };
+}
+
 /** A change the client would notice (a private note alone isn't one). */
 export function isMeaningful(changes: SessionChange[]): boolean {
   return changes.some((c) => c.kind !== "note");

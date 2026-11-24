@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { EmptyState, ErrorState, OfflineState, PageSkeleton, SlowNote } from "@/components/loading";
 import { queryView } from "@/lib/loading/load-state";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDragDropTouch } from "@/lib/drag-drop-touch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -15,13 +16,13 @@ import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cle
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { useEditorBack } from "@/lib/editor-back";
 import { ProgramSheet } from "@/components/program-editor/program-sheet";
-import { Keyboard, Link2, StickyNote, Table2, TrendingUp, Unlink } from "lucide-react";
+import { History, Keyboard, Link2, StickyNote, Table2, TrendingUp, Unlink } from "lucide-react";
 import { isTimedCardio } from "@/lib/timed-cardio";
 import { supersetPartner, withSuperset, withoutSuperset } from "@/lib/program-editor-superset";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
-  estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
+  estimateDayMinutes, rowsWithNames, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
@@ -35,6 +36,9 @@ import { ProgramBuilderShortcutsButton, pbShortcutsEnabled } from "@/components/
 import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
 import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
 import { colorClass, inferBlockType, resolveBlockType } from "@/lib/block-types";
+import { exerciseRole, isMainRole, ROLE_MARK } from "@/lib/exercise-role";
+import { TemplateVersionsSheet } from "@/components/program-editor/template-versions-sheet";
+import { tagTemplateVersion } from "@/lib/program-history-queries";
 import { useBlockTypeLibrary } from "@/lib/block-types-queries";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { classifyExercise } from "@/lib/exercise-classifier";
@@ -1190,10 +1194,16 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   // sidebar (exercises go in with each day's + buttons), no zoom, no full
   // screen, and every card opens (compact rows only help on a wide screen).
   const phone = useIsMobileNow();
+  // the exercise library drags into a day by touch too (an iPad): the polyfill's listeners on this box only
+  const dragRoot = useRef<HTMLDivElement | null>(null);
+  useDragDropTouch(dragRoot, !phone);
   const zoom = phone ? 1 : zoomPref;
   const compact = phone ? false : compactPref;
   const [weekSlot, setWeekSlot] = useState<HTMLDivElement | null>(null);
   const [maxesOpen, setMaxesOpen] = useState(false);
+  // a template's version history (the library builder; a client's block has its own record)
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versionsHere, setVersionsHere] = useState<{ blockId: string | null; blockName: string | null; week: number | null } | null>(null);
   const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
   const fitToScreen = () => {
     // Rough fit heuristic based on viewport width
@@ -1362,6 +1372,19 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
               <Dumbbell className="mr-2 h-4 w-4" /> 1RM and training maxes
             </DropdownMenuItem>
           )}
+          {templateId && !clientId && (
+            <DropdownMenuItem
+              onSelect={() => {
+                const h = builderNav.here();
+                const blk = h && multi ? checkBlocks[h.blockIndex] : null;
+                setVersionsHere(blk ? { blockId: blk.id, blockName: blk.name, week: h?.week ?? null } : null);
+                setVersionsOpen(true);
+              }}
+              data-template-versions-open
+            >
+              <History className="mr-2 h-4 w-4" /> Version history
+            </DropdownMenuItem>
+          )}
           {!phone && (
             <>
               {canSetMaxes && <DropdownMenuSeparator />}
@@ -1422,10 +1445,31 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     <ProgramOverviewContext.Provider value={programOverview ?? null}>
     {portalToolbar && createPortal(toolbar, toolbarTarget!)}
     {phone && status ? <div className="flex items-center pb-1 pt-1" data-builder-status>{status}</div> : null}
+    {versionsOpen && templateId && (
+      <TemplateVersionsSheet
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        templateId={templateId}
+        current={payload}
+        exercises={exercises as any[]}
+        here={versionsHere}
+        onRestore={(next, versionNo, what) => {
+          const before = payload;
+          setP(next as any);
+          // once the editor has saved it, the version it makes says it was a restore
+          window.setTimeout(() => void tagTemplateVersion(templateId, versionNo), 15000);
+          toast.success(`Restored ${what}`, {
+            description: "Saved like any edit. Later versions stay in history.",
+            action: { label: "Undo", onClick: () => setP(before) },
+            duration: 8000,
+          });
+        }}
+      />
+    )}
     {maxesOpen && clientId && blockId && (
       <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
     )}
-    <div className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
+    <div ref={dragRoot} className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
       {!portalToolbar && (
         <div className="sticky top-0 z-20 border-b border-border bg-background">
           {toolbar}
@@ -1994,17 +2038,20 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     });
     return out.status === "ok" && out.load != null ? `= ${out.load} ${out.unit}` : out.status === "no-max" ? "no max" : null;
   }, [ctxClientId, ctxMaxesIndex, exMetaById]);
-  const weekStats = useMemo(() => weeksData.map((w: any) => {
-    const days = w.days || [];
-    let rowCount = 0;
-    let minutes = 0;
-    for (const d of days) {
-      const dr = d.rows || [];
-      rowCount += dr.length;
-      minutes += estimateDayMinutes(dr) || 0;
-    }
-    return { days: days.length, rows: rowCount, minutes };
-  }), [weeksData]);
+  const weekStats = useMemo(() => {
+    const names = new Map<string, string>((exercises as any[]).map((e: any) => [e.id, e.name]));
+    return weeksData.map((w: any) => {
+      const days = w.days || [];
+      let rowCount = 0;
+      let minutes = 0;
+      for (const d of days) {
+        const dr = d.rows || [];
+        rowCount += dr.length;
+        minutes += estimateDayMinutes(rowsWithNames(dr, (id) => names.get(id))) || 0;
+      }
+      return { days: days.length, rows: rowCount, minutes };
+    });
+  }, [weeksData, exercises]);
   const fmtDur = (m: number) => { if (!m || m <= 0) return "—"; const h = Math.floor(m/60); const mm = Math.round(m%60); return h > 0 ? `${h}h ${mm}m` : `${mm}m`; };
   const weekColumnWidthClass = compact
     ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
@@ -2195,6 +2242,9 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   };
   // The weeks: one row in the editor's toolbar (the canvas's slot), the
   // week you're on in neutral, + adds one, ⋯ holds the rest.
+  // the block on screen: its name and type colour lead the weeks, so where you are reads at a glance
+  const thisBlock = overview?.blocks.find((b) => b.current) ?? null;
+  const blockTint = thisBlock?.resolved.type ? colorClass(thisBlock.resolved.type) : null;
   const weekNav = (
     <div className="flex min-w-0 flex-1 items-center gap-1">
       {!phone && (
@@ -2243,7 +2293,20 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
         aria-label="Weeks"
         className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <span className="shrink-0 px-1 text-xs text-muted-foreground max-md:hidden @max-[56rem]/tb:hidden">Week</span>
+        {thisBlock && overview && overview.blocks.length > 1 ? (
+          <span
+            className="flex max-w-[11rem] shrink-0 items-center gap-1.5 px-1 text-xs text-muted-foreground max-md:hidden @max-[56rem]/tb:hidden"
+            title={`${thisBlock.name}${thisBlock.resolved.type ? ` · ${thisBlock.resolved.type.name}` : ""}`}
+            data-week-nav-block
+          >
+            <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", blockTint ? blockTint.dot : "border border-dashed border-muted-foreground/60")} />
+            <span className="truncate font-medium text-foreground">{thisBlock.name}</span>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">Week</span>
+          </span>
+        ) : (
+          <span className="shrink-0 px-1 text-xs text-muted-foreground max-md:hidden @max-[56rem]/tb:hidden">Week</span>
+        )}
         {weeksData.map((w: any, i: number) => (
           <button
             key={i}
@@ -2255,12 +2318,16 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             data-week-chip
             onClick={() => goWeek(i)}
             className={cn(
-              "shrink-0 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors",
+              "relative shrink-0 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors",
               phone ? "h-10 min-w-10" : "h-8 min-w-8",
               activeIdx === i ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {w.week_index}
+            {/* the week on screen carries its block's colour underneath */}
+            {activeIdx === i && blockTint && (
+              <span aria-hidden className={cn("absolute inset-x-2 bottom-0.5 h-[2px] rounded-full", blockTint.bar)} />
+            )}
           </button>
         ))}
         <button
@@ -2335,7 +2402,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               name: blockName ?? "This block",
               weeks: weeksData.length,
               weekPhases: weeksData.map((w: any) => w?.phase ?? null),
-              resolved: resolveBlockType({ name: blockName }),
+              resolved: resolveBlockType({ name: blockName, weeks: weeksData }),
               current: true,
               onOpen: (w) => { if (w != null) setActiveIdx(w); setView("week"); },
             }],
@@ -2567,7 +2634,7 @@ function DayFocus({ weeksData, weekIdx, dayIdx, onGo, setWeek, exercises, compac
   const exById = useMemo(() => new Map<string, any>((exercises as any[]).map((e) => [e.id, e])), [exercises]);
   const rows: any[] = day?.rows ?? [];
   const nameOf = (r: any): string => (r?.exercise_id ? exById.get(r.exercise_id)?.name : null) ?? r?.exercise_name_override ?? "Exercise";
-  const minutes = rows.length ? estimateDayMinutes(rows) : 0;
+  const minutes = rows.length ? estimateDayMinutes(rowsWithNames(rows, (id) => exById.get(id)?.name)) : 0;
   const sets = rows.filter((r) => r?.measurement_type !== "time").reduce((n, r) => n + (Number(r?.sets) || 0), 0);
   const muscles = useMemo(() => {
     const m = new Map<string, number>();
@@ -2695,6 +2762,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
   onlyDay?: number }) {
   const days = week.days || [];
   const purposeLabelsByDay = useMemo(() => weekPurposeLabelsByDay(days, exercises), [days, exercises]);
+  const exNameById = useMemo(() => new Map<string, string>((exercises as any[]).map((e: any) => [e.id, e.name])), [exercises]);
   const phone = useBuilderPhone();
   const clip = useClip();
   // Days that show their Focus line even before one is typed.
@@ -2763,7 +2831,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
       <div className={cn("grid gap-3", layout === "grid" && "@4xl:grid-cols-2 @[96rem]:grid-cols-3", compact && "gap-2")}>
       {days.map((d: any, i: number) => {
         if (onlyDay != null && i !== onlyDay) return null;
-        const dayMinutes = estimateDayMinutes(d.rows || []);
+        const dayMinutes = estimateDayMinutes(rowsWithNames(d.rows || [], (id) => exNameById.get(id)));
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         const positional = i + 1;
         const dayLabel = formatDayLabel(d, positional);
@@ -3979,6 +4047,9 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
   const showLabel = !followTitle && !!purposeLabel && purposeLabel !== "Assistance";
+  // what this exercise is in the workout, as a quiet bar at the row's edge (its label says it in words)
+  const role = exerciseRole({ purposeLabel, backoff: !!followTitle, cardio: kind === "cardio", warmup: kind === "mobility" });
+  const roleBar = ROLE_MARK[role].bar;
   // The same prescription as columns, for a card wide enough to line them up
   // (the Day view): sets × reps · load · effort · rest, each in its place.
   const setsText = hasSets && amount ? `${row.sets} × ${amount}` : hasSets ? `${row.sets} set${Number(row.sets) === 1 ? "" : "s"}` : amount ? (isTime ? amount : `${amount} reps`) : null;
@@ -4084,7 +4155,7 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
         {followTitle ? (
           <span className="min-w-0 font-semibold leading-snug" data-backoff-title>{followTitle}</span>
         ) : (
-        <span className="min-w-0 font-semibold leading-snug [overflow-wrap:anywhere] line-clamp-2">
+        <span className={cn("min-w-0 leading-snug [overflow-wrap:anywhere] line-clamp-2", isMainRole(role) ? "font-semibold text-foreground" : role === "warmup" || role === "cardio" ? "font-medium text-foreground/85" : "font-semibold", isMainRole(role) && !phone && "text-[15px]")} data-row-name>
           {exName || <span className="font-normal italic text-muted-foreground">No exercise yet</span>}
         </span>
         )}
@@ -4141,7 +4212,11 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
           : cn("bg-muted/40", phone ? "space-y-3 py-3 pl-2 pr-2" : "space-y-2.5 py-3 pl-2 pr-2"),
       )}
       title={collapsed ? "Click to edit" : undefined}
+      data-row-role={role}
     >
+      {roleBar && (
+        <span aria-hidden className={cn("pointer-events-none absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-full", roleBar)} data-row-role-bar />
+      )}
       {collapsed ? (
         <div className="flex min-w-0 items-start gap-2.5">
           {grip ?? gripRoom}

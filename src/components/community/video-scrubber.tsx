@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   CLIP_SCRUB_EVENT,
   KEY_STEP_SECONDS,
+  LINE_SYNC_SLACK_MS,
   LINGER_MS,
   SCRUB_TAP_PX,
   WAKE_MS,
@@ -11,6 +12,8 @@ import {
   clipLength,
   inScrubBand,
   isBarTap,
+  lineDriftMs,
+  lineTimeMs,
   makeScrubSeeker,
   rangesOf,
   ratioAt,
@@ -132,11 +135,52 @@ export function VideoScrubber({
     const seeker = makeScrubSeeker(v);
 
     const ranges = () => rangesOf(v.seekable);
+    // The line runs on the compositor: one animation of its scaleX across the clip's length, repeating like the
+    // clip, played, paused and moved to the clip's time on its events (video-scrub.ts lineTimeMs / lineDriftMs).
+    // A playing clip costs the page nothing a frame. Only a browser without Element.animate paints it a frame at
+    // a time (the frame loop below).
+    let anim: Animation | null = null;
+    let animLen = 0;
+    const lineAnim = (): Animation | null => {
+      const f = fill.current;
+      if (!f || !len || typeof f.animate !== "function") return null;
+      if (anim && animLen === len) return anim;
+      anim?.cancel();
+      try {
+        anim = f.animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], {
+          duration: len * 1000,
+          iterations: Infinity,
+          easing: "linear",
+          fill: "both",
+        });
+        anim.pause();
+        animLen = len;
+      } catch {
+        anim = null;
+      }
+      return anim;
+    };
     const paint = (t?: number) => {
       if (!len) return;
       const at = t ?? pinned ?? v.currentTime;
-      const p = Math.min(1, Math.max(0, at / len));
-      if (fill.current) fill.current.style.transform = `scaleX(${p})`;
+      const a = lineAnim();
+      if (a) {
+        if (t == null && pinned == null && !v.paused && !v.seeking && v.readyState >= 3) {
+          // playing: the compositor carries it; put it back in step only when it has drifted (a stall, a loop)
+          const dur = len * 1000;
+          if (a.playbackRate !== (v.playbackRate || 1)) a.playbackRate = v.playbackRate || 1;
+          if (a.playState !== "running" || lineDriftMs(lineTimeMs(at, len), Number(a.currentTime ?? 0), dur) > LINE_SYNC_SLACK_MS)
+            a.currentTime = lineTimeMs(at, len);
+          if (a.playState !== "running") a.play();
+        } else {
+          // held where it is: paused, held, scrubbed, waiting for data, or a seek's landing
+          if (a.playState === "running") a.pause();
+          a.currentTime = lineTimeMs(at, len);
+        }
+      } else if (fill.current) {
+        const p = Math.min(1, Math.max(0, at / len));
+        fill.current.style.transform = `scaleX(${p})`;
+      }
       const sec = Math.floor(at);
       if (sec !== lastSecond) {
         lastSecond = sec;
@@ -160,13 +204,17 @@ export function VideoScrubber({
       if (Date.now() > pinnedUntil || (!v.seeking && Math.abs(v.currentTime - pinned) < 0.35))
         pinned = null;
     };
+    // only without Element.animate: the line painted a frame at a time while it plays
     const frame = () => {
       settle();
       paint();
       raf = requestAnimationFrame(frame);
     };
     const run = () => {
-      if (!raf && !v.paused) raf = requestAnimationFrame(frame);
+      if (v.paused) return;
+      settle();
+      if (lineAnim()) return paint();
+      if (!raf) raf = requestAnimationFrame(frame);
     };
     const stop = () => {
       if (raf) cancelAnimationFrame(raf);
@@ -240,7 +288,17 @@ export function VideoScrubber({
       if (grip?.scrubbing) drawPreview();
     };
     const onTime = () => {
-      if (v.paused) onSeeked();
+      if (v.paused) return onSeeked();
+      // playing on the compositor: a few times a second, a check that it's still in step (and the time's second)
+      if (anim) {
+        settle();
+        paint();
+      }
+    };
+    // waiting for data, seeking or a new speed: the line holds (or changes pace) with the clip
+    const onHeld = () => {
+      settle();
+      paint();
     };
     const onProgress = () => {
       if (len == null) readLength();
@@ -476,6 +534,9 @@ export function VideoScrubber({
       ["ended", stop],
       ["seeked", onSeeked],
       ["timeupdate", onTime],
+      ["waiting", onHeld],
+      ["seeking", onHeld],
+      ["ratechange", onHeld],
     ];
     vidEvents.forEach(([k, f]) => v.addEventListener(k, f));
     // capture: the band sees a finger before the words or the clip under it do
@@ -508,6 +569,8 @@ export function VideoScrubber({
       z.removeEventListener("keydown", onKey);
       if (raf) cancelAnimationFrame(raf);
       if (drawRaf) cancelAnimationFrame(drawRaf);
+      anim?.cancel();
+      anim = null;
       window.clearTimeout(lingerTimer);
       window.clearTimeout(wakeTimer);
       seeker.dispose();

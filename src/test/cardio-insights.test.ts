@@ -145,10 +145,17 @@ describe("cardio plan quality", () => {
     expect(scoreCardioPlan(lots, ctx).score!).toBeLessThan(scoreCardioPlan(good, ctx).score!);
   });
 
-  it("an empty plan for a building goal is fine; with no goal there's nothing to score", () => {
-    expect(scoreCardioPlan({ sessions: [] }, { ...ctx, direction: "gain", context: "gain" }).score).toBe(100);
+  it("an empty plan has no number (never an inflated 100), just whether that's right for them", () => {
+    const gain = scoreCardioPlan({ sessions: [] }, { ...ctx, direction: "gain", context: "gain" });
+    expect(gain.score).toBeNull();
+    expect(gain.verdict.kind).toBe("none");
+    expect(gain.verdict.action).toBe("none");
+    expect(gain.verdict.headline).toMatch(/fits their goal/);
+    const behind = scoreCardioPlan({ sessions: [] }, { ...ctx, trendStatus: "behind" });
+    expect(behind.verdict.action).toBe("review");
     const none = scoreCardioPlan({ sessions: [] }, { ...ctx, direction: null, context: null, trainingDays: [] });
-    expect(none.categories.find((c) => c.key === "goal")!.score).toBeNull();
+    expect(none.score).toBeNull();
+    expect(none.verdict.headline).toMatch(/no bodyweight goal/);
   });
 
   it("what they said about their legs counts against recovery, and says why", () => {
@@ -207,7 +214,7 @@ describe("nutrition plan quality", () => {
     const cal = q.categories.find((c) => c.key === "calories")!;
     expect(cal.notes.join(" ")).toMatch(/under 1,500/);
     expect(cal.notes.join(" ")).toMatch(/from its macros/);
-    expect(q.categories.find((c) => c.key === "macros")!.notes[0]).toMatch(/Protein/);
+    expect(q.categories.find((c) => c.key === "protein")!.notes[0]).toMatch(/Protein/);
   });
 
   it("an allergen on the plan sinks food compatibility", () => {

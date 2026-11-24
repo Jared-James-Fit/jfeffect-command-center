@@ -41,9 +41,22 @@ export type AgreementCoach = {
 
 const clean = (v: string | null | undefined) => (v ?? "").replace(/\s+/g, " ").trim();
 
-/** The owner's coach profile is the one on the business's official email address. */
+/**
+ * The email on Jared's own app account (his login and coach profile). This is an account
+ * identifier, not a contact address: it is never shown to clients and is not part of the
+ * agreement text. From 2.4 the agreement's notice address (COACH.email) is the business inbox,
+ * so the owner can't be found by that any more.
+ */
+export const OWNER_ACCOUNT_EMAILS = ["jaredjamesfit@gmail.com"] as const;
+
+/** The owner's coach profile: his account email, or the business notice address. */
 export function isOwnerCoach(row: Pick<CoachRow, "email">): boolean {
-  return clean(row.email).toLowerCase() === COACH.email.toLowerCase();
+  const email = clean(row.email).toLowerCase();
+  if (!email) return false;
+  return (
+    email === COACH.email.toLowerCase() ||
+    (OWNER_ACCOUNT_EMAILS as readonly string[]).includes(email)
+  );
 }
 
 /**

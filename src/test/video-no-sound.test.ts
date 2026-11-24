@@ -53,8 +53,8 @@ describe("posted with no sound: the audio track never leaves the phone", () => {
     expect(r).toContain("(info.hasAudio && !p.muted && !kept.some((t) => t.type === \"audio\"))");
     // a slow re-encode that falls back to the whole clip never sends the original (it has the sound)
     expect(r).toContain("if (whole && !plan.muted) return done(normalizeVideoType(file), \"original\", why);");
-    expect(read("lib/video-edit/pipeline.ts")).toContain("planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted, graded });");
-    expect(read("lib/community-media.ts")).toContain("trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null })");
+    expect(read("lib/video-edit/pipeline.ts")).toContain("planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted, graded, hd: o.hd });");
+    expect(read("lib/community-media.ts")).toContain("trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null, hd })");
   });
 });
 

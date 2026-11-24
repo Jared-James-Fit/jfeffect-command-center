@@ -10,6 +10,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
 import { LinkHeadsUp } from './link-heads-up'
 
 interface InviteEmailProps {
@@ -32,6 +33,7 @@ export const InviteEmail = ({
     </Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Your {siteName} account is ready</Heading>
         <Text style={text}>
           Tap below and pick a password. That's it, you're in.
@@ -49,6 +51,7 @@ export const InviteEmail = ({
         <Text style={footer}>
           Not expecting this? You can ignore this email.
         </Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>

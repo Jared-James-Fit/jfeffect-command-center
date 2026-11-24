@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ErrorState, OfflineState } from "@/components/loading";
 import { Link } from "@tanstack/react-router";
 import { Minus, Plus, Upload } from "lucide-react";
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { detailPlan, useProgram, type ProgramDraft } from "@/lib/athlete-programs";
 import { draftBackupKey, usableBackup } from "@/lib/athlete-program-draft";
 import { DEFAULT_WEEKS, MAX_DAYS, MAX_WEEKS, newPlan } from "@/lib/program-plan";
+import { draftKeys, fetchServerDraft, type ServerDraft } from "@/lib/program-history-queries";
 import { useProgramEditor } from "./use-program-editor";
 import { ProgramWorkbench } from "./workbench/program-workbench";
 
@@ -23,10 +25,11 @@ import { ProgramWorkbench } from "./workbench/program-workbench";
 export function ProgramBuilder({ editId }: { editId: string | null }) {
   const programQ = useProgram(editId);
   const { data: existing, isLoading } = programQ;
-  if (editId && isLoading) {
+  const remote = useRemoteDraft(editId);
+  if ((editId && isLoading) || remote.waiting) {
     return (
       <div className="mx-auto w-full max-w-2xl pb-28">
-        <PageHeader title="Edit program" backTo="/portal/programs" />
+        <PageHeader title={editId ? "Edit program" : "Build a program"} backTo="/portal/programs" />
         <div className="space-y-3 px-4 py-3 md:px-8" aria-hidden>
           <Skeleton className="h-12 w-full rounded-lg" />
           <Skeleton className="h-48 w-full rounded-2xl" />
@@ -62,8 +65,30 @@ export function ProgramBuilder({ editId }: { editId: string | null }) {
       </div>
     );
   }
-  if (!editId) return <NewProgram />;
-  return <Builder existing={existing ?? null} />;
+  if (!editId) return <NewProgram remote={remote.draft} />;
+  return <Builder existing={existing ?? null} remote={remote.draft} />;
+}
+
+/**
+ * The server's draft of this program (null: a new one), read before the
+ * builder opens so unsaved work from another device comes back. Never holds
+ * the builder up for long: offline or slow, it opens with this device's copy.
+ */
+function useRemoteDraft(programId: string | null): { waiting: boolean; draft: ServerDraft | null } {
+  const q = useQuery({
+    queryKey: draftKeys.one(programId),
+    queryFn: () => fetchServerDraft(programId),
+    staleTime: 0,
+    gcTime: 60_000,
+    retry: false,
+  });
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGaveUp(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
+  const waiting = q.isPending && q.fetchStatus === "fetching" && !gaveUp;
+  return { waiting, draft: q.data ?? null };
 }
 
 /** A half-built program kept on this device (the builder picks it up instead of asking again). */
@@ -85,15 +110,15 @@ const WEEK_CHOICES = [4, 8, 12, 16];
  * following week 1 until one is changed), so the first thing to do there is
  * add exercises. Skipped when a half-built one is waiting on this device.
  */
-function NewProgram() {
+function NewProgram({ remote }: { remote: ServerDraft | null }) {
   const { user } = useAuth();
   const [shape, setShape] = useState<null | { title: string; weeks: number; days: number }>(() =>
-    hasKeptDraft(user?.id) ? { title: "", weeks: DEFAULT_WEEKS, days: 1 } : null,
+    hasKeptDraft(user?.id) || (remote && remote.base == null) ? { title: "", weeks: DEFAULT_WEEKS, days: 1 } : null,
   );
   const [title, setTitle] = useState("");
   const [weeks, setWeeks] = useState(DEFAULT_WEEKS);
   const [days, setDays] = useState(3);
-  if (shape) return <Builder existing={null} shape={shape} />;
+  if (shape) return <Builder existing={null} shape={shape} remote={remote} />;
   return (
     <div className="mx-auto w-full max-w-2xl pb-28" data-new-program-setup>
       <PageHeader title="Build a program" backTo="/portal/programs" />
@@ -231,9 +256,11 @@ function Stepper({
 function Builder({
   existing,
   shape,
+  remote,
 }: {
   existing: ReturnType<typeof useProgram>["data"] | null;
   shape?: { title: string; weeks: number; days: number };
+  remote: ServerDraft | null;
 }) {
   // made once: a refetch while editing never resets the draft
   const [start] = useState<ProgramDraft>(() =>
@@ -255,6 +282,6 @@ function Builder({
           plan: newPlan(shape?.weeks ?? DEFAULT_WEEKS, shape?.days ?? 1),
         },
   );
-  const editor = useProgramEditor(start, existing?.updated_at ?? null);
+  const editor = useProgramEditor(start, existing?.updated_at ?? null, { remote });
   return <ProgramWorkbench editor={editor} />;
 }

@@ -154,7 +154,8 @@ describe("Crew's create flow, wired", () => {
     expect(composer).not.toContain("function KindPill");
   });
   it("the flash is offered only where it can fire: the back camera's light, or the screen for a selfie", () => {
-    expect(studio).toContain('{status === "live" && (facing === "user" || torchOk) && (');
+    // (and steps away while it films: only the clip's time sits there then)
+    expect(studio).toContain('{status === "live" && (facing === "user" || torchOk) && !recorder.recording && (');
     expect(studio).toContain("setTorchOk(torchSupported(stream.getVideoTracks()[0]));");
     expect(studio).toContain("data-studio-screen-flash");
     // in the middle of the top, Instagram's
@@ -171,7 +172,7 @@ describe("Crew's create flow, wired", () => {
     expect(selector).not.toContain("rounded-full bg-white\" aria-hidden />");
   });
   it("nothing is lost by accident: leaving, retaking a photo with words on it and switching to Story ask first", () => {
-    expect(studio).toContain('setDiscard({ title: story ? "Discard story?" : "Discard post?"');
+    expect(studio).toContain('title: story ? "Discard story?" : "Discard post?",');
     expect(studio).toContain('setDiscard({ title: "Discard edits?"');
     expect(studio).toContain("<Dialog open={open} onOpenChange={(o) => !o && requestLeave()}>");
     expect(composer).toContain('if (dirty && !posted) return setConfirm("story");');

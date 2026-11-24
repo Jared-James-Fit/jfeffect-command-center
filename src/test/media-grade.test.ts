@@ -170,7 +170,10 @@ describe("media grade: stored, defaults and carousels", () => {
     expect(cleanGrade(null)).toBeNull();
     expect(cleanGrade({ filter: "auto", intensity: 4 })).toEqual({ filter: "auto", intensity: 1 });
     expect(cleanGrade({ filter: "auto", adjust: { sharpness: -40 } })).toEqual({ filter: "auto", intensity: 1 });
-    expect(ADJUST_KEYS).toHaveLength(7);
+    expect(ADJUST_KEYS).toHaveLength(17);
+    // the one-way ones never go negative; HSL is kept as whole moves per range, empty ranges dropped
+    expect(cleanGrade({ filter: "original", adjust: { grain: -20, vignette: 140, exposure: -150 } })).toEqual({ filter: "original", intensity: 1, adjust: { vignette: 100, exposure: -100 } });
+    expect(cleanGrade({ filter: "cool", hsl: { blue: { h: 12.6, s: 0, l: -300 }, red: { h: 0 }, bogus: { h: 5 } } })).toEqual({ filter: "cool", intensity: 1, hsl: { blue: { h: 13, l: -100 } } });
   });
   it("a new filter keeps the intensity and adjustments already set", () => {
     expect(withFilter({ filter: "auto", intensity: 0.6, adjust: { contrast: 10 } }, "flash")).toMatchObject({ filter: "flash", intensity: 0.6, adjust: { contrast: 10 } });

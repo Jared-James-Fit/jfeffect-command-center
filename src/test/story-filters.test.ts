@@ -70,7 +70,8 @@ describe("story filters", () => {
     expect(STORY_FILTERS.length).toBeGreaterThanOrEqual(40);
     const ids = STORY_FILTERS.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const g of FILTER_GROUPS) expect(STORY_FILTERS.some((f) => f.group === g.key)).toBe(true);
+    // (Favorites is the person's own: it fills from the others)
+    for (const g of FILTER_GROUPS) if (g.key !== "fav") expect(STORY_FILTERS.some((f) => f.group === g.key)).toBe(true);
   });
 
   it("paint in a story and a feed post, with and without anything on file", () => {

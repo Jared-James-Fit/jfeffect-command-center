@@ -4,6 +4,7 @@ import { baseMediaType } from "@/lib/community";
 import { RECORD_MAX_SECONDS } from "@/lib/video-edit/limits";
 import { micRefused, openVideoMic } from "@/lib/video-mic";
 import { pickType, recorderBitrate, recorderKeyframes, recorderTypes } from "@/lib/camera/film-settings";
+import { startZoomCompositor, type ZoomCompositor } from "@/lib/camera/zoom-compositor";
 
 /** The longest clip the camera records (a story's length; longer clips come from the library and get trimmed). */
 export const MAX_RECORD_MS = RECORD_MAX_SECONDS * 1000;
@@ -38,7 +39,7 @@ export function canRecordClips(): boolean {
   return typeof window !== "undefined" && typeof (window as { MediaRecorder?: unknown }).MediaRecorder === "function" && !!pickRecorderType();
 }
 
-type Rec = { recorder: MediaRecorder; audio: MediaStream | null; restore: (() => void) | null; startedAt: number; type: string };
+type Rec = { recorder: MediaRecorder; audio: MediaStream | null; restore: (() => void) | null; startedAt: number; type: string; comp: ZoomCompositor | null };
 
 /**
  * Hold the shutter to film (Instagram's camera): the live camera's picture and,
@@ -47,20 +48,30 @@ type Rec = { recorder: MediaRecorder; audio: MediaStream | null; restore: (() =>
  * of a tap and stops when the finger lifts, or at the clip limit. The mic is
  * only asked for the first time someone films: if that question takes the
  * finger off the button, it keeps recording until the shutter's tapped again.
+ *
+ * A camera with no zoom of its own zooms digitally (camera-zoom.ts): then
+ * `digital` hands over the viewfinder and the zoom it's at, and the clip is
+ * recorded through a canvas cropped the same way (zoom-compositor.ts), so the
+ * zoom is in the clip, not only on the screen.
+ *
+ * Nothing here changes per frame: the ring and the clock read `startedAt`
+ * themselves, so a clip never re-renders the whole camera 60 times a second.
  */
 export function useClipRecorder({
   getStream,
   onClip,
   withSound = () => true,
+  digital,
 }: {
   getStream: () => MediaStream | null;
   onClip: (file: File) => void;
   /** Read when a clip starts: record the mic (pauses their music) or film without it. */
   withSound?: () => boolean;
+  /** Read when a clip starts: the viewfinder and its digital zoom (1 for a 4K camera drawn down to 1080p), or null to record the camera as it is. */
+  digital?: () => { video: HTMLVideoElement; zoom: () => number } | null;
 }) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
   const rec = useRef<Rec | null>(null);
   const starting = useRef(false);
   const released = useRef(false);
@@ -70,6 +81,8 @@ export function useClipRecorder({
   onClipRef.current = onClip;
   const withSoundRef = useRef(withSound);
   withSoundRef.current = withSound;
+  const digitalRef = useRef(digital);
+  digitalRef.current = digital;
 
   const stop = useCallback((keep = true) => {
     const r = rec.current;
@@ -83,6 +96,7 @@ export function useClipRecorder({
     } catch {
       r.audio?.getTracks().forEach((t) => t.stop());
       r.restore?.();
+      r.comp?.stop();
     }
     setStartedAt(null);
     setLocked(false);
@@ -93,11 +107,11 @@ export function useClipRecorder({
     if (rec.current || starting.current) return;
     const stream = getStream();
     if (!stream || !pickRecorderType()) return;
-    // Recorded as hard as the picture needs (film-settings.ts: ~10 Mbps for 1080p, a phone
-    // camera's own rate), in the H.264 level that fits it; it's shrunk for the feed later.
+    // Recorded as hard as the picture needs (film-settings.ts: ~6 Mbps for 1080p), in the
+    // H.264 level that fits it; a 1080p clip goes up to Crew as it is (plan.ts `caps.hd`).
     const vs = stream.getVideoTracks()[0]?.getSettings?.() ?? {};
-    const w = vs.width ?? 1440;
-    const h = vs.height ?? 1920;
+    let w = vs.width ?? 1440;
+    let h = vs.height ?? 1920;
     const fps = vs.frameRate ?? 30;
     const type = pickType(recorderTypes(w, h, fps), (t) => typeof MediaRecorder !== "undefined" && !!MediaRecorder.isTypeSupported?.(t)) ?? pickRecorderType()!;
     starting.current = true;
@@ -124,29 +138,43 @@ export function useClipRecorder({
       restore?.();
       return;
     }
-    const mixed = new MediaStream([...stream.getVideoTracks(), ...(audio?.getAudioTracks() ?? [])]);
+    // a digital zoom (or a 4K camera, drawn down to 1080p) films through the canvas, so the clip zooms as the screen does
+    const dz = digitalRef.current?.() ?? null;
+    const comp = dz ? startZoomCompositor(dz.video, dz.zoom, Math.round(fps) || 30) : null;
+    let recType = type;
+    if (comp) {
+      w = comp.width;
+      h = comp.height;
+      // the H.264 level for the size actually recorded
+      recType = pickType(recorderTypes(w, h, fps), (t) => typeof MediaRecorder !== "undefined" && !!MediaRecorder.isTypeSupported?.(t)) ?? type;
+    }
+    const mixed = new MediaStream([...(comp ? [comp.track] : stream.getVideoTracks()), ...(audio?.getAudioTracks() ?? [])]);
+    const fail = (message: string) => {
+      audio?.getTracks().forEach((t) => t.stop());
+      restore?.();
+      comp?.stop();
+      toast.error(message);
+    };
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000, ...recorderKeyframes() });
+      recorder = new MediaRecorder(mixed, { mimeType: recType, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000, ...recorderKeyframes() });
     } catch {
       try {
         recorder = new MediaRecorder(mixed);
       } catch {
-        audio?.getTracks().forEach((t) => t.stop());
-        restore?.();
-        toast.error("This phone can't film here. Pick a clip from your library instead.");
-        return;
+        return fail("This phone can't film here. Pick a clip from your library instead.");
       }
     }
     const chunks: Blob[] = [];
     const t0 = performance.now();
-    const entry: Rec & { keep?: boolean } = { recorder, audio, restore, startedAt: t0, type };
+    const entry: Rec & { keep?: boolean } = { recorder, audio, restore, startedAt: t0, type: recType, comp };
     recorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) chunks.push(e.data);
     };
     recorder.onstop = () => {
       audio?.getTracks().forEach((t) => t.stop());
       restore?.();
+      comp?.stop();
       const took = performance.now() - t0;
       if (entry.keep === false || took < MIN_CLIP_MS || !chunks.length) return;
       const mime = baseMediaType(recorder.mimeType || type) || "video/mp4";
@@ -156,14 +184,10 @@ export function useClipRecorder({
     try {
       recorder.start(500);
     } catch {
-      audio?.getTracks().forEach((t) => t.stop());
-      restore?.();
-      toast.error("Couldn't start filming. Try again, or pick a clip from your library.");
-      return;
+      return fail("Couldn't start filming. Try again, or pick a clip from your library.");
     }
     rec.current = entry;
     setStartedAt(t0);
-    setElapsed(0);
     limit.current = setTimeout(() => stop(), MAX_RECORD_MS);
     // the finger came off while the phone asked about the mic: keep filming until the shutter's tapped
     if (released.current) {
@@ -182,17 +206,12 @@ export function useClipRecorder({
     if (rec.current && !lockedRef.current) stop();
   }, [stop]);
 
-  // the clock for the ring around the shutter
-  useEffect(() => {
-    if (startedAt == null) return;
-    let raf = 0;
-    const tick = () => {
-      setElapsed(performance.now() - startedAt);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [startedAt]);
+  /** Slid to the lock while filming: the finger can lift, a tap on the shutter stops it (Instagram's hands-free). */
+  const lock = useCallback(() => {
+    if (!rec.current && !starting.current) return;
+    lockedRef.current = true;
+    setLocked(true);
+  }, []);
 
   // leaving the camera mid-clip throws it away
   useEffect(() => () => stop(false), [stop]);
@@ -200,11 +219,11 @@ export function useClipRecorder({
   return {
     recording: startedAt != null,
     locked,
-    /** 0 → 1 of the clip limit. */
-    progress: startedAt == null ? 0 : Math.min(1, elapsed / MAX_RECORD_MS),
-    seconds: Math.floor(elapsed / 1000),
+    /** When filming started (`performance.now()`), for the ring and the clock; null when it isn't. */
+    startedAt,
     start,
     release,
     stop,
+    lock,
   };
 }

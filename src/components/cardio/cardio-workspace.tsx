@@ -15,7 +15,8 @@ import { toast } from "sonner";
 import { Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
-import { CleoDockFrame, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
+import { CleoDockFrame, DockBrief, useCleoDock } from "@/components/program-ai/cleo-dock";
+import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { CardioOverview } from "@/components/cardio/cardio-overview";
 import { CardioBuilder, type PublishInput } from "@/components/cardio/cardio-builder";
@@ -100,6 +101,7 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   const restore = useServerFn(restoreCardioVersionFn);
 
   const startPlan = useMemo(() => view.draft?.plan ?? view.pending?.plan ?? view.live, [view]);
+  const liveQuality = useMemo(() => scoreCardioPlan(view.live, view.scoreCtx), [view]);
   const history = useDraftHistory(startPlan);
   const [mode, setMode] = useState<"overview" | "builder">("overview");
   const [unit, setUnit] = useState<SpeedUnit>(view.speedUnit);
@@ -176,6 +178,8 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
     dock.ask(text);
   };
 
+  const draftScore = useMemo(() => (view.draft ? scoreCardioPlan(history.plan, view.scoreCtx).score : null), [view.draft, view.scoreCtx, history.plan]);
+
   const onPublish = async (x: PublishInput) => {
     setPublishing(true);
     try {
@@ -245,7 +249,9 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
 
   const cleoPanel = (
     <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust cardio"} subtitle={`Cardio · ${view.firstName}`} branded={cleo} conversationClientId={clientId}>
+      <DockBrief dock={dock} />
       <CardioCleoPanel
+        scorePlan={(p) => scoreCardioPlan(p, view.scoreCtx).score}
         clientId={clientId}
         firstName={view.firstName}
         draft={history.plan}
@@ -270,10 +276,18 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
           <Activity className="h-5 w-5 text-muted-foreground" aria-hidden />
           <h2 className="text-lg font-semibold">Cardio</h2>
           <span className="text-[13px] text-muted-foreground">{view.wmHeadline}</span>
-          <div className="ml-auto">
-            <CleoLauncher dock={dock} />
-          </div>
         </div>
+      )}
+      {mode === "overview" && (
+        <PlanIntelligence
+          domain="cardio"
+          clientKey={clientId}
+          quality={liveQuality}
+          cleo={cleo}
+          draft={view.draft ? { score: draftScore, label: "Draft" } : null}
+          onOptimize={(q) => dock.optimize({ domain: "cardio", what: "cardio plan", quality: q })}
+          onAskCleo={() => dock.ask()}
+        />
       )}
       {mode === "overview" ? (
         <CardioOverview

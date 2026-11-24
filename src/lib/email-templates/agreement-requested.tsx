@@ -12,6 +12,8 @@ import {
   Text,
   Hr,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
+import { CONTACT } from '@/lib/email-identity'
 import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
@@ -29,7 +31,7 @@ const AgreementRequestedEmail = (p: AgreementRequestedProps) => {
   const firstName = p.first_name?.trim() || 'there'
   const coach = p.coach_name?.trim() || 'Coach Jared'
   const signUrl = p.sign_url || 'https://jfeffect.com/portal/agreements?sign=1'
-  const support = p.support_email || 'jaredjamesfit@gmail.com'
+  const support = p.support_email || CONTACT.coaching
 
   return (
     <Html lang="en" dir="ltr">
@@ -39,6 +41,7 @@ const AgreementRequestedEmail = (p: AgreementRequestedProps) => {
       </Preview>
       <Body style={main}>
         <Container style={container}>
+          <BrandHeader />
           <Heading style={h1}>Please sign your agreement, {firstName}.</Heading>
           <Text style={text}>
             {coach} sent you the JF Effect Coaching Agreement to review and sign in the app. It
@@ -73,6 +76,7 @@ const AgreementRequestedEmail = (p: AgreementRequestedProps) => {
             </Link>
             . This is a service message about your account, not marketing.
           </Text>
+          <BrandFooter />
         </Container>
       </Body>
     </Html>
@@ -80,6 +84,7 @@ const AgreementRequestedEmail = (p: AgreementRequestedProps) => {
 }
 
 export const template = {
+  identity: 'coaching',
   component: AgreementRequestedEmail,
   subject: (data: Record<string, any>) => {
     const first = (data?.first_name || 'there').toString().trim() || 'there'
@@ -90,7 +95,7 @@ export const template = {
     first_name: 'Jane',
     coach_name: 'Coach Jared',
     sign_url: 'https://jfeffect.com/portal/agreements?sign=1',
-    support_email: 'jaredjamesfit@gmail.com',
+    support_email: CONTACT.coaching,
   },
 } satisfies TemplateEntry
 

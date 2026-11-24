@@ -51,22 +51,23 @@ export function styleFrom(brain: string | null | undefined, words: string): Prog
   return t.trim() ? "general" : null;
 }
 
-export async function loadBuilderAthlete(clientId: string, today = new Date().toISOString().slice(0, 10)): Promise<BuilderAthlete> {
+/** `db`: the coach's own client (default) or, on the server, the service role after an access check. */
+export async function loadBuilderAthlete(clientId: string, today = new Date().toISOString().slice(0, 10), db: any = sb): Promise<BuilderAthlete> {
   const [goals, profile, pt, feedback] = await Promise.all([
     safe(async () => {
-      const { data } = await sb.from("client_goals_setup").select("workout_length_minutes, equipment, training_styles, main_goal, main_goal_other").eq("client_id", clientId).maybeSingle();
+      const { data } = await db.from("client_goals_setup").select("workout_length_minutes, equipment, training_styles, main_goal, main_goal_other").eq("client_id", clientId).maybeSingle();
       return data ?? null;
     }, null as any),
     safe(async () => {
-      const { data } = await sb.from("program_intel_profiles").select("brain_override, equipment_profile").eq("client_id", clientId).maybeSingle();
+      const { data } = await db.from("program_intel_profiles").select("brain_override, equipment_profile").eq("client_id", clientId).maybeSingle();
       return data ?? null;
     }, null as any),
     safe(async () => {
-      const { data } = await sb.from("pt_sessions").select("starts_at, ends_at, status").eq("client_id", clientId).gte("starts_at", `${addDays(today, -56)}T00:00:00Z`).lte("starts_at", `${addDays(today, 28)}T23:59:59Z`).limit(200);
+      const { data } = await db.from("pt_sessions").select("starts_at, ends_at, status").eq("client_id", clientId).gte("starts_at", `${addDays(today, -56)}T00:00:00Z`).lte("starts_at", `${addDays(today, 28)}T23:59:59Z`).limit(200);
       return data ?? [];
     }, [] as any[]),
     safe(async () => {
-      const { data } = await sb.from("pl_workout_feedback").select("created_at, pain_area, pain_level, pain_note, client_note").eq("client_id", clientId).eq("pain", true).gte("created_at", `${addDays(today, -84)}T00:00:00Z`).order("created_at").limit(300);
+      const { data } = await db.from("pl_workout_feedback").select("created_at, pain_area, pain_level, pain_note, client_note").eq("client_id", clientId).eq("pain", true).gte("created_at", `${addDays(today, -84)}T00:00:00Z`).order("created_at").limit(300);
       return data ?? [];
     }, [] as any[]),
   ]);

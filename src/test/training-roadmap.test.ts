@@ -300,6 +300,18 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(plainProblems("Re-Specificity", 32)).toContain('it uses "Re-Specificity"');
     expect(plainProblems("Specific week", 24)).toContain('it uses "Specific"');
     expect(plainProblems("Stay within the coach's effort cap.", 110)).toContain('it uses "cap"');
+    // Nov 24 2026's first live rewrite still let coach phrasing through
+    expect(plainProblems("Peak strength exposure", 32)).toContain('it uses "exposure"');
+    expect(plainProblems("Expose heavier singles, keep bar speed, and shift toward expressing strength", 110).join(" ")).toMatch(/Expose/);
+    expect(plainProblems("Keep the bar speed up.", 110)).toContain('it uses "bar speed"');
+    expect(plainProblems("Fewer sets to aid recovery and express strength.", 110)).toContain('it uses "express strength"');
+    expect(plainProblems("Assistance remains steady to hold capacity.", 110)).toContain('it uses "Assistance"');
+    expect(plainProblems("Planned top loads for the block.", 110)).toContain('it uses "top loads"');
+    expect(plainProblems("Less work than week seven.", 110)).toContain('it names a week by its number (say "last week" or "next week")');
+    expect(plainProblems("A bit heavier than last week.", 110)).toEqual([]);
+    // and the v7 rewrite's two misses
+    expect(plainProblems("About ten percent less total work to recover while keeping loads up.", 110)).toContain('it uses "percent"');
+    expect(plainProblems("More sets and reps than last week, mostly submaximal effort on the main lifts.", 110)).toContain('it uses "submaximal"');
     expect(plainProblems("x".repeat(40), 24)).toContain("it's longer than 24 characters");
     expect(plainProblems("", 24)).toEqual(["it's empty"]);
   });
@@ -361,9 +373,26 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(server).toContain("Your last reply broke the plain-words rules.");
     expect(server).toContain("return plainReply(best.reply, digest, meet);");
     const { ROADMAP_PROMPT_VERSION, digestBlock: digest } = await import("@/lib/training-roadmap");
-    expect(ROADMAP_PROMPT_VERSION).toBe(6);
+    expect(ROADMAP_PROMPT_VERSION).toBe(8);
     const d = digest(block(3));
     expect(d.shapes.map((s) => s.week)).toEqual([1, 2, 3]);
     expect(d.shapes[0].start).toBe("first");
+  });
+});
+
+describe("a sentence the athlete reads ends with a stop", () => {
+  it("adds a full stop only when it's missing", async () => {
+    const { endSentence, parseRoadmapReply } = await import("@/lib/training-roadmap");
+    expect(endSentence("Push workload over several weeks so you finish with a lighter recovery week")).toBe(
+      "Push workload over several weeks so you finish with a lighter recovery week.",
+    );
+    expect(endSentence("Stay sharp and rested. It's meet week.")).toBe("Stay sharp and rested. It's meet week.");
+    expect(endSentence("Ready?")).toBe("Ready?");
+    const r = parseRoadmapReply(
+      JSON.stringify({ style: "strength", label: "Get stronger", purpose: "Lift a little heavier each week", weeks: [{ week: 1, label: "Build", focus: "A few more sets than last week" }] }),
+      [1],
+    );
+    expect(r?.purpose).toBe("Lift a little heavier each week.");
+    expect(r?.weeks[0].focus).toBe("A few more sets than last week.");
   });
 });

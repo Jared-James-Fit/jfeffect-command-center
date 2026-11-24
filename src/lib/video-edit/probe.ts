@@ -3,7 +3,7 @@
  * nothing decoded), and whether this phone can re-encode it. Loads the media
  * library only when a video is actually picked.
  */
-import { MAX_FPS, OUTPUT_VIDEO_CODEC, TARGET_LONG_EDGE, TARGET_VIDEO_BITRATE, outputSize, type SourceInfo } from "@/lib/video-edit/plan";
+import { HD_LONG_EDGE, HD_VIDEO_BITRATE, MAX_FPS, OUTPUT_VIDEO_CODEC, TARGET_LONG_EDGE, TARGET_VIDEO_BITRATE, outputSize, type SourceInfo } from "@/lib/video-edit/plan";
 
 export type Probe = { info: SourceInfo; canEncode: boolean; how: "header" | "player" };
 
@@ -35,18 +35,23 @@ function containerOf(mime: string | null, file: File): SourceInfo["container"] {
 
 const encodeCache = new Map<string, Promise<boolean>>();
 /** Can this browser encode the output size at all (cached per size). */
-export async function canEncodeOutput(width: number, height: number): Promise<boolean> {
+export async function canEncodeOutput(width: number, height: number, longEdge = TARGET_LONG_EDGE, bitrate = TARGET_VIDEO_BITRATE): Promise<boolean> {
   if (!supportsWebCodecs()) return false;
-  const { width: w, height: h } = outputSize({ width, height }, TARGET_LONG_EDGE);
-  const key = `${outputCodec()}:${w}x${h}`;
+  const { width: w, height: h } = outputSize({ width, height }, longEdge);
+  const key = `${outputCodec()}:${w}x${h}:${bitrate}`;
   let p = encodeCache.get(key);
   if (!p) {
     p = loadMediabunny()
-      .then((mb) => mb.canEncodeVideo(outputCodec(), { width: w, height: h, bitrate: TARGET_VIDEO_BITRATE }))
+      .then((mb) => mb.canEncodeVideo(outputCodec(), { width: w, height: h, bitrate }))
       .catch(() => false);
     encodeCache.set(key, p);
   }
   return p;
+}
+
+/** Can this phone re-encode a clip at 1080p (a Crew post or story keeps it: plan.ts `caps.hd`). */
+export function canEncodeHd(width: number, height: number): Promise<boolean> {
+  return canEncodeOutput(width, height, HD_LONG_EDGE, HD_VIDEO_BITRATE);
 }
 
 /** Length / size from the phone's own player, for a file the header reader can't parse. */
