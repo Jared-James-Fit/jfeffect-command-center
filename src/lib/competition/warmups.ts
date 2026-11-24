@@ -103,6 +103,8 @@ export function planWarmups(input: {
   history?: WarmupHistory | null;
   barKg?: number;
   step?: number;
+  /** Cleo's checked change: the last warm-up's weight, or the whole ladder (proposals.ts) */
+  override?: { lastKg?: number | null; sets?: Array<{ kg: number; reps: number }> | null } | null;
 }): WarmupPlan {
   const { lift } = input;
   const step = input.step ?? 2.5;
@@ -135,8 +137,20 @@ export function planWarmups(input: {
     pct: p,
   }));
   // strictly rising, no repeats
-  const sets: Array<{ kg: number; reps: number; pct: number }> = [];
+  let sets: Array<{ kg: number; reps: number; pct: number }> = [];
   for (const s of raw) if (!sets.length || s.kg > sets[sets.length - 1].kg) sets.push(s);
+  const o = input.override;
+  if (o?.sets?.length) {
+    sets = o.sets.map((s) => ({ kg: s.kg, reps: s.reps, pct: s.kg / input.openerKg }));
+    why.unshift("Cleo's warm-up ladder, checked against the opener");
+  } else if (o?.lastKg) {
+    const lastKg = o.lastKg;
+    sets = sets.filter((s, i) => i < sets.length - 1 && s.kg < lastKg);
+    sets.push({ kg: lastKg, reps: 1, pct: lastKg / input.openerKg });
+    why.unshift(
+      `Last warm-up at ${lastKg} kg (${Math.round((lastKg / input.openerKg) * 100)}% of the opener): Cleo's call from their history`,
+    );
+  }
 
   // timing: last warm-up ~8 minutes before the opener, heavier sets 4 min apart, lighter 3
   const timed: WarmupSet[] = [];

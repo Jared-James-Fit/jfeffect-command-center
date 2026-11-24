@@ -179,7 +179,7 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
     sb
       .from("competition_competitors")
       .select(
-        "id, name, sex, weight_class, federation, country, opl_slug, instagram, identity, contenders, meets, meets_fetched_at, fetch_error, observations, notes, bodyweight_kg, source",
+        "id, name, sex, weight_class, federation, country, opl_slug, instagram, identity, contenders, meets, meets_fetched_at, fetch_error, observations, notes, bodyweight_kg, source, field_status",
       )
       .eq("competition_id", pick.id)
       .eq("archived", false)
@@ -227,7 +227,8 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
         .select("internal")
         .eq("id", confirmed.id)
         .maybeSingle();
-      plan = full?.internal?.engine ?? null;
+      const { confirmedPlan } = await import("./proposals");
+      plan = confirmedPlan(full?.internal) as any;
     }
     debrief = readDebrief(plan, comp.results);
   }

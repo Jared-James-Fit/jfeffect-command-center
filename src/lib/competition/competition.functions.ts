@@ -522,6 +522,8 @@ export const updateCompetitorFn = createServerFn({ method: "POST" })
         oplUrl: z.string().trim().max(300).nullable().optional(),
         archive: z.boolean().optional(),
         resync: z.boolean().optional(),
+        /** the coach's read of a suggested entrant: on the start list, likely, or not coming (archive) */
+        status: z.enum(["suggested", "confirmed", "registered"]).optional(),
       })
       .parse(d),
   )
@@ -550,6 +552,11 @@ export const updateCompetitorFn = createServerFn({ method: "POST" })
       await sb
         .from("competition_competitors")
         .update({ archived: true })
+        .eq("id", data.competitorId);
+    if (data.status)
+      await sb
+        .from("competition_competitors")
+        .update({ field_status: data.status })
         .eq("id", data.competitorId);
     let result: any = null;
     if (data.oplUrl) {
@@ -623,7 +630,7 @@ export const extractCompetitionFn = createServerFn({ method: "POST" })
     z
       .object({
         competitionId: uuid,
-        kind: z.enum(["roster", "training"]),
+        kind: z.enum(["roster", "training", "meet_info"]),
         text: z.string().max(40_000).nullable(),
         image: z
           .object({
@@ -638,8 +645,14 @@ export const extractCompetitionFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { sb } = await reachCompetition(context, data.competitionId);
-    const { extractRoster, extractTraining } = await import("./extract.server");
+    const { extractRoster, extractTraining, extractMeetInfo } = await import("./extract.server");
     const { todayWinnipeg } = await import("./load.server");
+    if (data.kind === "meet_info")
+      return {
+        roster: [],
+        lifts: [],
+        meet: await extractMeetInfo(sb, { text: data.text?.trim() || null, file: data.image }),
+      };
     if (data.kind === "roster")
       return {
         roster: await extractRoster(sb, { text: data.text?.trim() || null, image: data.image }),
@@ -1017,4 +1030,72 @@ export const markMyUpdateFn = createServerFn({ method: "POST" })
     const { athleteMark } = await import("./release.server");
     await athleteMark(sb, data.assessmentId, a.client_id, context.userId, data.what);
     return { ok: true };
+  });
+
+/* ------------------------------------------------------------------ */
+/* Cleo's calls and the research                                       */
+
+/** Keep one of Cleo's checked calls, or put it back to the engine's number, before release. */
+export const decideProposalFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        assessmentId: uuid,
+        proposalId: z.string().regex(/^P\d{1,2}$/),
+        use: z.enum(["cleo", "engine"]),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { sb } = await reachAssessment(context, data.assessmentId);
+    const { decideProposal } = await import("./release.server");
+    return decideProposal(sb, data.assessmentId, context.userId, data.proposalId, data.use);
+  });
+
+/** Find the likely field from OpenPowerlifting's rankings now (the daily read does it by itself). */
+export const discoverFieldFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ competitionId: uuid }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { sb } = await reachCompetition(context, data.competitionId);
+    const { discoverField } = await import("./research.server");
+    return discoverField(sb, data.competitionId, { actorId: context.userId });
+  });
+
+/** A public link read by the server into rows for the coach to confirm (nothing is saved here). */
+export const readLinkFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        competitionId: uuid,
+        url: z.string().trim().url().max(2000),
+        kind: z.enum(["roster", "training", "meet_info"]),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { sb } = await reachCompetition(context, data.competitionId);
+    const { readLink } = await import("./research.server");
+    const page = await readLink(data.url);
+    if (!page.ok) return { ok: false as const, error: page.error };
+    const { extractRoster, extractTraining, extractMeetInfo } = await import("./extract.server");
+    const { todayWinnipeg } = await import("./load.server");
+    const text = page.kind === "text" ? page.text : null;
+    const file =
+      page.kind === "pdf"
+        ? { mime: "application/pdf" as const, base64: page.base64, pdf: true as const }
+        : null;
+    const base = { ok: true as const, url: page.url, title: page.title, pdf: page.kind === "pdf" };
+    if (data.kind === "roster")
+      return { ...base, roster: await extractRoster(sb, { text, image: file }), lifts: [], meet: null };
+    if (data.kind === "training")
+      return {
+        ...base,
+        roster: [],
+        lifts: await extractTraining(sb, { text, image: file, today: todayWinnipeg(), url: page.url }),
+        meet: null,
+      };
+    return { ...base, roster: [], lifts: [], meet: await extractMeetInfo(sb, { text, file }) };
   });

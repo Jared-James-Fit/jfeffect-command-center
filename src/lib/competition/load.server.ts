@@ -208,6 +208,11 @@ export function readObservations(raw: unknown): Observation[] {
       url: typeof o.url === "string" ? o.url : null,
       confidence: ["high", "medium", "low"].includes(o.confidence) ? o.confidence : "low",
       note: o.note ?? null,
+      velocity:
+        o.velocity != null && Number(o.velocity) > 0 && Number(o.velocity) < 3
+          ? Number(o.velocity)
+          : null,
+      technique: o.technique === "clean" || o.technique === "questionable" ? o.technique : null,
     }));
 }
 
@@ -360,7 +365,7 @@ export async function loadCompetitionContext(
         (
           await sb
             .from("competition_competitors")
-            .select("id, name, identity, meets, observations")
+            .select("id, name, identity, meets, observations, field_status")
             .eq("competition_id", competitionId)
             .eq("archived", false)
             .order("created_at")
@@ -429,7 +434,9 @@ export async function loadCompetitionContext(
   const lifts = {} as Record<Lift, LiftEvidence>;
   const conversion: ConversionPoint[] = [];
   const topSingles: Partial<Record<Lift, number | null>> = {};
+  const sessions: Partial<Record<Lift, import("./brief").TrainingDay[]>> = {};
   const sixWeeks = addDays(today, -42);
+  const twelveWeeks = addDays(today, -84);
   for (const lift of LIFTS) {
     const ls = strengths[lift];
     const now = envelopeAt(ls.envelope, today);
@@ -453,6 +460,30 @@ export async function loadCompetitionContext(
       .filter((s) => s.day >= sixWeeks && s.set.reps <= 2)
       .map((s) => kg(s.heaviest));
     topSingles[lift] = singles.length ? Math.max(...singles) : null;
+    // the training days Cleo reads as evidence, newest first (the top set's bar speed when logged)
+    sessions[lift] = ls.sessions
+      .filter((s) => s.day >= twelveWeeks && !s.outlier)
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .slice(0, 14)
+      .map((s) => {
+        const v = sets.find(
+          (x: any) =>
+            String(x.date).slice(0, 10) === s.day &&
+            liftOf(x.competition_lift_type) === lift &&
+            Math.abs(x.load - s.set.load) < 0.6 &&
+            x.velocity_mps != null,
+        );
+        return {
+          day: s.day,
+          kg: kg(s.set.load),
+          reps: s.set.reps,
+          rpe: s.set.effort,
+          e1rm: kg(s.e1rm),
+          confidence: s.confidence,
+          heaviestKg: kg(s.heaviest),
+          velocity: v ? Number(v.velocity_mps) : null,
+        };
+      });
     // training-to-platform: each past meet against the training line 3 weeks before it
     const trainingOnly = strengthEnvelope(ls.sessions);
     for (const m of meets) {
@@ -618,7 +649,7 @@ export async function loadCompetitionContext(
   }
 
   const forecastChecks = (checks as any[]).flatMap((c) => {
-    const exp = c.internal?.engine?.forecast?.total?.expected;
+    const exp = c.internal?.strategy?.adjusted?.total?.expected ?? c.internal?.engine?.forecast?.total?.expected;
     const actual = Number(c.competitions?.results?.total);
     return exp && actual
       ? [
@@ -661,6 +692,7 @@ export async function loadCompetitionContext(
       identity: c.identity,
       meets: readMeets(c.meets),
       observations: readObservations(c.observations),
+      status: c.field_status === "suggested" || c.field_status === "registered" ? c.field_status : "confirmed",
     })),
     watch: {
       programEndsOn,
@@ -682,6 +714,8 @@ export async function loadCompetitionContext(
       : null,
     checks: forecastChecks,
     cues: {},
+    sessions,
+    classOptions: Array.isArray(comp.research?.alternatives) ? comp.research.alternatives : [],
   };
   return { ctx, competition: comp, client };
 }

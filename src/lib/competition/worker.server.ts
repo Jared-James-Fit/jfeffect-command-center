@@ -138,7 +138,8 @@ async function debriefInput(sb: Db, competitionId: string, comp: any) {
     .in("status", ["approved", "released"])
     .order("created_at", { ascending: false })
     .limit(1);
-  const plan = last?.[0]?.internal?.engine ?? null;
+  const { confirmedPlan } = await import("./proposals");
+  const plan = confirmedPlan(last?.[0]?.internal);
   let results: MeetResults | null = comp.results ?? null;
   if (!results) {
     const { data: log } = await sb
@@ -166,6 +167,25 @@ export async function processMilestone(
       milestone: kind,
     });
     const brief = buildBrief(ctx);
+    // the class question, read once a week from the rankings (before the first call only)
+    const checked = competition.research?.alternatives_checked_at;
+    if (
+      !state.calls &&
+      kind !== "debrief" &&
+      (!checked || Date.now() - Date.parse(checked) > 7 * 86_400_000)
+    ) {
+      try {
+        const { classOptions } = await import("./research.server");
+        const alt = await classOptions(sb, m.competition_id, {
+          bodyweightAvg: ctx.athlete.bodyweightAvg,
+          classLimit: ctx.athlete.classLimit,
+          expectedTotal: brief.forecast.total?.expected ?? null,
+        });
+        brief.classOptions = alt ? [alt] : [];
+      } catch (e) {
+        console.warn("[competition] class options failed", (e as Error)?.message);
+      }
+    }
     const debrief =
       kind === "debrief" ? await debriefInput(sb, m.competition_id, competition) : null;
     if (kind === "debrief" && !debrief) {
@@ -190,7 +210,7 @@ export async function processMilestone(
       .order("created_at", { ascending: false })
       .limit(1);
     const { writeNarrative, athleteVersion } = await import("./write.server");
-    const { narrative, model } = await writeNarrative(
+    const { narrative, model, strategy } = await writeNarrative(
       sb,
       brief,
       {
@@ -231,10 +251,16 @@ export async function processMilestone(
         internal: {
           engine: brief,
           narrative,
+          strategy: {
+            checks: strategy.checks,
+            adjusted: strategy.adjusted,
+            evidence: strategy.evidence,
+            declined: [],
+          },
           debrief: debrief ?? null,
           instructions: m.instructions ?? null,
         },
-        athlete: athleteVersion(brief, narrative, kind),
+        athlete: athleteVersion(brief, narrative, kind, strategy.adjusted),
         coach_message: narrative.coach_notification,
         call: brief.call,
         model,
@@ -406,9 +432,32 @@ export async function dailyRead(
   }
   if (daysOut < 0) return;
 
+  // the field and the class question, refreshed weekly (two weeks out and closer, every few days)
+  const researched = comp.research?.field;
+  const fieldAge = researched?.fetched_at
+    ? (Date.now() - Date.parse(researched.fetched_at)) / 86_400_000
+    : 99;
+  if (fieldAge >= (daysOut <= 21 ? 3 : 7)) {
+    try {
+      const { discoverField } = await import("./research.server");
+      await discoverField(sb, competitionId, { budget });
+    } catch (e) {
+      console.warn("[competition] research failed", competitionId, (e as Error)?.message);
+    }
+  }
   const { ctx } = await loadCompetitionContext(sb, competitionId, { today });
   const brief = buildBrief(ctx);
   const live = liveSummary(brief);
+  try {
+    const { classOptions } = await import("./research.server");
+    await classOptions(sb, competitionId, {
+      bodyweightAvg: ctx.athlete.bodyweightAvg,
+      classLimit: ctx.athlete.classLimit,
+      expectedTotal: brief.forecast.total?.expected ?? null,
+    });
+  } catch (e) {
+    console.warn("[competition] class options failed", competitionId, (e as Error)?.message);
+  }
   const prevSerious = new Set(
     ((comp.watch ?? []) as any[]).filter((w) => w.severity === "serious").map((w) => w.key),
   );
@@ -478,6 +527,32 @@ export async function runCompetitionTick(
     .neq("status", "archived")
     .limit(50);
   for (const c of dirty ?? []) report.scheduled += await applySchedule(sb, c.id);
+  // a new competition's field is researched right away (best effort, a few at a time)
+  if (Date.now() - t0 < budget * 0.4) {
+    const { data: fresh } = await sb
+      .from("competitions")
+      .select("id, research, status")
+      .eq("status", "upcoming")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    const { discoverField } = await import("./research.server");
+    for (const c of (fresh ?? []).filter((x: any) => !x.research?.field).slice(0, 2)) {
+      if (Date.now() - t0 > budget * 0.4) break;
+      try {
+        const r = await discoverField(sb, c.id, { budget: { left: 10 } });
+        if (r.status === "unsupported" || r.status === "error") {
+          await sb
+            .from("competitions")
+            .update({
+              research: { ...(c.research ?? {}), field: { fetched_at: new Date().toISOString(), error: r.error ?? r.status } },
+            })
+            .eq("id", c.id);
+        }
+      } catch (e) {
+        console.warn("[competition] research failed", c.id, (e as Error)?.message);
+      }
+    }
+  }
 
   if (opts.scan === "daily") {
     const { data: comps } = await sb

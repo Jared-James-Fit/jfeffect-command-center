@@ -212,6 +212,56 @@ export async function editAthleteVersion(
   });
 }
 
+/**
+ * The coach keeps one of Cleo's calls or puts it back to the engine's number
+ * before the plan goes out. The plan is rebuilt by the same engines
+ * (proposals.ts) and the athlete version's plan follows it; once released, a
+ * version never changes (a new one does).
+ */
+export async function decideProposal(
+  sb: Db,
+  id: string,
+  userId: string,
+  proposalId: string,
+  use: "cleo" | "engine",
+) {
+  const a = await getAssessment(sb, id);
+  if (a.status === "superseded" || a.status === "released")
+    throw new Error("This version can't change any more");
+  const st = a.internal?.strategy;
+  if (!st?.checks || !a.internal?.engine) throw new Error("This assessment has no calls to decide");
+  const check = (st.checks as any[]).find((c) => c.proposal?.id === proposalId);
+  if (!check?.ok) throw new Error("That call didn't pass its checks");
+  const declined = new Set<string>(st.declined ?? []);
+  if (use === "engine") declined.add(proposalId);
+  else declined.delete(proposalId);
+  const { applyProposals } = await import("./proposals");
+  const accepted = (st.checks as any[])
+    .filter((c) => c.ok && !declined.has(c.proposal.id))
+    .map((c) => c.proposal);
+  const adjusted = applyProposals(a.internal.engine, accepted);
+  const { athleteVersion } = await import("./write.server");
+  const rebuilt = athleteVersion(a.internal.engine, a.internal.narrative, a.kind, adjusted);
+  const athlete = { ...(a.athlete ?? {}), plan: rebuilt.plan };
+  await sb
+    .from("competition_assessments")
+    .update({
+      internal: { ...a.internal, strategy: { ...st, adjusted, declined: [...declined] } },
+      athlete,
+    })
+    .eq("id", id);
+  await logEvent(sb, {
+    competitionId: a.competition_id,
+    clientId: a.client_id,
+    assessmentId: id,
+    actorId: userId,
+    actor: "coach",
+    action: use === "engine" ? "call_declined" : "call_kept",
+    detail: { proposal: proposalId, text: check.proposal.text },
+  });
+  return { declined: [...declined] };
+}
+
 /** Who the chat message comes from: the client's coach, else whoever approved, else the first admin. */
 async function senderFor(
   sb: Db,
@@ -263,9 +313,23 @@ export async function release(
     .maybeSingle();
   const { data: comp } = await sb
     .from("competitions")
-    .select("id, name, meet_date")
+    .select("id, name, meet_date, internal_test")
     .eq("id", a.competition_id)
     .maybeSingle();
+  if (comp?.internal_test) {
+    // an internal test only ever reaches a staff member's own linked athlete account
+    const { data: link } = client?.user_id
+      ? await sb
+          .from("community_profiles")
+          .select("user_id")
+          .eq("same_person_as", client.user_id)
+          .limit(1)
+      : { data: [] };
+    if (!link?.length)
+      throw new Error(
+        "An internal test competition only releases to a staff member's own athlete account",
+      );
+  }
   const now = new Date().toISOString();
   const def = MILESTONE_BY_KIND[a.kind as keyof typeof MILESTONE_BY_KIND];
   const plan = a.kind === "game_plan" || a.kind === "confirm";

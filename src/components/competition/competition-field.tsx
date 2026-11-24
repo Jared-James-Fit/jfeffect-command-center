@@ -12,7 +12,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ExternalLink, Link2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,10 +25,15 @@ import {
 } from "@/components/ui/sheet";
 import {
   addCompetitorsFn,
+  discoverFieldFn,
   extractCompetitionFn,
+  readLinkFn,
   saveObservationsFn,
+  updateCompetitionFn,
   updateCompetitorFn,
 } from "@/lib/competition/competition.functions";
+import type { ClassOption } from "@/lib/competition/brief";
+import type { MeetInfo } from "@/lib/competition/research";
 import { attemptPatternWords, type CompetitorRead } from "@/lib/competition/competitor";
 import type { Landscape } from "@/lib/competition/landscape";
 import { LIFT_LABEL, type Observation } from "@/lib/competition/types";
@@ -50,6 +55,14 @@ type CompetitorRow = {
   fetch_error: string | null;
   observations: Observation[];
   notes: string | null;
+  field_status?: "suggested" | "confirmed" | "registered" | null;
+  source?: string | null;
+};
+
+const STATUS_WORD: Record<"suggested" | "confirmed" | "registered", string> = {
+  suggested: "Likely, from rankings: not confirmed",
+  confirmed: "Likely entrant",
+  registered: "On the start list",
 };
 
 const IDENTITY_WORD: Record<CompetitorRow["identity"], string> = {
@@ -79,18 +92,33 @@ export function CompetitionField({
   competitors,
   reads,
   landscape,
+  research = null,
+  weightClass = null,
+  classOptions = [],
 }: {
   clientId: string;
   competitionId: string;
   competitors: CompetitorRow[];
   reads: Map<string, CompetitorRead>;
   landscape: Landscape | null;
+  research?: any;
+  weightClass?: string | null;
+  classOptions?: ClassOption[];
 }) {
   const qc = useQueryClient();
   const add = useServerFn(addCompetitorsFn);
   const update = useServerFn(updateCompetitorFn);
   const extract = useServerFn(extractCompetitionFn);
   const saveObs = useServerFn(saveObservationsFn);
+  const discover = useServerFn(discoverFieldFn);
+  const readLink = useServerFn(readLinkFn);
+  const updateComp = useServerFn(updateCompetitionFn);
+  const [link, setLink] = useState<null | {
+    url: string;
+    kind: "roster" | "meet_info";
+    meet: MeetInfo | null;
+    title: string | null;
+  }>(null);
   const refresh = () =>
     void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
   const [adding, setAdding] = useState(false);
@@ -148,6 +176,7 @@ export function CompetitionField({
       oplUrl?: string;
       archive?: boolean;
       resync?: boolean;
+      status?: "suggested" | "confirmed" | "registered";
     }) => update({ data: x }),
     onSuccess: () => refresh(),
     onError: (e: any) => toast.error(e?.message ?? "That didn't work"),
@@ -223,6 +252,56 @@ export function CompetitionField({
   });
 
   const threat = (id: string) => landscape?.ranked.find((t) => t.id === id);
+  const findField = useMutation({
+    mutationFn: () => discover({ data: { competitionId } }),
+    onSuccess: (r) => {
+      refresh();
+      if (r.status === "added") toast.success(`${r.added} likely entrant${r.added === 1 ? "" : "s"} found from the rankings`);
+      else if (r.status === "nothing_new") toast.success("Nobody new in the rankings");
+      else toast.error(r.error ?? "Couldn't read the rankings");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't read the rankings"),
+  });
+  const fetchLink = useMutation({
+    mutationFn: (x: { url: string; kind: "roster" | "meet_info" }) =>
+      readLink({ data: { competitionId, url: x.url, kind: x.kind } }),
+    onSuccess: (r, x) => {
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      if (x.kind === "roster") {
+        setLink(null);
+        setRoster({ text: "", rows: r.roster.map((row) => ({ ...row, keep: true })) });
+        if (!r.roster.length) toast.error("No lifters found on that page");
+      } else setLink({ url: r.url, kind: "meet_info", meet: r.meet, title: r.title });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't read the page"),
+  });
+  const applyMeet = useMutation({
+    mutationFn: (m: MeetInfo) => {
+      const q = m.qualifyingTotals.find(
+        (x) => weightClass && x.weightClass.replace(/[^0-9+]/g, "") === weightClass.replace(/[^0-9+]/g, ""),
+      );
+      return updateComp({
+        data: {
+          competitionId,
+          fields: {
+            ...(m.location ? { location: m.location } : {}),
+            ...(m.liftingStart ? { lifting_start: m.liftingStart } : {}),
+            ...(m.weighIn ? { weigh_in_at: m.weighIn } : {}),
+            ...(q ? { qualification_total_kg: q.totalKg } : {}),
+          },
+        } as any,
+      });
+    },
+    onSuccess: () => {
+      refresh();
+      setLink(null);
+      toast.success("Meet details saved");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
+  });
 
   return (
     <div className="space-y-4" data-competition-field>
@@ -244,6 +323,131 @@ export function CompetitionField({
           ) : null}
         </div>
       ) : null}
+
+      <div className="rounded-2xl border border-border bg-card p-4" data-field-research>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-[15px] font-semibold">Research</h3>
+            <p className="text-[12px] text-muted-foreground">
+              {research?.field?.fetched_at
+                ? research.field.error
+                  ? `Rankings: ${research.field.error}`
+                  : `Rankings read ${new Date(research.field.fetched_at).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}: ${research.field.considered ?? 0} results, ${research.field.added ?? 0} added`
+                : "Cleo reads OpenPowerlifting's rankings for this class by itself; you confirm who's coming."}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            loading={findField.isPending}
+            onClick={() => findField.mutate()}
+          >
+            <Search className="h-4 w-4" /> Find the likely field
+          </Button>
+        </div>
+        {research?.field?.sources?.length ? (
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Source:{" "}
+            {research.field.sources.map((u: string, i: number) => (
+              <a
+                key={u}
+                href={u}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline underline-offset-2"
+              >
+                {i ? ", " : ""}OpenPowerlifting {u.match(/\/(\d{4})$/)?.[1] ?? "rankings"}
+              </a>
+            ))}
+          </p>
+        ) : null}
+        {classOptions.map((o) => (
+          <div key={o.weightClass} className="mt-3 rounded-xl bg-muted/50 p-3 text-[13px]" data-class-option>
+            <p className="font-medium">
+              The {o.weightClass} kg class ({o.reason})
+              {o.ourPlace != null ? `: our expected total would place about ${o.ourPlace}` : ""}
+            </p>
+            <p className="text-muted-foreground">
+              {o.lifters.slice(0, 5).map((l) => `${l.name} ${l.total}`).join(" · ")}
+            </p>
+          </div>
+        ))}
+        <form
+          className="mt-3 flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            const url = String(fd.get("url") ?? "").trim();
+            const kind = String(fd.get("kind") ?? "roster") as "roster" | "meet_info";
+            if (url) fetchLink.mutate({ url, kind });
+          }}
+        >
+          <div className="relative min-w-[14rem] flex-1">
+            <Link2 className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              name="url"
+              type="url"
+              inputMode="url"
+              placeholder="Paste a link: nominations, start list, meet page, PDF"
+              className="pl-8"
+              autoComplete="off"
+            />
+          </div>
+          <select
+            name="kind"
+            className="h-10 rounded-lg border border-input bg-background px-2 text-[14px]"
+            aria-label="What the link is"
+            defaultValue="roster"
+          >
+            <option value="roster">Lifters on it</option>
+            <option value="meet_info">Meet details</option>
+          </select>
+          <Button size="sm" type="submit" variant="outline" loading={fetchLink.isPending}>
+            Read it
+          </Button>
+        </form>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          The server fetches public pages, Google Sheets and PDFs. A page behind a login, or
+          Instagram, can't be read: paste its text or a screenshot below.
+        </p>
+        {link?.meet ? (
+          <div className="mt-3 space-y-1 rounded-xl border border-border p-3 text-[13px]" data-meet-info>
+            <p className="font-medium">{link.title ?? "Meet details"}</p>
+            {link.meet.date ? <p>Date: {link.meet.date}</p> : null}
+            {link.meet.location ? <p>Venue: {link.meet.location}</p> : null}
+            {link.meet.weighIn ? <p>Weigh-in: {link.meet.weighIn}</p> : null}
+            {link.meet.liftingStart ? <p>Lifting starts: {link.meet.liftingStart}</p> : null}
+            {link.meet.registrationDeadline ? (
+              <p>Registration closes: {link.meet.registrationDeadline}</p>
+            ) : null}
+            {link.meet.qualifyingTotals.length ? (
+              <p>
+                Qualifying totals:{" "}
+                {link.meet.qualifyingTotals
+                  .slice(0, 12)
+                  .map((q) => `${q.weightClass}${q.sex ? ` ${q.sex}` : ""} ${q.totalKg}`)
+                  .join(" · ")}
+              </p>
+            ) : null}
+            {link.meet.notes.map((x, i) => (
+              <p key={i} className="text-muted-foreground">
+                · {x}
+              </p>
+            ))}
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" loading={applyMeet.isPending} onClick={() => applyMeet.mutate(link.meet!)}>
+                Use these
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setLink(null)}>
+                Discard
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Copied from the page, never guessed: anything not written there is left out.
+            </p>
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => setAdding(true)}>
@@ -336,6 +540,7 @@ export function CompetitionField({
                     </div>
                     <p className="text-[12px] text-muted-foreground">
                       {[
+                        STATUS_WORD[c.field_status ?? "confirmed"],
                         c.weight_class ? `${c.weight_class} kg` : null,
                         c.federation,
                         IDENTITY_WORD[c.identity],
@@ -344,6 +549,16 @@ export function CompetitionField({
                         .join(" · ")}
                       {c.fetch_error ? ` · ${c.fetch_error}` : ""}
                     </p>
+                    {c.instagram ? (
+                      <a
+                        href={`https://www.instagram.com/${c.instagram}/`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-[12px] text-muted-foreground underline underline-offset-2"
+                      >
+                        @{c.instagram}
+                      </a>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     {c.opl_slug ? (
@@ -376,6 +591,35 @@ export function CompetitionField({
                   </div>
                 </div>
 
+                {c.field_status === "suggested" ? (
+                  <div
+                    className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 p-2 text-[13px]"
+                    data-suggested
+                  >
+                    <span className="text-muted-foreground">Coming?</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => act.mutate({ competitorId: c.id, status: "registered" })}
+                    >
+                      On the start list
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => act.mutate({ competitorId: c.id, status: "confirmed" })}
+                    >
+                      Likely
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => act.mutate({ competitorId: c.id, archive: true })}
+                    >
+                      Not coming
+                    </Button>
+                  </div>
+                ) : null}
                 {c.identity === "ambiguous" && c.contenders.length ? (
                   <div className="mt-2 space-y-1.5 rounded-xl bg-muted/50 p-2">
                     <p className="text-[12px] text-muted-foreground">

@@ -32,7 +32,7 @@ export type LiftAttempts = {
 const DEFAULT_OPENER: Record<Lift, number> = { squat: 0.91, bench: 0.92, deadlift: 0.91 };
 
 /** Each attempt at least one increment over the last, every one on the increment. */
-function climb(a: number[], step: number): Triple3 {
+export function climb(a: number[], step: number): Triple3 {
   const out = [floorTo(a[0], step)];
   for (let i = 1; i < 3; i++) out.push(Math.max(roundTo(a[i], step), out[i - 1] + step));
   return out as Triple3;
@@ -99,7 +99,37 @@ export function planLiftAttempts(input: {
 
   const second = { low: conservative[1], high: aggressive[1] };
   const third = { low: conservative[2], high: aggressive[2] };
-  const noLower = input.rules.noLowerAfterAttempt;
+  const { conditional, contingencies } = attemptRules({
+    pathways: { conservative, balanced, aggressive },
+    opener,
+    openerConservative,
+    noLower: input.rules.noLowerAfterAttempt,
+  });
+  return {
+    lift,
+    opener,
+    openerConservative,
+    second,
+    third,
+    pathways: { conservative, balanced, aggressive },
+    conditional,
+    contingencies,
+    why,
+  };
+}
+
+/** What to do after each kind of attempt and when one goes wrong, from the pathways' numbers. */
+export function attemptRules(input: {
+  pathways: { conservative: Triple3; balanced: Triple3; aggressive: Triple3 };
+  opener: number;
+  openerConservative: number;
+  noLower: boolean;
+}): {
+  conditional: Array<{ when: string; then: string }>;
+  contingencies: Array<{ when: string; then: string }>;
+} {
+  const { conservative, balanced, aggressive } = input.pathways;
+  const { opener, openerConservative, noLower } = input;
   const conditional = [
     {
       when: "Opener moves easily (RPE 7 or under, or faster than their usual opener)",
@@ -136,17 +166,7 @@ export function planLiftAttempts(input: {
       then: "Stop and decide with the coach before the next attempt: the total matters more than one lift",
     },
   ];
-  return {
-    lift,
-    opener,
-    openerConservative,
-    second,
-    third,
-    pathways: { conservative, balanced, aggressive },
-    conditional,
-    contingencies,
-    why,
-  };
+  return { conditional, contingencies };
 }
 
 export type AttemptPlan = {

@@ -9,7 +9,13 @@ import type { CompetitorRead } from "./competitor";
 import { roundTo } from "./rules";
 import type { Lift, Objective, Range } from "./types";
 
-export type CompetitorEntry = { id: string; name: string; read: CompetitorRead };
+export type CompetitorEntry = {
+  id: string;
+  name: string;
+  read: CompetitorRead;
+  /** suggested: found by research (likely, not a confirmed entry) */
+  status?: "suggested" | "confirmed" | "registered";
+};
 
 export type Threat = {
   id: string;
@@ -20,6 +26,7 @@ export type Threat = {
   overlaps: boolean;
   level: "favourite" | "contender" | "outside";
   why: string[];
+  status: "suggested" | "confirmed" | "registered";
 };
 
 export type Landscape = {
@@ -72,8 +79,20 @@ export function buildLandscape(input: {
         why.push(
           `No total at ${c.read.stats.bombOuts} meet${c.read.stats.bombOuts === 1 ? "" : "s"}`,
         );
-      if (c.read.observationsUsed.length)
-        why.push("Recent training suggests more than their meets show");
+      const moved = Object.values(c.read.training).filter((t) => t && t.weight >= 0.2);
+      if (moved.length) {
+        const up = moved.filter((t) => {
+          const last = c.read.lastSplit[t!.lift];
+          return last != null && t!.estimateKg > last;
+        }).length;
+        why.push(
+          up >= moved.length / 2
+            ? "A run of recent training points above their meets"
+            : "Recent training points below their meets",
+        );
+      } else if (c.read.observationsUsed.length)
+        why.push("A recent training lift widens their high end");
+      if (c.status === "suggested") why.push("Likely entrant from rankings, not a confirmed entry");
       const level: Threat["level"] = !us
         ? "contender"
         : c.p.expected > us.high
@@ -89,6 +108,7 @@ export function buildLandscape(input: {
         overlaps,
         level,
         why,
+        status: c.status ?? "confirmed",
       };
     });
 
@@ -190,6 +210,11 @@ export function buildLandscape(input: {
       : null;
   if (!ranked.length)
     answers.push({ q: "The field", a: "No competitors on file yet: placing can't be read" });
+  else if (ranked.every((t) => t.status === "suggested"))
+    answers.push({
+      q: "The field",
+      a: "Read from public rankings: who's likely there, not a confirmed start list",
+    });
   return {
     ranked,
     biggest,

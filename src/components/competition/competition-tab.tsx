@@ -301,6 +301,9 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
           competitors={sel.competitors}
           reads={reads}
           landscape={brief?.landscape ?? null}
+          research={comp.research ?? null}
+          weightClass={comp.weight_class ?? null}
+          classOptions={brief?.classOptions ?? []}
         />
       ) : null}
       {section === "projections" ? (

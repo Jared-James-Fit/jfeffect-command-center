@@ -92,4 +92,8 @@ export type Observation = {
   url: string | null;
   confidence: Confidence;
   note: string | null;
+  /** mean concentric velocity (m/s) when the source gives one */
+  velocity?: number | null;
+  /** how the rep looked to the coach on video: to standard, or questionable (depth, lockout, a hitch) */
+  technique?: "clean" | "questionable" | null;
 };

@@ -1,15 +1,25 @@
 /**
- * Cleo's written assessment around the engines' numbers (server only).
+ * Cleo's strategic assessment (server only).
  *
- * The brief (brief.ts) decides every number; Cleo writes the read a head
- * coach would: what matters most, what's wrong, what to challenge, what to do
- * and the athlete's version, in the background on the OpenAI key's strongest
- * models (route `competition`, staged calls, never Lovable credits). Every
- * number in the answer is checked against the brief (grounding.ts): a number
- * that isn't there sends it back once with what was wrong, and a second miss
- * fails this attempt (the worker tries again, three times at most). Provider
- * failures (no credits, a refused key, an outage) never use an attempt: the
- * milestone waits for AI to come back.
+ * The engines (brief.ts) give a baseline from formulas: the forecast, the
+ * field, attempts, warm-ups. Cleo reads the same evidence, numbered
+ * (evidence.ts), as an elite powerlifting coach would and decides whether
+ * each baseline holds for this athlete. Where the evidence justifies a
+ * different number or a specific action, it says so as a structured proposal
+ * citing evidence ids; code checks every one (proposals.ts) and the engines
+ * rebuild the plan from the ones that stand. Then the read: what matters
+ * most, what's wrong, what to challenge, what to do, and the athlete's
+ * version. In the background on the OpenAI key's strongest models (route
+ * `competition`, high effort, staged calls, never Lovable credits).
+ *
+ * Numbers in the written read must come from the brief, the evidence or the
+ * rebuilt plan (grounding.ts; small gaps and jumps under 50 kg are fine), and
+ * the athlete's words carry no weights at all (the app attaches the plan). A
+ * proposal that fails its checks or a number that isn't grounded sends the
+ * answer back once with what was wrong; a second miss sets the failing
+ * proposals aside (kept, with why) and fails the attempt only if the words
+ * still lean on numbers that don't exist. Provider failures (no credits, a
+ * refused key, an outage) never use an attempt: the milestone waits for AI.
  */
 import type { CallState } from "@/lib/ai/staged-call.server";
 import type { Brief } from "./brief";
@@ -17,6 +27,15 @@ import { MILESTONE_BY_KIND } from "./milestones";
 import { bannedPhrases, numbersIn, ungroundedNumbers } from "./grounding";
 import { LIFT_LABEL, OBJECTIVE_LABEL, type Lift, type MilestoneKind } from "./types";
 import { attemptPatternWords } from "./competitor";
+import { buildEvidence, type EvidenceItem } from "./evidence";
+import {
+  applyProposals,
+  checkProposals,
+  readProposals,
+  type AdjustedPlan,
+  type Proposal,
+  type ProposalCheck,
+} from "./proposals";
 
 export type Narrative = {
   coach_summary: string;
@@ -47,6 +66,21 @@ export type Narrative = {
     message: string;
   };
   coach_notification: string;
+  /** Cleo's verdict on each part of the engines' baseline */
+  engine_review: Array<{
+    area: string;
+    verdict: "agree" | "challenge" | "insufficient";
+    note: string;
+  }>;
+  /** the calls Cleo made, as it made them (checked separately: Strategy) */
+  proposals: Proposal[];
+};
+
+/** Cleo's calls after the checks, and the plan rebuilt with the ones that stood. */
+export type Strategy = {
+  checks: ProposalCheck[];
+  adjusted: AdjustedPlan;
+  evidence: EvidenceItem[];
 };
 
 /** What each milestone asks Cleo to focus on. */
@@ -69,29 +103,42 @@ const FOCUS: Record<MilestoneKind, string> = {
     "Debrief. Projected against actual, planned against actual attempts, attempt selection, warm-ups, taper, execution, decisions, placing, missed-attempt patterns and lessons for next time. Athlete version: a constructive competition review.",
 };
 
-const SYSTEM = `You are Cleo, the competition intelligence system inside JF Effect, writing for the coach like an elite competitive powerlifting coach, performance analyst and meet handler.
+const SYSTEM = `You are Cleo, the head strategist inside JF Effect's competition intelligence: an elite international-level powerlifting coach, performance analyst and meet handler writing a strategic second opinion for the coach.
 
-How you think:
-- Evidence over hope. Separate what the numbers show from interpretation, and say which is which.
-- Gym strength isn't platform performance. A forecast is a range, never a promise. Never give a probability.
-- Challenge unrealistic expectations, unnecessary attempt risks and programming that doesn't serve the meet. If a competitor is clearly stronger, say it. If the preparation isn't adequate, say what's wrong and a realistic fix.
-- Prioritize the objective (winning, placing, qualifying, a clean first meet) over maximum individual lifts. Don't take a risk a smaller attempt makes unnecessary.
-- Fatigue, a deload or a taper is not strength loss. One great or bad session is a fluctuation.
-- Competitors: describe observable attempt patterns, never their intentions. Gym posts are selective and often variations; they never count as meet results.
-- Never recommend dehydration, water loading, sodium manipulation, diuretics, saunas or a crash cut. Caffeine only in amounts the athlete already uses.
-- Nothing you write changes a program, a plan or an attempt: you recommend, the coach decides.
+THE ENGINES AND YOU
+The brief's numbers come from deterministic engines: formulas that know the athlete only through generic rules (a strength line from hard sets, a default platform conversion, an opener at a fixed share of the expected max, a standard warm-up ramp, competitors projected from their meet trend). They are a baseline, not the answer. Your job is to read the EVIDENCE the way a world-class coach would and decide, area by area, whether each baseline holds for THIS athlete. Challenge it when the athlete's own history and recent training justify it, in either direction. Agree when it holds. Say "insufficient" when the evidence can't decide. Never rubber-stamp and never change a number for the sake of changing it.
 
-Numbers: use ONLY numbers that appear in the brief (kg, totals, dates, percentages, counts). Never compute a new total, attempt or projection. If a number you'd want isn't there, say it qualitatively.
+How an elite coach reads the evidence:
+- Forecast: compare recent top sets (load, reps, RPE, bar speed) with what the athlete has done on a platform; their own training-to-platform history (CV- items); where they are in the season (off-season RPE 6 volume is not a max, and a deload or taper is not strength lost); how many weeks remain and what a lifter of their training age and level realistically gains in that time; bodyweight and the class (making weight costs strength, the bench most); pain and recovery; whether the program reaches a peak.
+- Attempts: their own attempt history (where they open, which lift they miss, how often thirds are made, misses that cost a total); the objective (placing and qualifying beat individual PRs); the field; rules (never lower after an attempt). An opener is made on a bad day; a third serves the objective.
+- Warm-ups: their own last-warm-up habit from training (W- items) against the standard ramp; flight timing.
+- Taper: what preceded their best meets; the last heavy single and volume drop; recommend to the coach, never rewrite the program.
+- Competitors: their recent level, not lifetime bests; a run of competition-standard training over weeks can move their expected (in either direction), one posted PR can't; class changes, equipment, consistency, how they attempt.
+- Strategy and risk: the two or three decisions that will actually decide this meet, and what to do when it goes wrong.
 
-Coach-facing writing: direct, specific, technically sophisticated, short. No hype, no filler, no headings inside fields, no em dashes. Athlete-facing writing: plain, constructive, actionable, warm but not gushing, in the coach's voice ("I", "we"), never mentions competitors' research, internal concerns about them or Cleo.
+PROPOSALS (structured calls, checked by code)
+Make a proposal only where the evidence justifies a different number or a specific action. Each cites evidence ids from EVIDENCE. Code checks them: cited ids must exist; numbers need training or meet evidence (a competitor needs their own record); a move over 3% needs two items; a lift's expected moves at most 8% (conservative or high 10%), a competitor's 12%; attempts are multiples of the increment, each at least one increment over the last, the opener no higher than the conservative scenario, the second no higher than the expected, the third no higher than the high, jumps at most 10% then 7%; the last warm-up 82–97% of the opener; a warm-up ladder 3–9 rising sets on 2.5 kg plates. What passes is applied and the engines rebuild the totals, the field, the attempt pathways and the warm-ups from it.
+Proposal shape (use the fields that apply):
+{"type":"forecast|competitor|attempt|last_warmup|warmup_sets|taper|strategy|risk","lift":"squat|bench|deadlift|null","scenario":"conservative|expected|high","attempt":1|2|3,"kg":number,"sets":[{"kg":number,"reps":number}],"competitor":"name as in the brief","days_out":number,"severity":"watch|concern|serious","text":"the call in one sentence","reason":"why, from the evidence, in a coach's words","evidence":["T-SQ1","M2"],"confidence":"high|medium|low"}
+Attempt proposals change the planned (balanced) pathway; the conservative and aggressive pathways follow.
+
+NUMBERS
+In everything you write, use only numbers that are in the brief, the evidence, or your proposals that pass the checks. Small gaps and jumps under 50 kg you can work out. Never give a probability. A forecast is a range, never a promise.
+
+VOICE
+Coach-facing: direct, specific, technically sophisticated, short. Separate evidence from interpretation and say which is which. If a competitor is clearly stronger, say it. If the preparation isn't adequate, say what's wrong and a realistic fix. No hype, filler or em dashes.
+Athlete-facing: plain, constructive, actionable, in the coach's voice ("I", "we"). NO weights or totals at all (the app attaches the plan with every number); never mentions competitors' research, private concerns about competitors, or Cleo.
+Never recommend dehydration, water loading, sodium manipulation, diuretics, saunas or a crash cut. Caffeine only in amounts the athlete already uses. Nothing you write changes a program, a plan or an attempt by itself: the coach decides.
 
 Answer ONLY with JSON:
 {
-  "coach_summary": "3-6 sentences: the read",
+  "coach_summary": "4-8 sentences: the strategic read, what you agree with and what you'd change",
   "key_finding": "the single most important thing, one sentence",
+  "engine_review": [{"area": "forecast|attempts|warmups|taper|field|bodyweight|programming|strategy", "verdict": "agree|challenge|insufficient", "note": "one or two sentences: why, from which evidence"}],
+  "proposals": [ ...proposal objects, 0-10... ],
   "concerns": ["significant concerns, most important first (0-5)"],
   "challenges": ["where the plan or expectations should be challenged (0-4)"],
-  "recommendations": [{"text": "what to do", "area": "programming|attempts|bodyweight|recovery|competitors|logistics|nutrition|cardio|communication", "needs_approval": true}],
+  "recommendations": [{"text": "what to do", "area": "programming|attempts|bodyweight|recovery|competitors|logistics|nutrition|cardio|communication|taper", "needs_approval": true}],
   "sections": {"projection": "...", "field": "...", "attempts": "...", "warmups": "...", "game_day": "...", "bodyweight": "...", "programming": "...", "learning": "...", "debrief": "..."},
   "call_note": "one or two sentences to the coach: why a strategy call is or isn't worth it now",
   "athlete": {"title": "short title", "summary": "2-4 sentences", "focus": ["what to focus on (1-4)"], "expectations": ["what's expected of them (0-4)"], "message": "a chat message under 280 characters in the coach's voice introducing this update"},
@@ -187,6 +234,16 @@ export function briefForModel(
           : null,
         confidence: x.read.confidence,
         basis: x.read.basis,
+        entry: x.status,
+        training_read: Object.values(x.read.training)
+          .filter(Boolean)
+          .map((t) => ({
+            lift: t!.lift,
+            platform_estimate: t!.estimateKg,
+            days: t!.exposures,
+            span_days: t!.spanDays,
+            share_of_gap_taken: t!.weight,
+          })),
       })),
     },
     attempts: Object.fromEntries(
@@ -221,6 +278,17 @@ export function briefForModel(
       ]),
     ),
     watch: b.watch.map((w) => ({ severity: w.severity, area: w.area, text: w.text })),
+    class_options: (b.classOptions ?? []).map((c) => ({
+      weight_class: c.weightClass,
+      why_considered: c.reason,
+      field: c.lifters,
+      our_expected_would_place: c.ourPlace,
+    })),
+    bodyweight: {
+      seven_day_avg: b.inputs.bodyweightAvg,
+      trend_per_week: b.inputs.bodyweightTrendPerWeek,
+      class_limit: b.inputs.classLimit,
+    },
     strategy_call: {
       recommended: b.call.recommend,
       minutes: b.call.minutes,
@@ -300,12 +368,23 @@ export function readNarrative(text: string): Narrative | null {
       message: clip(j.athlete?.message, 300),
     },
     coach_notification: clip(j.coach_notification, 180) || clip(j.key_finding, 180),
+    engine_review: (Array.isArray(j.engine_review) ? j.engine_review : [])
+      .slice(0, 10)
+      .map((r: any) => ({
+        area: clip(r?.area, 30) || "general",
+        verdict: (["agree", "challenge", "insufficient"].includes(r?.verdict)
+          ? r.verdict
+          : "insufficient") as "agree" | "challenge" | "insufficient",
+        note: clip(r?.note, 600),
+      }))
+      .filter((r: any) => r.note),
+    proposals: readProposals(j.proposals),
   };
 }
 
-/** Problems with an answer: numbers the brief doesn't have, phrases the app never says. */
-export function narrativeProblems(n: Narrative, allowed: Set<number>): string[] {
-  const all = [
+/** Every written field Cleo gave, coach-facing and athlete-facing. */
+function writtenText(n: Narrative) {
+  const coach = [
     n.coach_summary,
     n.key_finding,
     ...n.concerns,
@@ -313,27 +392,96 @@ export function narrativeProblems(n: Narrative, allowed: Set<number>): string[] 
     ...n.recommendations.map((r) => r.text),
     ...Object.values(n.sections),
     n.call_note,
+    n.coach_notification,
+    ...n.engine_review.map((r) => r.note),
+  ].join("\n");
+  const athlete = [
+    n.athlete.title,
     n.athlete.summary,
     ...n.athlete.focus,
     ...n.athlete.expectations,
     n.athlete.message,
-    n.coach_notification,
   ].join("\n");
+  return { coach, athlete };
+}
+
+/** Numbers over 12 in the athlete's words (years aside): the plan carries the weights. */
+export function athleteNumbers(text: string): number[] {
+  const out: number[] = [];
+  for (const m of text.matchAll(/(?<![\w.])(\d{1,4}(?:[.,]\d{1,2})?)(?![\d])/g)) {
+    const n = Number(m[1].replace(",", "."));
+    if (n > 12 && !(n >= 1900 && n <= 2100)) out.push(n);
+  }
+  return [...new Set(out)];
+}
+
+/** Problems with an answer: numbers that aren't grounded, weights in the athlete's words, phrases the app never says. */
+export function narrativeProblems(n: Narrative, allowed: Set<number>): string[] {
+  const { coach, athlete } = writtenText(n);
   const out: string[] = [];
-  const bad = ungroundedNumbers(all, allowed);
+  const bad = ungroundedNumbers(`${coach}\n${athlete}`, allowed).filter(
+    // small gaps and jumps are worked out, not invented
+    (x) => !(x < 50 && Math.abs(x * 2 - Math.round(x * 2)) < 1e-9),
+  );
   if (bad.length)
     out.push(
-      `These numbers aren't in the brief: ${bad.slice(0, 8).join(", ")}. Use only the brief's numbers.`,
+      `These numbers aren't in the brief, the evidence or a proposal that passed: ${bad.slice(0, 8).join(", ")}. Use only those numbers.`,
     );
-  const banned = bannedPhrases(all);
+  const nums = athleteNumbers(athlete);
+  if (nums.length)
+    out.push(
+      `The athlete's words have weights or totals in them (${nums.slice(0, 5).join(", ")}): the app attaches the plan, keep numbers out of them.`,
+    );
+  const banned = bannedPhrases(`${coach}\n${athlete}`);
   if (banned.length)
     out.push("Never give probabilities, guarantees or water / sodium / sauna weight cutting.");
   return out;
 }
 
+/** What the checks said about the calls that didn't stand, for the second round. */
+export function proposalProblems(checks: ProposalCheck[]): string[] {
+  return checks
+    .filter((c) => !c.ok)
+    .map(
+      (c) =>
+        `Proposal "${c.proposal.text || c.proposal.type}" (${c.proposal.type}${c.proposal.lift ? ` ${c.proposal.lift}` : ""}${c.proposal.kg != null ? ` ${c.proposal.kg} kg` : ""}) was set aside: ${c.reasons.join("; ")}. Fix it or drop it, and don't lean on it in the read.`,
+    );
+}
+
+/** The numbers Cleo may use: the brief, the evidence, and the plan rebuilt with the calls that stood. */
+export function allowedNumbers(forModel: unknown, evidence: EvidenceItem[], adjusted: AdjustedPlan) {
+  const set = numbersIn(forModel);
+  numbersIn(
+    evidence.map((e) => e.text),
+    set,
+  );
+  numbersIn(
+    {
+      lifts: adjusted.lifts,
+      total: adjusted.total,
+      attempts: adjusted.attempts,
+      warmups: Object.values(adjusted.warmups).map((w) => w && { sets: w.sets.map((s) => s.kg), last: w.last.kg }),
+      landscape: {
+        toWin: adjusted.landscape.toWin,
+        toPodium: adjusted.landscape.toPodium,
+        subtotal: adjusted.landscape.subtotal,
+        qualification: adjusted.landscape.qualification,
+        ranked: adjusted.landscape.ranked.map((t) => t.range),
+      },
+    },
+    set,
+  );
+  return set;
+}
+
 export class NarrativeRejected extends Error {}
 
-/** Writes (or keeps polling for) the narrative; throws WaitingForModel while a model is still thinking. */
+/** The evidence as the model reads it: one line an item. */
+export function evidenceForModel(evidence: EvidenceItem[]): string {
+  return evidence.map((e) => `${e.id}: ${e.text}`).join("\n");
+}
+
+/** Writes (or keeps polling for) the assessment; throws WaitingForModel while a model is still thinking. */
 export async function writeNarrative(
   sb: any,
   b: Brief,
@@ -345,16 +493,16 @@ export async function writeNarrative(
   },
   state: CallState,
   save: () => Promise<void>,
-): Promise<{ narrative: Narrative; model: string }> {
+): Promise<{ narrative: Narrative; model: string; strategy: Strategy }> {
   const { stagedCall, ModelsExhausted, OPENAI_CREDITS_HINT } =
     await import("@/lib/ai/staged-call.server");
   const { resolveRoute } = await import("@/lib/ai/routing");
   const { readRouteOverride } = await import("@/lib/ai/route-call.server");
   const route = resolveRoute("competition", await readRouteOverride(sb), { openaiOnly: true });
   const forModel = briefForModel(b, extra);
-  const allowed = numbersIn(forModel);
+  const evidence = buildEvidence(b);
   const kind = b.milestone ?? "update";
-  const prompt = `${FOCUS[kind]}\n\nBRIEF (the engines' numbers, JSON):\n${JSON.stringify(forModel)}`;
+  const prompt = `${FOCUS[kind]}\n\nBRIEF (the engines' baseline, JSON):\n${JSON.stringify(forModel)}\n\nEVIDENCE (cite these ids in proposals):\n${evidenceForModel(evidence)}`;
   const call = async (key: string, p: string) => {
     try {
       return await stagedCall({
@@ -370,9 +518,9 @@ export async function writeNarrative(
         save,
         tag: `competition:${kind}`,
         poll: { ms: 40_000, every: 3000 },
-        backgroundLimitMs: 20 * 60_000,
-        hedgeAfterMs: 12 * 60_000,
-        finalLimitMs: 30 * 60_000,
+        backgroundLimitMs: 25 * 60_000,
+        hedgeAfterMs: 15 * 60_000,
+        finalLimitMs: 40 * 60_000,
         syncTimeoutMs: 200_000,
       });
     } catch (e) {
@@ -382,30 +530,53 @@ export async function writeNarrative(
       );
     }
   };
+  const judge = (text: string) => {
+    const n = readNarrative(text);
+    if (!n) return { n: null, checks: [] as ProposalCheck[], problems: ["The answer wasn't the JSON asked for."], adjusted: null as AdjustedPlan | null };
+    const checks = checkProposals(b, evidence, n.proposals);
+    const adjusted = applyProposals(
+      b,
+      checks.filter((c) => c.ok).map((c) => c.proposal),
+    );
+    const allowed = allowedNumbers(forModel, evidence, adjusted);
+    const problems = [...proposalProblems(checks), ...narrativeProblems(n, allowed)];
+    return { n, checks, problems, adjusted };
+  };
   const first = await call("write", prompt);
-  let n = readNarrative(first.text);
-  let problems = n ? narrativeProblems(n, allowed) : ["The answer wasn't the JSON asked for."];
-  if (!problems.length && n) return { narrative: n, model: first.model };
+  let r = judge(first.text);
+  if (r.n && !r.problems.length)
+    return { narrative: r.n, model: first.model, strategy: { checks: r.checks, adjusted: r.adjusted!, evidence } };
   const second = await call(
     "write2",
-    `${prompt}\n\nYOUR LAST ANSWER HAD PROBLEMS, fix them and answer again with the whole JSON:\n- ${problems.join("\n- ")}`,
+    `${prompt}\n\nYOUR LAST ANSWER HAD PROBLEMS. Fix them and answer again with the whole JSON:\n- ${r.problems.join("\n- ")}`,
   );
-  n = readNarrative(second.text);
-  problems = n ? narrativeProblems(n, allowed) : ["The answer wasn't the JSON asked for."];
-  if (n && !problems.length) return { narrative: n, model: second.model };
-  throw new NarrativeRejected(
-    `The write-up didn't hold to the engines' numbers: ${problems.join(" ")}`,
+  r = judge(second.text);
+  if (!r.n) throw new NarrativeRejected("The assessment wasn't readable twice.");
+  // calls still failing their checks are set aside (kept, with why); the words must still hold
+  const wordProblems = narrativeProblems(
+    r.n,
+    allowedNumbers(forModel, evidence, r.adjusted!),
   );
+  if (wordProblems.length)
+    throw new NarrativeRejected(`The write-up didn't hold to the numbers: ${wordProblems.join(" ")}`);
+  return { narrative: r.n, model: second.model, strategy: { checks: r.checks, adjusted: r.adjusted!, evidence } };
 }
 
 /** The athlete-facing version: Cleo's words plus, for a game plan, the plan itself from the engines. */
-export function athleteVersion(b: Brief, n: Narrative, kind: MilestoneKind) {
+export function athleteVersion(
+  b: Brief,
+  n: Narrative,
+  kind: MilestoneKind,
+  adjusted?: AdjustedPlan | null,
+) {
   const c = b.competition;
+  const att = adjusted?.attempts ?? b.attempts;
+  const warm = adjusted?.warmups ?? b.warmups;
   const plan =
     kind === "game_plan" || kind === "confirm"
       ? {
           attempts: Object.fromEntries(
-            (Object.entries(b.attempts.lifts) as [Lift, (typeof b.attempts.lifts)[Lift]][]).map(
+            (Object.entries(att.lifts) as [Lift, (typeof att.lifts)[Lift]][]).map(
               ([l, a]) => [
                 l,
                 a
@@ -421,7 +592,7 @@ export function athleteVersion(b: Brief, n: Narrative, kind: MilestoneKind) {
             ),
           ),
           warmups: Object.fromEntries(
-            (Object.entries(b.warmups) as [Lift, (typeof b.warmups)[Lift]][]).map(([l, w]) => [
+            (Object.entries(warm) as [Lift, (typeof warm)[Lift]][]).map(([l, w]) => [
               l,
               w
                 ? {

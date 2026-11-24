@@ -275,6 +275,7 @@ import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/
 import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
 import { Route as ApiPublicHooksCoachingPackageStripeRouteImport } from './routes/api/public/hooks/coaching-package-stripe'
 import { Route as ApiPublicHooksCompetitionIntelTickRouteImport } from './routes/api/public/hooks/competition-intel-tick'
+import { Route as ApiPublicHooksCompetitionSelfcheckRouteImport } from './routes/api/public/hooks/competition-selfcheck'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
@@ -1856,6 +1857,12 @@ const ApiPublicHooksCompetitionIntelTickRoute =
     path: '/api/public/hooks/competition-intel-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCompetitionSelfcheckRoute =
+  ApiPublicHooksCompetitionSelfcheckRouteImport.update({
+    id: '/api/public/hooks/competition-selfcheck',
+    path: '/api/public/hooks/competition-selfcheck',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksDailyVisualsTickRoute =
   ApiPublicHooksDailyVisualsTickRouteImport.update({
     id: '/api/public/hooks/daily-visuals-tick',
@@ -2438,6 +2445,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
+  '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2757,6 +2765,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
+  '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -3082,6 +3091,7 @@ export interface FileRoutesById {
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
+  '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -3407,6 +3417,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
     | '/api/public/hooks/competition-intel-tick'
+    | '/api/public/hooks/competition-selfcheck'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -3726,6 +3737,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
     | '/api/public/hooks/competition-intel-tick'
+    | '/api/public/hooks/competition-selfcheck'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -4050,6 +4062,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
     | '/api/public/hooks/competition-intel-tick'
+    | '/api/public/hooks/competition-selfcheck'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -4195,6 +4208,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
   ApiPublicHooksCoachingPackageStripeRoute: typeof ApiPublicHooksCoachingPackageStripeRoute
   ApiPublicHooksCompetitionIntelTickRoute: typeof ApiPublicHooksCompetitionIntelTickRoute
+  ApiPublicHooksCompetitionSelfcheckRoute: typeof ApiPublicHooksCompetitionSelfcheckRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
@@ -6104,6 +6118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCompetitionIntelTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/competition-selfcheck': {
+      id: '/api/public/hooks/competition-selfcheck'
+      path: '/api/public/hooks/competition-selfcheck'
+      fullPath: '/api/public/hooks/competition-selfcheck'
+      preLoaderRoute: typeof ApiPublicHooksCompetitionSelfcheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/daily-visuals-tick': {
       id: '/api/public/hooks/daily-visuals-tick'
       path: '/api/public/hooks/daily-visuals-tick'
@@ -7247,6 +7268,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksCoachingPackageStripeRoute,
   ApiPublicHooksCompetitionIntelTickRoute:
     ApiPublicHooksCompetitionIntelTickRoute,
+  ApiPublicHooksCompetitionSelfcheckRoute:
+    ApiPublicHooksCompetitionSelfcheckRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,

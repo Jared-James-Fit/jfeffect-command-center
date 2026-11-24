@@ -38,6 +38,8 @@ import {
   type AssessmentRow,
 } from "@/lib/competition/lifecycle";
 import { AttemptsView, ForecastTable, GameDayView, WarmupsView } from "./plan-views";
+import { StrategyCalls } from "./strategy-calls";
+import { confirmedPlan } from "@/lib/competition/proposals";
 import { cn } from "@/lib/utils";
 
 const fmt = (iso: string | null | undefined) =>
@@ -136,6 +138,9 @@ export function AssessmentSheet({
   const def = a ? MILESTONE_BY_KIND[a.kind as keyof typeof MILESTONE_BY_KIND] : null;
   const n = a?.internal?.narrative;
   const engine = a?.internal?.engine;
+  const strategy = a?.internal?.strategy;
+  const plan = a?.internal ? confirmedPlan(a.internal) : null;
+  const changed = (strategy?.adjusted?.changes ?? []).length > 0;
   const actions = row ? coachActions(row) : [];
   const busy = run.isPending;
 
@@ -237,6 +242,15 @@ export function AssessmentSheet({
                     </p>
                   ) : null}
                 </section>
+                <StrategyCalls
+                  assessmentId={a.id}
+                  clientId={clientId}
+                  review={n?.engine_review ?? []}
+                  checks={strategy?.checks ?? []}
+                  declined={strategy?.declined ?? []}
+                  evidence={strategy?.evidence ?? []}
+                  locked={a.status === "released" || a.status === "superseded"}
+                />
                 {n?.concerns?.length ? (
                   <ListBlock title="Concerns" items={n.concerns} tone="warn" />
                 ) : null}
@@ -296,16 +310,18 @@ export function AssessmentSheet({
                       </section>
                     ))
                   : null}
-                {engine ? (
+                {engine && plan ? (
                   <>
                     <section>
-                      <h4 className="mb-1.5 text-[14px] font-semibold">The numbers (engine)</h4>
-                      <ForecastTable forecast={engine.forecast} showBasis />
+                      <h4 className="mb-1.5 text-[14px] font-semibold">
+                        {changed ? "The numbers (with Cleo's calls you kept)" : "The numbers"}
+                      </h4>
+                      <ForecastTable forecast={plan.forecast} showBasis />
                     </section>
                     {a.kind === "forecast" || a.kind === "game_plan" || a.kind === "confirm" ? (
                       <section>
                         <h4 className="mb-1.5 text-[14px] font-semibold">Attempts</h4>
-                        <AttemptsView attempts={engine.attempts?.lifts} />
+                        <AttemptsView attempts={plan.attempts?.lifts} />
                       </section>
                     ) : null}
                   </>
@@ -316,8 +332,9 @@ export function AssessmentSheet({
                   </p>
                 ) : null}
                 <p className="text-[12px] text-muted-foreground">
-                  {a.model ? `Model: ${a.model}. ` : ""}Every number comes from the engines; Cleo's
-                  words were checked against them.
+                  {a.model ? `Model: ${a.model}. ` : ""}The engines work out the maths; Cleo's calls
+                  were checked by code before they changed anything, and every number in the words
+                  traces to the evidence, the engines or a call that passed.
                 </p>
               </div>
             ) : (

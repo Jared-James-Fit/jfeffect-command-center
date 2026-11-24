@@ -16,11 +16,15 @@ import type { Observation } from "./types";
 
 type Db = any;
 
+type Attachment =
+  | { mime: string; base64: string }
+  | { mime: "application/pdf"; base64: string; pdf: true };
+
 async function ask(
   sb: Db,
   system: string,
   prompt: string,
-  image: { mime: string; base64: string } | null,
+  image: Attachment | null,
 ): Promise<string> {
   const { resolveRoute } = await import("@/lib/ai/routing");
   const { readRouteOverride } = await import("@/lib/ai/route-call.server");
@@ -39,7 +43,11 @@ async function ask(
         timeoutMs: 60_000,
         tag: "competition_extract",
         files: image
-          ? [{ kind: "image", name: "source", mime: image.mime, base64: image.base64 }]
+          ? [
+              "pdf" in image
+                ? { kind: "pdf", name: "source.pdf", mime: "application/pdf", base64: image.base64 }
+                : { kind: "image", name: "source", mime: image.mime, base64: image.base64 },
+            ]
           : undefined,
       });
       if (r.text?.trim()) return r.text;
@@ -61,11 +69,11 @@ const json = (t: string) => {
 
 export async function extractRoster(
   sb: Db,
-  input: { text: string | null; image: { mime: string; base64: string } | null },
+  input: { text: string | null; image: Attachment | null },
 ): Promise<RosterRow[]> {
   const prompt = input.text
     ? `ROSTER:\n${input.text.slice(0, 40_000)}`
-    : "The roster is in the picture.";
+    : "The roster is in the attached file.";
   return cleanRoster(json(await ask(sb, ROSTER_SYSTEM, prompt, input.image)), input.text);
 }
 
@@ -73,7 +81,7 @@ export async function extractTraining(
   sb: Db,
   input: {
     text: string | null;
-    image: { mime: string; base64: string } | null;
+    image: Attachment | null;
     today: string;
     url: string | null;
   },
@@ -84,4 +92,16 @@ export async function extractTraining(
     input.text,
     input.today,
   ).map((o) => ({ ...o, url: input.url, source: input.url ? "link" : o.source }));
+}
+
+/** A meet's details (dates, schedule, qualifying totals, rules notes) copied from a page or a PDF. */
+export async function extractMeetInfo(
+  sb: Db,
+  input: { text: string | null; file: Attachment | null },
+) {
+  const { MEET_INFO_SYSTEM, cleanMeetInfo } = await import("./research");
+  const prompt = input.text
+    ? `MEET PAGE:\n${input.text.slice(0, 50_000)}`
+    : "The meet information is in the attached file.";
+  return cleanMeetInfo(json(await ask(sb, MEET_INFO_SYSTEM, prompt, input.file)), input.text);
 }

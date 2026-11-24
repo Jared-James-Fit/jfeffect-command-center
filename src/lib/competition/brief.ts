@@ -77,6 +77,8 @@ export type BriefContext = {
     meets: MeetRecord[];
     observations: Observation[];
     identity: string;
+    /** suggested (found by research, not confirmed), confirmed, registered (on a start list) */
+    status?: "suggested" | "confirmed" | "registered";
   }>;
   watch: Omit<
     WatchInput,
@@ -98,6 +100,31 @@ export type BriefContext = {
   previous: { expectedTotal: number | null } | null;
   checks: ForecastCheck[];
   cues: Partial<Record<Lift, string[]>>;
+  /** each competition lift's training days in the last 12 weeks (newest first): the evidence Cleo reads */
+  sessions?: Partial<Record<Lift, TrainingDay[]>>;
+  /** an adjacent class's field when the athlete is well over their limit (research.server.ts) */
+  classOptions?: ClassOption[];
+};
+
+export type ClassOption = {
+  weightClass: string;
+  lifters: Array<{ name: string; total: number; date: string }>;
+  ourPlace: number | null;
+  reason: string;
+};
+
+/** One training day of a competition lift: its most telling set, as the strength line read it. */
+export type TrainingDay = {
+  day: string;
+  kg: number;
+  reps: number;
+  rpe: number | null;
+  /** estimated max from this set (kg) */
+  e1rm: number;
+  confidence: "high" | "medium" | "low";
+  /** heaviest load moved that day (kg) */
+  heaviestKg: number;
+  velocity: number | null;
 };
 
 export type MissingInfo = {
@@ -114,7 +141,13 @@ export type Brief = {
   daysOut: number;
   competition: CompetitionFacts;
   forecast: Forecast;
-  competitors: Array<{ id: string; name: string; identity: string; read: CompetitorRead }>;
+  competitors: Array<{
+    id: string;
+    name: string;
+    identity: string;
+    read: CompetitorRead;
+    status: "suggested" | "confirmed" | "registered";
+  }>;
   landscape: Landscape;
   attempts: AttemptPlan;
   warmups: Record<Lift, WarmupPlan | null>;
@@ -125,6 +158,21 @@ export type Brief = {
   missing: MissingInfo;
   /** the expected total moved since the last assessment, as a share */
   projectionShift: number | null;
+  /** an adjacent class's field, when the class is a question */
+  classOptions: ClassOption[];
+  /** what the plan was built from, so a checked change from Cleo can rebuild it (proposals.ts) */
+  inputs: {
+    history: ReturnType<typeof attemptStats>;
+    topSingles: Partial<Record<Lift, number | null>>;
+    warmups: Partial<Record<Lift, WarmupHistory>>;
+    sessions: Partial<Record<Lift, TrainingDay[]>>;
+    meets: MeetRecord[];
+    bodyweightAvg: number | null;
+    bodyweightTrendPerWeek: number | null;
+    classLimit: number | null;
+    conversion: ConversionPoint[];
+    watchFacts: BriefContext["watch"];
+  };
 };
 
 export function missingInfo(ctx: BriefContext): MissingInfo {
@@ -216,7 +264,10 @@ export function buildBrief(ctx: BriefContext): Brief {
       meetDate: c.meetDate,
       observations: x.observations,
       increment: c.rules.incrementKg,
+      meetClassLimitKg: ctx.athlete.classLimit,
+      classic: c.rules.family === "ipf",
     }),
+    status: x.status ?? "confirmed",
   }));
   const liftRanges = Object.fromEntries(
     LIFTS.map((l) => [l, forecast.lifts[l]?.range ?? null]),
@@ -315,6 +366,19 @@ export function buildBrief(ctx: BriefContext): Brief {
     profile,
     missing,
     projectionShift,
+    classOptions: ctx.classOptions ?? [],
+    inputs: {
+      history,
+      topSingles: ctx.topSingles,
+      warmups: ctx.warmups,
+      sessions: ctx.sessions ?? {},
+      meets: ctx.meets.slice(0, 12),
+      bodyweightAvg: ctx.athlete.bodyweightAvg,
+      bodyweightTrendPerWeek: ctx.athlete.bodyweightTrendPerWeek,
+      classLimit: ctx.athlete.classLimit,
+      conversion: ctx.conversion,
+      watchFacts: ctx.watch,
+    },
   };
 }
 

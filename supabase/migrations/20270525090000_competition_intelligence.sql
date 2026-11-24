@@ -21,7 +21,9 @@
 --                             supersedes the old one, never overwrites it.
 --  * competition_events       append-only record of who did what and when.
 --  * competition_competitors  the field: OpenPowerlifting history, identity
---                             status, training seen outside meets.
+--                             status, training seen outside meets; entrants the
+--                             research found are "suggested" until the coach
+--                             confirms them.
 --  * competition_resources    links, notes, rosters, rules, files the coach gave.
 --  * competition_meet_log     meet-day attempts, ours and the field's, logged by
 --                             hand (idempotent on the phone's key).
@@ -68,6 +70,10 @@ CREATE TABLE IF NOT EXISTS public.competitions (
   live jsonb,
   live_at timestamptz,
   schedule_dirty boolean NOT NULL DEFAULT true,
+  -- automatic research: the field from OpenPowerlifting's rankings, an adjacent class's field
+  research jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- an internal validation run on a staff member's own athlete account: releases go nowhere else
+  internal_test boolean NOT NULL DEFAULT false,
   source text NOT NULL DEFAULT 'coach' CHECK (source IN ('coach', 'prep', 'plan', 'profile')),
   created_by uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -197,7 +203,9 @@ CREATE TABLE IF NOT EXISTS public.competition_competitors (
   observations jsonb NOT NULL DEFAULT '[]'::jsonb,
   notes text CHECK (notes IS NULL OR char_length(notes) <= 4000),
   bodyweight_kg numeric CHECK (bodyweight_kg IS NULL OR bodyweight_kg BETWEEN 25 AND 300),
-  source text NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'roster')),
+  source text NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'roster', 'opl')),
+  -- suggested: found by research, not confirmed; confirmed: the coach says they're likely; registered: on a start list
+  field_status text NOT NULL DEFAULT 'confirmed' CHECK (field_status IN ('suggested', 'confirmed', 'registered')),
   archived boolean NOT NULL DEFAULT false,
   created_by uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
