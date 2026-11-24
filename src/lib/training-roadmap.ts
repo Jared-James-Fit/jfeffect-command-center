@@ -230,7 +230,7 @@ export function hashText(text: string): string {
 const MAX_DIGEST = 28_000;
 
 /** Bump when the prompt changes, so every block is rewritten in the new style. */
-export const ROADMAP_PROMPT_VERSION = 7;
+export const ROADMAP_PROMPT_VERSION = 8;
 
 /**
  * The block as Cleo reads it, plus a hash of only what the notes depend on
@@ -400,7 +400,7 @@ Rules:
 - Describe only what the program data shows. Never invent exercises, numbers, dates, goals, injuries or meet details.
 - Never prescribe, add or change training. You explain the coach's plan; you don't edit it.
 - Read the structure like an experienced strength coach (how sets, reps, effort and loads move from week to week: building up, getting heavier, a lighter week to recover, a test or heavy singles, a taper before a meet), then say it in everyday words.
-- Plain words only. No numbers or percentages at all (the app shows the dates, weeks and the workouts themselves). Never use: RPE, RIR, top set, back-off, volume, intensity, intensification, accumulation, specific, specificity, SBD, deload, pivot, realization, hypertrophy, periodization, fatigue, stimulus, calibration, consolidation, benchmark, cap, assistance, exposure, express strength, capacity, top loads, bar speed. Compare a week with "last week" or "next week", never "week four". Say it the way you'd tell a friend at the gym: lighter, heavier, more sets, fewer sets, easier, harder, the main lifts (or squat, bench and deadlift), build muscle, get stronger, recover, the meet.
+- Plain words only. No numbers or percentages at all (the app shows the dates, weeks and the workouts themselves). Never use: RPE, RIR, top set, back-off, volume, intensity, intensification, accumulation, specific, specificity, SBD, deload, pivot, realization, hypertrophy, periodization, fatigue, stimulus, calibration, consolidation, benchmark, cap, assistance, exposure, express strength, capacity, top loads, bar speed, submaximal, and no numbers spelled out either ("ten percent"). Compare a week with "last week" or "next week", never "week four". Say it the way you'd tell a friend at the gym: lighter, heavier, more sets, fewer sets, easier, harder, the main lifts (or squat, bench and deadlift), build muscle, get stronger, recover, the meet.
 - If the coach gave a goal, focus or week phase, keep its meaning and say it in plain words: "Accumulation 2" is "Build", "Deload" is "Lighter week", "Intensification" is "Heavier", "Realization" is "Peak".
 - Second person ("you"). Short, calm and confident. No hype, no emojis, no dashes, no filler.
 
@@ -436,7 +436,7 @@ function weekShape(w: DigestWeek, s: WeekStats, prev: WeekStats | null, laterBlo
 
 /** Words an athlete shouldn't have to learn to read their own plan. */
 const JARGON =
-  /\b(?:rpe|rir|e?1rm|amrap|top[\s_-]?sets?|back[\s_-]?offs?|volume|intensit(?:y|ies)|intensif\w*|accumulat\w*|(?:re-?)?specific(?:ity)?|caps?|sbd|deloads?|pivot|reali[sz]ation|hypertrophy|periodi[sz]\w*|fatigue|stimulus|calibrat\w*|consolidat\w*|benchmark\w*|mesocycle|microcycle|tempo|assistance|expos(?:e|es|ed|ing|ures?)|express(?:es|ed|ing)?\s+(?:your\s+)?strength|capacity|top[\s_-]?loads?|bar[\s_-]?speed)\b/i;
+  /\b(?:rpe|rir|e?1rm|amrap|top[\s_-]?sets?|back[\s_-]?offs?|volume|intensit(?:y|ies)|intensif\w*|accumulat\w*|(?:re-?)?specific(?:ity)?|caps?|sbd|deloads?|pivot|reali[sz]ation|hypertrophy|periodi[sz]\w*|fatigue|stimulus|calibrat\w*|consolidat\w*|benchmark\w*|mesocycle|microcycle|tempo|assistance|expos(?:e|es|ed|ing|ures?)|express(?:es|ed|ing)?\s+(?:your\s+)?strength|capacity|top[\s_-]?loads?|bar[\s_-]?speed|percent(?:age)?s?|per\s+cent|sub-?max\w*)\b/i;
 
 /** "than week four": the plan numbers weeks across the program, so a week named by number in the block's own count can be the wrong one. */
 const WEEK_BY_NUMBER = /\bweeks?\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i;

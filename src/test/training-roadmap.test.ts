@@ -309,6 +309,9 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(plainProblems("Planned top loads for the block.", 110)).toContain('it uses "top loads"');
     expect(plainProblems("Less work than week seven.", 110)).toContain('it names a week by its number (say "last week" or "next week")');
     expect(plainProblems("A bit heavier than last week.", 110)).toEqual([]);
+    // and the v7 rewrite's two misses
+    expect(plainProblems("About ten percent less total work to recover while keeping loads up.", 110)).toContain('it uses "percent"');
+    expect(plainProblems("More sets and reps than last week, mostly submaximal effort on the main lifts.", 110)).toContain('it uses "submaximal"');
     expect(plainProblems("x".repeat(40), 24)).toContain("it's longer than 24 characters");
     expect(plainProblems("", 24)).toEqual(["it's empty"]);
   });
@@ -370,7 +373,7 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(server).toContain("Your last reply broke the plain-words rules.");
     expect(server).toContain("return plainReply(best.reply, digest, meet);");
     const { ROADMAP_PROMPT_VERSION, digestBlock: digest } = await import("@/lib/training-roadmap");
-    expect(ROADMAP_PROMPT_VERSION).toBe(7);
+    expect(ROADMAP_PROMPT_VERSION).toBe(8);
     const d = digest(block(3));
     expect(d.shapes.map((s) => s.week)).toEqual([1, 2, 3]);
     expect(d.shapes[0].start).toBe("first");
