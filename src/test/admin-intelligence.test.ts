@@ -24,6 +24,7 @@ import {
   SESSION_IDLE_MS,
   visitDevice,
 } from "@/lib/app-pulse/pulse-rules";
+import { zoneCount, zonePlace } from "@/lib/app-pulse/tz-places";
 import { prettySource, shapeAppIntel, takeaways } from "@/lib/admin-intel/app-intel-model";
 import { planChangeLines, planChangeProblems, type PlanChangeReview } from "@/lib/admin-intel/membership-model";
 import { fitView } from "@/components/admin/intel/place-map";
@@ -195,6 +196,28 @@ describe("visits: what's recorded", () => {
       lng: null,
     });
     expect(coarsePlace({ city: encodeURIComponent("Saint-Boniface") }).city).toBe("Saint-Boniface");
+  });
+  it("never reads a missing coordinate as 0 (the host that gives only a country)", () => {
+    // what production's host sends: a country header and nothing else
+    const p = coarsePlace({ country: "CA", region: null, city: null, latitude: null, longitude: undefined });
+    expect(p).toEqual({ country: "CA", region: null, city: null, lat: null, lng: null });
+    expect(coarsePlace({ country: "CA", latitude: "", longitude: " " }).lat).toBeNull();
+    expect(coarsePlace({ country: "CA", latitude: 0, longitude: 0 }).lat).toBeNull();
+    expect(coarsePlace({ country: "CA", latitude: 49.9, longitude: null })).toMatchObject({ lat: null, lng: null });
+    expect(coarsePlace({ country: "GH", latitude: 0.04, longitude: -0.2 })).toMatchObject({ lat: 0, lng: -0.2 });
+  });
+  it("places a country-only visit at its time zone's main city, only inside that country", () => {
+    expect(zoneCount()).toBeGreaterThan(400);
+    expect(zonePlace("America/Winnipeg", "CA")).toEqual({ city: "Winnipeg", lat: 49.9, lng: -97.1 });
+    expect(zonePlace("Europe/Lisbon", "pt")).toEqual({ city: "Lisbon", lat: 38.7, lng: -9.1 });
+    // an older name the browser may still use
+    expect(zonePlace("Asia/Calcutta", "IN")?.city).toBe("Kolkata");
+    // a zone in another country than the internet address (a VPN, travel) places nothing
+    expect(zonePlace("America/Winnipeg", "US")).toBeNull();
+    expect(zonePlace("America/Chicago", "CA")).toBeNull();
+    expect(zonePlace("Not/AZone", "CA")).toBeNull();
+    expect(zonePlace(null, "CA")).toBeNull();
+    expect(zonePlace("America/Winnipeg", null)).toBeNull();
   });
 });
 

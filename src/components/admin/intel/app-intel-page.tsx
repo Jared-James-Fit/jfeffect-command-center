@@ -223,7 +223,7 @@ function Body({ v }: { v: AppIntelView }) {
 
       <IntelSection
         title="Where they are"
-        sub="Approximate: the city a visit's internet address points to, kept to about 11 km. Nobody's exact location is recorded, and no place names a person."
+        sub="Approximate: the country a visit's internet address is in, placed at the main city of the device's time zone (most of Manitoba shows as Winnipeg). Nobody's exact location is recorded, and no place names a person."
       >
         <PlaceMap places={v.places} />
         <div className="mt-3 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
@@ -308,7 +308,7 @@ function Body({ v }: { v: AppIntelView }) {
           { term: "In the app now", text: "A visit with a heartbeat in the last 5 minutes (the app beats once a minute while it's on screen)." },
           { term: "Visit", text: "One session: closing the app or 30 minutes away starts a new one." },
           { term: "Website visitor", text: "An anonymous browser that opened the landing page, counted once a day. A browser asking not to be tracked isn't counted." },
-          { term: "Places", text: "From the host's IP geolocation on a visit's first beat, kept to a city and ~11 km. The IP itself is never stored." },
+          { term: "Places", text: "On a visit's first beat: the country from the host's IP geolocation (the IP itself is never stored), put on the map at the main city of the device's time zone when that zone is in the same country, else listed by country only." },
           { term: "Revenue", text: "Payments less refunds before GST/HST, by the day the money moved; voided payments left out." },
         ]}
       />
