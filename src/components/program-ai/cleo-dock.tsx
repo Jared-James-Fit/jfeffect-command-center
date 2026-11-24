@@ -24,15 +24,23 @@
  *
  * Branded Cleo for whoever has Cleo (useCleoAccess); anyone else who may adjust
  * the program sees the same dock as "Adjust program": nobody loses it.
+ *
+ * One way in per page (Nov 24 2026): a client's Training, Nutrition and Cardio
+ * tabs open their dock from the plan-quality strip (Optimize, Ask Cleo), never a
+ * second launcher beside it. Once the strip has scrolled away (or isn't there),
+ * the closed dock shows its handle (`handle`): a slim tab on the right edge on a
+ * computer, a small pill above the tab bar on a phone, so Cleo stays one tap
+ * away anywhere on the page without a second button competing with the strip.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Maximize2, Minimize2, SlidersHorizontal, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { ChevronDown, ChevronUp, Maximize2, MessagesSquare, Minimize2, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { builderNav, type BuilderHere } from "@/lib/builder-nav";
 import { CleoMark } from "@/components/summer/cleo-mark";
+import { CLEO_PANEL_OPENED, closeSummer, openSummer } from "@/lib/cleo-open";
 import { ChatPanel, HistoryPanel, RulesPanel } from "@/components/program-ai/edit-with-ai";
 import { OptimizeBrief, type OptimizeBriefData } from "@/components/plan-quality/plan-intelligence";
 import type { ProgramAiTarget } from "@/lib/program-ai/program-ai.functions";
@@ -188,7 +196,9 @@ export function CleoDockFrame({
   subtitle,
   branded,
   header,
+  handle,
   children,
+  conversationClientId,
 }: {
   dock: CleoDockHandle;
   /** "Cleo" (or the unbranded name for someone without Cleo). */
@@ -198,15 +208,37 @@ export function CleoDockFrame({
   branded: boolean;
   /** What goes under the title row (scope, tabs, a specialty line). */
   header?: ReactNode;
+  /**
+   * The page's own way in (a CSS selector, the strip's Cleo buttons): while it's on screen the
+   * closed dock shows nothing extra; once it scrolls away (or isn't there) the handle shows.
+   * Leave it out where a header launcher is always in view (the block editor).
+   */
+  handle?: string | null;
   children: ReactNode;
+  /** A client's dock: "Conversation" continues in Cleo's panel, in that client's conversation. */
+  conversationClientId?: string | null;
 }) {
   const phone = useIsMobileNow();
+  const anchorInView = useAnchorInView(handle ?? null);
+  const showHandle = !!handle && !dock.open && !anchorInView;
 
   // mounted on first open and kept (hidden) after, so the conversation and the draft survive closing
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     if (dock.open) setMounted(true);
   }, [dock.open]);
+
+  // one Cleo on screen at a time (Nov 24 2026): this dock puts Cleo's panel away, and the panel folds this dock
+  useEffect(() => {
+    if (dock.open) closeSummer();
+  }, [dock.open]);
+  const setOpenRef = useRef(dock.setOpen);
+  setOpenRef.current = dock.setOpen;
+  useEffect(() => {
+    const fold = () => setOpenRef.current(false);
+    window.addEventListener(CLEO_PANEL_OPENED, fold);
+    return () => window.removeEventListener(CLEO_PANEL_OPENED, fold);
+  }, []);
 
   // computer: docked or expanded, and the docked width, remembered
   const [mode, setMode] = useState<DeskMode>(() => {
@@ -304,7 +336,8 @@ export function CleoDockFrame({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [dock]);
 
-  if (!mounted) return null;
+  const handleEl = handle ? <CleoHandle dock={dock} name={name} branded={branded} phone={phone} shown={showHandle} /> : null;
+  if (!mounted) return handleEl;
   const keyboardUp = phone && !!box?.keyboard;
   const phoneStyle = phone
     ? keyboardUp && box
@@ -313,6 +346,8 @@ export function CleoDockFrame({
     : { width: deskW };
 
   return (
+    <>
+    {handleEl}
     <aside
       role="complementary"
       aria-label={name}
@@ -370,6 +405,17 @@ export function CleoDockFrame({
             <p className="text-sm font-semibold leading-tight tracking-[-0.01em]">{name}</p>
             <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
           </div>
+          {branded && conversationClientId && (
+            <button
+              type="button"
+              onClick={() => openSummer({ clientId: conversationClientId })}
+              className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Continue in your conversation with Cleo about this client"
+              data-cleo-dock-conversation
+            >
+              <MessagesSquare className="h-4 w-4" /> Conversation
+            </button>
+          )}
           {phone ? (
             <button type="button" onClick={() => setFull((v) => !v)} aria-label={full ? "Smaller" : "Full screen"} className="grid h-10 w-10 cursor-pointer place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
               {full ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
@@ -402,6 +448,192 @@ export function CleoDockFrame({
 
       {children}
     </aside>
+    </>
+  );
+}
+
+/**
+ * Whether the page's own way into Cleo is on screen (the strip's buttons). Missing counts as not
+ * on screen. Re-found when the page re-renders it (one check a frame at most).
+ */
+export function useAnchorInView(selector: string | null): boolean {
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    if (!selector || typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    let el: Element | null = null;
+    let io: IntersectionObserver | null = null;
+    let frame = 0;
+    const attach = () => {
+      frame = 0;
+      const next = document.querySelector(selector);
+      if (next === el) return;
+      io?.disconnect();
+      io = null;
+      el = next;
+      if (!el) {
+        setInView(false);
+        return;
+      }
+      // the app's top bar covers the first 56px
+      io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: "-56px 0px 0px 0px" });
+      io.observe(el);
+    };
+    attach();
+    const mo = new MutationObserver(() => {
+      if (!frame) frame = window.requestAnimationFrame(attach);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      io?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [selector]);
+  return inView;
+}
+
+/** A dialog, sheet, menu, popover or list is open over the page (Radix portals mount on <body>). */
+export function overlayOpen(doc: Document = document): boolean {
+  return !!doc.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [data-radix-popper-content-wrapper], [data-vaul-drawer][data-state="open"]');
+}
+
+/** Whether the phone pill may show at this moment: never scrolling down, never at the page's end. */
+export function pillRoom(o: { scrollingDown: boolean; nearEnd: boolean; overlay: boolean }): boolean {
+  return !o.scrollingDown && !o.nearEnd && !o.overlay;
+}
+
+/** The computer tab steps aside (a sliver) while the pointer works near the right edge, not on the tab. */
+export function tabPeeks(o: { x: number; y: number; vw: number; tabTop: number; tabBottom: number }): boolean {
+  const fromEdge = o.vw - o.x;
+  return fromEdge > 18 && fromEdge < 140 && o.y > o.tabTop - 60 && o.y < o.tabBottom + 60;
+}
+
+/**
+ * When the handle has room to show without getting in the way: hidden while a dialog, sheet or menu
+ * is open; on a phone, hidden while scrolling down and at the page's end (so the last controls are
+ * reachable), back on scrolling up or a beat after scrolling stops; on a computer, a sliver while the
+ * pointer works on page controls near the right edge, and clear of an inner scroll area's scrollbar.
+ */
+function useHandleRoom(active: boolean, phone: boolean, tabRef: RefObject<HTMLButtonElement | null>) {
+  const [overlay, setOverlay] = useState(false);
+  const [scrollingDown, setScrollingDown] = useState(false);
+  const [nearEnd, setNearEnd] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    const check = () => setOverlay(overlayOpen());
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: false, attributes: true, attributeFilter: ["data-scroll-locked", "style"] });
+    // a dialog closing flips data-state before its portal leaves
+    const t = window.setInterval(check, 800);
+    return () => {
+      mo.disconnect();
+      window.clearInterval(t);
+    };
+  }, [active]);
+  useEffect(() => {
+    if (!active || !phone) return;
+    let last = new Map<EventTarget, number>();
+    let idle = 0;
+    const onScroll = (e: Event) => {
+      const el = e.target === document ? document.scrollingElement : (e.target as HTMLElement | null);
+      if (!el || !(el instanceof HTMLElement)) return;
+      const y = el.scrollTop;
+      const prev = last.get(el) ?? y;
+      last.set(el, y);
+      if (Math.abs(y - prev) > 2) setScrollingDown(y > prev);
+      setNearEnd(el.scrollHeight - el.clientHeight - y < 96 && el.scrollHeight > el.clientHeight + 200);
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setScrollingDown(false), 900);
+    };
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true } as any);
+      window.clearTimeout(idle);
+      last = new Map();
+    };
+  }, [active, phone]);
+  useEffect(() => {
+    if (!active || phone) return;
+    // an inner scroll area that reaches the right edge keeps its scrollbar: the tab sits left of it
+    const main = document.querySelector("[data-shell-root] main") as HTMLElement | null;
+    const measure = () => {
+      if (!main) return setInset(0);
+      const r = main.getBoundingClientRect();
+      const scrolls = main.scrollHeight > main.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(main).overflowY);
+      setInset(scrolls && Math.abs(window.innerWidth - r.right) < 2 ? Math.max(0, main.offsetWidth - main.clientWidth) : 0);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    let frame = 0;
+    const onMove = (e: PointerEvent) => {
+      if (frame || e.pointerType === "touch") return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const tab = tabRef.current?.getBoundingClientRect();
+        if (!tab) return;
+        if (e.clientX >= tab.left - 4 && e.clientY >= tab.top && e.clientY <= tab.bottom) return setPeek(false);
+        setPeek(tabPeeks({ x: e.clientX, y: e.clientY, vw: window.innerWidth, tabTop: tab.top, tabBottom: tab.bottom }));
+      });
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("pointermove", onMove);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [active, phone, tabRef]);
+  return { room: phone ? pillRoom({ scrollingDown, nearEnd, overlay }) : !overlay, peek: !phone && peek, inset };
+}
+
+/**
+ * The closed dock's handle: where Cleo lives on the page once the strip has scrolled away. A slim
+ * tab on the right edge on a computer (where the dock opens), a small pill above the tab bar on a
+ * phone (where the sheet rises from). Slides in and out, and steps out of the way: hidden while
+ * typing, while a dialog or menu is open, while scrolling down and at the page's end on a phone, a
+ * sliver while the pointer works near it on a computer. Never over the tab bar or the app's bars.
+ */
+function CleoHandle({ dock, name, branded, phone, shown }: { dock: CleoDockHandle; name: string; branded: boolean; phone: boolean; shown: boolean }) {
+  const short = branded ? "Cleo" : name.split(" ")[0];
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const { room, peek, inset } = useHandleRoom(shown, phone, ref);
+  const visible = shown && room;
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={() => dock.setOpen(true)}
+      aria-label={branded ? "Open Cleo" : `Open ${name}`}
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
+      title={branded ? "Cleo: ask about or change this plan" : name}
+      data-cleo-handle={visible ? (peek ? "peek" : "shown") : "hidden"}
+      data-hide-on-keyboard
+      className={cn(
+        "fixed z-30 cursor-pointer border border-border bg-background text-foreground shadow-[0_6px_20px_-10px_rgba(0,0,0,0.35)] transition-[transform,opacity] duration-200 ease-out hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none dark:bg-card",
+        phone
+          ? "right-3 flex h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold"
+          : "top-1/2 flex flex-col items-center gap-1.5 rounded-l-xl border-r-0 px-1.5 py-3 text-[12px] font-semibold",
+        visible ? "opacity-100" : "pointer-events-none opacity-0",
+      )}
+      style={
+        phone
+          ? { bottom: "calc(var(--bottom-nav-clearance, 0px) + 12px)", transform: visible ? undefined : "translateY(12px)" }
+          : {
+              right: inset,
+              // a sliver while the pointer works near it (still a target: moving onto it brings it back)
+              transform: `translateY(-50%) translateX(${!visible ? "100%" : peek ? "calc(100% - 8px)" : "0"})`,
+            }
+      }
+    >
+      {branded ? <CleoMark size={phone ? 17 : 18} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
+      <span className={phone ? undefined : "[writing-mode:vertical-rl]"}>{short}</span>
+    </button>
   );
 }
 
@@ -412,6 +644,7 @@ export function CleoDock({
   onApplied,
   beforeSend,
   scopes = ["day", "week", "block", "program"],
+  handle,
 }: {
   dock: CleoDockHandle;
   target: ProgramAiTarget;
@@ -422,6 +655,8 @@ export function CleoDock({
   beforeSend?: () => Promise<void> | void;
   /** The scopes to offer (the client's Training tab, outside the builder, is the whole program). */
   scopes?: CleoScope[];
+  /** The page's own way in, for the closed dock's handle (CleoDockFrame). */
+  handle?: string | null;
 }) {
   const cleo = useCleoAccess();
   const here = useBuilderHere();
@@ -485,7 +720,7 @@ export function CleoDock({
   );
 
   return (
-    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header}>
+    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header} handle={handle} conversationClientId={target.kind === "client" ? target.clientId : null}>
       <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== "chat"}>
         <DockBrief dock={dock} />
         <ChatPanel target={target} onApplied={onApplied} context={context} beforeSend={beforeSend} quickActions={quick} seed={dock.seed} />

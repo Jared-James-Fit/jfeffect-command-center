@@ -179,7 +179,7 @@ describe("the plan reads a day at a time: targets, then meals", () => {
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(nutrition).toContain('<div className="min-w-0 space-y-4 md:col-span-1 md:self-start">');
-    expect(nutrition).toContain('<NutritionTargetsPanel clientId={id} className="md:col-span-2" />');
+    expect(nutrition).toContain('<NutritionTargetsPanel clientId={id} className="md:col-span-2" cleoEntry={false} />');
     expect(nutrition).not.toContain("<CardioTargetsPanel");
     expect(tab).toContain("<CardioWorkspace clientId={id} />");
   });

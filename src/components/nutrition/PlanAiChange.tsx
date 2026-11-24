@@ -41,6 +41,8 @@ import { introducedHardToFind, type HardToFind } from "@/lib/nutrition-targets/p
 import { allergenConflictLine, allergenConflicts, foodHistoryKey, onFileRules, type AllergenHit, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
+import { isReviewAsk } from "@/lib/plan-quality";
+import { useCoachVoice, VoiceButton, VoiceStatus } from "@/components/program-ai/coach-voice";
 
 /** Changes coaches ask for most: a tap puts the words in the box to edit or send. */
 export const PLAN_CHANGE_EXAMPLES = [
@@ -85,6 +87,8 @@ export function PlanAiChange({
   const undo = useServerFn(undoPlanEditFn);
   const discard = useServerFn(discardPlanEditFn);
   const [text, setText] = useState(() => (seed?.send ? "" : (seed?.text ?? "")).slice(0, REVISE_MAX_CHARS));
+  // speak it instead of typing (the coach's mic, OpenAI only): the words land in the box to read first
+  const voice = useCoachVoice((said) => setText((cur) => (cur.trim() ? `${cur.trim()} ${said}` : said).slice(0, REVISE_MAX_CHARS)));
   useEffect(() => {
     if (seed?.text && !seed.send) setText(seed.text.slice(0, REVISE_MAX_CHARS));
   }, [seed?.nonce, seed?.text, seed?.send]);
@@ -292,8 +296,8 @@ export function PlanAiChange({
           {review.error ? (
             <p className="text-[13px] text-destructive">{review.error}</p>
           ) : review.nothing ? (
-            <p className="text-[13px] text-muted-foreground">
-              Nothing changed. Try saying it a different way.
+            <p className="text-[13px] text-muted-foreground" data-plan-ai-kept>
+              {isReviewAsk(edit.instructions) ? "No changes: Cleo would keep the plan as it is." : "Nothing changed. Try saying it a different way."}
             </p>
           ) : (
             <>
@@ -372,6 +376,11 @@ export function PlanAiChange({
               {review.error || review.nothing || review.stale ? "Clear" : "Discard"}
             </Button>
           </div>
+          {!review.error && !review.nothing && !review.stale && (
+            <p className="text-[12px] text-muted-foreground" data-plan-ai-next>
+              Updating the plan puts it live and tells {firstName ?? "them"} in their chat. Not ready? Leave it here: it stays a draft, and Nutrition quality reminds you until you update or discard it.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-2" data-plan-ai-state="ask">
@@ -400,14 +409,26 @@ export function PlanAiChange({
               </div>
             </div>
           )}
-          <Textarea
-            rows={3}
-            value={text}
-            maxLength={REVISE_MAX_CHARS}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Say what to change, e.g. salmon instead of chicken on rest days"
-            className="text-base sm:text-sm"
-          />
+          <div className="flex items-end gap-2">
+            <Textarea
+              rows={3}
+              value={text}
+              maxLength={REVISE_MAX_CHARS}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter sends, Shift+Enter is a new line (every Cleo box, Nov 24 2026)
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && (e.nativeEvent as any).keyCode !== 229) {
+                  e.preventDefault();
+                  if (text.trim().length >= 3 && !askM.isPending) askM.mutate(text.trim());
+                }
+              }}
+              enterKeyHint="send"
+              placeholder="Say what to change, e.g. salmon instead of chicken on rest days"
+              className="flex-1 text-base sm:text-sm"
+            />
+            <VoiceButton voice={voice} disabled={askM.isPending} />
+          </div>
+          <VoiceStatus voice={voice} />
           {!text.trim() && (
             <div className="flex flex-wrap gap-1.5" aria-label="Examples">
               {PLAN_CHANGE_EXAMPLES.map((ex) => (

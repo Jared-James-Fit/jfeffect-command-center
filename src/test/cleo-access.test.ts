@@ -96,7 +96,7 @@ describe("Cleo access: every Cleo server function checks it", () => {
 
   it("uses assertCleo, never the old admin-or-finance check", () => {
     expect(cleo).not.toContain("assertAdminView");
-    for (const name of ["getSummerMessages", "listSummerChats", "deleteSummerChat", "askSummer", "askSummerVoice", "summerSpeech", "getSummerProfile", "saveSummerSettings"]) {
+    for (const name of ["getSummerMessages", "listSummerChats", "deleteSummerChat", "askSummer", "summerSpeech", "getSummerProfile", "saveSummerSettings"]) {
       const at = cleo.indexOf(`export const ${name} =`);
       expect(at, name).toBeGreaterThan(-1);
       const next = cleo.indexOf("export const ", at + 10);
@@ -136,8 +136,8 @@ describe("Cleo access: the screens follow it", () => {
   });
 
   it("Cleo says what it is, with a face of its own (no sparkle, gradient or glow)", () => {
-    const chat = read("components/admin/books/summer-chat.tsx");
-    expect(chat).toContain('<CleoAvatar size="sm" />');
+    const chat = read("components/cleo/cleo-panel.tsx");
+    expect(chat).toContain("<CleoMark size={16} />");
     expect(chat).toContain("{CLEO_ROLE_LINE}");
     expect(chat).not.toMatch(/Sparkles|bg-gradient|from-amber-300|to-pink-500/);
     expect(read("components/summer/cleo-avatar.tsx")).toContain('export const CLEO_ROLE_LINE = "AI assistant";');

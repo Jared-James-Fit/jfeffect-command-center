@@ -97,6 +97,51 @@ export async function targetClientOf(admin: any, kind: CleoActionKind, p: any): 
 }
 
 /**
+ * Whose a card would change, for a client's conversation (Nov 24 2026): the
+ * client it resolves to, or null when it's about nobody in particular (a task)
+ * or can't be told yet (it's then checked again when it runs). Service role,
+ * read only; never throws.
+ */
+export async function scopeClientOf(kind: CleoActionKind, p: any): Promise<string | null> {
+  try {
+    const admin = await service();
+    switch (kind) {
+      case "edit_program_day":
+        return await clientOfDay(admin, p.day_id);
+      case "publish_program": {
+        const { data } = await admin.from("pl_blocks").select("client_id").eq("id", p.block_id).maybeSingle();
+        return data?.client_id ?? null;
+      }
+      case "correct_logged_exercise": {
+        const { data } = await admin.from("pl_exercise_rows").select("day_id").eq("id", p.row_id).maybeSingle();
+        return data?.day_id ? await clientOfDay(admin, data.day_id) : null;
+      }
+      case "record_payment":
+      case "send_payment_link": {
+        const { data } = await admin.from("purchase_records").select("client_id").eq("id", p.purchase_id).maybeSingle();
+        return data?.client_id ?? null;
+      }
+      case "move_workout":
+      case "remove_workout": {
+        if (p.workout_id) {
+          const { data } = await admin.from("pl_scheduled_workouts").select("client_id").eq("id", p.workout_id).maybeSingle();
+          return data?.client_id ?? null;
+        }
+        return p.day_id ? await clientOfDay(admin, p.day_id) : null;
+      }
+      case "restore_program_version": {
+        const { data } = await admin.from("pl_program_versions").select("client_id").eq("id", p.version_id).maybeSingle();
+        return data?.client_id ?? null;
+      }
+      default:
+        return typeof p?.client_id === "string" ? p.client_id : null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
  * May this person act on this client right now? The admin, or the client's
  * own active coach (`cleo_action_target_allowed`, a definer check that reads
  * the requester's roles and coach record, never the caller's session).
@@ -192,6 +237,10 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
       if (!to) throw new Error(`${clientLabel(pr.client)} has no ${p.via === "email" ? "email" : "phone number"} on file.`);
       return `Send ${clientLabel(pr.client)} the payment link for ${pr.offer_name ?? "their purchase"} by ${p.via === "email" ? "email" : "text"} (${to}).`;
     }
+    case "link_openipf": {
+      const c = await client(db, p.client_id);
+      return `Link ${clientLabel(c)}'s OpenIPF profile: ${String(p.url).replace(/^https?:\/\/(www\.)?/, "")}. Their meets come in and go in the Hall of Strength.`;
+    }
     case "book_appointment": {
       const start = wallTimeToUtc(p.date, p.time, BUSINESS_TZ);
       if (start.getTime() < Date.now()) throw new Error("That time has already passed.");
@@ -263,6 +312,8 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
       }
       case "set_nutrition_targets":
         return client(p.client_id, "nutrition", "Open their nutrition");
+      case "link_openipf":
+        return p.client_id ? { href: `/admin/clients/${p.client_id}?tab=training#openipf`, label: "Open their OpenIPF" } : null;
       case "restore_program_version": {
         const { data } = await (await service()).from("pl_program_versions").select("client_id, kind").eq("id", p.version_id).maybeSingle();
         return data?.kind === "set_nutrition_targets" ? client(data?.client_id, "nutrition", "Open their nutrition") : training(data?.client_id);
@@ -431,6 +482,12 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
         },
       });
       return "Booked.";
+    }
+    case "link_openipf": {
+      const { error } = await sb.rpc("openipf_link_url", { _client: p.client_id, _athlete: null, _url: p.url });
+      if (missingFunction(error)) throw new Error("OpenIPF isn't set up in the database yet.");
+      if (error) throw new Error(error.message);
+      return `Linked. Their meets are coming in; it can be removed or added back from their profile's OpenIPF row.`;
     }
   }
 }

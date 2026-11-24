@@ -17,7 +17,7 @@ import { CARDIO_WEEKDAYS, type CardioWeekday } from "@/lib/cardio-prescription";
 import { WEEKLY_MINUTES, TRAIN_MINUTES_MAX, TRAIN_MINUTES_MAX_PL, TRAIN_INCLINE_MAX_PL, type CardioGoal } from "@/lib/weight-management/treadmill";
 import { modalitySpec } from "@/lib/cardio/modalities";
 import { planTotals, sessionTitle, weekdaysFor, type CardioPlan, type CardioSession, type PlanContext } from "@/lib/cardio/plan";
-import { adherencePct, clampScore, finishQuality, FOLLOW_LOW, type QualityCategory, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
+import { adherencePct, clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, REVIEW_ASK_START, settlingOf, UNPROVEN_MAX, type CategoryConcern, type QualityCategory, type QualityChange, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
 
 export type CardioScoreContext = PlanContext & {
   /** "lose" | "gain" | "maintain", or null when no goal is on file. */
@@ -46,6 +46,18 @@ export type CardioScoreContext = PlanContext & {
   lowerPerformance?: "up" | "steady" | "down" | null;
   /** Hunger flagged on their weekly check-ins (a cut with a lot of cardio feels it). */
   hungerHigh?: boolean;
+  /** The change log's read (plan-changes.ts changeRead): wins over lastChanged when there is one. */
+  changeLog?: { changes: QualityChange[]; settling: QualityScore["settling"] } | null;
+  /** What their check-ins say gets in the way (barriersFromCheckins). */
+  barriers?: string[];
+  firstName?: string | null;
+  /**
+   * They log their workouts but hardly any cardio: likely not logging it rather than not doing it, so
+   * cardio adherence isn't read as following (or not following) the plan.
+   */
+  unlogged?: boolean;
+  /** Working sets a week lately against the 3 weeks before (training load moving under the cardio). */
+  trainingVolume?: { recent: number | null; prior: number | null } | null;
 };
 
 const CARDIO_GOAL: Record<string, CardioGoal> = {
@@ -105,7 +117,7 @@ export function planFacts(plan: CardioPlan, ctx: PlanContext & { heavyLowerDays:
 }
 
 function executionOf(ctx: CardioScoreContext): QualityExecution {
-  const a = ctx.adherence;
+  const a = ctx.unlogged ? null : ctx.adherence;
   const pct = a ? adherencePct(a.done, a.planned) : null;
   const t = ctx.trendStatus;
   const outcome =
@@ -121,6 +133,7 @@ function executionOf(ctx: CardioScoreContext): QualityExecution {
   return {
     adherence: pct != null && a ? { pct, label: `${Math.min(a.done, a.planned)} of ${a.planned} planned sessions done in 4 weeks` } : null,
     outcome,
+    barriers: ctx.barriers ?? [],
   };
 }
 
@@ -136,13 +149,18 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
   const execution = executionOf(ctx);
   const adh = execution.adherence?.pct ?? null;
   const followed = adh != null && adh >= FOLLOW_LOW;
-  const onTrack = execution.outcome?.status === "on_track";
-  const behind = execution.outcome != null && execution.outcome.status !== "on_track";
+  // a plan too new for its results: they neither count against it nor flatter it
+  const settling = ctx.changeLog ? ctx.changeLog.settling : settlingOf("cardio", ctx.lastChanged, ctx.today);
+  const onTrack = !settling && execution.outcome?.status === "on_track";
+  const behind = !settling && execution.outcome != null && execution.outcome.status !== "on_track";
+  const recovery = recoveryTrend({ lowerPerformance: ctx.lowerPerformance, recoveryFlags: ctx.recoveryFlags });
+  const meetIn = ctx.meetWeeksOut != null && ctx.meetWeeksOut >= 0 ? Math.round(ctx.meetWeeksOut) : null;
   const points = [ctx.direction != null, ctx.trainingDays.length > 0, adh != null, ctx.checkins >= 2, ctx.trendStatus != null && ctx.trendStatus !== "not_enough_data"].filter(Boolean).length;
   const missing: string[] = [];
   if (ctx.direction == null) missing.push("A bodyweight goal");
   if (!ctx.trainingDays.length) missing.push("Their training days");
-  if (adh == null) missing.push("A few weeks of logged cardio");
+  if (ctx.unlogged) missing.push("Cardio logging (their workouts are logged, their cardio mostly isn't)");
+  else if (adh == null) missing.push("A few weeks of logged cardio");
   if (ctx.checkins < 2) missing.push("Weekly check-ins");
 
   // what their training means for the cardio (and the other way round)
@@ -151,6 +169,10 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
   if (f.beforeLifting) connections.push({ domain: "training", text: "Cardio is set before lifting on training days" });
   if (ctx.lowerPerformance === "down" && (f.hardMinutes > 0 || f.highImpactSessions > 0)) connections.push({ domain: "training", text: "Lower-body strength is down while some cardio is hard or high-impact (a pattern, not a confirmed cause)" });
   if (ctx.hungerHigh && ctx.direction === "lose" && f.minutes > target * 1.5) connections.push({ domain: "nutrition", text: `Hunger is high on a fat-loss plan with ${f.minutes} min of cardio a week` });
+  // the training load moving under the cardio: hard cardio on top of a big jump in lifting volume
+  const tv = ctx.trainingVolume;
+  if (tv?.recent && tv.prior && tv.recent >= tv.prior * 1.25 && (f.hardMinutes > 30 || f.highImpactSessions > 0))
+    connections.push({ domain: "training", text: `Lifting volume is up ${Math.round((tv.recent / tv.prior - 1) * 100)}% lately while some cardio is hard or high-impact` });
 
   // nothing prescribed: no number, just whether that's right for them
   if (f.empty) {
@@ -160,15 +182,18 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
         : ctx.direction == null
           ? { headline: "No cardio set, and no bodyweight goal on file to judge it against.", action: "none" as const }
           : { headline: ctx.direction === "lose" ? "No cardio set: fat loss is coming from nutrition, which is fine while it's working." : "No cardio set: fits their goal.", action: "none" as const };
-    return finishQuality([], { what: "cardio plan", points, missing, execution, connections, none });
+    const ask = `${REVIEW_ASK_START}cardio for this client: they have none set. ${none.headline} Should they have any? If no cardio is right for them, say so and why. If some would help, propose the smallest plan that does the job around their training, with why and the effect you expect.`;
+    return finishQuality([], { what: "cardio plan", points, missing, execution, connections, recovery, settling, changes: ctx.changeLog?.changes, domain: "cardio", firstName: ctx.firstName, none: { ...none, ask } });
   }
 
   const cats: QualityCategory[] = [];
 
   // Goal alignment: the dose against what the goal needs (results are evidence about the dose, nothing more)
+  const goalConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = 100;
+    let capped = false;
     if (ctx.direction == null) {
       s = null;
       notes.push("No bodyweight goal on file to judge the dose against");
@@ -187,6 +212,7 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
       } else if (f.minutes > target * 4) {
         s = 50;
         notes.push(`${f.minutes} min a week is far more than the goal needs (about ${target})`);
+        goalConcerns.push({ text: `${f.minutes} min of cardio a week is far more than the goal needs (about ${target})`, severity: "significant", reason: "recovery" });
       } else if (f.minutes > target * 2.5) {
         s = 70;
         notes.push(`${f.minutes} min a week is more than the goal usually needs (about ${target})`);
@@ -205,7 +231,13 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
         notes.push(`${f.minutes} min a week is a lot for maintenance`);
       } else notes.push("Fits a maintenance goal");
     }
-    cats.push({ key: "goal", label: "Goal alignment", score: s == null ? null : clampScore(s), weight: 0.22, notes });
+    if (s != null && settling && !settling.minor) {
+      // a plan reaches top marks here only once its own results back it
+      capped = s > UNPROVEN_MAX;
+      s = Math.min(s, UNPROVEN_MAX);
+      if (capped) notes.unshift(`New ${settling.days} days ago: their results will show whether the dose is right`);
+    }
+    cats.push({ key: "goal", label: "Goal alignment", score: s == null ? null : clampScore(s), weight: 0.22, notes, critical: ctx.direction === "lose" && behind ? "fat loss is behind" : null, concerns: goalConcerns, awaitingResults: capped });
   }
 
   // Recovery compatibility
@@ -223,28 +255,35 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
       s -= Math.min(30, f.highImpactSessions * 10);
       notes.push(`${f.highImpactSessions} high-impact session${f.highImpactSessions > 1 ? "s" : ""} a week (running, stairs or conditioning)`);
     }
+    const concerns: CategoryConcern[] = [];
     if (ctx.recoveryFlags >= 2 && (totals.avgRpe ?? 0) >= 5) {
       s -= 15;
       notes.push("Moderate-to-hard cardio while recovery signals are down");
+      concerns.push({ text: "Moderate-to-hard cardio while sleep or energy are flagged on recent check-ins", severity: "significant", reason: "recovery" });
     }
     const legs = ctx.issues.find((i) => /legs? (feel |felt )?tired|heavy legs|sore legs/i.test(i));
     if (legs) {
       s -= f.hardMinutes > 0 || f.minutes > 120 ? 20 : 10;
       notes.push("They said cardio leaves their legs tired for lifting");
+      concerns.push({ text: "They said cardio leaves their legs tired for lifting", severity: "significant", reason: "recovery" });
     }
     if (ctx.walkingLimits.length && enabled.some((x) => (modalitySpec(x.modality).walking && (x.incline ?? 0) > 3) || modalitySpec(x.modality).lowerBody === "high")) {
       s -= 20;
       notes.push(`Incline or impact with ${ctx.walkingLimits.join(", ")} on file`);
+      concerns.push({ text: `Incline or impact with ${ctx.walkingLimits.join(", ")} on file`, severity: "significant", reason: "safety" });
     }
     if (meetClose && (f.hardMinutes > 0 || f.highImpactSessions > 0)) {
       s -= 20;
       notes.push("Hard cardio within 4 weeks of the meet");
+      concerns.push({ text: `Hard or high-impact cardio ${meetIn != null ? `${meetIn} weeks` : "weeks"} from the meet`, severity: "significant", reason: "timeline" });
     }
     if (!notes.length) notes.push("Easy enough to recover from alongside training");
-    cats.push({ key: "recovery", label: "Recovery compatibility", score: clampScore(s), weight: 0.16, notes });
+    const why = [ctx.powerlifter && "they lift heavy", meetIn != null && meetIn <= 8 && `a meet in ${meetIn} weeks`, ctx.recoveryFlags >= 2 && "sleep or energy flagged", ctx.walkingLimits.length > 0 && "a walking limit on file"].filter(Boolean) as string[];
+    cats.push({ key: "recovery", label: "Recovery compatibility", score: clampScore(s), weight: 0.16, notes, critical: why.length ? why.join(", ") : null, concerns });
   }
 
   // Training compatibility
+  const trainingConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = 100;
@@ -259,6 +298,7 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
       if (f.dayBeforeHeavyLower) {
         s -= 15;
         notes.push("Harder cardio the day before a heavy squat or deadlift day");
+        if (ctx.powerlifter || (meetIn != null && meetIn <= 8)) trainingConcerns.push({ text: "Harder cardio the day before a heavy squat or deadlift day", severity: "significant", reason: "recovery" });
       }
       if (f.trainingDayMinutesMax > trainCap + 5) {
         s -= 15;
@@ -271,7 +311,7 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
       }
       if (!notes.length) notes.push("Placed around training well");
     }
-    cats.push({ key: "training", label: "Training compatibility", score: s == null ? null : clampScore(s), weight: 0.16, notes });
+    cats.push({ key: "training", label: "Training compatibility", score: s == null ? null : clampScore(s), weight: 0.16, notes, critical: ctx.powerlifter && ctx.heavyLowerDays.length ? "heavy squat and deadlift days" : null, concerns: trainingConcerns });
   }
 
   // Intensity and volume
@@ -337,7 +377,7 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
       notes.push(`Only ${adh}% done lately, which fits the plan being hard to keep`);
     }
     if (!notes.length) notes.push("Simple to keep up");
-    cats.push({ key: "sustain", label: "Sustainability", score: clampScore(s), weight: 0.14, notes });
+    cats.push({ key: "sustain", label: "Sustainability", score: clampScore(s), weight: 0.14, notes, critical: adh != null && adh < FOLLOW_LOW ? "they're missing sessions" : null });
   }
 
   // Time efficiency
@@ -369,7 +409,7 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
     const wantsProgress = ctx.direction === "lose" || ctx.context === "bodybuilding" || ctx.context === "event";
     const daysSince = ctx.lastChanged ? Math.round((Date.parse(`${ctx.today}T00:00:00Z`) - Date.parse(`${ctx.lastChanged.slice(0, 10)}T00:00:00Z`)) / 86_400_000) : null;
     if (wantsProgress && !progressing.length) {
-      if (daysSince != null && daysSince < 28) {
+      if ((settling && !settling.minor) || (!ctx.changeLog && daysSince != null && daysSince < 28)) {
         s = 92;
         notes.push("Holds steady while the new plan settles");
       } else if (behind && followed) {
@@ -401,7 +441,19 @@ export function scoreCardioPlan(plan: CardioPlan, ctx: CardioScoreContext): Qual
     cats.push({ key: "progression", label: "Progression strategy", score: clampScore(s), weight: 0.1, notes });
   }
 
-  return finishQuality(cats, { what: "cardio plan", points, missing, execution, connections });
+  const q = finishQuality(cats, { what: "cardio plan", points, missing, execution, connections, recovery, settling, changes: ctx.changeLog?.changes, domain: "cardio", firstName: ctx.firstName });
+  // their workouts are logged and their cardio mostly isn't: a data gap to close, not a plan to change
+  if (ctx.unlogged && (q.verdict.kind === "working" || q.verdict.kind === "watch")) {
+    const hi = ctx.firstName ? `Hey ${ctx.firstName}, ` : "Hey, ";
+    q.verdict = {
+      kind: "watch",
+      headline: `${q.score != null && q.score >= 80 ? "Looks well designed, but their" : "Their"} cardio mostly isn't logged (their workouts are), so whether it's done can't be read yet. Ask them to log it when they do it.`,
+      action: "review",
+      ask: `${hi}quick one: when you do your cardio, can you log it in the app? Even just ticking it off helps me see what's working and adjust it properly.`,
+    };
+    q.summary = q.verdict.headline;
+  }
+  return q;
 }
 
 export type { CardioSession };

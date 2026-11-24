@@ -212,7 +212,7 @@ describe("nutrition plan quality", () => {
       nctx,
     );
     const cal = q.categories.find((c) => c.key === "calories")!;
-    expect(cal.notes.join(" ")).toMatch(/under 1,500/);
+    expect(cal.notes.join(" ")).toMatch(/Under 1,500 kcal on/);
     expect(cal.notes.join(" ")).toMatch(/from its macros/);
     expect(q.categories.find((c) => c.key === "protein")!.notes[0]).toMatch(/Protein/);
   });

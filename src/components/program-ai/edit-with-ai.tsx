@@ -421,6 +421,11 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
                 Discard
               </Button>
             </div>
+            {target.kind === "client" && (
+              <p className="text-xs text-muted-foreground" data-edit-with-ai-next>
+                Applying changes only workouts that haven't been started; trained ones never change. Not ready? Leave it here: it stays a draft, and Program quality reminds you until you apply or discard it.
+              </p>
+            )}
           </div>
         )}
         {quickActions?.length && turns.length > 0 && !text.trim() && !working && last?.status !== "ready" ? (
@@ -450,13 +455,15 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia("(pointer: fine)").matches) {
+              // Enter sends, Shift+Enter is a new line (every Cleo box, Nov 24 2026); an input method composing keeps its Enter
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && (e.nativeEvent as any).keyCode !== 229) {
                 e.preventDefault();
                 submit();
               }
             }}
             rows={1}
             maxHeight={140}
+            enterKeyHint="send"
             placeholder={last?.status === "ready" && proposal.length ? "Refine it: “keep Friday heavy”, “fewer accessories”…" : target.kind === "client" ? "What should change? Or ask a question…" : "How should this template change?"}
             className="min-h-11 flex-1 resize-none rounded-lg text-base"
             aria-label="Message"

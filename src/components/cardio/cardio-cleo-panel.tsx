@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { askCardioCleoFn, decideCardioProposalFn } from "@/lib/cardio/cardio.functions";
+import { useCoachVoice, VoiceButton, VoiceStatus } from "@/components/program-ai/coach-voice";
 import type { CardioProposal, CardioProposalRow } from "@/lib/cardio/types";
 import { pickChanges, type CardioPlan } from "@/lib/cardio/plan";
 
@@ -38,6 +39,7 @@ export function CardioCleoPanel({
   seed,
   history,
   scorePlan,
+  onPublishDraft,
 }: {
   clientId: string;
   firstName: string;
@@ -49,6 +51,8 @@ export function CardioCleoPanel({
   history: CardioProposalRow[];
   /** The design score of a plan (scoreCardioPlan with their context), for picked changes. */
   scorePlan?: (plan: CardioPlan) => number | null;
+  /** After a proposal lands on the draft: open the publish dialog (now, or scheduled for a date). */
+  onPublishDraft?: () => void;
 }) {
   const ask = useServerFn(askCardioCleoFn);
   const decide = useServerFn(decideCardioProposalFn);
@@ -73,9 +77,12 @@ export function CardioCleoPanel({
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [turns.length]);
 
+  const busy = turns.some((t) => t.status === "thinking");
+  const voice = useCoachVoice((said) => setText((cur) => (cur.trim() ? `${cur.trim()} ${said}` : said)));
   const send = async (words?: string) => {
     const q = (words ?? text).trim();
-    if (q.length < 3) return;
+    // one ask at a time: a second Enter or tap while Cleo reads is ignored
+    if (q.length < 3 || busy) return;
     const id = `${Date.now()}`;
     setTurns((t) => [...t, { id, ask: q, status: "thinking" }]);
     setText("");
@@ -265,7 +272,19 @@ export function CardioCleoPanel({
                     />
                   </div>
                 )}
-                {t.decided && <p className="text-[12px] font-medium text-muted-foreground">{t.decided === "applied" ? "Applied to your draft" : "Turned down"}</p>}
+                {t.decided === "dismissed" && <p className="text-[12px] font-medium text-muted-foreground">Turned down</p>}
+                {t.decided === "applied" && (
+                  <div className="space-y-2 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px]" data-proposal-next>
+                    <p>
+                      <span className="font-medium">On your draft.</span> Publish it now, schedule it for a date, or keep it as a draft to look at again (Cardio quality reminds you while it waits). Nothing reaches {firstName} until you publish.
+                    </p>
+                    {onPublishDraft && (
+                      <Button className="h-9" onClick={onPublishDraft} data-proposal-publish>
+                        Publish or schedule…
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -290,20 +309,24 @@ export function CardioCleoPanel({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              // Enter sends, Shift+Enter is a new line (every Cleo box, Nov 24 2026)
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && (e.nativeEvent as any).keyCode !== 229) {
                 e.preventDefault();
                 void send();
               }
             }}
+            enterKeyHint="send"
             rows={2}
             placeholder={`Ask about or change ${firstName}'s cardio…`}
             className="min-h-[44px] flex-1 resize-none text-[14px]"
             data-cardio-cleo-input
           />
-          <Button size="icon" className={cn("h-11 w-11 shrink-0")} onClick={() => void send()} disabled={text.trim().length < 3 || turns.some((t) => t.status === "thinking")} aria-label="Send to Cleo">
+          <VoiceButton voice={voice} disabled={busy} />
+          <Button size="icon" className={cn("h-11 w-11 shrink-0")} onClick={() => void send()} disabled={text.trim().length < 3 || busy || voice.recording} aria-label="Send to Cleo">
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        <VoiceStatus voice={voice} className="mt-2" />
       </div>
     </div>
   );

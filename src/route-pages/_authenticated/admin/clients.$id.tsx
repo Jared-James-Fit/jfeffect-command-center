@@ -823,7 +823,7 @@ export function ClientProfileWorkspace({
             <div className="min-w-0 space-y-4 md:col-span-1 md:self-start">
               <FoodNotesCard clientId={id} />
             </div>
-            <NutritionTargetsPanel clientId={id} className="md:col-span-2" />
+            <NutritionTargetsPanel clientId={id} className="md:col-span-2" cleoEntry={false} />
             <RoadmapCoachCard clientId={id} className="md:col-span-3" />
             <WeightManagementCard clientId={id} className="md:col-span-3" />
             <NutritionProgressCard clientId={id} className="md:col-span-3" />

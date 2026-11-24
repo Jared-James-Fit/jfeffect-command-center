@@ -7,7 +7,7 @@
  * and whether the client gets a message. Templates, Duplicate, Copy to other
  * days and the weekly total make the common jobs one or two taps.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, Plus, Redo2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { CleoLauncher, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
+import { type CleoDockHandle } from "@/components/program-ai/cleo-dock";
 import { CardioSessionEditor } from "@/components/cardio/cardio-session-editor";
 import { CardioWeek } from "@/components/cardio/cardio-week";
 import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
@@ -55,6 +55,7 @@ export function CardioBuilder({
   publishing,
   dock,
   onAskCleo,
+  publishNonce = 0,
 }: {
   view: CardioWorkspaceView;
   plan: CardioPlan;
@@ -76,9 +77,17 @@ export function CardioBuilder({
   publishing: boolean;
   dock: CleoDockHandle;
   onAskCleo: (ask: string) => void;
+  /** Bumped by Cleo's "Publish or schedule" after a proposal lands on the draft: opens the publish dialog. */
+  publishNonce?: number;
 }) {
   const ctx = view.ctx;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const seenNonce = useRef(publishNonce);
+  useEffect(() => {
+    if (publishNonce === seenNonce.current) return;
+    seenNonce.current = publishNonce;
+    setReviewOpen(true);
+  }, [publishNonce]);
   const [notify, setNotify] = useState(view.hasLogin);
   const [weekly, setWeekly] = useState("");
   const problems = useMemo(() => planProblems(plan, ctx), [plan, ctx]);
@@ -124,7 +133,6 @@ export function CardioBuilder({
             <Redo2 className="h-4 w-4" />
           </Button>
           <div className="hidden items-center gap-2 sm:flex">
-            <CleoLauncher dock={dock} compact />
             <Button className="h-10" onClick={() => setReviewOpen(true)} disabled={!changes.length} data-review-publish>
               {changes.length ? "Review & publish" : "No changes yet"}
             </Button>
@@ -132,7 +140,6 @@ export function CardioBuilder({
         </div>
         {/* a phone: the two actions get a row of their own */}
         <div className="mt-2 flex items-center gap-2 sm:hidden">
-          <CleoLauncher dock={dock} compact />
           <Button className="h-10 flex-1" onClick={() => setReviewOpen(true)} disabled={!changes.length}>
             {changes.length ? `Review & publish (${changes.length})` : "No changes to publish"}
           </Button>

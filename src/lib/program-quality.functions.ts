@@ -12,7 +12,7 @@ import type { QualityScore } from "@/lib/plan-quality";
 export const getProgramQualityFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }): Promise<{ quality: QualityScore | null; blockId: string | null }> => {
+  .handler(async ({ data, context }): Promise<{ quality: QualityScore | null; blockId: string | null; pending?: { at: string; count: number } | null }> => {
     const { assertStaffReachesClient } = await import("@/lib/staff-client-access.server");
     await assertStaffReachesClient(context.supabase, context.userId, data.clientId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

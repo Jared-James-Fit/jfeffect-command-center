@@ -26,7 +26,7 @@
  * plan itself shows why: that's the difference between a poorly designed plan
  * and a sound one they're struggling to follow (the verdict says which).
  */
-import { clampScore, finishQuality, FOLLOW_LOW, type QualityCategory, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
+import { clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, settlingOf, UNPROVEN_MAX, type CategoryConcern, type QualityCategory, type QualityChange, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
 import { structureMealPlanDay } from "@/lib/nutrition-targets/meal-plan-structure";
 import { dayCoverage } from "@/lib/nutrition-targets/plan-coverage";
 import { hardToFindFoods, prepDrift } from "@/lib/nutrition-targets/plan-foods";
@@ -91,6 +91,14 @@ export type NutritionScoreContext = {
   cardioMinutes?: number | null;
   /** Lower-body strength lately (comparable sets), when known. */
   lowerPerformance?: "up" | "steady" | "down" | null;
+  /** When the plan last changed (its start, or an edit since), and today, for "too new to judge". */
+  changedOn?: string | null;
+  today?: string | null;
+  /** The change log's read (plan-changes.ts changeRead): wins over changedOn when there is one. */
+  changeLog?: { changes: QualityChange[]; settling: QualityScore["settling"] } | null;
+  /** What their check-ins say gets in the way (barriersFromCheckins). */
+  barriers?: string[];
+  firstName?: string | null;
 };
 
 const kcalOf = (d: NutritionDayIn) => (d.protein != null && d.carbs != null && d.fats != null ? d.protein * 4 + d.carbs * 4 + d.fats * 9 : null);
@@ -160,7 +168,9 @@ export function mealFactsOf(
 
 function executionOf(ctx: NutritionScoreContext): QualityExecution {
   const r = ctx.adherence;
-  const t = ctx.trendStatus;
+  // "the wrong way" only on a trend that's clear of day-to-day noise (water, salt, food in the gut);
+  // a noisy one is read as not moving yet, never as a reason to react
+  const t = ctx.trendStatus === "wrong_way" && ctx.trend && !ctx.trend.clear ? "stalled" : ctx.trendStatus;
   const outcome =
     ctx.direction && ctx.direction !== "maintain" && t
       ? t === "on_track" || t === "ahead" || t === "reached"
@@ -174,6 +184,7 @@ function executionOf(ctx: NutritionScoreContext): QualityExecution {
   return {
     adherence: r != null ? { pct: Math.round(Math.max(0, Math.min(5, r)) * 20), label: `Rated their consistency ${r}/5 on recent check-ins` } : null,
     outcome,
+    barriers: ctx.barriers ?? [],
   };
 }
 
@@ -192,11 +203,16 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
   const behind = execution.outcome != null && execution.outcome.status !== "on_track";
   const onTrack = execution.outcome?.status === "on_track";
   const meals = ctx.meals ?? null;
+  // a plan too new for its results: they neither count against it nor flatter it
+  const settling = ctx.changeLog ? ctx.changeLog.settling : ctx.today ? settlingOf("nutrition", ctx.changedOn ?? null, ctx.today) : null;
+  const evidence = !settling;
 
   // Goal alignment: calories against what they maintain on; results are evidence only while it's followed
+  const goalConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = null;
+    let capped = false;
     if (ctx.direction && deltaPct != null) {
       s = 100;
       const d = Math.round(deltaPct);
@@ -207,6 +223,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
         } else if (deltaPct < -30) {
           s = 65;
           notes.push(`${Math.abs(d)}% under maintenance is a steep deficit`);
+          goalConcerns.push({ text: `${Math.abs(d)}% under what they maintain on is a steep deficit`, severity: "significant", reason: "safety" });
         } else notes.push(`${Math.abs(d)}% under what they maintain on`);
       } else if (ctx.direction === "gain") {
         if (deltaPct < 3) {
@@ -220,20 +237,27 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
         s = 70;
         notes.push(`${d > 0 ? "+" : ""}${d}% from maintenance on a maintenance goal`);
       } else notes.push("Close to what they maintain on");
-    } else if (ctx.direction && ctx.direction !== "maintain" && followed && execution.outcome) {
+    } else if (ctx.direction && ctx.direction !== "maintain" && followed && execution.outcome && evidence) {
       // no maintenance to read against: results while it's followed are the evidence
       s = onTrack ? 90 : 65;
       notes.push(onTrack ? "Followed well and bodyweight is moving the way the goal needs" : `Followed well, but ${execution.outcome.label.toLowerCase()}`);
     }
-    if (s != null && behind && followed && deltaPct != null) {
+    if (s != null && behind && followed && deltaPct != null && evidence) {
       s -= 15;
       notes.unshift(`Followed well (${adh}%) while ${execution.outcome!.label.toLowerCase()}: the targets aren't doing the job`);
     }
+    if (s != null && settling && !settling.minor) {
+      // a plan only reaches top marks here once its own results back it
+      capped = s > UNPROVEN_MAX;
+      s = Math.min(s, UNPROVEN_MAX);
+      if (capped) notes.unshift(`New ${settling.days} days ago: their results will show whether these targets work`);
+    }
     if (!notes.length) notes.push(ctx.direction ? "Not enough weigh-ins and check-ins yet to read what they maintain on" : "No goal on file to judge calories against");
-    cats.push({ key: "goal", label: "Goal alignment", score: s == null ? null : clampScore(s), weight: 0.16, notes });
+    cats.push({ key: "goal", label: "Goal alignment", score: s == null ? null : clampScore(s), weight: 0.16, notes, critical: behind && followed && evidence ? "they follow it and results are behind" : null, concerns: goalConcerns, awaitingResults: capped });
   }
 
   // Calorie targets
+  const calConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = withKcal.length ? 100 : null;
@@ -241,7 +265,8 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       const under = withKcal.filter((d) => (d.kcal as number) < floor);
       if (under.length) {
         s -= 35;
-        notes.push(`${under.map((d) => d.label).join(", ")} under ${floor.toLocaleString("en-US")} kcal`);
+        notes.push(`Under ${floor.toLocaleString("en-US")} kcal on ${under.map((d) => d.label).join(", ")}`);
+        calConcerns.push({ text: `Under ${floor.toLocaleString("en-US")} kcal on ${under.map((d) => d.label).join(", ")}`, severity: ctx.safety.length ? "urgent" : "significant", reason: "safety" });
       }
       const off = withKcal.filter((d) => {
         const k = kcalOf(d);
@@ -262,15 +287,17 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       if (ctx.safety.length && ctx.direction === "lose") {
         s -= 20;
         notes.push(`Health on file (${ctx.safety.join(", ")}) calls for conservative targets`);
+        calConcerns.push({ text: `A fat-loss plan with ${ctx.safety.join(", ")} on file: keep the targets conservative and plan it with their doctor or a registered dietitian`, severity: "significant", reason: "safety" });
       }
       if (!notes.length) notes.push("Every day adds up and stays above the floor");
     }
-    cats.push({ key: "calories", label: "Calorie targets", score: s == null ? null : clampScore(s), weight: 0.14, notes });
+    cats.push({ key: "calories", label: "Calorie targets", score: s == null ? null : clampScore(s), weight: 0.14, notes, critical: ctx.safety.length ? "health on file" : ctx.direction === "lose" ? "a fat-loss goal" : null, concerns: calConcerns });
   }
 
   const pDays = withKcal.filter((d) => d.protein != null && d.fats != null && d.carbs != null);
 
   // Protein adequacy (on an adjusted weight past a BMI of 30 is the roadmap's job; here g/kg of bodyweight)
+  const proteinConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = null;
@@ -280,6 +307,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       if (gkg < 1.2) {
         s = 55;
         notes.push(`Protein ${r1(gkg)} g/kg is low (1.6–2.2 supports muscle)`);
+        if (ctx.direction === "lose" || ctx.direction === "gain") proteinConcerns.push({ text: `Protein ${r1(gkg)} g/kg is low for ${ctx.direction === "lose" ? "a cut (it costs muscle)" : "building muscle"}`, severity: "significant", reason: "results" });
       } else if (gkg < 1.6) {
         s = 78;
         notes.push(`Protein ${r1(gkg)} g/kg (1.6–2.2 supports muscle)`);
@@ -292,7 +320,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
         notes.push("A cut keeps more muscle nearer 2 g/kg");
       }
     } else if (pDays.length) notes.push("No recent bodyweight to judge grams per kilo");
-    cats.push({ key: "protein", label: "Protein adequacy", score: s == null ? null : clampScore(s), weight: 0.12, notes });
+    cats.push({ key: "protein", label: "Protein adequacy", score: s == null ? null : clampScore(s), weight: 0.12, notes, critical: ctx.direction === "lose" ? "a cut" : ctx.direction === "gain" ? "a building goal" : null, concerns: proteinConcerns });
   }
 
   // Macro distribution: fat and carbs
@@ -349,6 +377,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
   }
 
   // Meal timing and practicality (only from written meals)
+  const timingConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = null;
@@ -367,6 +396,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       if (meals.uncovered.length) {
         s -= Math.min(25, meals.uncovered.length * 12);
         notes.push(`Meals don't add up to the targets on ${meals.uncovered.join(", ")}`);
+        timingConcerns.push({ text: `The meals don't add up to the targets on ${meals.uncovered.join(", ")}: what they eat won't match the numbers they see`, severity: "significant", reason: "results" });
       }
       if (ctx.trainingDays > 0 && meals.trainingDaysWithMeals > 0 && meals.trainingDaysWithWorkoutMeal === 0) {
         s -= 10;
@@ -382,10 +412,11 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       }
       if (!notes.length) notes.push(`${least === most ? least : `${least}–${most}`} meals a day, easy to prep`);
     } else notes.push("No meals written to check");
-    cats.push({ key: "timing", label: "Meal timing and practicality", score: s, weight: 0.1, notes });
+    cats.push({ key: "timing", label: "Meal timing and practicality", score: s, weight: 0.1, notes, concerns: timingConcerns });
   }
 
   // Training and recovery support
+  const perfConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = null;
@@ -413,6 +444,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       if (ctx.recoveryFlags >= 2 && deltaPct != null && deltaPct < -10) {
         s -= 15;
         notes.push("A deficit while sleep, energy or recovery are flagged");
+        perfConcerns.push({ text: "A deficit while sleep or energy are flagged on recent check-ins", severity: "significant", reason: "recovery" });
       }
       const cardio = ctx.cardioMinutes ?? 0;
       if (cardio >= 150 && deltaPct != null && deltaPct < -20) {
@@ -421,10 +453,19 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       }
       if (!notes.length) notes.push(ctx.recoveryFlags >= 2 ? "Fuels training; recovery is flagged, but the plan isn't the likely reason" : "Training days are fuelled");
     } else if (!ctx.trainingDays) notes.push("Their training days aren't set");
-    cats.push({ key: "performance", label: "Training and recovery support", score: s == null ? null : clampScore(s), weight: 0.12, notes });
+    cats.push({
+      key: "performance",
+      label: "Training and recovery support",
+      score: s == null ? null : clampScore(s),
+      weight: 0.12,
+      notes,
+      critical: ctx.meetWeeksOut != null && ctx.meetWeeksOut <= 8 ? `a meet in ${Math.round(ctx.meetWeeksOut)} weeks` : ctx.recoveryFlags >= 2 ? "sleep or energy flagged" : null,
+      concerns: perfConcerns,
+    });
   }
 
   // Preferences and restrictions
+  const foodConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = null;
@@ -433,6 +474,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       if (ctx.conflicts.length) {
         s = Math.max(0, 100 - 40 * ctx.conflicts.length);
         notes.push(`Against what's on file: ${ctx.conflicts.slice(0, 3).join(", ")}`);
+        foodConcerns.push({ text: `On the plan against an allergy or diet on file: ${ctx.conflicts.slice(0, 3).join(", ")}`, severity: "urgent", reason: "safety" });
       }
       if (meals?.dislikes.length) {
         s = Math.max(0, (s ?? 100) - 15 * meals.dislikes.length);
@@ -440,7 +482,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       }
       if (!notes.length) notes.push(ctx.restrictions ? "Clear of every allergy and diet on file" : "No allergies or diets on file");
     } else notes.push("No meals written to check");
-    cats.push({ key: "food", label: "Preferences and restrictions", score: s, weight: 0.08, notes });
+    cats.push({ key: "food", label: "Preferences and restrictions", score: s, weight: 0.08, notes, critical: ctx.restrictions ? "allergies or diets on file" : null, concerns: foodConcerns });
   }
 
   // Sustainability: the plan's own barriers; low adherence only corroborates them
@@ -472,7 +514,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       }
       if (!notes.length) notes.push("Nothing in the plan makes it hard to keep");
     }
-    cats.push({ key: "sustain", label: "Sustainability", score: s == null ? null : clampScore(s), weight: 0.1, notes });
+    cats.push({ key: "sustain", label: "Sustainability", score: s == null ? null : clampScore(s), weight: 0.1, notes, critical: ctx.hungerHigh ? "hunger is high" : adh != null && adh < FOLLOW_LOW ? "they rate their consistency low" : null });
   }
 
   // how it sits with their training and cardio
@@ -489,7 +531,8 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
   if (ctx.maintenance == null) missing.push("Enough weigh-ins and check-ins to read maintenance");
   if (ctx.adherence == null) missing.push("Check-in nutrition ratings");
   if (!ctx.hasMeals) missing.push("Meals written on the plan");
-  return finishQuality(cats, { what: "nutrition plan", points, missing, execution, connections });
+  const recovery = recoveryTrend({ lowerPerformance: ctx.lowerPerformance, recoveryFlags: ctx.recoveryFlags });
+  return finishQuality(cats, { what: "nutrition plan", points, missing, execution, connections, recovery, settling, changes: ctx.changeLog?.changes, domain: "nutrition", firstName: ctx.firstName });
 }
 
 /** A plan day's kind from its label (Training / Rest / High), for the score. */

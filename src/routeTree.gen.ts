@@ -110,6 +110,7 @@ import { Route as AuthenticatedAdminOffersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminOnboardingRouteImport } from './routes/_authenticated/admin/onboarding'
 import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_authenticated/admin/payment-links'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
+import { Route as AuthenticatedAdminPlansRouteImport } from './routes/_authenticated/admin/plans'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminProgramAssignRouteImport } from './routes/_authenticated/admin/program-assign'
 import { Route as AuthenticatedAdminProgramGapsRouteImport } from './routes/_authenticated/admin/program-gaps'
@@ -268,6 +269,7 @@ import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './route
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
+import { Route as ApiPublicHooksCleoTurnRouteImport } from './routes/api/public/hooks/cleo-turn'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
 import { Route as ApiPublicHooksCoachingPackageStripeRouteImport } from './routes/api/public/hooks/coaching-package-stripe'
@@ -285,6 +287,7 @@ import { Route as ApiPublicHooksNutritionImportsTickRouteImport } from './routes
 import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
 import { Route as ApiPublicHooksNutritionRoadmapTickRouteImport } from './routes/api/public/hooks/nutrition-roadmap-tick'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
+import { Route as ApiPublicHooksOpenipfNotifyRouteImport } from './routes/api/public/hooks/openipf-notify'
 import { Route as ApiPublicHooksPaymentProofImportRouteImport } from './routes/api/public/hooks/payment-proof-import'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPlanChangesTickRouteImport } from './routes/api/public/hooks/plan-changes-tick'
@@ -301,6 +304,7 @@ import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './rou
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksSessionBookingsTickRouteImport } from './routes/api/public/hooks/session-bookings-tick'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
+import { Route as ApiPublicHooksStripePortalConfigRouteImport } from './routes/api/public/hooks/stripe-portal-config'
 import { Route as ApiPublicHooksStripeSyncRouteImport } from './routes/api/public/hooks/stripe-sync'
 import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
 import { Route as ApiPublicHooksTrainingRoadmapTickRouteImport } from './routes/api/public/hooks/training-roadmap-tick'
@@ -882,6 +886,11 @@ const AuthenticatedAdminPaymentsRoute =
     path: '/payments',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminPlansRoute = AuthenticatedAdminPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminPopupsRoute =
   AuthenticatedAdminPopupsRouteImport.update({
     id: '/popups',
@@ -1811,6 +1820,11 @@ const ApiPublicHooksCleoBenchRoute = ApiPublicHooksCleoBenchRouteImport.update({
   path: '/api/public/hooks/cleo-bench',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksCleoTurnRoute = ApiPublicHooksCleoTurnRouteImport.update({
+  id: '/api/public/hooks/cleo-turn',
+  path: '/api/public/hooks/cleo-turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksClientCalendarsTickRoute =
   ApiPublicHooksClientCalendarsTickRouteImport.update({
     id: '/api/public/hooks/client-calendars-tick',
@@ -1912,6 +1926,12 @@ const ApiPublicHooksNutritionTickRoute =
     path: '/api/public/hooks/nutrition-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksOpenipfNotifyRoute =
+  ApiPublicHooksOpenipfNotifyRouteImport.update({
+    id: '/api/public/hooks/openipf-notify',
+    path: '/api/public/hooks/openipf-notify',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksPaymentProofImportRoute =
   ApiPublicHooksPaymentProofImportRouteImport.update({
     id: '/api/public/hooks/payment-proof-import',
@@ -2006,6 +2026,12 @@ const ApiPublicHooksSmsRemindersRoute =
   ApiPublicHooksSmsRemindersRouteImport.update({
     id: '/api/public/hooks/sms-reminders',
     path: '/api/public/hooks/sms-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksStripePortalConfigRoute =
+  ApiPublicHooksStripePortalConfigRouteImport.update({
+    id: '/api/public/hooks/stripe-portal-config',
+    path: '/api/public/hooks/stripe-portal-config',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksStripeSyncRoute =
@@ -2264,6 +2290,7 @@ export interface FileRoutesByFullPath {
   '/admin/onboarding': typeof AuthenticatedAdminOnboardingRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/admin/plans': typeof AuthenticatedAdminPlansRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
   '/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
@@ -2404,6 +2431,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
+  '/api/public/hooks/cleo-turn': typeof ApiPublicHooksCleoTurnRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -2421,6 +2449,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/openipf-notify': typeof ApiPublicHooksOpenipfNotifyRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
@@ -2437,6 +2466,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/session-bookings-tick': typeof ApiPublicHooksSessionBookingsTickRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
+  '/api/public/hooks/stripe-portal-config': typeof ApiPublicHooksStripePortalConfigRoute
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -2579,6 +2609,7 @@ export interface FileRoutesByTo {
   '/admin/onboarding': typeof AuthenticatedAdminOnboardingRoute
   '/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/admin/plans': typeof AuthenticatedAdminPlansRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
   '/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
@@ -2719,6 +2750,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
+  '/api/public/hooks/cleo-turn': typeof ApiPublicHooksCleoTurnRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -2736,6 +2768,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/openipf-notify': typeof ApiPublicHooksOpenipfNotifyRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
@@ -2752,6 +2785,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/session-bookings-tick': typeof ApiPublicHooksSessionBookingsTickRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
+  '/api/public/hooks/stripe-portal-config': typeof ApiPublicHooksStripePortalConfigRoute
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -2900,6 +2934,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/onboarding': typeof AuthenticatedAdminOnboardingRoute
   '/_authenticated/admin/payment-links': typeof AuthenticatedAdminPaymentLinksRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/_authenticated/admin/plans': typeof AuthenticatedAdminPlansRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
   '/_authenticated/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
@@ -3040,6 +3075,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
+  '/api/public/hooks/cleo-turn': typeof ApiPublicHooksCleoTurnRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -3057,6 +3093,7 @@ export interface FileRoutesById {
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/openipf-notify': typeof ApiPublicHooksOpenipfNotifyRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
@@ -3073,6 +3110,7 @@ export interface FileRoutesById {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/session-bookings-tick': typeof ApiPublicHooksSessionBookingsTickRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
+  '/api/public/hooks/stripe-portal-config': typeof ApiPublicHooksStripePortalConfigRoute
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -3221,6 +3259,7 @@ export interface FileRouteTypes {
     | '/admin/onboarding'
     | '/admin/payment-links'
     | '/admin/payments'
+    | '/admin/plans'
     | '/admin/popups'
     | '/admin/program-assign'
     | '/admin/program-gaps'
@@ -3361,6 +3400,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
+    | '/api/public/hooks/cleo-turn'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
@@ -3378,6 +3418,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/openipf-notify'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/plan-changes-tick'
@@ -3394,6 +3435,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/session-bookings-tick'
     | '/api/public/hooks/sms-reminders'
+    | '/api/public/hooks/stripe-portal-config'
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
@@ -3536,6 +3578,7 @@ export interface FileRouteTypes {
     | '/admin/onboarding'
     | '/admin/payment-links'
     | '/admin/payments'
+    | '/admin/plans'
     | '/admin/popups'
     | '/admin/program-assign'
     | '/admin/program-gaps'
@@ -3676,6 +3719,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
+    | '/api/public/hooks/cleo-turn'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
@@ -3693,6 +3737,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/openipf-notify'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/plan-changes-tick'
@@ -3709,6 +3754,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/session-bookings-tick'
     | '/api/public/hooks/sms-reminders'
+    | '/api/public/hooks/stripe-portal-config'
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
@@ -3856,6 +3902,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/onboarding'
     | '/_authenticated/admin/payment-links'
     | '/_authenticated/admin/payments'
+    | '/_authenticated/admin/plans'
     | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-assign'
     | '/_authenticated/admin/program-gaps'
@@ -3996,6 +4043,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
+    | '/api/public/hooks/cleo-turn'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
@@ -4013,6 +4061,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/openipf-notify'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/plan-changes-tick'
@@ -4029,6 +4078,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/session-bookings-tick'
     | '/api/public/hooks/sms-reminders'
+    | '/api/public/hooks/stripe-portal-config'
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
@@ -4139,6 +4189,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
+  ApiPublicHooksCleoTurnRoute: typeof ApiPublicHooksCleoTurnRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
   ApiPublicHooksCoachingPackageStripeRoute: typeof ApiPublicHooksCoachingPackageStripeRoute
@@ -4156,6 +4207,7 @@ export interface RootRouteChildren {
   ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
   ApiPublicHooksNutritionRoadmapTickRoute: typeof ApiPublicHooksNutritionRoadmapTickRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
+  ApiPublicHooksOpenipfNotifyRoute: typeof ApiPublicHooksOpenipfNotifyRoute
   ApiPublicHooksPaymentProofImportRoute: typeof ApiPublicHooksPaymentProofImportRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPlanChangesTickRoute: typeof ApiPublicHooksPlanChangesTickRoute
@@ -4172,6 +4224,7 @@ export interface RootRouteChildren {
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSessionBookingsTickRoute: typeof ApiPublicHooksSessionBookingsTickRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
+  ApiPublicHooksStripePortalConfigRoute: typeof ApiPublicHooksStripePortalConfigRoute
   ApiPublicHooksStripeSyncRoute: typeof ApiPublicHooksStripeSyncRoute
   ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
   ApiPublicHooksTrainingRoadmapTickRoute: typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -4894,6 +4947,13 @@ declare module '@tanstack/react-router' {
       path: '/payments'
       fullPath: '/admin/payments'
       preLoaderRoute: typeof AuthenticatedAdminPaymentsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/plans': {
+      id: '/_authenticated/admin/plans'
+      path: '/plans'
+      fullPath: '/admin/plans'
+      preLoaderRoute: typeof AuthenticatedAdminPlansRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/popups': {
@@ -6002,6 +6062,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCleoBenchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/cleo-turn': {
+      id: '/api/public/hooks/cleo-turn'
+      path: '/api/public/hooks/cleo-turn'
+      fullPath: '/api/public/hooks/cleo-turn'
+      preLoaderRoute: typeof ApiPublicHooksCleoTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/client-calendars-tick': {
       id: '/api/public/hooks/client-calendars-tick'
       path: '/api/public/hooks/client-calendars-tick'
@@ -6121,6 +6188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksNutritionTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/openipf-notify': {
+      id: '/api/public/hooks/openipf-notify'
+      path: '/api/public/hooks/openipf-notify'
+      fullPath: '/api/public/hooks/openipf-notify'
+      preLoaderRoute: typeof ApiPublicHooksOpenipfNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/payment-proof-import': {
       id: '/api/public/hooks/payment-proof-import'
       path: '/api/public/hooks/payment-proof-import'
@@ -6231,6 +6305,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/sms-reminders'
       fullPath: '/api/public/hooks/sms-reminders'
       preLoaderRoute: typeof ApiPublicHooksSmsRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/stripe-portal-config': {
+      id: '/api/public/hooks/stripe-portal-config'
+      path: '/api/public/hooks/stripe-portal-config'
+      fullPath: '/api/public/hooks/stripe-portal-config'
+      preLoaderRoute: typeof ApiPublicHooksStripePortalConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/stripe-sync': {
@@ -6629,6 +6710,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminOnboardingRoute: typeof AuthenticatedAdminOnboardingRoute
   AuthenticatedAdminPaymentLinksRoute: typeof AuthenticatedAdminPaymentLinksRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
+  AuthenticatedAdminPlansRoute: typeof AuthenticatedAdminPlansRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramAssignRoute: typeof AuthenticatedAdminProgramAssignRouteWithChildren
   AuthenticatedAdminProgramGapsRoute: typeof AuthenticatedAdminProgramGapsRoute
@@ -6770,6 +6852,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminOnboardingRoute: AuthenticatedAdminOnboardingRoute,
     AuthenticatedAdminPaymentLinksRoute: AuthenticatedAdminPaymentLinksRoute,
     AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
+    AuthenticatedAdminPlansRoute: AuthenticatedAdminPlansRoute,
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramAssignRoute:
       AuthenticatedAdminProgramAssignRouteWithChildren,
@@ -7152,6 +7235,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksCleoAttachmentsSweepRoute:
     ApiPublicHooksCleoAttachmentsSweepRoute,
   ApiPublicHooksCleoBenchRoute: ApiPublicHooksCleoBenchRoute,
+  ApiPublicHooksCleoTurnRoute: ApiPublicHooksCleoTurnRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksCoachAutomationTickRoute:
@@ -7175,6 +7259,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksNutritionRoadmapTickRoute:
     ApiPublicHooksNutritionRoadmapTickRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
+  ApiPublicHooksOpenipfNotifyRoute: ApiPublicHooksOpenipfNotifyRoute,
   ApiPublicHooksPaymentProofImportRoute: ApiPublicHooksPaymentProofImportRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPlanChangesTickRoute: ApiPublicHooksPlanChangesTickRoute,
@@ -7195,6 +7280,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksSessionBookingsTickRoute:
     ApiPublicHooksSessionBookingsTickRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
+  ApiPublicHooksStripePortalConfigRoute: ApiPublicHooksStripePortalConfigRoute,
   ApiPublicHooksStripeSyncRoute: ApiPublicHooksStripeSyncRoute,
   ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
   ApiPublicHooksTrainingRoadmapTickRoute:

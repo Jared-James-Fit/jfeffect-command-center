@@ -26,8 +26,8 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  AlertTriangle, Archive, BarChart3, Trash2, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
-  Download, Dumbbell, Flame, FlagOff, HeartPulse, FilePlus2, History, Layers, LineChart, Loader2, MoreHorizontal, Pencil, PenLine, Plus, SlidersHorizontal, Trophy,
+  AlertTriangle, Archive, Trash2, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
+  Download, Dumbbell, Flame, FlagOff, HeartPulse, FilePlus2, History, Layers, LineChart, Loader2, Medal, MoreHorizontal, Pencil, PenLine, Plus, SlidersHorizontal, Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -53,8 +53,7 @@ import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 import { CleoDock, useCleoDock, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
-import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
-import { CleoMark } from "@/components/summer/cleo-mark";
+import { PlanIntelligence, pendingReminder } from "@/components/plan-quality/plan-intelligence";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { getProgramQualityFn } from "@/lib/program-quality.functions";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
@@ -65,18 +64,23 @@ import {
 } from "@/components/clients/training-schedule-board";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { useServerFn } from "@tanstack/react-start";
-import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
+import { getClientSchedule, rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
+import { monthWorkoutsDone } from "@/lib/workout-peek";
 import { ClientNotesCard } from "@/components/messages/client-notes-log";
 import { HealthCard, useHealthProfile } from "@/components/health/HealthCard";
 import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
 import { healthSummary } from "@/lib/health/health-profile";
+import { useOpenIpfStatus } from "@/lib/openipf.queries";
+import { openIpfSummary } from "@/lib/openipf";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 const ScheduleManagerShell = lazyWithRetry(() =>
   import("@/components/schedule/ScheduleManagerShell").then((m) => ({ default: m.ScheduleManagerShell })),
 );
 const ClientMaxesPanel = lazyWithRetry(() => import("@/components/client-maxes-panel").then((m) => ({ default: m.ClientMaxesPanel })));
+const PerformanceCard = lazyWithRetry(() => import("@/components/performance-card").then((m) => ({ default: m.PerformanceCard })));
 const ClientWarmupCard = lazyWithRetry(() => import("@/components/client-warmup-card").then((m) => ({ default: m.ClientWarmupCard })));
+const OpenIpfPanel = lazyWithRetry(() => import("@/components/openipf/openipf-panel").then((m) => ({ default: m.OpenIpfPanel })));
 
 type ClientRow = {
   id: string;
@@ -88,6 +92,8 @@ type ClientRow = {
 
 /** Element id of the schedule card; /admin/clients/$id/schedule lands here. */
 export const TRAINING_SCHEDULE_ANCHOR = "schedule";
+/** Element id of the client's Performance card (their training analytics, one tap away). */
+export const TRAINING_ANALYTICS_ANCHOR = "analytics";
 /** Element id of Athlete setup (training days, maxes): "Place them" goes there when no days are set. */
 export const ATHLETE_SETUP_ANCHOR = "athlete-setup";
 
@@ -98,7 +104,7 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
   // Missing program data's "Add maxes" / "Set days" open it on Athlete setup.
   useEffect(() => {
     const id = hash.replace(/^#/, "");
-    if (id !== TRAINING_SCHEDULE_ANCHOR && id !== ATHLETE_SETUP_ANCHOR) return;
+    if (id !== TRAINING_SCHEDULE_ANCHOR && id !== ATHLETE_SETUP_ANCHOR && id !== TRAINING_ANALYTICS_ANCHOR) return;
     const t = window.setTimeout(() => {
       document.getElementById(id)?.scrollIntoView({ block: "start" });
     }, 400);
@@ -115,37 +121,88 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
   };
   return (
+    // On a phone the two columns are one list (`contents`), ordered so their analytics sits right
+    // under the program, a tap from it; on a computer it heads the side column.
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
-      <ProgramQualityStrip clientId={clientId} dock={dock} className="lg:col-span-2" />
-      <div className="min-w-0 space-y-4 lg:space-y-5">
-        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} dock={dock} onFocus={setFocusId} />
-        <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="min-w-0 scroll-mt-24">
+      <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="order-1 lg:order-none lg:col-span-2" />
+      <div className="contents lg:block lg:min-w-0 lg:space-y-5">
+        <div className="order-2 min-w-0 lg:order-none">
+          <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} onFocus={setFocusId} />
+        </div>
+        <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="order-4 min-w-0 scroll-mt-24 lg:order-none">
           <Suspense fallback={<Card className="p-6 text-sm text-muted-foreground">Loading schedule…</Card>}>
             <ScheduleManagerShell clientId={clientId} mode="coach" />
           </Suspense>
         </section>
       </div>
-      <div className="min-w-0 space-y-4 lg:space-y-5">
-        <AthleteSetupCard clientId={clientId} client={client} />
-        <ClientNotesCard clientId={clientId} name={name} />
+      <div className="contents lg:block lg:min-w-0 lg:space-y-5">
+        <div className="order-3 min-w-0 lg:order-none" id={TRAINING_ANALYTICS_ANCHOR}>
+          <ClientPerformance clientId={clientId} client={client} />
+        </div>
+        <div className="order-5 min-w-0 lg:order-none">
+          <AthleteSetupCard clientId={clientId} client={client} />
+        </div>
+        <div className="order-6 min-w-0 lg:order-none">
+          <ClientNotesCard clientId={clientId} name={name} />
+        </div>
       </div>
-      {/* Cleo, docked beside the tab: Adjust program's engine on their whole program */}
-      <CleoDock dock={dock} target={{ kind: "client", clientId, focusBlockId: focusId }} title={name ?? "Their program"} onApplied={afterApply} scopes={["program"]} />
+      {/* Cleo, docked beside the tab: Adjust program's engine on their whole program. Its one way in is
+          the strip's Optimize / Ask Cleo; once that's scrolled away the closed dock shows its handle. */}
+      <CleoDock
+        dock={dock}
+        target={{ kind: "client", clientId, focusBlockId: focusId }}
+        title={name ?? "Their program"}
+        onApplied={afterApply}
+        scopes={["program"]}
+        handle={focusId ? TRAINING_CLEO_ANCHOR : null}
+      />
     </div>
+  );
+}
+
+/* ─────────────────────────── Performance ─────────────────────────── */
+
+/**
+ * Their training analytics at a glance, one tap from the rest: the athlete's own Performance card
+ * (the last 12 weeks, the main lift's estimated max, this month's planned workouts, the latest
+ * record), opening the coach's analytics page. The month reads the Schedule's own feed and cache.
+ */
+function ClientPerformance({ clientId, client }: { clientId: string; client: ClientRow | null }) {
+  const scheduleFn = useServerFn(getClientSchedule);
+  const schedule = useQuery({
+    queryKey: ["client-schedule", clientId],
+    enabled: !!clientId,
+    staleTime: 60_000,
+    queryFn: () => scheduleFn({ data: { clientId } }),
+  });
+  const today = todayISO();
+  const month = useMemo(() => monthWorkoutsDone(schedule.data as any, today), [schedule.data, today]);
+  const first = ((client?.full_name as string | null) ?? "").split(" ")[0] || null;
+  return (
+    <Suspense fallback={<Card className="h-[176px] jf-skeleton bg-muted/30" aria-hidden />}>
+      <PerformanceCard
+        clientId={clientId}
+        unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
+        month={month}
+        analytics={{ to: "/admin/client-programs/$clientId/analytics", params: { clientId } }}
+        emptyText={`Fills in after ${first ?? "their"}${first ? "'s" : ""} first logged workout.`}
+      />
+    </Suspense>
   );
 }
 
 /* ─────────────────────────── Plan quality ─────────────────────────── */
 
 export const programQualityKey = (clientId: string) => ["program-quality", clientId] as const;
+/** The strip's Cleo buttons (or the strip while it loads): the tab's one way into Cleo. */
+const TRAINING_CLEO_ANCHOR = "[data-plan-intelligence='training'] [data-quality-actions], [data-plan-intelligence='training'][aria-busy]";
 
-/** The program's design score and verdict, with Optimize and Ask opening Cleo docked beside the tab. */
-function ProgramQualityStrip({ clientId, dock, className }: { clientId: string; dock: CleoDockHandle; className?: string }) {
+/** The program's design score and verdict, with Optimize and Ask opening Cleo docked beside the tab (the tab's one way in). */
+function ProgramQualityStrip({ clientId, dock, hasProgram, className }: { clientId: string; dock: CleoDockHandle; hasProgram: boolean; className?: string }) {
   const read = useServerFn(getProgramQualityFn);
   const cleo = useCleoAccess();
   const q = useQuery({ queryKey: programQualityKey(clientId), queryFn: () => read({ data: { clientId } }), staleTime: 60_000 });
   const quality = q.data?.quality ?? null;
-  const live = quality != null && quality.verdict.kind !== "none";
   return (
     <PlanIntelligence
       domain="training"
@@ -157,16 +214,17 @@ function ProgramQualityStrip({ clientId, dock, className }: { clientId: string; 
       onRetry={() => void q.refetch()}
       cleo={cleo}
       className={className}
-      onOptimize={live ? (x) => dock.optimize({ domain: "training", what: "training program", quality: x }) : undefined}
-      onAskCleo={live ? () => dock.ask() : undefined}
+      onOptimize={hasProgram ? (x) => dock.optimize({ domain: "training", what: "training program", quality: x }) : undefined}
+      onAskCleo={hasProgram ? () => dock.ask() : undefined}
+      messageClientId={clientId}
+      pending={q.data?.pending ? pendingReminder("program", q.data.pending.at, { count: q.data.pending.count, cleo, onOpen: () => dock.ask() }) : null}
     />
   );
 }
 
 /* ───────────────────────────── Program ───────────────────────────── */
 
-function ProgramCard({ clientId, clientName, trainingDays, dock, onFocus }: { clientId: string; clientName: string | null; trainingDays: string[] | null; dock: CleoDockHandle; onFocus?: (blockId: string | null) => void }) {
-  const cleo = useCleoAccess();
+function ProgramCard({ clientId, clientName, trainingDays, onFocus }: { clientId: string; clientName: string | null; trainingDays: string[] | null; onFocus?: (blockId: string | null) => void }) {
   const qc = useQueryClient();
   const placeWorkouts = useServerFn(rescheduleFromCommittedDays);
   const [placing, setPlacing] = useState(false);
@@ -306,9 +364,6 @@ function ProgramCard({ clientId, clientName, trainingDays, dock, onFocus }: { cl
                 <Link to="/admin/client-programs/$clientId/intelligence" params={{ clientId }} search={{ scope: "program", from: "", to: "", tab: "summary" }}><LineChart className="mr-2 h-4 w-4" /> Program Intelligence</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/admin/client-programs/$clientId/analytics" params={{ clientId }}><BarChart3 className="mr-2 h-4 w-4" /> Analytics &amp; PRs</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
                 <Link to="/admin/client-programs/$clientId/history" params={{ clientId }}><History className="mr-2 h-4 w-4" /> Program history</Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setArchiveOpen(true)}><Archive className="mr-2 h-4 w-4" /> Workout archive</DropdownMenuItem>
@@ -421,19 +476,6 @@ function ProgramCard({ clientId, clientName, trainingDays, dock, onFocus }: { cl
             <Button variant="outline" className="min-h-[48px] px-4" onClick={() => setAddOpen(true)}>
               <Plus className="mr-1 h-4 w-4" /> Add
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="col-span-2 min-h-[48px] gap-1.5"
-              onClick={dock.toggle}
-              aria-pressed={dock.open}
-              data-testid="edit-with-ai"
-              data-training-cleo
-            >
-              {cleo ? <CleoMark size={16} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
-              {cleo ? "Adjust with Cleo" : "Adjust program"}
-            </Button>
-
           </div>
         ) : null}
       </div>
@@ -778,10 +820,20 @@ function NewBlockDialog({
 
 /* ───────────────────────────── Setup ───────────────────────────── */
 
-type SetupSheet = "days" | "maxes" | "warmup" | "health" | "competition" | "equipment" | null;
+type SetupSheet = "days" | "maxes" | "warmup" | "health" | "competition" | "equipment" | "openipf" | null;
+
+/** Element id / hash that opens a client's OpenIPF (a push or the Messages sheet's Open client). */
+export const OPENIPF_ANCHOR = "openipf";
 
 function AthleteSetupCard({ clientId, client }: { clientId: string; client: ClientRow | null }) {
   const [sheet, setSheet] = useState<SetupSheet>(null);
+  // their OpenIPF link and meets (coaching clients only; a free member's is never looked up)
+  const coaching = (client as any)?.service_tier === "coaching";
+  const openipf = useOpenIpfStatus(clientId, coaching);
+  const hash = useRouterState({ select: (r) => r.location.hash });
+  useEffect(() => {
+    if (coaching && hash.replace(/^#/, "") === OPENIPF_ANCHOR) setSheet("openipf");
+  }, [hash, coaching]);
   const { data: maxes = [] } = useQuery({
     queryKey: ["pl-client-maxes", clientId],
     queryFn: () => listClientMaxes(clientId),
@@ -823,11 +875,14 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
       {competes && (
         <SetupRow icon={<Trophy className="h-4 w-4" />} title="Competition" value={profileSummary(competition)} empty="Weight class and age classes not set" onClick={() => setSheet("competition")} />
       )}
+      {coaching && openipf.data?.eligible && (
+        <SetupRow icon={<Medal className="h-4 w-4" />} title="OpenIPF" value={openIpfSummary(openipf.data)} empty="Not linked" onClick={() => setSheet("openipf")} />
+      )}
 
       <Sheet open={sheet !== null} onOpenChange={(v) => !v && setSheet(null)}>
         <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
           <SheetHeader className="mb-3 text-left">
-            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : sheet === "competition" ? "Competition" : sheet === "equipment" ? "Equipment & setups" : "Warm-up"}</SheetTitle>
+            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : sheet === "competition" ? "Competition" : sheet === "equipment" ? "Equipment & setups" : sheet === "openipf" ? "OpenIPF" : "Warm-up"}</SheetTitle>
             <SheetDescription>
               {sheet === "days"
                 ? "Their upcoming workouts move onto the days you pick."
@@ -839,7 +894,9 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
                       ? "Their powerlifting forms start from this, and what they send updates it."
                       : sheet === "equipment"
                         ? "Their racks and machines and how they set each one up. A setup you add shows on their workout card."
-                        : "Which warm-up they get before each workout."}
+                        : sheet === "openipf"
+                          ? "Their meets from OpenIPF, kept up to date. They go in the Hall of Strength."
+                          : "Which warm-up they get before each workout."}
             </SheetDescription>
           </SheetHeader>
           <Suspense fallback={<div className="py-6 text-sm text-muted-foreground">Loading…</div>}>
@@ -857,6 +914,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
             {sheet === "warmup" && <ClientWarmupCard clientId={clientId} embedded onSaved={() => setSheet(null)} />}
             {sheet === "health" && <HealthCard clientId={clientId} bare />}
             {sheet === "competition" && <CompetitionProfileEditor clientId={clientId} as="coach" />}
+            {sheet === "openipf" && <OpenIpfPanel clientId={clientId} firstName={(client?.full_name as string | null)?.split(" ")[0] ?? null} />}
             {sheet === "equipment" && (
               <EquipmentManager clientId={clientId} coachView athleteFirstName={(client?.full_name as string | null)?.split(" ")[0] ?? null} />
             )}

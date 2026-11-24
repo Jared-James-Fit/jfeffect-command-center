@@ -48,6 +48,12 @@ const clip = (s: unknown, n = 220) => {
 export type ClientIntelInput = {
   clientId: string;
   loaded: LoadedWeightManagement;
+  /**
+   * The staff member asking (a specialty dock): their own recent Cleo conversations about this
+   * client go in as context (Nov 24 2026), so a decision talked through in Cleo's panel is known in
+   * the Training, Nutrition and Cardio docks too. Never anyone else's conversations.
+   */
+  viewer?: string | null;
   cardio?: { live: CardioPlan; ctx: PlanContext; unit: SpeedUnit; outcomes: VersionOutcome[]; read: CardioRead } | null;
 };
 
@@ -178,6 +184,28 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
   for (const w of wmReviews) hist.push(`- ${String(w.created_at).slice(0, 10)} weight-management read "${clip(w.headline, 140)}": ${w.status}${w.decision_note ? ` (coach: ${clip(w.decision_note, 160)})` : ""}`);
   for (const r of recs) hist.push(`- ${String(r.created_at).slice(0, 10)} check-in recommendation "${clip(r.headline, 120)}": ${r.status}${r.coach_note ? ` (coach: ${clip(r.coach_note, 160)})` : ""}`);
   out.push(`DECISION HISTORY (newest first):\n${hist.length ? hist.join("\n") : "- Nothing recorded yet"}`);
+
+  // The asker's own conversations with Cleo about them (summaries, not the full text)
+  if (x.viewer) {
+    const talks = await safe<any[]>(
+      () =>
+        sb
+          .from("summer_chats")
+          .select("title, summary, preview, last_message_at")
+          .eq("user_id", x.viewer)
+          .eq("client_id", clientId)
+          .order("last_message_at", { ascending: false })
+          .limit(2),
+      [],
+    );
+    const lines = talks
+      .map((t) => {
+        const gist = String(t.summary || t.preview || "").trim();
+        return gist ? `- "${clip(t.title, 80)}" (${String(t.last_message_at).slice(0, 10)}): ${clip(gist, 700)}` : null;
+      })
+      .filter(Boolean);
+    if (lines.length) out.push(`FROM THE COACH'S RECENT CONVERSATIONS WITH CLEO ABOUT THEM (summaries; what the coach decided or asked for there counts as a coach instruction unless something above is newer):\n${lines.join("\n")}`);
+  }
 
   return out.join("\n\n");
 }

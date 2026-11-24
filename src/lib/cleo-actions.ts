@@ -167,6 +167,15 @@ export const CLEO_ACTION_PARAMS = {
     client_notes: z.string().trim().max(2000).optional().describe("Notes the client sees."),
     water: z.string().trim().max(100).optional(),
   }),
+  link_openipf: z.object({
+    client_id: uuid,
+    url: z
+      .string()
+      .trim()
+      .max(200)
+      .regex(/(openipf|openpowerlifting)\.org\/u\/[a-z0-9]+/i, "An openipf.org/u/… or openpowerlifting.org/u/… profile link")
+      .describe("Their profile link from the openipf lookup, e.g. https://www.openipf.org/u/marcasugui."),
+  }),
 } as const;
 
 export type CleoActionKind = keyof typeof CLEO_ACTION_PARAMS;
@@ -199,6 +208,7 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   correct_logged_exercise: { title: "Fix a logged exercise", tool: "Correct which exercise a client actually did on a day they already logged (e.g. they did barbell bench instead of the dumbbell incline). Only the exercise changes; every logged set (load, reps, RPE) stays exactly as entered." },
   restore_program_version: { title: "Undo a change", tool: "Undo one of the program or nutrition changes in a client's program history (version ids from program_history): puts days, exercises, dates, visibility or targets back the way they were. Days the client has since started or logged stay as trained." },
   set_nutrition_targets: { title: "Update nutrition", tool: "Set a client's nutrition targets: calories and macros for each day type, plus phase and notes. Replaces their current day list (or creates their first targets)." },
+  link_openipf: { title: "Link OpenIPF", tool: "Link a coaching client's OpenIPF (or OpenPowerlifting) profile to their account: their meets come in, stay synced every day, and go in the Hall of Strength. Only a profile the openipf lookup found or the person gave you; never a guess. It can be removed and added back from their profile." },
 };
 
 /**
@@ -239,6 +249,8 @@ export const CLEO_ACTION_RULES: Record<CleoActionKind, ActionRule> = {
   publish_program: { need: "client", approvable: true },
   correct_logged_exercise: { need: "client", approvable: true },
   set_nutrition_targets: { need: "client", approvable: true },
+  // the database's link function checks the person who taps it: the owner's to do himself
+  link_openipf: { need: "owner", approvable: false },
   // These run through server functions bound to the tapper's request (templates,
   // the calendar's scheduled instances, appointments with Google): the owner's.
   assign_program_template: { need: "owner", approvable: false },

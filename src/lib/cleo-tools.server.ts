@@ -396,6 +396,62 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
 
+    openipf: tool({
+      description:
+        "A coaching client's OpenIPF: whether a profile is linked and its meets, any matches or new meets waiting for the coach, and with search: true it looks them up on OpenIPF / OpenPowerlifting by name right now (takes up to 25 seconds). To link a profile, propose link_openipf with its link; never link a lifter the lookup didn't find or the person didn't give you. Free members are never looked up.",
+      inputSchema: z.object({
+        client_id: clientId,
+        search: z.boolean().optional().describe("Look them up now (only when no profile is linked)."),
+      }),
+      execute: safe("OpenIPF", async ({ client_id, search }) => {
+        const c = await clientRow(db, client_id);
+        if (c.service_tier !== "coaching") return `${clientName(c)} isn't a coaching client; OpenIPF is only for coaching clients.`;
+        const status = async () => {
+          const { data, error } = await db.rpc("openipf_status", { _client: client_id, _athlete: null });
+          if (error) throw new Error(error.message);
+          return data as any;
+        };
+        let st = await status();
+        let note = "";
+        if (search && !st.linked) {
+          const { data: scan, error } = await db.rpc("openipf_scan_start", { _client: client_id, _athlete: null });
+          if (error) throw new Error(error.message);
+          const until = Date.now() + 25_000;
+          let done = false;
+          while (!done && Date.now() < until) {
+            await new Promise((r) => setTimeout(r, 1500));
+            const { data: step, error: e2 } = await db.rpc("openipf_scan_step", { _scan: scan });
+            if (e2) throw new Error(e2.message);
+            done = !!(step as any)?.done;
+          }
+          note = done ? "Looked up just now." : "Still looking (it finishes in the background; anything found goes to Messages → OpenIPF).";
+          st = await status();
+        }
+        const { liftsLine, matchLine, meetDay, plainLifterName, prLine, profileUrl, siteName } = await import("@/lib/openipf");
+        const lines = [`OpenIPF for ${clientName(c)}${note ? ` (${note})` : ""}:`];
+        if (st.linked) lines.push(`Linked: ${st.url} · ${st.meet_count} meets on file${st.last_meet ? ` · last ${meetDay(st.last_meet)}` : ""}. Synced every day.`);
+        else lines.push(`Not linked.${st.history?.length ? ` Removed before: ${st.history.map((h: any) => h.url).join(", ")} (Add back from their profile).` : ""}`);
+        const { data: waiting } = await db
+          .from("openipf_suggestions")
+          .select("*")
+          .eq("client_id", client_id)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(10);
+        for (const sg of (waiting ?? []) as any[]) {
+          if (sg.kind === "new_meet") {
+            lines.push(`- New meet waiting: ${[sg.meet_name, meetDay(sg.meet_date)].filter(Boolean).join(", ")}${liftsLine(sg) ? ` · ${liftsLine(sg)}` : ""}${prLine(sg.prs) ? ` · ${prLine(sg.prs)}` : ""}`);
+          } else {
+            lines.push(
+              `- Possible match (${sg.confidence ?? "possible"}): ${plainLifterName(sg.lifter_name) || sg.slug} on ${siteName(sg.host)}, ${profileUrl(sg.host, sg.slug)}${matchLine(sg) ? ` · ${matchLine(sg)}` : ""}${liftsLine(sg) ? ` · best ${liftsLine(sg)}` : ""}${sg.reasons?.length ? ` · ${sg.reasons.join(", ")}` : ""}`,
+            );
+          }
+        }
+        if (!st.linked && !(waiting ?? []).length) lines.push(search ? "Nobody by their name was found." : "Nothing waiting. Pass search: true to look them up now.");
+        return lines.join("\n");
+      }),
+    }),
+
     training_program: tool({
       description:
         "A client's program: blocks (current one first), and their schedule from 7 days ago to 14 days ahead (every workout the app shows on their calendar) with which are done, each with its day id (and workout id when it has one). Pass `date` (YYYY-MM-DD) to also get the prescribed exercises for that day's workout.",

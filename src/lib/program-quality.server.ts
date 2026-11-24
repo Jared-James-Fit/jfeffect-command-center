@@ -16,7 +16,8 @@ import { all, blockTypesFor, inChunks } from "@/lib/program-ai/load.server";
 import { scoreProgram, type ProgramQualityContext } from "@/lib/program-quality";
 import { buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import type { CheckExercise, CheckInput } from "@/lib/program-check";
-import type { QualityScore } from "@/lib/plan-quality";
+import { barriersFromCheckins, type QualityScore } from "@/lib/plan-quality";
+import { changeRead, programEditChanges, trainingFingerprint, type PlanChange } from "@/lib/plan-changes";
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -39,8 +40,35 @@ const rpeNum = (v: unknown): number | null => {
   return m ? Number(m[2] ?? m[1]) : null;
 };
 
-export async function programQualityFor(sb: any, clientId: string): Promise<{ quality: QualityScore | null; blockId: string | null }> {
-  const { data: client, error: ce } = await sb.from("clients").select("id, committed_training_days, timezone").eq("id", clientId).maybeSingle();
+/** A finished draft nobody has acted on: what the quality strip reminds the coach of. */
+export type PendingDraftInfo = { at: string; count: number } | null;
+
+/** Waiting long enough to be worth a reminder (a proposal that just landed is on screen already). */
+export const PENDING_AFTER_MS = 30 * 60_000;
+
+/** Adjust program's latest proposal for this client that's ready and not applied or discarded (last 3 weeks). */
+export async function pendingProgramProposal(sb: any, clientId: string, now = Date.now()): Promise<PendingDraftInfo> {
+  try {
+    const { data, error } = await sb
+      .from("program_ai_edits")
+      .select("updated_at, finished_at, result")
+      .eq("client_id", clientId)
+      .eq("status", "ready")
+      .gte("updated_at", new Date(now - 21 * 86_400_000).toISOString())
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const at = String(data.finished_at ?? data.updated_at);
+    const count = Array.isArray(data.result?.changes) ? data.result.changes.length : 0;
+    return count && now - Date.parse(at) >= PENDING_AFTER_MS ? { at, count } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function programQualityFor(sb: any, clientId: string): Promise<{ quality: QualityScore | null; blockId: string | null; pending?: PendingDraftInfo }> {
+  const { data: client, error: ce } = await sb.from("clients").select("id, full_name, committed_training_days, timezone").eq("id", clientId).maybeSingle();
   if (ce) throw new Error(ce.message);
   if (!client) throw new Error("That client wasn't found.");
   const today = todayInTimeZone(client.timezone ?? "America/Winnipeg");
@@ -48,7 +76,7 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
 
   // their primary programs that are live or ended in the last four weeks (adherence reads those too)
   const blocks = filterPrimaryProgramBlocks(
-    await all(() => sb.from("pl_blocks").select("id, name, status, client_visible, start_date, end_date, archived, source_template_block_key, created_at").eq("client_id", clientId).eq("archived", false).order("id"), "blocks"),
+    await all(() => sb.from("pl_blocks").select("id, name, status, client_visible, start_date, end_date, archived, source_template_block_key, created_at, prep_id").eq("client_id", clientId).eq("archived", false).order("id"), "blocks"),
   ).filter((b: any) => b.status !== "Archived" && (!b.end_date || b.end_date >= since));
   blocks.sort((a: any, b: any) => (a.start_date ?? "9999").localeCompare(b.start_date ?? "9999") || String(a.created_at).localeCompare(String(b.created_at)));
   const liveBlocks = blocks.filter((b: any) => !b.end_date || b.end_date >= today);
@@ -113,6 +141,7 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
   const rowById = new Map(rows.map((r) => [r.id, r]));
   let rated = 0;
   let harder = 0;
+  let easier = 0;
   for (const l of logged) {
     if (!l.completed_at || String(l.completed_at).slice(0, 10) < since) continue;
     const r = rowById.get(l.row_id);
@@ -123,6 +152,7 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
     if (!coachLoad || target == null || actual == null || !Number.isFinite(actual)) continue;
     rated++;
     if (actual >= target + 1.5) harder++;
+    if (actual <= target - 2) easier++;
   }
 
   // the program as Program Check reads it: the live blocks, every workout's lock
@@ -226,6 +256,65 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
   }
 
   const meet = wm?.input.meet ?? null;
+  // when the program last changed: the current block's start, or the latest Adjust program change applied to it
+  const currentStart = (liveBlocks as Array<{ start_date: string | null }>).filter((b) => !!b.start_date && b.start_date <= today).map((b) => b.start_date as string).sort().pop() ?? null;
+  const lastEdit = await best(
+    async () => {
+      const { data, error } = await sb.from("program_ai_edits").select("applied_at").eq("client_id", clientId).eq("status", "applied").not("applied_at", "is", null).order("applied_at", { ascending: false }).limit(1);
+      if (error) throw new Error(error.message);
+      return ((data ?? [])[0]?.applied_at as string | undefined)?.slice(0, 10) ?? null;
+    },
+    null,
+  );
+  const changedOn = [currentStart, lastEdit].filter((d): d is string => !!d && d <= today).sort().pop() ?? null;
+
+  // ── the change log: what changed, how big, and when each change can be judged ──
+  const known: PlanChange[] = [];
+  // a program starts once: the next block of the same program (or one assigned with it) was planned
+  // with it, so it isn't a change of its own
+  const firstOfProgram = new Map<string, any>();
+  for (const b of blocks as any[]) {
+    if (!b.start_date) continue;
+    const key = b.prep_id ?? null;
+    const together = !key ? [...firstOfProgram.values()].find((f) => Math.abs(Date.parse(f.created_at) - Date.parse(b.created_at)) <= 2 * 86_400_000) : null;
+    if (key && firstOfProgram.has(key)) continue;
+    if (together) continue;
+    firstOfProgram.set(key ?? b.id, b);
+  }
+  for (const b of firstOfProgram.values()) {
+    if (b.start_date && b.start_date >= addDays(today, -90)) known.push({ domain: "training", area: "program", size: "substantial", summary: `Started ${b.name ?? "a new program"}`, on: b.start_date });
+  }
+  const edits = await best(
+    async () => {
+      const { data, error } = await sb.from("program_ai_edits").select("applied_at, applied_changes, result").eq("client_id", clientId).eq("status", "applied").not("applied_at", "is", null).gte("applied_at", `${addDays(today, -90)}T00:00:00Z`).order("applied_at", { ascending: false }).limit(10);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as any[];
+    },
+    [] as any[],
+  );
+  for (const e of edits) known.push(...programEditChanges(e.result, e.applied_changes, String(e.applied_at).slice(0, 10)));
+  const liveIds = new Set(liveBlocks.map((b: any) => b.id));
+  const liveWeekIds = new Set(weeks.filter((w) => liveIds.has(w.block_id)).map((w) => w.id));
+  const liveDays = new Map(days.filter((d) => liveWeekIds.has(d.week_id)).map((d) => [d.id, d]));
+  const fp = trainingFingerprint(
+    rows
+      .filter((r) => liveDays.has(r.day_id) && !r.cardio_target_id)
+      .map((r) => {
+        const d = liveDays.get(r.day_id);
+        const date = dayDate(d);
+        return { ...r, open: !lockedIds.has(r.day_id) && (!date || date >= today), date, dayId: r.day_id };
+      }),
+  );
+  const { trackPlanChanges } = await import("@/lib/plan-changes.server");
+  const tracked = await trackPlanChanges(sb, clientId, "training", fp, today);
+  const phaseWords = (() => {
+    const w = structure[0]?.weeks?.find((x: any) => x.days.some((d: any) => d.rows.length && !lockedIds.has(d._dbId)));
+    const p = String(w?.phase ?? "");
+    return /taper/i.test(p) ? "taper" : /peak/i.test(p) ? "peak" : /deload/i.test(p) ? "deload" : null;
+  })();
+  const sessionsPerWeek = planned ? planned / 4 : toFull(client.committed_training_days).length || null;
+  const meetWeeksOut = wm?.assessment.meetWeeksOut ?? null;
+  const changeLog = changeRead("training", [...tracked, ...known], today, { meetWeeksOut, phase: phaseWords as any, sessionsPerWeek });
   const ctx: ProgramQualityContext = {
     today,
     level: wm?.input.level ?? null,
@@ -240,7 +329,12 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
     cardio,
     adherence: planned ? { done, planned } : null,
     effort: rated ? { rated, harder } : null,
+    easier,
     checkins: wm?.assessment.checkins.count ?? 0,
+    changedOn,
+    changeLog,
+    barriers: wm ? barriersFromCheckins(wm.input.checkins.slice().sort((a: any, b: any) => String(b.date).localeCompare(String(a.date)))) : [],
+    firstName: String(client.full_name ?? "").trim().split(/\s+/)[0] || null,
   };
-  return { quality: scoreProgram(input, ctx), blockId: firstLive };
+  return { quality: scoreProgram(input, ctx), blockId: firstLive, pending: await pendingProgramProposal(sb, clientId) };
 }

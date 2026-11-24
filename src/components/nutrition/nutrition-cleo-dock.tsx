@@ -7,6 +7,12 @@
  * the plan with one tap, Undo after). It opens from the Current plan card,
  * from plan quality's Optimize, and from a recommendation (the prefill event),
  * with the words in the box, never sent or applied by itself.
+ *
+ * One way in on the tab (Nov 24 2026): the plan-quality strip's Optimize and Ask
+ * Cleo, then the closed dock's handle once the strip has scrolled away (or with
+ * no plan yet, when there's no strip). The Current plan card's own entry
+ * (NutritionCleoEntry) is only for where no dock is mounted: a quick sheet from
+ * the Clients list, which takes the coach to the tab.
  */
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +37,9 @@ export const NUTRITION_QUICK_ASKS = [
   "Review everything before I publish",
   "Make the rest days easier to stick to",
 ];
+
+/** The strip's Cleo buttons (or the strip while it loads): the tab's one way into Cleo. */
+const NUTRITION_CLEO_ANCHOR = "[data-plan-intelligence='nutrition'] [data-quality-actions], [data-plan-intelligence='nutrition'][aria-busy]";
 
 /** Clients whose Nutrition tab has its dock mounted (a quick sheet from the Clients list doesn't). */
 const mounted = new Set<string>();
@@ -120,7 +129,7 @@ export function NutritionCleoDock({ clientId }: { clientId: string }) {
   }, [clientId, dockAsk, dockOptimize]);
 
   return (
-    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo}>
+    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo} handle={NUTRITION_CLEO_ANCHOR} conversationClientId={clientId}>
       <DockBrief dock={dock} />
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-nutrition-cleo>
         <p className="text-[13px] leading-snug text-muted-foreground">

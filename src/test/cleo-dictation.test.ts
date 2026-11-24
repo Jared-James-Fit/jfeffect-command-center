@@ -9,7 +9,7 @@ const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "u
 
 describe("Cleo dictation", () => {
   const mic = read("hooks/use-summer-mic.ts");
-  const chat = read("components/admin/books/summer-chat.tsx");
+  const chat = read("components/cleo/cleo-panel.tsx");
   const inbox = read("route-pages/_authenticated/admin/messages.tsx");
 
   it("never stops on silence while dictating; only a tap or the cap ends it", () => {
@@ -19,21 +19,14 @@ describe("Cleo dictation", () => {
     expect(mic).toMatch(/timer = window\.setTimeout\(\(\) => finish\(true\), maxMs\);/);
   });
 
-  it("the chat dictates for up to 5 minutes with an obvious Send", () => {
-    expect(chat).toContain("useSummerMic({ dictate: true, maxMs: DICTATION_MAX_MS })");
-    expect(chat).toContain("const DICTATION_MAX_MS = 5 * 60_000;");
-    expect(chat).toContain("Send to {ASSISTANT_NAME}");
+  it("the panel dictates up to 5 minutes into the box, to read and change before sending", () => {
+    const composer = read("components/cleo/cleo-composer.tsx");
+    expect(composer).toContain("useSummerMic({ dictate: true, maxMs: DICTATION_MAX_MS })");
+    expect(composer).toContain("export const DICTATION_MAX_MS = 5 * 60_000;");
+    // the words go in the box; nothing is sent until they tap Send
+    expect(composer).toContain("insert(text);");
+    expect(chat).toContain("transcribe={transcribe}");
     expect(chat).not.toMatch(/PhoneOff|Call Cleo|End call/);
-  });
-
-  it("after Cleo answers it's your turn: one tap keeps the conversation going", () => {
-    expect(chat).toMatch(/if \(turn === turnRef\.current\) setVoiceState\("ready"\);/);
-    expect(chat).toContain("Keep talking");
-    // The orb sends while listening, and otherwise starts listening (cutting Cleo off).
-    expect(chat).toContain("onClick={listening ? onSend : onTalk}");
-    expect(chat).toContain("onTalk={startDictation}");
-    // Nothing listens on its own: "ready" waits for the tap.
-    expect(chat).not.toMatch(/setVoiceState\("ready"\);\s*\n\s*void dictate\(\)/);
   });
 
   it("Cleo's row in Messages opens straight into dictation with a mic", () => {
@@ -53,15 +46,16 @@ describe("Cleo in admin has no floating button", () => {
     expect(assistant).not.toContain('aria-label="Chat with Cleo"');
     expect(assistant).not.toMatch(/fixed right-4/);
     expect(styles).not.toContain(".summer-fab");
-    expect(assistant).toContain("<SummerChat");
+    expect(assistant).toContain("<CleoPanel />");
   });
 
   it("still opens from Messages, the shortcut and Cleo's pushes", () => {
     // Mounted for whoever has Cleo (the admin always; finance and coaches by switch).
     expect(layout).toContain("{cleoOn && <SummerAssistant />}");
-    expect(assistant).toContain('window.addEventListener("summer:open", onOpen);');
-    expect(assistant).toMatch(/e\.shiftKey && \(e\.key === "S" \|\| e\.key === "s"\)/);
-    expect(assistant).toContain('if (hash !== "cleo" && hash !== "#cleo") return;');
+    const panel = read("components/cleo/cleo-panel.tsx");
+    expect(panel).toContain('window.addEventListener("summer:open", onOpen);');
+    expect(panel).toMatch(/e\.shiftKey && \(e\.key === "S" \|\| e\.key === "s"\)/);
+    expect(panel).toContain('if (hash !== "cleo" && hash !== "#cleo") return;');
   });
 });
 
