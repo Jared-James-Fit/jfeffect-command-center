@@ -289,7 +289,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   if (viewOnly)
     return (
       <>
-        <PageHeader title="Program Intelligence" backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
+        <PageHeader title="Program Intelligence" backTo={`/admin/clients/${clientId}?tab=training`} backLabel="Training" />
         <div className="p-4 text-sm text-muted-foreground">Generating programs is for coaches. It isn't available in a view-only login.</div>
       </>
     );
@@ -347,7 +347,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   };
   return (
     <>
-      <PageHeader title="Program Intelligence" subtitle={name || undefined} backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
+      <PageHeader title="Program Intelligence" subtitle={name || undefined} backTo={`/admin/clients/${clientId}?tab=training`} backLabel="Training" />
       <div className="mx-auto w-full max-w-3xl space-y-4 p-3 pb-28 sm:p-6" data-testid="next-program-workstation">
         {records.isLoading || !intel || !setup ? (
           records.isError ? (

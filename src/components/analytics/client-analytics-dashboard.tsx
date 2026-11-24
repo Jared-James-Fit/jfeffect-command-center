@@ -833,7 +833,7 @@ export function ClientAnalyticsDashboard({
   };
 
   const openWorkout = (dayId: string) => {
-    if (coach) void navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+    if (coach) void navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any });
     else void navigate({ to: "/portal/workouts/$dayId", params: { dayId } });
   };
   const widen = () => handleFilterChange(lifetimeFilter(clientBlocks, firstDataDate));

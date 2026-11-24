@@ -351,8 +351,9 @@ function WorkoutPeekBody({
           ))
         )}
         <Link
-          to="/admin/client-programs/$clientId"
-          params={{ clientId }}
+          to="/admin/clients/$id"
+          params={{ id: clientId }}
+          search={{ tab: "training" } as any}
           className="flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
         >
           <ExternalLink className="h-3.5 w-3.5" /> Open full program

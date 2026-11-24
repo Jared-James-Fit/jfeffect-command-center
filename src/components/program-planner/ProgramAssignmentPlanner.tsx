@@ -454,7 +454,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
           if (!v) {
             setSuccessInfo(null);
             if (onDone) onDone();
-            else navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+            else navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any });
           }
         }}
       >
@@ -475,7 +475,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
               onClick={() => {
                 setSuccessInfo(null);
                 if (onDone) onDone();
-                else navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+                else navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any });
               }}
             >
               Done

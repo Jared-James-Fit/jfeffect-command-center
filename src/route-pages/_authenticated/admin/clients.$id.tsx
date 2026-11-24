@@ -561,7 +561,7 @@ export function ClientProfileWorkspace({
             <Dumbbell className="mr-2 h-4 w-4" />Today's workout
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId", params: { clientId: id } })}>
+        <DropdownMenuItem onSelect={() => navigate({ to: "/admin/clients/$id", params: { id: id }, search: { tab: "training" } as any })}>
           <Dumbbell className="mr-2 h-4 w-4" />Training program
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId/history", params: { clientId: id } })}>

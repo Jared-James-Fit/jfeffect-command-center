@@ -704,7 +704,7 @@ function SessionDetailSheet({
             </Button>
             {canOpenLog ? (
               <Button asChild size="lg" className="w-full">
-                <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
+                <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "training" } as any}>
                   <ExternalLink className="mr-2 h-4 w-4" /> Open in program
                 </Link>
               </Button>
