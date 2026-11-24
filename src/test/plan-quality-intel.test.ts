@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { finishQuality, opportunitiesOf, optimizeAskFrom, verdictOf, type QualityCategory } from "@/lib/plan-quality";
+import { CRITICAL_LOW, FOLLOW_CONCERN, finishQuality, isReviewAsk, MIN_JUDGED, OPPORTUNITY_BELOW, opportunitiesOf, optimizeAskFrom, SETTLE_DAYS, UNPROVEN_MAX, verdictOf, WEAK_SPOT, type QualityCategory, type QualityConcern } from "@/lib/plan-quality";
+import { briefAsk, briefItems } from "@/components/plan-quality/plan-intelligence";
 import { scoreProgram, type ProgramQualityContext } from "@/lib/program-quality";
 import type { CheckExercise, CheckInput } from "@/lib/program-check";
 import { scoreCardioPlan, type CardioScoreContext } from "@/lib/cardio/quality";
@@ -43,22 +44,23 @@ describe("one quality model: design apart from how it's followed", () => {
     expect(unknown.action).toBe("review");
   });
 
-  it("working: well designed, followed and on track says nothing needs changing", () => {
+  it("working: well designed, followed and on track says keep it as is", () => {
     const v = verdictOf(90, good, { adherence: { pct: 90, label: "" }, outcome: { status: "on_track", label: "" } });
     expect(v.kind).toBe("working");
     expect(v.action).toBe("none");
-    expect(v.headline).toBe("Well designed, followed (90%) and results are on track. Nothing needs changing.");
+    expect(v.headline).toBe("Keep it as is: well designed, followed (90%) and results are on track.");
   });
 
-  it("ranks what would help most by how much it lifts the score, and asks Cleo for now vs proposed, why and impact", () => {
+  it("asks Cleo for what matters most in order, with now vs proposed, why and the effect", () => {
     const opp = opportunitiesOf([cat("a", 50, 0.3), cat("b", 80, 0.1), cat("c", 95, 0.6)]);
     expect(opp.map((o) => o.key)).toEqual(["a", "b"]);
     expect(opp[0].impact).toBe("high");
     const q = finishQuality([cat("a", 50, 0.3), cat("c", 95, 0.6)], { what: "cardio plan", points: 4, missing: [] });
-    expect(q.optimize).toMatch(/^Optimize the cardio plan\. In order of expected impact:\n1\. a note/);
-    expect(q.optimize).toMatch(/what it is now, what you'd change it to, why, and how much it should help/);
+    expect(q.optimize).toMatch(/^Optimize the cardio plan\. What matters most for them, in order:\n1\. a note/);
+    expect(q.optimize).toMatch(/what it is now, what you'd change it to, why, and the effect you expect/);
     expect(q.optimize).toMatch(/Keep what's working: c: c note/);
-    expect(optimizeAskFrom("x", { ...q, opportunities: [] })).toBeNull();
+    expect(q.optimize).toMatch(/Don't change anything just to tidy the plan/);
+    expect(optimizeAskFrom("x", { ...q, opportunities: [], concerns: [] })).toBeNull();
   });
 
   it("working on its own terms but pulled on by another plan is worth a look, and says why", () => {
@@ -391,5 +393,229 @@ describe("one signature strip on every management tab", () => {
   it("the training Cleo reads the client's cardio and nutrition too", () => {
     expect(read("src/lib/program-ai/worker.server.ts")).toMatch(/otherPlansForTraining\(admin, athleteId\)/);
     expect(read("src/lib/program-ai/prompts.ts")).toMatch(/THEIR OTHER PLANS/);
+  });
+});
+
+/* ── Nov 24 2026: concerns before the score, importance over points, keep vs change, no inflation ── */
+
+describe("intervention never rests on the overall score alone", () => {
+  const crit = (key: string, score: number, weight: number, why: string, note = `${key} note`): QualityCategory => ({ ...cat(key, score, weight, note), critical: why });
+
+  it("a high overall score never hides a weak category critical for this client", () => {
+    const q = finishQuality([cat("goal", 97, 0.3), cat("dose", 96, 0.3), crit("recovery", 70, 0.15, "they lift heavy", "Hard cardio the day before heavy squats")], {
+      what: "cardio plan",
+      points: 4,
+      missing: [],
+      execution: { adherence: { pct: 92, label: "" }, outcome: { status: "on_track", label: "" } },
+    });
+    expect(q.score!).toBeGreaterThanOrEqual(85);
+    expect(q.band).toBe("strong");
+    expect(q.concerns.map((c) => c.category)).toEqual(["recovery"]);
+    expect(q.verdict.kind).toBe("concern");
+    expect(q.verdict.action).toBe("act");
+    expect(q.verdict.headline).toMatch(/^Strong overall \(\d+\), but recovery matters most for them right now \(they lift heavy\), and it's weak: hard cardio the day before heavy squats\./);
+    expect(70).toBeLessThan(CRITICAL_LOW);
+  });
+
+  it("any category under the weak-spot line is a concern, whatever the rest says", () => {
+    const q = finishQuality([cat("goal", 98, 0.4), cat("dose", 98, 0.4), cat("efficiency", WEAK_SPOT - 5, 0.08, "A session over an hour")], { what: "cardio plan", points: 4, missing: [] });
+    expect(q.score!).toBeGreaterThanOrEqual(85);
+    expect(q.concerns[0]).toMatchObject({ category: "efficiency", reason: "weak_spot", severity: "significant" });
+    expect(q.verdict.kind).toBe("concern");
+  });
+
+  it("an urgent flag (an allergen on the plan) comes first, even before not having enough data", () => {
+    const allergen: QualityCategory = { ...cat("food", 60, 0.1, "Against what's on file: cooked shrimp (shellfish allergy)"), concerns: [{ text: "On the plan against an allergy on file: cooked shrimp", severity: "urgent", reason: "safety" }] };
+    const thin = finishQuality([allergen, cat("goal", null), cat("protein", null)], { what: "nutrition plan", points: 1, missing: ["A recent bodyweight"] });
+    expect(thin.score).toBeNull();
+    expect(thin.verdict.kind).toBe("concern");
+    expect(thin.verdict.headline).toMatch(/^On the plan against an allergy on file: cooked shrimp\. This comes first\./);
+    const full = finishQuality([allergen, cat("goal", 95), cat("protein", 95)], { what: "nutrition plan", points: 4, missing: [] });
+    expect(full.verdict.headline).toMatch(/The rest of the plan reads well \(\d+\), but this comes first\./);
+  });
+
+  it("recovery slipping is a concern worth a look, and lifts recovery work up the list", () => {
+    const q = scoreProgram(input([hypertrophyBlock()]), pctx({ lowerPerformance: "down", recoveryFlags: 1 }));
+    expect(q.recovery).toMatch(/Recovery looks to be slipping/);
+    expect(q.concerns.some((c) => c.key === "recovery" && c.category == null)).toBe(true);
+    expect(q.verdict.kind).toBe("concern");
+    expect(q.verdict.action).toBe("review");
+    expect(q.optimize).toMatch(/hold off adding anything until that's understood/);
+    expect(q.categories.find((c) => c.key === "fatigue")!.critical).toMatch(/lower-body strength is down/);
+  });
+
+  it("very low adherence is its own concern; under the follow line it's a conversation", () => {
+    const q = finishQuality([cat("goal", 95), cat("dose", 95), cat("recovery", 95)], { what: "cardio plan", points: 4, missing: [], execution: { adherence: { pct: FOLLOW_CONCERN - 10, label: "4 of 10 planned sessions done in 4 weeks" }, outcome: null } });
+    expect(q.concerns.map((c) => c.key)).toEqual(["adherence"]);
+    expect(q.verdict.kind).toBe("follow_through");
+  });
+
+  it("pain that's getting worse and still loaded is urgent; loads running heavier than written is a recovery concern", () => {
+    const pain = { key: "shoulder", label: "Shoulder", sides: [], reports: 3, days: 3, first: "2026-11-02", last: "2026-11-20", worst: 6, trend: "worse" as const, evidence: [] as string[] };
+    const b = hypertrophyBlock();
+    const athlete = { sessionLimit: { minutes: 75, source: "goals" as const, pt: null, stated: 75, phrase: "", short: "75 min" }, equipment: null, pain: [{ ...pain, sides: [] }] };
+    const q = scoreProgram(input([b], athlete), pctx({ effort: { rated: 10, harder: 6 } }));
+    const kinds = q.concerns.map((c) => `${c.category}:${c.severity}:${c.reason}`);
+    expect(kinds).toContain("fatigue:significant:recovery");
+    expect(kinds).toContain("selection:urgent:safety");
+    expect(q.concerns[0]).toMatchObject({ category: "selection", severity: "urgent" });
+    expect(q.concerns[0].text).toMatch(/Shoulder pain is getting worse and the program still loads it/);
+    expect(q.verdict.kind).toBe("concern");
+    expect(q.verdict.action).toBe("act");
+    expect(q.verdict.headline).toMatch(/^Shoulder pain is getting worse and the program still loads it\. The rest of the plan reads well \(\d+\), but this comes first\./);
+  });
+});
+
+describe("what would help is ranked by importance, never by points", () => {
+  it("a concern in a small category outranks a bigger gap with nothing behind it", () => {
+    const cats = [cat("order", 70, 0.5, "Isolation work before the main lift"), cat("fatigue", 80, 0.2, "Loads heavier than written")];
+    const concerns: QualityConcern[] = [{ key: "fatigue:0", category: "fatigue", label: "Fatigue", text: "The loads you set are running heavier than written", severity: "significant", reason: "recovery" }];
+    const byPoints = opportunitiesOf(cats);
+    expect(byPoints[0].key).toBe("order");
+    const byImportance = opportunitiesOf(cats, { concerns });
+    expect(byImportance.map((o) => o.key)).toEqual(["fatigue", "order"]);
+    expect(byImportance[0]).toMatchObject({ title: "The loads you set are running heavier than written", reason: "Recovery", impact: "high", optional: false });
+  });
+
+  it("what's critical for this client, and what their adherence or results back up, come before plain gaps", () => {
+    const cats = [cat("order", 72, 0.3, "Order"), { ...cat("sustain", 82, 0.15, "A 50-min walk is hard to keep up") }];
+    const plain = opportunitiesOf(cats);
+    expect(plain[0].key).toBe("order");
+    const backed = opportunitiesOf(cats, { execution: { adherence: { pct: 55, label: "" }, outcome: null } });
+    expect(backed[0].key).toBe("sustain");
+    expect(backed[0].reason).toBe("Following it");
+  });
+
+  it("on a plan to keep, gaps without a concern are optional fine-tuning; the threshold for listing stays 90", () => {
+    const q = finishQuality([cat("goal", 96, 0.3), cat("dose", 94, 0.3), cat("order", 84, 0.1, "Could move between fewer stations")], {
+      what: "training program",
+      points: 4,
+      missing: [],
+      execution: { adherence: { pct: 95, label: "" }, outcome: { status: "on_track", label: "" } },
+    });
+    expect(OPPORTUNITY_BELOW).toBe(90);
+    expect(q.verdict.kind).toBe("working");
+    expect(q.opportunities.map((o) => [o.key, o.optional])).toEqual([["order", true]]);
+    expect(isReviewAsk(q.optimize)).toBe(true);
+    expect(q.optimize).toMatch(/Keeping it as it is is a good answer when it's working/);
+  });
+
+  it("the ask never mentions a score or points, so nothing is changed to chase a number", () => {
+    for (const q of [
+      finishQuality([cat("a", 50, 0.3), cat("b", 80, 0.2), cat("c", 95, 0.5)], { what: "cardio plan", points: 4, missing: [] }),
+      finishQuality([cat("goal", 96), cat("dose", 94), cat("order", 84)], { what: "training program", points: 4, missing: [] }),
+    ]) {
+      expect(q.optimize).not.toMatch(/\bscore|points?\b|\/100/i);
+    }
+  });
+});
+
+describe("Optimize with Cleo is always there", () => {
+  it("offers an ask for every scored plan: the ranked fixes, or a review that may say keep it", () => {
+    const working = finishQuality([cat("goal", 96), cat("dose", 95), cat("recovery", 93)], { what: "cardio plan", points: 4, missing: [] });
+    const weak = finishQuality([cat("goal", 40), cat("dose", 60), cat("recovery", 70)], { what: "cardio plan", points: 4, missing: [] });
+    expect(working.optimize).toBeTruthy();
+    expect(isReviewAsk(working.optimize)).toBe(true);
+    expect(weak.optimize).toMatch(/^Optimize the cardio plan\./);
+    const none = scoreCardioPlan({ sessions: [] }, cctx);
+    expect(none.score).toBeNull();
+    expect(isReviewAsk(none.optimize)).toBe(true);
+    expect(none.optimize).toMatch(/If no cardio is right for them, say so and why/);
+  });
+
+  it("the brief ticks what matters, leaves optional fine-tuning unticked, and nothing ticked is a review", () => {
+    const q = finishQuality([cat("goal", 96, 0.3), cat("dose", 94, 0.3), cat("order", 84, 0.1, "Could move between fewer stations")], { what: "training program", points: 4, missing: [] });
+    const items = briefItems(q);
+    expect(items.map((i) => [i.key, i.optional])).toEqual([["order", true]]);
+    expect(isReviewAsk(briefAsk({ domain: "training", what: "training program", quality: q, nonce: 1 }, new Set()))).toBe(true);
+    expect(briefAsk({ domain: "training", what: "training program", quality: q, nonce: 1 }, new Set(["order"]))).toMatch(/Optional, only if clearly worth it for them: could move between fewer stations/);
+    const r = scoreProgram(input([hypertrophyBlock()]), pctx({ lowerPerformance: "down", recoveryFlags: 1 }));
+    const ri = briefItems(r);
+    expect(ri[0]).toMatchObject({ key: "concern:recovery", concern: true, optional: false });
+  });
+});
+
+describe("no inflation after a change, and a thin read says so", () => {
+  it("a plan changed recently isn't judged on the old plan's results, can't reach top marks on them, and says give it time", () => {
+    const fresh = { ...nctx, trendStatus: "behind", changedOn: "2026-11-14", today: "2026-11-24" };
+    const q = scoreNutritionPlan(ndays, fresh);
+    const goal = q.categories.find((c) => c.key === "goal")!;
+    expect(goal.notes.join(" ")).not.toMatch(/targets aren't doing the job/);
+    expect(goal.score!).toBeLessThanOrEqual(UNPROVEN_MAX);
+    expect(goal.notes.join(" ")).toMatch(/New 10 days ago: their results will show whether these targets work/);
+    expect(q.settling).toEqual({ days: 10, window: SETTLE_DAYS.nutrition });
+    expect(q.provisional).toBe(true);
+    expect(q.confidence).not.toBe("high");
+    expect(q.verdict.kind).toBe("settling");
+    expect(q.verdict.headline).toBe("Changed 10 days ago: give it about 3 more weeks to show in their results before changing it again.");
+    expect(q.execution.outcome!.label).toMatch(/\(mostly before the change\)$/);
+    expect(q.optimize).toMatch(/don't undo a recent change before it's had time to work/);
+  });
+
+  it("cardio: on-track results don't flatter a new plan, and behind results don't count against it", () => {
+    const light: CardioPlan = { sessions: [{ ...newSession("treadmill_incline", "weekdays", cctx), weekdays: ["Wednesday"], minutes: 30 }] };
+    const goal = (t: string, lastChanged: string) => scoreCardioPlan(light, { ...cctx, trendStatus: t, lastChanged }).categories.find((c) => c.key === "goal")!.score!;
+    const old = "2026-10-01";
+    const recent = "2026-11-16";
+    expect(goal("on_track", old)).toBeGreaterThan(goal("on_track", recent));
+    expect(goal("on_track", recent)).toBe(goal("behind", recent));
+  });
+
+  it("too few categories to read is no number; a thin read is provisional and says what's missing", () => {
+    const none = finishQuality([cat("goal", 90), cat("dose", 90), cat("a", null), cat("b", null), cat("c", null), cat("d", null)], { what: "x", points: 1, missing: ["A bodyweight goal", "Their training days"] });
+    expect(MIN_JUDGED).toBe(3);
+    expect(none.score).toBeNull();
+    expect(none.verdict.headline).toBe("Not enough on file to score this plan yet: a bodyweight goal and their training days would let it read the plan.");
+    const thin = finishQuality([cat("goal", 95), cat("dose", 95), cat("e", 95), cat("a", null), cat("b", null), cat("c", null), cat("d", null), cat("f", null)], { what: "x", points: 1, missing: ["A bodyweight goal"] });
+    expect(thin.score).toBe(95);
+    expect(thin.confidence).toBe("low");
+    expect(thin.provisional).toBe(true);
+    expect(thin.verdict.headline).toBe("Looks sound on what's on file. Keep it as is; a bodyweight goal would make this read surer.");
+  });
+});
+
+describe("one standard, read for the client, in all three", () => {
+  it("each engine finishes through the shared model with its recovery trend and recent-change window", () => {
+    for (const f of ["src/lib/program-quality.ts", "src/lib/nutrition-targets/plan-quality.ts", "src/lib/cardio/quality.ts"]) {
+      const src = read(f);
+      expect(src).toMatch(/recoveryTrend\(/);
+      expect(src).toMatch(/settlingOf\("(training|nutrition|cardio)"/);
+      expect(src).toMatch(/finishQuality\([\s\S]*recovery, settling/);
+      expect(src).toMatch(/critical: /);
+    }
+  });
+
+  it("what's critical follows the client: a meet makes the timeline and goal critical; a deficit makes protein critical", () => {
+    const meet = scoreProgram(input([hypertrophyBlock()]), pctx({ style: "powerlifting", meet: { name: "Provincials", date: "2026-12-29", weeksOut: 5 } }));
+    expect(meet.categories.find((c) => c.key === "timeline")!.critical).toMatch(/a meet in 5 weeks/);
+    expect(scoreProgram(input([hypertrophyBlock()]), pctx()).categories.find((c) => c.key === "goal")!.critical).toBeNull();
+    const cut = scoreNutritionPlan(ndays, nctx);
+    expect(cut.categories.find((c) => c.key === "protein")!.critical).toBe("a cut");
+    expect(scoreNutritionPlan(ndays, { ...nctx, direction: "maintain" }).categories.find((c) => c.key === "protein")!.critical).toBeNull();
+  });
+});
+
+describe("one way into Cleo per page, and it stays reachable", () => {
+  it("no second Cleo button beside the strip on Training, Nutrition or the cardio builder", () => {
+    const training = read("src/components/clients/client-training-tab.tsx");
+    expect(training).not.toMatch(/Adjust with Cleo/);
+    expect(training).not.toMatch(/data-training-cleo/);
+    expect(read("src/route-pages/_authenticated/admin/clients.$id.tsx")).toContain('<NutritionTargetsPanel clientId={id} className="md:col-span-2" cleoEntry={false} />');
+    expect(read("src/components/nutrition-targets-panel.tsx")).toMatch(/\{cleoEntry && <NutritionCleoEntry clientId=\{clientId\} \/>\}/);
+    expect(read("src/components/cardio/cardio-builder.tsx")).not.toMatch(/<CleoLauncher/);
+  });
+
+  it("each tab's closed dock shows its handle once the strip's buttons scroll away", () => {
+    expect(read("src/components/clients/client-training-tab.tsx")).toMatch(/handle=\{focusId \? TRAINING_CLEO_ANCHOR : null\}/);
+    expect(read("src/components/nutrition/nutrition-cleo-dock.tsx")).toMatch(/handle=\{NUTRITION_CLEO_ANCHOR\}/);
+    expect(read("src/components/cardio/cardio-workspace.tsx")).toMatch(/handle=\{CARDIO_CLEO_ANCHOR\}/);
+    const dock = read("src/components/program-ai/cleo-dock.tsx");
+    expect(dock).toMatch(/const showHandle = !!handle && !dock\.open && !anchorInView/);
+    expect(dock).toMatch(/data-hide-on-keyboard/);
+    expect(read("src/components/plan-quality/plan-intelligence.tsx")).toMatch(/data-quality-actions/);
+  });
+
+  it("a review that keeps the plan says so instead of asking the coach to reword it", () => {
+    expect(read("src/components/nutrition/PlanAiChange.tsx")).toMatch(/isReviewAsk\(edit\.instructions\) \? "No changes: Cleo would keep the plan as it is\."/);
   });
 });

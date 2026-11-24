@@ -34,7 +34,7 @@ import { estimateDayMinutes } from "@/lib/pl-programs";
 import { mainLiftProgression, programCheck, type CheckFinding, type CheckInput, type ProgramStyle } from "@/lib/program-check";
 import { MUSCLE_DOSE, LIFT_DOSE, type ExperienceLevel } from "@/lib/program-intel/first-program";
 import { blockTypeFamily, resolveBlockType } from "@/lib/block-types";
-import { adherencePct, clampScore, finishQuality, FOLLOW_LOW, type QualityCategory, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
+import { adherencePct, clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, settlingOf, type CategoryConcern, type QualityCategory, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
 
 export type ProgramQualityContext = {
   today: string;
@@ -63,6 +63,8 @@ export type ProgramQualityContext = {
    */
   effort: { rated: number; harder: number } | null;
   checkins: number;
+  /** When the program last changed (the current block's start, or an applied Adjust program change). */
+  changedOn?: string | null;
 };
 
 const rows = (d: any) => ((d?.rows ?? []) as any[]).filter(Boolean);
@@ -236,7 +238,13 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
   const compLift = (l: Lift) => week.lifts[l];
   const connections: QualityConnection[] = [];
 
+  const meetIn = ctx.meet && ctx.meet.weeksOut >= 0 ? Math.round(ctx.meet.weeksOut) : null;
+  const harder = !!ctx.effort && ctx.effort.rated >= 6 && ctx.effort.harder / ctx.effort.rated >= 0.4;
+  const recovery = recoveryTrend({ lowerPerformance: ctx.lowerPerformance, recoveryFlags: ctx.recoveryFlags, harderThanWritten: harder });
+  const settling = settlingOf("training", ctx.changedOn ?? null, ctx.today);
+
   // ── Goal alignment ──
+  const goalConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s: number | null = 100;
@@ -256,6 +264,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
           if (!x.sets) {
             s -= meetSoon ? 25 : 12;
             notes.push(`No ${l} in the current week${meetSoon ? " with a meet coming" : ""}`);
+            if (meetSoon) goalConcerns.push({ text: `No ${l} in the current week with a meet ${Math.round(ctx.meet!.weeksOut)} weeks out`, severity: "significant", reason: "timeline" });
           } else if (!x.comp && meetSoon && ctx.meet!.weeksOut <= 10) {
             s -= 10;
             notes.push(`Only ${l} variations ${Math.round(ctx.meet!.weeksOut)} weeks from the meet`);
@@ -281,16 +290,21 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       }
       if (!notes.length) notes.push(`Fits a ${style === "general" ? "general fitness" : style} goal`);
     }
-    cats.push({ key: "goal", label: "Goal alignment", score: s == null ? null : clampScore(s), weight: 0.14, notes });
+    cats.push({ key: "goal", label: "Goal alignment", score: s == null ? null : clampScore(s), weight: 0.14, notes, critical: meetIn != null && meetIn <= 16 ? `a meet in ${meetIn} weeks` : null, concerns: goalConcerns });
   }
 
   // ── Exercise selection and suitability ──
   {
     const notes: string[] = [];
     let s = 100;
-    for (const f of byId(findings, "warning:pain")) {
+    const concerns: CategoryConcern[] = [];
+    const pain = byId(findings, "warning:pain");
+    for (const f of pain) {
       s -= 15;
-      notes.push(`${f.title.split(":")[0]} pain on file and the program loads it`);
+      const place = f.title.split(":")[0];
+      notes.push(`${place} pain on file and the program loads it`);
+      const worst = Number(/worst (\d+)\/10/.exec(f.title)?.[1] ?? 0);
+      concerns.push({ text: `${place} pain${/getting worse/.test(f.title) ? " is getting worse" : " is on file"} and the program still loads it`, severity: /getting worse/.test(f.title) || worst >= 7 ? "urgent" : "significant", reason: "safety" });
     }
     const equip = findings.find((f) => f.id === "warning:equipment");
     if (equip) {
@@ -321,7 +335,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       notes.push(cues.title);
     }
     if (!notes.length) notes.push("Stable, loadable exercises that suit their equipment and what's on file");
-    cats.push({ key: "selection", label: "Exercise selection", score: clampScore(s), weight: 0.12, notes });
+    cats.push({ key: "selection", label: "Exercise selection", score: clampScore(s), weight: 0.12, notes, critical: pain.length ? "pain on file" : null, concerns });
   }
 
   // ── Volume, intensity and frequency (against their level) ──
@@ -415,9 +429,11 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
         }
       }
     }
-    if (ctx.effort && ctx.effort.rated >= 6 && ctx.effort.harder / ctx.effort.rated >= 0.4) {
+    const concerns: CategoryConcern[] = [];
+    if (harder && ctx.effort) {
       s -= 15;
       notes.push(`${ctx.effort.harder} of ${ctx.effort.rated} sets at the loads you set ran 1.5+ RPE over target lately: the loads are heavier than written`);
+      concerns.push({ text: `The loads you set are running heavier than written (${ctx.effort.harder} of ${ctx.effort.rated} sets 1.5+ RPE over target lately)`, severity: "significant", reason: "recovery" });
     }
     if (ctx.recoveryFlags >= 2 && highVolume) {
       s -= 10;
@@ -441,7 +457,8 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
         connections.push({ domain: "cardio", text: "Lower-body strength is down while some cardio is hard or high-impact (a pattern, not a confirmed cause)" });
     }
     if (!notes.length) notes.push("Fatigue is spread sensibly across sessions and weeks");
-    cats.push({ key: "fatigue", label: "Fatigue and recovery", score: clampScore(s), weight: 0.12, notes });
+    const why = [ctx.recoveryFlags >= 2 && "sleep or energy flagged", ctx.deficitPct != null && ctx.deficitPct < -15 && "a calorie deficit", ctx.lowerPerformance === "down" && "lower-body strength is down", harder && "loads running heavier than written"].filter(Boolean) as string[];
+    cats.push({ key: "fatigue", label: "Fatigue and recovery", score: clampScore(s), weight: 0.12, notes, critical: why.length ? why.join(", ") : null, concerns });
   }
 
   // ── Progressive overload and periodization ──
@@ -465,7 +482,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       notes.push(`${untyped === input.blocks.length ? "No block type set" : `${untyped} block${untyped === 1 ? "" : "s"} with no type set`} (read from the name)`);
     }
     if (!notes.length) notes.push(prog.total ? "Main lifts progress week to week" : "Progression is set for the work that needs it");
-    cats.push({ key: "progression", label: "Progression and periodization", score: clampScore(s), weight: 0.12, notes });
+    cats.push({ key: "progression", label: "Progression and periodization", score: clampScore(s), weight: 0.12, notes, critical: ctx.lowerPerformance === "down" && adh != null && adh >= FOLLOW_LOW ? "strength is down while they follow it" : null });
   }
 
   // ── Exercise order and equipment efficiency ──
@@ -499,6 +516,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
   }
 
   // ── Individualization ──
+  const indConcerns: CategoryConcern[] = [];
   {
     const notes: string[] = [];
     let s = 100;
@@ -523,11 +541,12 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       if (maxEffort) {
         s -= 10;
         notes.push("Singles or RPE 9.5+ on the main lifts for a beginner");
+        indConcerns.push({ text: "Singles or RPE 9.5+ on the main lifts for a beginner", severity: "significant", reason: "safety" });
       }
     }
     if (!input.athlete?.equipment || input.athlete.equipment.confidence === "unknown") notes.push("Equipment isn't on file, so it's checked by exercise name only");
     if (!notes.length || (notes.length === 1 && /equipment/i.test(notes[0]))) notes.unshift("Fits their days, maxes and experience");
-    cats.push({ key: "individual", label: "Individualization", score: clampScore(s), weight: 0.1, notes });
+    cats.push({ key: "individual", label: "Individualization", score: clampScore(s), weight: 0.1, notes, concerns: indConcerns });
   }
 
   // ── Session duration and sustainability ──
@@ -537,10 +556,14 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
     const far = findings.find((f) => f.id === "warning:duration");
     const near = findings.find((f) => f.id === "decision:duration");
     const slots = (input.blocks[live!.bi].weeks[live!.wi].days ?? []).filter((d) => rows(d).length).length;
+    const concerns: CategoryConcern[] = [];
+    const pt = input.athlete?.sessionLimit?.source === "pt";
     if (far) {
       // every workout well past their limit is the program's shape, not a slip
-      s -= far.at.length >= Math.max(2, slots) ? 45 : Math.min(30, far.at.length * 10);
+      const every = far.at.length >= Math.max(2, slots);
+      s -= every ? 45 : Math.min(30, far.at.length * 10);
       notes.push(far.title);
+      if (every && (pt || (adh != null && adh < FOLLOW_LOW))) concerns.push({ text: `Every workout runs well past ${input.athlete?.sessionLimit?.phrase ?? "their session limit"}`, severity: "significant", reason: "adherence" });
     }
     if (near) {
       s -= Math.min(15, near.at.length * 4);
@@ -557,7 +580,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       notes.push(`Only ${adh}% of workouts done lately, which fits sessions running long`);
     }
     if (!notes.length) notes.push(mins.length ? `About ${Math.min(...mins)}–${longest} min a session${input.athlete?.sessionLimit?.minutes ? `, inside ${input.athlete.sessionLimit.short}` : ""}` : "Sessions are a sensible length");
-    cats.push({ key: "duration", label: "Session length", score: clampScore(s), weight: 0.1, notes });
+    cats.push({ key: "duration", label: "Session length", score: clampScore(s), weight: 0.1, notes, critical: pt ? "a booked PT session" : adh != null && adh < FOLLOW_LOW ? "they're missing workouts" : null, concerns });
   }
 
   // ── Competition timeline (only with a meet) ──
@@ -568,9 +591,11 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
     const ends = ctx.blocks.map((b) => b.end).filter((e): e is string => !!e).sort();
     const lastEnd = ends[ends.length - 1] ?? null;
     const weeksShort = lastEnd ? Math.round((Date.parse(`${meetDate}T00:00:00Z`) - Date.parse(`${lastEnd}T00:00:00Z`)) / (7 * 86_400_000)) : null;
+    const concerns: CategoryConcern[] = [];
     if (weeksShort != null && weeksShort >= 2) {
       s -= ctx.meet.weeksOut <= 12 ? 25 : 8;
       notes.push(`The program ends ${weeksShort} weeks before the meet${ctx.meet.weeksOut <= 12 ? "" : " (plan the final prep later)"}`);
+      if (ctx.meet.weeksOut <= 12) concerns.push({ text: `The program ends ${weeksShort} weeks before the meet`, severity: "significant", reason: "timeline" });
     }
     if (ctx.meet.weeksOut <= 8) {
       const families = input.blocks.map((b) => blockTypeFamily(resolveBlockType({ block_type: b.blockType, block_meta: b.blockMeta, phase: b.phase, training_focus: b.trainingFocus, name: b.name }, input.blockTypes).type));
@@ -579,11 +604,12 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       if (!peaks) {
         s -= 25;
         notes.push(`No peak or taper in the ${Math.round(ctx.meet.weeksOut)} weeks before the meet`);
+        concerns.push({ text: `No peak or taper in the ${Math.round(ctx.meet.weeksOut)} weeks before the meet`, severity: "significant", reason: "timeline" });
       }
     }
     if (!notes.length) notes.push(`Builds to ${ctx.meet.name ?? "the meet"} on ${meetDate}`);
-    cats.push({ key: "timeline", label: "Competition timeline", score: clampScore(s), weight: 0.08, notes });
+    cats.push({ key: "timeline", label: "Competition timeline", score: clampScore(s), weight: 0.08, notes, critical: ctx.meet.weeksOut <= 12 ? `a meet in ${Math.round(ctx.meet.weeksOut)} weeks` : null, concerns });
   }
 
-  return finishQuality(cats, { what: "training program", points, missing, execution, connections });
+  return finishQuality(cats, { what: "training program", points, missing, execution, connections, recovery, settling });
 }

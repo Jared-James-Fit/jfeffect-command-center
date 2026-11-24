@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { CleoLauncher, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
+import { type CleoDockHandle } from "@/components/program-ai/cleo-dock";
 import { CardioSessionEditor } from "@/components/cardio/cardio-session-editor";
 import { CardioWeek } from "@/components/cardio/cardio-week";
 import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
@@ -124,7 +124,6 @@ export function CardioBuilder({
             <Redo2 className="h-4 w-4" />
           </Button>
           <div className="hidden items-center gap-2 sm:flex">
-            <CleoLauncher dock={dock} compact />
             <Button className="h-10" onClick={() => setReviewOpen(true)} disabled={!changes.length} data-review-publish>
               {changes.length ? "Review & publish" : "No changes yet"}
             </Button>
@@ -132,7 +131,6 @@ export function CardioBuilder({
         </div>
         {/* a phone: the two actions get a row of their own */}
         <div className="mt-2 flex items-center gap-2 sm:hidden">
-          <CleoLauncher dock={dock} compact />
           <Button className="h-10 flex-1" onClick={() => setReviewOpen(true)} disabled={!changes.length}>
             {changes.length ? `Review & publish (${changes.length})` : "No changes to publish"}
           </Button>

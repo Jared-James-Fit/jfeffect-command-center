@@ -54,7 +54,6 @@ import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 import { CleoDock, useCleoDock, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
 import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
-import { CleoMark } from "@/components/summer/cleo-mark";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { getProgramQualityFn } from "@/lib/program-quality.functions";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
@@ -116,9 +115,9 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
   };
   return (
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
-      <ProgramQualityStrip clientId={clientId} dock={dock} className="lg:col-span-2" />
+      <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="lg:col-span-2" />
       <div className="min-w-0 space-y-4 lg:space-y-5">
-        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} dock={dock} onFocus={setFocusId} />
+        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} onFocus={setFocusId} />
         <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="min-w-0 scroll-mt-24">
           <Suspense fallback={<Card className="p-6 text-sm text-muted-foreground">Loading schedule…</Card>}>
             <ScheduleManagerShell clientId={clientId} mode="coach" />
@@ -129,8 +128,16 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
         <AthleteSetupCard clientId={clientId} client={client} />
         <ClientNotesCard clientId={clientId} name={name} />
       </div>
-      {/* Cleo, docked beside the tab: Adjust program's engine on their whole program */}
-      <CleoDock dock={dock} target={{ kind: "client", clientId, focusBlockId: focusId }} title={name ?? "Their program"} onApplied={afterApply} scopes={["program"]} />
+      {/* Cleo, docked beside the tab: Adjust program's engine on their whole program. Its one way in is
+          the strip's Optimize / Ask Cleo; once that's scrolled away the closed dock shows its handle. */}
+      <CleoDock
+        dock={dock}
+        target={{ kind: "client", clientId, focusBlockId: focusId }}
+        title={name ?? "Their program"}
+        onApplied={afterApply}
+        scopes={["program"]}
+        handle={focusId ? TRAINING_CLEO_ANCHOR : null}
+      />
     </div>
   );
 }
@@ -138,14 +145,15 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
 /* ─────────────────────────── Plan quality ─────────────────────────── */
 
 export const programQualityKey = (clientId: string) => ["program-quality", clientId] as const;
+/** The strip's Cleo buttons (or the strip while it loads): the tab's one way into Cleo. */
+const TRAINING_CLEO_ANCHOR = "[data-plan-intelligence='training'] [data-quality-actions], [data-plan-intelligence='training'][aria-busy]";
 
-/** The program's design score and verdict, with Optimize and Ask opening Cleo docked beside the tab. */
-function ProgramQualityStrip({ clientId, dock, className }: { clientId: string; dock: CleoDockHandle; className?: string }) {
+/** The program's design score and verdict, with Optimize and Ask opening Cleo docked beside the tab (the tab's one way in). */
+function ProgramQualityStrip({ clientId, dock, hasProgram, className }: { clientId: string; dock: CleoDockHandle; hasProgram: boolean; className?: string }) {
   const read = useServerFn(getProgramQualityFn);
   const cleo = useCleoAccess();
   const q = useQuery({ queryKey: programQualityKey(clientId), queryFn: () => read({ data: { clientId } }), staleTime: 60_000 });
   const quality = q.data?.quality ?? null;
-  const live = quality != null && quality.verdict.kind !== "none";
   return (
     <PlanIntelligence
       domain="training"
@@ -157,16 +165,15 @@ function ProgramQualityStrip({ clientId, dock, className }: { clientId: string; 
       onRetry={() => void q.refetch()}
       cleo={cleo}
       className={className}
-      onOptimize={live ? (x) => dock.optimize({ domain: "training", what: "training program", quality: x }) : undefined}
-      onAskCleo={live ? () => dock.ask() : undefined}
+      onOptimize={hasProgram ? (x) => dock.optimize({ domain: "training", what: "training program", quality: x }) : undefined}
+      onAskCleo={hasProgram ? () => dock.ask() : undefined}
     />
   );
 }
 
 /* ───────────────────────────── Program ───────────────────────────── */
 
-function ProgramCard({ clientId, clientName, trainingDays, dock, onFocus }: { clientId: string; clientName: string | null; trainingDays: string[] | null; dock: CleoDockHandle; onFocus?: (blockId: string | null) => void }) {
-  const cleo = useCleoAccess();
+function ProgramCard({ clientId, clientName, trainingDays, onFocus }: { clientId: string; clientName: string | null; trainingDays: string[] | null; onFocus?: (blockId: string | null) => void }) {
   const qc = useQueryClient();
   const placeWorkouts = useServerFn(rescheduleFromCommittedDays);
   const [placing, setPlacing] = useState(false);
@@ -421,19 +428,6 @@ function ProgramCard({ clientId, clientName, trainingDays, dock, onFocus }: { cl
             <Button variant="outline" className="min-h-[48px] px-4" onClick={() => setAddOpen(true)}>
               <Plus className="mr-1 h-4 w-4" /> Add
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="col-span-2 min-h-[48px] gap-1.5"
-              onClick={dock.toggle}
-              aria-pressed={dock.open}
-              data-testid="edit-with-ai"
-              data-training-cleo
-            >
-              {cleo ? <CleoMark size={16} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
-              {cleo ? "Adjust with Cleo" : "Adjust program"}
-            </Button>
-
           </div>
         ) : null}
       </div>

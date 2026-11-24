@@ -16,7 +16,7 @@ const SAFETY = /(eating disorder|anorexi|bulimi|binge|arfid|pregnan|breastfeed|n
 export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ quality: QualityScore | null; planId: string | null }> {
   const { data: plan } = await sb
     .from("nutrition_targets")
-    .select("id, start_date, phase, nutrition_target_days(day_label, calories, protein, carbs, fats, notes, use_on, sort_order)")
+    .select("id, start_date, phase, last_updated_at, nutrition_target_days(day_label, calories, protein, carbs, fats, notes, use_on, sort_order)")
     .eq("client_id", clientId)
     .neq("status", "Archived")
     .order("start_date", { ascending: false })
@@ -99,6 +99,9 @@ export async function nutritionQualityFor(sb: any, clientId: string): Promise<{ 
     meals,
     cardioMinutes,
     lowerPerformance: input.performance.lower,
+    // when the plan last changed: its start, or an edit since (Adjust plan, the editor)
+    changedOn: [plan.start_date, plan.last_updated_at ? String(plan.last_updated_at).slice(0, 10) : null].filter((d): d is string => !!d && d <= assessment.today).sort().pop() ?? null,
+    today: assessment.today,
   });
   return { quality, planId: plan.id };
 }

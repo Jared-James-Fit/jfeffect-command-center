@@ -226,6 +226,17 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
   }
 
   const meet = wm?.input.meet ?? null;
+  // when the program last changed: the current block's start, or the latest Adjust program change applied to it
+  const currentStart = (liveBlocks as Array<{ start_date: string | null }>).filter((b) => !!b.start_date && b.start_date <= today).map((b) => b.start_date as string).sort().pop() ?? null;
+  const lastEdit = await best(
+    async () => {
+      const { data, error } = await sb.from("program_ai_edits").select("applied_at").eq("client_id", clientId).eq("status", "applied").not("applied_at", "is", null).order("applied_at", { ascending: false }).limit(1);
+      if (error) throw new Error(error.message);
+      return ((data ?? [])[0]?.applied_at as string | undefined)?.slice(0, 10) ?? null;
+    },
+    null,
+  );
+  const changedOn = [currentStart, lastEdit].filter((d): d is string => !!d && d <= today).sort().pop() ?? null;
   const ctx: ProgramQualityContext = {
     today,
     level: wm?.input.level ?? null,
@@ -241,6 +252,7 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
     adherence: planned ? { done, planned } : null,
     effort: rated ? { rated, harder } : null,
     checkins: wm?.assessment.checkins.count ?? 0,
+    changedOn,
   };
   return { quality: scoreProgram(input, ctx), blockId: firstLive };
 }
