@@ -84,6 +84,14 @@ export function CameraRoll({
   const [picks, setPicks] = useState<Record<string, string | null>>({});
   const [progress, setProgress] = useState<Record<string, number>>({});
   const gen = useRef(0);
+  // New post closed mid-load: nothing that lands afterwards goes in the tray (or starts uploading)
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const staged = useRef<string | null>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -281,7 +289,7 @@ export function CameraRoll({
     setPicks((p) => (single ? { [a.id]: null } : { ...p, [a.id]: null }));
     staged.current = a.id;
     onStage(a.thumb ?? null);
-    const stale = () => single && gen.current !== mine;
+    const stale = () => !alive.current || (single && gen.current !== mine);
     try {
       const res = await loadRollFile(a, {
         cancelled: stale,
