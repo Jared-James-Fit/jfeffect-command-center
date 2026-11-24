@@ -529,6 +529,8 @@ export function ShareWorkoutButton({
             allowNoPhoto={activeMode !== "meal" && activeMode !== "fx"}
             card={activeMode === "post" ? null : cameraCard}
             post={activeMode === "lockin" ? lockPost : activeMode === "workout" ? workout.post : activeMode === "meal" ? mealPost : plainPost}
+            // the chip's room stays under the picture while a lock in's or workout's filter is in the row (so switching never resizes it)
+            chipRoom={row.items.some((i) => i.key.startsWith("lockin:") || i.key.startsWith("workout:"))}
             // the lock in's and the workout's say what they're for; the rest need no chip (the filter's name is over the shutter)
             chip={
               activeMode === "lockin" && today ? (

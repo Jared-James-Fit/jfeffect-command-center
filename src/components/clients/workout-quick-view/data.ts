@@ -31,10 +31,12 @@ export function peekScheduleQuery(fetchFn: ScheduleFn, clientId: string) {
   });
 }
 
+// Also what the logger's load guidance reads (card-suggestion.ts): the exercise's id and
+// lift fields, the coach's override and rounding, and the top set a back-off follows.
 const ROW_COLS =
-  "id, day_id, sort_order, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, load_unit, rest_seconds, rest_seconds_override, tempo, notes, measurement_type, tracking_type, duration_seconds, purpose_label, movement_family, cardio_target_id, exercises(name, primary_muscle_group, muscle_group, equipment, cues, video_url, vimeo_url, youtube_url)";
+  "id, day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, manual_override, load_round, basis_row_id, load_kg, load_lb, load_unit, rest_seconds, rest_seconds_override, tempo, notes, measurement_type, tracking_type, duration_seconds, purpose_label, movement_family, cardio_target_id, exercises(id, name, primary_muscle_group, muscle_group, equipment, cues, video_url, vimeo_url, youtube_url, default_load_type, default_measurement_type, exercise_category, is_competition_lift, competition_lift_type, movement_family)";
 const RESULT_COLS =
-  "id, row_id, scheduled_workout_id, set_index, actual_reps, actual_load, actual_load_lb, actual_load_kg, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_rpe, actual_rpe_num, actual_rir, completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit, notes, completed_at, is_working_set";
+  "id, row_id, scheduled_workout_id, set_index, actual_reps, actual_load, actual_load_lb, actual_load_kg, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_rpe, actual_rpe_num, actual_rir, completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit, notes, completed_at, is_working_set, load_type, is_bodyweight, equipment_id";
 const DAY_COLS = "id, title, subtitle, focus, notes, notes_client_visible, is_optional, day_index";
 const COMPLETION_COLS = "id, day_id, scheduled_workout_id, started_at, in_progress_at, completed_at, client_notes";
 const FEEDBACK_COLS = "overall_rating, session_rpe, client_note, pain, pain_area, pain_level, hit_target, fatigue_feel, strength_feel";
@@ -108,6 +110,7 @@ export type PeekClientRecord = {
   created_at: string | null;
   committed_training_days: string[] | null;
   preferred_weight_unit: string | null;
+  weight_unit_confirmed_at?: string | null;
   date_of_birth: string | null;
   assigned_coach_id: string | null;
   bodyweight_goal_type: string | null;
@@ -117,7 +120,7 @@ export type PeekClientRecord = {
 };
 
 const CLIENT_COLS =
-  "id, full_name, profile_picture_url, email, phone, coaching_type, status, archived, service_tier, last_signed_in_at, last_active_at, created_at, committed_training_days, preferred_weight_unit, date_of_birth, assigned_coach_id, bodyweight_goal_type, bodyweight_goal_value, bodyweight_goal_unit, bodyweight_goal_date";
+  "id, full_name, profile_picture_url, email, phone, coaching_type, status, archived, service_tier, last_signed_in_at, last_active_at, created_at, committed_training_days, preferred_weight_unit, weight_unit_confirmed_at, date_of_birth, assigned_coach_id, bodyweight_goal_type, bodyweight_goal_value, bodyweight_goal_unit, bodyweight_goal_date";
 
 export function peekClientQuery(clientId: string) {
   return queryOptions({

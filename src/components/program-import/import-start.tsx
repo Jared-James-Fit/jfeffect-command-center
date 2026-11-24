@@ -84,6 +84,8 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
   const [paste, setPaste] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState<null | "reading" | "uploading" | "sending">(null);
+  // Which file is going up, of how many ("Uploading 2 of 5…"): real counts, never a made-up percent.
+  const [uploadStep, setUploadStep] = useState<{ at: number; of: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needAgree, setNeedAgree] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -206,6 +208,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
         const folder = crypto.randomUUID();
         let total = 0;
         for (const [i, f] of picked.files.entries()) {
+          setUploadStep({ at: i + 1, of: picked.files.length });
           const body = picked.kind === "image" ? await photoForUpload(f) : f;
           const type = picked.kind === "image" ? "image/jpeg" : "application/pdf";
           const name = picked.kind === "image" ? `${i + 1}.jpg` : safeName(f.name.toLowerCase().endsWith(".pdf") ? f.name : `${f.name}.pdf`);
@@ -215,6 +218,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
           uploaded.push(path);
           total += body.size;
         }
+        setUploadStep(null);
         setBusy("sending");
         r = await start({
           data: { kind: picked.kind, fileName: picked.name.slice(0, 200), paths: uploaded, bytes: total, rightsConfirmed: true },
@@ -239,6 +243,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
     } finally {
       // a file that went up for an import that didn't start isn't kept
       if (uploaded.length) void supabase.storage.from("program-imports").remove(uploaded);
+      setUploadStep(null);
       setBusy(null);
     }
   };
@@ -448,7 +453,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
       >
         {busy === "uploading" ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading…
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {uploadStep && uploadStep.of > 1 ? `Uploading ${uploadStep.at} of ${uploadStep.of}…` : "Uploading…"}
           </>
         ) : busy === "sending" ? (
           <>

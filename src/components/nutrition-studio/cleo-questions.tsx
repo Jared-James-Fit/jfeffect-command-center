@@ -116,7 +116,7 @@ export function CleoQuestions({
 
       <section className="rounded-2xl border border-border p-4" data-cleo-targets>
         {targetsLoading ? (
-          <div className="h-10 animate-pulse rounded-lg bg-muted" aria-hidden />
+          <div className="h-10 jf-skeleton rounded-lg bg-muted" aria-hidden />
         ) : targets ? (
           <>
             <div className="text-[13px] text-muted-foreground">Written to your targets</div>

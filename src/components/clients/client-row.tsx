@@ -436,7 +436,7 @@ function ProgramSummary({ r, onSchedule, onAssign }: { r: DirectoryRow; onSchedu
 
 export function ClientRowSkeleton() {
   return (
-    <li className="grid animate-pulse gap-3 rounded-2xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto]">
+    <li className="grid jf-skeleton gap-3 rounded-2xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto]">
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-full bg-muted" />
         <div className="space-y-2">

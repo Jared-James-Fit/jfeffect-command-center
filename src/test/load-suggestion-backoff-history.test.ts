@@ -70,7 +70,7 @@ describe("a cold suggestion reads past back-offs as the top set they imply (note
   });
 
   it("the logger gives the engine each set's card and its place in the workout", () => {
-    const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const wdv = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
     expect(wdv).toContain("purpose_label, sort_order, reps_text, exercises(name)");
     expect(wdv).toContain("rowId: log.row_id ?? null,");
     expect(wdv).toContain("rowOrder: historyRow?.sort_order ?? null,");

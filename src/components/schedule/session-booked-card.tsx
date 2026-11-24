@@ -56,7 +56,7 @@ export function SessionBookedCard({
     },
   });
 
-  if (isLoading) return <div className="h-24 w-[min(18rem,72vw)] animate-pulse rounded-2xl bg-muted" />;
+  if (isLoading) return <div className="h-24 w-[min(18rem,72vw)] jf-skeleton rounded-2xl bg-muted" />;
   const sessions = rows ?? [];
   const shown = all ? sessions : sessions.slice(0, COLLAPSED);
   const one = sessions.length === 1 ? sessions[0] : null;

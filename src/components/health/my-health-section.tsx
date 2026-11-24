@@ -80,7 +80,7 @@ export function MyHealthSection({ clientId, preview }: { clientId: string; previ
       </p>
 
       {isLoading ? (
-        <div className="h-16 animate-pulse rounded-xl bg-muted" />
+        <div className="h-16 jf-skeleton rounded-xl bg-muted" />
       ) : live.length ? (
         <ul className="divide-y divide-border rounded-xl border border-border">
           {live.map((i) => {

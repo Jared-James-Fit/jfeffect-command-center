@@ -285,7 +285,8 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
   const onGroup = looks[at]?.group ?? null;
   return (
     <div className="relative" data-look-carousel={pick ? "pick" : "shoot"}>
-      {chips.length > 1 && !filming && <GroupChips chips={chips} on={onGroup} onPick={(k) => bring(Math.max(0, looks.findIndex((l) => l.group === k)))} />}
+      {/* (out of sight while filming, its room kept, so nothing under it moves) */}
+      {chips.length > 1 && <GroupChips chips={chips} on={onGroup} hidden={filming} onPick={(k) => bring(Math.max(0, looks.findIndex((l) => l.group === k)))} />}
       {/* what the ring holds, above it (the clip's time while filming) */}
       <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && !filming && "sr-only")}>
         {filming ? (
@@ -381,7 +382,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
  * tap glides the row to that group's first filter. Scrolls on a narrow
  * phone, keeping the lit one in view.
  */
-function GroupChips({ chips, on, onPick }: { chips: LookGroup[]; on: string | null; onPick: (key: string) => void }) {
+function GroupChips({ chips, on, onPick, hidden = false }: { chips: LookGroup[]; on: string | null; onPick: (key: string) => void; hidden?: boolean }) {
   const row = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = row.current;
@@ -393,7 +394,11 @@ function GroupChips({ chips, on, onPick }: { chips: LookGroup[]; on: string | nu
   return (
     <div
       ref={row}
-      className="mb-2 flex gap-1.5 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={cn(
+        "mb-2 flex gap-1.5 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        hidden && "invisible",
+      )}
+      aria-hidden={hidden || undefined}
       role="group"
       aria-label="Filter groups"
       data-filter-groups

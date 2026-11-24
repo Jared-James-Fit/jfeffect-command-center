@@ -146,7 +146,7 @@ describe("one photo viewer, everywhere", () => {
   });
 
   it("chat photos go through the same viewer, and the old second lightbox is gone", () => {
-    const mv = read("src/components/media-viewer.tsx");
+    const mv = read("src/components/media-viewer-surface.tsx");
     expect(mv).toContain("<PhotoViewer");
     expect(mv).not.toContain("function ImageViewer");
     expect(existsSync("src/components/chat-image-lightbox.tsx")).toBe(false);

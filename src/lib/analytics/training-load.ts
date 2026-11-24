@@ -380,6 +380,8 @@ export type Insight = {
   actionNeeded: boolean;
   /** only for the coach (program design), or for both */
   audience: "coach" | "both";
+  /** the same finding in the athlete's words, for Cleo's one observation (plain language, no program-design terms) */
+  athlete?: { observation: string; action: string };
 };
 
 export type TrainingLoad = {
@@ -392,7 +394,7 @@ export type TrainingLoad = {
    * as zero), never a week that hasn't happened. With none over yet it's this
    * week so far (`partial`), said as such, never an average.
    */
-  perWeekBasis: { weeks: number; partial: boolean };
+  perWeekBasis: { weeks: number; partial: boolean; /** the Monday of every week averaged over (this week when partial) */ keys?: string[] };
   totals: {
     sets: number;
     hardSets: number;
@@ -751,7 +753,7 @@ export function buildTrainingLoad(input: {
   const load: TrainingLoad = {
     weeks,
     completeWeeks: done.length,
-    perWeekBasis: { weeks: partial ? 0 : basis.length, partial },
+    perWeekBasis: { weeks: partial ? 0 : basis.length, partial, keys: basis.map((w) => w.key) },
     totals,
     muscles,
     patterns,
@@ -829,6 +831,10 @@ function buildInsights(load: TrainingLoad, sets: Enriched[], plan: PlanRow[], to
       action: "Find out why sets are being missed before changing volume or intensity: fix execution first, then judge the program.",
       actionNeeded: true,
       audience: "both",
+      athlete: {
+        observation: `You did ${t.completedOfPrescribed} of the ${t.prescribed} sets planned for your past workouts (${t.completionPct}%).`,
+        action: "Missed sets usually come down to time, schedule or recovery. Work out what's getting in the way before changing anything else.",
+      },
     });
   }
 
@@ -982,6 +988,10 @@ function buildInsights(load: TrainingLoad, sets: Enriched[], plan: PlanRow[], to
         action: "Check that loads follow the RPE (lighter when sets run hard) rather than raising the targets.",
         actionNeeded: true,
         audience: "both",
+        athlete: {
+          observation: `${over} of your last ${compared.length} rated sets felt at least a point harder than planned (RPE, how hard a set feels out of 10).`,
+          action: "When sets feel harder than planned, take a little weight off rather than pushing through.",
+        },
       });
     }
   }

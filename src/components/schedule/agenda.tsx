@@ -207,8 +207,8 @@ export function AgendaToday({ children }: { children: ReactNode }) {
 export function AgendaLoading() {
   return (
     <div className="space-y-1.5 py-1" aria-hidden>
-      <div className="h-9 animate-pulse rounded-lg bg-secondary/40" />
-      <div className="h-9 animate-pulse rounded-lg bg-secondary/30" />
+      <div className="h-9 jf-skeleton rounded-lg bg-secondary/40" />
+      <div className="h-9 jf-skeleton rounded-lg bg-secondary/30" />
     </div>
   );
 }

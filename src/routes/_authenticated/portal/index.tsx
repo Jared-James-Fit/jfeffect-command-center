@@ -344,7 +344,7 @@ function PortalHome() {
 }
 
 function SectionSkeleton({ height = "h-32" }: { height?: string }) {
-  return <div className={`rounded-2xl border border-border bg-card animate-pulse ${height}`} />;
+  return <div className={`rounded-2xl border border-border bg-card jf-skeleton ${height}`} />;
 }
 
 // No bell: what clients need to see reaches them in Messages (its tab shows

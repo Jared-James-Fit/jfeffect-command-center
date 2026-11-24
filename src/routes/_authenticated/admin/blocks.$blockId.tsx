@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { PageSkeleton, SlowNote } from "@/components/loading";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -712,7 +713,19 @@ function BlockEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autosave.state, autosaveValue]);
 
-  const save = async () => {
+  // One save at a time: a second tap on Save now, or a quick second block switch,
+  // waits on the save that's running instead of starting another persist()
+  // (two at once race the ids the first insert returns).
+  const saveInFlight = useRef<Promise<void> | null>(null);
+  const save = (): Promise<void> => {
+    if (saveInFlight.current) return saveInFlight.current;
+    const run = runSave().finally(() => {
+      saveInFlight.current = null;
+    });
+    saveInFlight.current = run;
+    return run;
+  };
+  const runSave = async () => {
     // Safety guard: never let a stale save land on a different block than
     // the one currently loaded in the editor. If the hydrated block id
     // doesn't match the route param, skip — the next render will hydrate
@@ -802,7 +815,12 @@ function BlockEditor() {
     );
   }
   if (isLoading || !tree || !payload) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading block…</div>;
+    return (
+      <div className="mx-auto w-full max-w-5xl p-4 md:p-8">
+        <PageSkeleton label="Loading block" />
+        <SlowNote active onRetry={() => refetchTree()} what="this block" />
+      </div>
+    );
   }
 
   const clientId = tree.block.client_id;
@@ -952,7 +970,7 @@ function BlockEditor() {
                   <Link
                     to="/admin/client-programs/$clientId/analytics"
                     params={{ clientId }}
-                    search={{ filter: "exact_block", blockId, view: "volume" } as any}
+                    search={{ filter: "exact_block", blockId, view: "training" } as any}
                     data-block-analytics
                   >
                     <BarChart3 className="mr-2 h-4 w-4" /> Training analytics

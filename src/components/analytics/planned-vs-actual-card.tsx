@@ -120,7 +120,7 @@ export function PlannedVsActualCard({
           Recent workouts
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Not enough data — complete a programmed workout to see how your sets and reps stack up.
+          Not enough data yet. Finish a planned workout to see how your sets and reps compare with the plan.
         </p>
       </Card>
     );

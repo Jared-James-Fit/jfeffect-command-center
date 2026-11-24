@@ -1,8 +1,8 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Settings2 } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronLeft, ChevronRight, Eye, Flag, Pencil, Settings2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -267,10 +267,68 @@ export function ProgramRoadmapCard({
   );
 }
 
+type PlanMode = "focus" | "list";
+const PLAN_MODE_KEY = "jf-plan-view";
+
+function readPlanMode(): PlanMode {
+  try {
+    return window.localStorage.getItem(PLAN_MODE_KEY) === "list" ? "list" : "focus";
+  } catch {
+    return "focus";
+  }
+}
+
+/** One week of the plan, numbered across the whole program (week 7 of 12, not block 2 week 1). */
+export type PlanWeek = { n: number; blockNo: number; block: RoadmapBlockView; week: RoadmapWeekView };
+
+export function planWeeks(roadmap: Pick<ProgramRoadmap, "blocks">): PlanWeek[] {
+  let n = 0;
+  return roadmap.blocks.flatMap((block, i) => block.weeks.map((week) => ({ n: ++n, blockNo: i + 1, block, week })));
+}
+
+/** The week the plan opens on: this week, else the block asked for, else the next week to come, else the last. */
+export function planStartIndex(weeks: PlanWeek[], focusBlockId: string | null): number {
+  if (!weeks.length) return 0;
+  const now = weeks.findIndex((w) => w.week.status === "current");
+  if (focusBlockId) {
+    const inBlock = weeks.findIndex((w) => w.block.id === focusBlockId && w.week.status === "current");
+    if (inBlock >= 0) return inBlock;
+    const first = weeks.findIndex((w) => w.block.id === focusBlockId);
+    if (first >= 0 && now < 0) return first;
+  }
+  if (now >= 0) return now;
+  const next = weeks.findIndex((w) => w.week.status === "upcoming");
+  return next >= 0 ? next : weeks.length - 1;
+}
+
+/** "Nov 23 – 29", "Dec 28 – Jan 3": a week's dates, short. */
+export function weekRange(start: string | null, end: string | null): string | null {
+  const a = parseLocalDate(start);
+  const b = parseLocalDate(end);
+  if (!a) return null;
+  if (!b) return format(a, "MMM d");
+  return a.getMonth() === b.getMonth() ? `${format(a, "MMM d")} – ${format(b, "d")}` : `${format(a, "MMM d")} – ${format(b, "MMM d")}`;
+}
+
+function WeekStatus({ week, dated = false }: { week: RoadmapWeekView; dated?: boolean }) {
+  if (week.status === "completed")
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-muted-foreground" data-plan-status="done">
+        <Check className="h-3.5 w-3.5" /> Done
+      </span>
+    );
+  if (week.status === "current")
+    return <span className="shrink-0 rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-background" data-plan-status="now">This week</span>;
+  // a week whose dates are already on screen (Focus) says nothing more
+  if (dated) return null;
+  return <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground" data-plan-status="later">{week.start ? `Starts ${fmt(week.start)}` : ""}</span>;
+}
+
 /**
- * The whole plan in one place: every block with every week and what it's
- * for, all in view (no folds), and other programs to look back at. Opening
- * one never changes the schedule.
+ * The whole plan, written for the athlete. Focus (the default) is one week at a time: where it
+ * sits, what it's called and one plain sentence, stepped with ‹ › , a swipe or the strip of weeks.
+ * List is every week in one line each, grouped by block, a tap opening that week in Focus. The
+ * choice is remembered on the phone. Opening it never changes the schedule.
  */
 function ProgramPlanSheet({
   open,
@@ -297,33 +355,63 @@ function ProgramPlanSheet({
   const name = programHeading(roadmap.program, !browsing);
   const progress = roadmapProgressParts(roadmap, todayLocalISO());
   const editBlock = selectedBlockId ?? roadmap.currentBlockId ?? roadmap.blocks[0]?.id ?? null;
+  const weeks = useMemo(() => planWeeks(roadmap), [roadmap]);
+  const [mode, setModeState] = useState<PlanMode>("focus");
+  const [at, setAt] = useState(0);
+  // each time it opens: the mode they last used, on this week
+  const [openedFor, setOpenedFor] = useState<string | null>(null);
+  const openKey = open ? `${roadmap.program.id}:${focusBlockId ?? ""}` : null;
+  if (openKey !== openedFor) {
+    setOpenedFor(openKey);
+    if (openKey) {
+      setModeState(readPlanMode());
+      setAt(planStartIndex(weeks, focusBlockId));
+    }
+  }
+  const setMode = (m: PlanMode) => {
+    setModeState(m);
+    try {
+      window.localStorage.setItem(PLAN_MODE_KEY, m);
+    } catch {
+      // the choice just isn't remembered
+    }
+  };
+  const showWeek = (i: number) => {
+    setAt(i);
+    setMode("focus");
+  };
+  const multi = roadmap.blocks.length > 1;
+  const line = [
+    !browsing ? progress.where : weeksLabel(roadmap.totalWeeks),
+    roadmap.meet ? `Meet ${fmt(roadmap.meet.date)}` : roadmap.end ? `Ends ${fmt(roadmap.end)}` : null,
+  ].filter(Boolean).join(" · ");
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
         swipeToClose
-        className="max-h-[90dvh] overflow-y-auto rounded-t-2xl p-0"
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          if (!focusBlockId) return;
-          window.setTimeout(() => {
-            document.querySelector(`[data-plan-block="${focusBlockId}"]`)?.scrollIntoView({ block: "start" });
-          }, 60);
-        }}
+        hideCloseButton
+        className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-lg"
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div className="mx-auto max-w-lg px-4 pb-8 pt-3">
+        <div className="mx-auto max-w-lg px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-2" data-plan-sheet data-plan-mode={mode}>
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
-          <SheetHeader className="text-left">
-            <SheetTitle className="text-lg leading-snug">{name}</SheetTitle>
-            <SheetDescription className="text-[13px]">
-              {[
-                weeksLabel(roadmap.totalWeeks),
-                rangeLabel(roadmap.start, roadmap.end) || null,
-                !browsing ? progress.where : null,
-                roadmap.meet ? `Meet ${fmt(roadmap.meet.date, "MMM d")}` : null,
-              ].filter(Boolean).join(" · ")}
-            </SheetDescription>
-          </SheetHeader>
+          {/* the app's bottom-sheet header: the program on the left, Done on the right */}
+          <div className="flex items-start gap-3">
+            <SheetHeader className="min-h-0 min-w-0 flex-1 space-y-0.5 p-0 text-left">
+              <SheetTitle className="break-words text-[20px] font-semibold leading-tight">{name}</SheetTitle>
+              {line && <SheetDescription className="text-[13px] tabular-nums">{line}</SheetDescription>}
+            </SheetHeader>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="-mr-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-plan-done
+            >
+              Done
+            </button>
+          </div>
           {browsing && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-secondary/60 px-3 py-2 text-[12px] text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> Viewing only. Your schedule is unchanged.</span>
@@ -331,48 +419,38 @@ function ProgramPlanSheet({
             </div>
           )}
 
-          <ol className="mt-4 space-y-5" aria-label="Blocks">
-            {roadmap.blocks.map((b, i) => (
-              <li key={b.id} data-plan-block={b.id} className="scroll-mt-4">
-                <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="min-w-0 text-[15px] font-semibold">
-                    <span className="mr-1.5 text-muted-foreground tabular-nums">{i + 1}</span>
-                    {blockTitle(b)}
-                    {b.status === "current" && <span className="ml-2 rounded bg-secondary px-1.5 align-middle text-[11px] font-medium">Now</span>}
-                  </h3>
-                  <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{rangeLabel(b.start, b.end)}</span>
-                </div>
-                {b.purpose && <p className="mt-1 text-[13px] leading-snug text-foreground/80">{b.purpose}</p>}
-                {b.weeks.length > 0 && (
-                  <ul className="mt-2 divide-y divide-border/50 rounded-xl border border-border/60">
-                    {b.weeks.map((w) => {
-                      const p = weekParts(w);
-                      return (
-                        <li key={w.id} className={cn("px-3 py-2", w.status === "current" && "bg-secondary/50")}>
-                          <div className="flex items-center justify-between gap-2 text-[13px]">
-                            <span className="min-w-0 truncate font-medium">
-                              Week {p.number}{p.name ? ` · ${p.name}` : ""}
-                            </span>
-                            <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
-                              {w.status === "completed" ? "Done" : w.status === "current" ? "This week" : fmt(w.start) ?? ""}
-                            </span>
-                          </div>
-                          {w.focus && <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{w.focus}</p>}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                {onOpenBlockView && !browsing && (
-                  <button type="button" onClick={() => onOpenBlockView(b.id)} className="mt-1 inline-flex min-h-10 items-center gap-0.5 text-[13px] font-medium text-foreground">
-                    See its workouts <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                )}
-              </li>
-            ))}
-          </ol>
+          {weeks.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 rounded-lg bg-secondary/70 p-0.5 text-[13px] font-medium" role="group" aria-label="How to show the plan" data-plan-modes>
+              {(["focus", "list"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  onClick={() => setMode(m)}
+                  className={cn("min-h-9 rounded-md transition", mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+                  data-plan-mode-button={m}
+                >
+                  {m === "focus" ? "Focus" : "List"}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {roadmap.programs.length > 1 && onSelectProgram && (
+          {weeks.length > 0 && mode === "focus" ? (
+            <PlanFocus
+              weeks={weeks}
+              at={Math.min(at, weeks.length - 1)}
+              onAt={setAt}
+              total={Math.max(weeks.length, roadmap.totalWeeks || 0)}
+              multi={multi}
+              blockCount={roadmap.blocks.length}
+              onOpenBlockView={!browsing ? onOpenBlockView : undefined}
+            />
+          ) : (
+            <PlanList roadmap={roadmap} weeks={weeks} onWeek={weeks.length ? showWeek : undefined} />
+          )}
+
+          {mode === "list" && roadmap.programs.length > 1 && onSelectProgram && (
             <div className="mt-6">
               <div className="mb-1 text-[13px] font-medium text-muted-foreground">Your programs</div>
               <ProgramList programs={roadmap.programs} selectedId={roadmap.program.id} defaultId={currentProgramId} onSelect={(id) => onSelectProgram(id === currentProgramId ? null : id)} />
@@ -382,7 +460,7 @@ function ProgramPlanSheet({
           {coach && (
             <div className="mt-5 flex items-center justify-between gap-2 border-t border-border/60 pt-3 text-[12px] text-muted-foreground">
               <span className="inline-flex min-w-0 items-center gap-1">
-                <span className="truncate">Notes are written from the program. Your words always win.</span>
+                <span className="truncate">Written from the program in plain words. Your words always win.</span>
               </span>
               {editBlock && (
                 <Link to="/admin/blocks/$blockId" params={{ blockId: editBlock }} hash="roadmap" className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground hover:underline">
@@ -394,6 +472,179 @@ function ProgramPlanSheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** One week at a time: the strip of weeks, then this week in a sentence, ‹ › to move. */
+export function PlanFocus({
+  weeks,
+  at,
+  onAt,
+  total,
+  multi,
+  blockCount,
+  onOpenBlockView,
+}: {
+  weeks: PlanWeek[];
+  at: number;
+  onAt: (i: number) => void;
+  total: number;
+  multi: boolean;
+  blockCount: number;
+  onOpenBlockView?: (blockId: string) => void;
+}) {
+  const cur = weeks[at];
+  const [touch, setTouch] = useState<{ x: number; y: number } | null>(null);
+  const go = (d: number) => onAt(Math.max(0, Math.min(weeks.length - 1, at + d)));
+  const p = weekParts(cur.week);
+  const title = p.name ?? `Week ${cur.n}`;
+  const dates = weekRange(cur.week.start, cur.week.end);
+  const blockName = blockTitle(cur.block);
+  return (
+    <div className="mt-4" data-plan-focus>
+      {/* every week of the program, one tap each; a gap between blocks */}
+      <div className="flex items-center gap-0.5" role="group" aria-label="Weeks" data-plan-strip>
+        {weeks.map((w, i) => {
+          const newBlock = i > 0 && weeks[i - 1].block.id !== w.block.id;
+          const selected = i === at;
+          return (
+            <button
+              key={w.week.id}
+              type="button"
+              onClick={() => onAt(i)}
+              aria-label={`Week ${w.n} of ${total}${w.week.status === "current" ? ", this week" : ""}`}
+              aria-current={selected ? "step" : undefined}
+              className={cn("flex h-8 min-w-0 flex-1 items-center", newBlock && "ml-1.5")}
+              data-plan-strip-week={w.n}
+            >
+              <span
+                className={cn(
+                  "block w-full rounded-full transition-all",
+                  selected ? "h-2.5" : "h-1.5",
+                  w.week.status === "completed" ? "bg-foreground/55" : w.week.status === "current" ? "bg-foreground" : "bg-muted-foreground/25",
+                  selected && w.week.status !== "current" && "bg-foreground/80",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="mt-2 rounded-2xl border border-border/70 bg-card p-4"
+        onTouchStart={(e) => setTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY })}
+        onTouchEnd={(e) => {
+          if (!touch) return;
+          const dx = e.changedTouches[0].clientX - touch.x;
+          const dy = e.changedTouches[0].clientY - touch.y;
+          setTouch(null);
+          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+        }}
+        data-plan-week={cur.n}
+      >
+        {(multi || cur.block.label) && (
+          <div className="text-[12px] font-medium text-muted-foreground" data-plan-block-line>
+            {multi ? `Block ${cur.blockNo} of ${blockCount}` : "This block"}
+            {blockName ? ` · ${blockName}` : ""}
+          </div>
+        )}
+        <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
+          {/* a week with no name of its own yet is titled "Week 7" below: its number isn't said twice */}
+          <span className="text-[13px] tabular-nums text-muted-foreground" data-plan-week-when>
+            {[p.name ? `Week ${cur.n}` : null, dates].filter(Boolean).join(" · ")}
+          </span>
+          <WeekStatus week={cur.week} dated={!!dates} />
+        </div>
+        <h3 className="mt-1 text-[22px] font-semibold leading-tight tracking-tight" data-plan-week-title>{title}</h3>
+        {cur.week.focus && <p className="mt-1.5 text-[15px] leading-snug text-foreground/85" data-plan-week-focus>{cur.week.focus}</p>}
+        {cur.block.purpose && cur.week.index === 1 && (
+          <p className="mt-3 border-t border-border/60 pt-3 text-[13px] leading-snug text-muted-foreground" data-plan-block-purpose>
+            {cur.block.purpose}
+          </p>
+        )}
+        {onOpenBlockView && (
+          <button type="button" onClick={() => onOpenBlockView(cur.block.id)} className="mt-2 inline-flex min-h-10 items-center gap-0.5 text-[14px] font-medium text-foreground">
+            See the workouts <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => go(-1)}
+          disabled={at === 0}
+          className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-border text-[14px] font-medium transition disabled:opacity-40"
+          data-plan-prev
+        >
+          <ChevronLeft className="h-4 w-4" /> Previous week
+        </button>
+        <button
+          type="button"
+          onClick={() => go(1)}
+          disabled={at === weeks.length - 1}
+          className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-border text-[14px] font-medium transition disabled:opacity-40"
+          data-plan-next
+        >
+          Next week <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Every week in one line, grouped by block. A tap opens that week in Focus. */
+export function PlanList({ roadmap, weeks, onWeek }: { roadmap: ProgramRoadmap; weeks: PlanWeek[]; onWeek?: (i: number) => void }) {
+  const multi = roadmap.blocks.length > 1;
+  // a long program opens on this week, not at its first block
+  const listRef = useRef<HTMLOListElement>(null);
+  const nowId = weeks.find((w) => w.week.status === "current")?.week.id ?? null;
+  useEffect(() => {
+    const row = nowId ? listRef.current?.querySelector<HTMLElement>('[data-plan-now="true"]') : null;
+    if (row && typeof row.scrollIntoView === "function") row.scrollIntoView({ block: "center" });
+  }, [nowId]);
+  return (
+    <ol ref={listRef} className="mt-4 space-y-4" aria-label="Blocks" data-plan-list>
+      {roadmap.blocks.map((b, bi) => (
+        <li key={b.id} data-plan-block={b.id}>
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="min-w-0 text-[14px] font-semibold">
+              {multi ? `Block ${bi + 1}` : "This block"}
+              {blockTitle(b) ? <span className="font-normal text-muted-foreground"> · {blockTitle(b)}</span> : null}
+            </h3>
+            <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{rangeLabel(b.start, b.end)}</span>
+          </div>
+          {b.weeks.length > 0 && (
+            <ul className="mt-1.5 divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60">
+              {b.weeks.map((w) => {
+                const i = weeks.findIndex((x) => x.week.id === w.id);
+                const pw = weeks[i];
+                const p = weekParts(w);
+                const row = (
+                  <>
+                    <span className="w-16 shrink-0 text-[13px] tabular-nums text-muted-foreground">Week {pw?.n ?? p.number}</span>
+                    <span className={cn("min-w-0 flex-1 truncate text-[14px]", w.status === "current" ? "font-semibold" : "font-medium")}>{p.name ?? ""}</span>
+                    <WeekStatus week={w} />
+                    {onWeek && i >= 0 && <ChevronRight className="-mr-1 h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden />}
+                  </>
+                );
+                return (
+                  <li key={w.id} className={cn(w.status === "current" && "bg-secondary/60")} data-plan-now={w.status === "current" ? "true" : undefined}>
+                    {onWeek && i >= 0 ? (
+                      <button type="button" onClick={() => onWeek(i)} className="flex min-h-11 w-full items-center gap-2 px-3 text-left transition hover:bg-secondary/40" data-plan-list-week={pw.n}>
+                        {row}
+                      </button>
+                    ) : (
+                      <div className="flex min-h-11 items-center gap-2 px-3">{row}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 

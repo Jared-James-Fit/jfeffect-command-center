@@ -52,6 +52,7 @@ const AI_AREA: Record<string, AreaKey> = {
   roadmap: "coaching",
   checkin_recap: "coaching",
   recovery_write: "coaching",
+  cardio_plan: "coaching",
   coach_write: "coaching",
   form_draft: "coaching",
   // what people use themselves

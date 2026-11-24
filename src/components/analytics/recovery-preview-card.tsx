@@ -493,7 +493,7 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false, bare = fa
     if (hideWhenEmpty) return null;
     return (
       <section aria-label="Training Readiness">
-        <Card className="h-[68px] animate-pulse bg-muted/30" aria-hidden />
+        <Card className="h-[68px] jf-skeleton bg-muted/30" aria-hidden />
       </section>
     );
   }

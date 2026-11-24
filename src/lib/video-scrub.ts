@@ -234,3 +234,32 @@ export function makeScrubSeeker(v: SeekableVideo, now: () => number = Date.now) 
     },
   };
 }
+
+/*
+ * The line's progress runs on the compositor (Nov 23 2026): one Web Animation
+ * of its scaleX across the clip's length, repeating like the clip, played,
+ * paused and moved to the clip's time on its events (play, pause, seek,
+ * waiting, rate). The page does nothing a frame while a clip plays; a line
+ * written a frame at a time from script made Chrome re-layer the whole feed
+ * on every frame of every playing clip (measured: 115 re-layers in 2 s on a
+ * clip's screen, half a throttled phone's main thread, 0 without it).
+ */
+
+/** How far the line may drift from the clip before it's put back in step (ms of the clip). */
+export const LINE_SYNC_SLACK_MS = 120;
+
+/** Where the line's animation sits for a moment `t` of a clip `length` long: inside its first round, never past its end (which would wrap to 0). */
+export function lineTimeMs(t: number, length: number): number {
+  if (!(length > 0)) return 0;
+  const dur = length * 1000;
+  return Math.min(dur - 1, Math.max(0, t * 1000));
+}
+
+/** How far apart the line (`haveMs`, the animation's own clock) and the clip (`wantMs`) are within one round of `durMs`, either way round. */
+export function lineDriftMs(wantMs: number, haveMs: number, durMs: number): number {
+  if (!(durMs > 0)) return 0;
+  const a = ((wantMs % durMs) + durMs) % durMs;
+  const b = ((haveMs % durMs) + durMs) % durMs;
+  const d = Math.abs(a - b);
+  return Math.min(d, durMs - d);
+}

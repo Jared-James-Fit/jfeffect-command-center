@@ -1,18 +1,18 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { Download, Dumbbell } from "lucide-react";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingUp, Trophy, Dumbbell, Calendar, PieChart, BarChart3, Check, Moon, Download, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { loadPdfLogo, makeAndDeliverPdf } from "@/lib/pdf/deliver";
-import {
-  getClientResults, buildExerciseHistory, recentPRs,
-} from "@/lib/pl-programs";
-import { format } from "date-fns";
+import { getClientResults, buildExerciseHistory } from "@/lib/pl-programs";
 import {
   AnalyticsPeriodControl,
   defaultAnalyticsFilter,
@@ -28,65 +28,70 @@ import {
 } from "@/lib/analytics/blocks";
 import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
 import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
-import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { LiftProgressCard } from "@/components/analytics/lift-progress-card";
 import { BodyweightTrendCard } from "@/components/analytics/bodyweight-trend-card";
 import { CardioAnalyticsSection } from "@/components/analytics/cardio-analytics-section";
 import { RunningAnalyticsSection } from "@/components/analytics/running-analytics-section";
-import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { RecoveryTrendsCard } from "@/components/analytics/recovery-trends-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { TrainingTimeCard } from "@/components/analytics/training-time-card";
-import { CompetitionStrengthChart } from "@/components/analytics/competition-strength-chart";
-import { TotalStandingCard } from "@/components/analytics/total-standing-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
-import { InfoTip } from "@/components/analytics/info-tip";
-import { InsightList, TrainingLoadSection } from "@/components/analytics/training-load-section";
-import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
-import {
-  AreaCard,
-  BlockStrengthTable,
-  ConsistencySummary,
-  LiftTriplet,
-  LiftsMovingCard,
-  MeetsList,
-  MiniBars,
-  MoreDetail,
-  ProgressBar,
-} from "@/components/analytics/analytics-area-cards";
-import {
-  blockStrengthRows,
-  blockVolumeRows,
-  changeWords,
-  consistencyOf,
-  liftSummary,
-  liftsTrending,
-} from "@/lib/analytics/analytics-areas";
+import { TrainingLoadSection } from "@/components/analytics/training-load-section";
+import { LiftsMovingCard, MoreDetail } from "@/components/analytics/analytics-area-cards";
+import { consistencyOf, liftsTrending } from "@/lib/analytics/analytics-areas";
 import { comparableE1rm } from "@/lib/analytics/strength-read";
-import { recoverySummary } from "@/lib/analytics/recovery-trends";
 import { useCheckouts } from "@/lib/analytics/recovery-trends.queries";
-import { COMP_LIFTS } from "@/lib/analytics/competition-strength";
-import { weekOf } from "@/lib/analytics/training-load";
-import { parseLocalDate } from "@/lib/today";
-import { useTrainingLoad } from "@/lib/analytics/training-load.queries";
-import { perWeekWords, type Insight } from "@/lib/analytics/training-load";
-import { strengthPoints } from "@/lib/analytics/competition-strength";
+import { useAnalyticsUnit } from "@/lib/analytics/use-analytics-unit";
+import {
+  COMP_LIFTS,
+  COMP_LIFT_LABEL,
+  compLiftOfResult,
+  type CompLift,
+} from "@/lib/analytics/competition-strength";
+import { useTrainingLoad, resultsToLoadSets } from "@/lib/analytics/training-load.queries";
 import { useCompetitionData } from "@/lib/analytics/competition-strength.queries";
 import { analyticsProfile, compSessionsSince } from "@/lib/analytics/analytics-profile";
-import { clientBodyweightQueryKey, loadClientBodyweight } from "@/lib/client-bodyweight";
+import { liftStrengths, liftNow, mainLift } from "@/lib/analytics/lift-strength";
+import { envelopeTrend, type EnvelopeTrend } from "@/lib/analytics/strength-estimate";
+import {
+  buildCalendar,
+  strengthChanges,
+  type CalendarMetric,
+} from "@/lib/analytics/performance-calendar";
+import {
+  lifetimeTotals,
+  personalRecords,
+  recordsByExercise,
+  isHeadlineRecord,
+} from "@/lib/analytics/records";
+import { buildWorkload, splitShift } from "@/lib/analytics/sbd-workload";
+import { estimatedComposition, meetCompositions } from "@/lib/analytics/sbd-composition";
+import { buildMuscleRead, muscleWindowChanges, musclesNamed } from "@/lib/analytics/muscle-read";
+import { recoveryPatterns } from "@/lib/analytics/recovery-intel";
+import { pickObservation } from "@/lib/analytics/performance-observation";
+import { blockRows } from "@/lib/analytics/block-comparison";
+import { inferBlockType } from "@/lib/block-types";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { cn } from "@/lib/utils";
-import { useScrollFade } from "@/hooks/use-scroll-fade";
+import { PerformanceCalendar, type DayMeta } from "@/components/analytics/performance-calendar";
+import { SbdDonut } from "@/components/analytics/sbd-donut";
+import { StrengthTrendChart } from "@/components/analytics/strength-trend-chart";
+import { SbdWorkloadChart } from "@/components/analytics/sbd-workload-chart";
+import { BlockComparisonCard } from "@/components/analytics/block-comparison-card";
+import { RecordsView } from "@/components/analytics/records-view";
+import { MuscleMap, useSupportCredit } from "@/components/analytics/muscle-map";
+import {
+  CleoObservationCard,
+  ConsistencyBlock,
+  KpiStrip,
+  RecoveryPatternList,
+  type Kpi,
+} from "@/components/analytics/overview-pieces";
+import { Change, SectionTitle, LB_PER_KG } from "@/components/analytics/viz";
 
 export type Unit = "lb" | "kg";
-/** A load as lifted: whole, or one decimal when it has one (72.5). */
-const fmtLoad = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
-const LB_PER_KG = 2.2046226;
-function convertWeight(value: number, from: Unit, to: Unit) {
-  if (!value || from === to) return value;
-  return to === "lb" ? value * LB_PER_KG : value / LB_PER_KG;
-}
 
 export interface ClientAnalyticsDashboardProps {
   clientId: string;
@@ -97,15 +102,14 @@ export interface ClientAnalyticsDashboardProps {
   onFilterChange?: (filter: AnalyticsFilter) => void;
   /** Show the LB/KG toggle above the filter bar. Defaults to true. */
   showUnitToggle?: boolean;
-  /** Optional node rendered as the "View All" PRs affordance. */
+  /** Optional node rendered as the "View All" PRs affordance (kept for callers; Records has them all). */
   viewAllPRsNode?: ReactNode;
   /** Optional node rendered above the filter bar (e.g. "Back to workouts"). */
   headerLeadingNode?: ReactNode;
-  /** Whether GraphDotDetail can open the underlying set log. */
+  /** Whether a session's detail can open the underlying workout log (the coach). */
   canOpenLog?: boolean;
   /** Leave out the bodyweight trend card (the coach's Progress tab has its own bodyweight panel above). */
   hideBodyweight?: boolean;
-  /** Optional class on outer container. */
   className?: string;
   /** The coach's view: programming detail (intensity spread, coach-only insights). */
   coach?: boolean;
@@ -114,20 +118,39 @@ export interface ClientAnalyticsDashboardProps {
   onViewChange?: (view: AnalyticsView) => void;
 }
 
-export type AnalyticsView = "overview" | "strength" | "volume" | "consistency" | "recovery";
+/**
+ * Overview · Strength · Training · Records. Old addresses (volume,
+ * consistency, recovery) open Training, where those now live.
+ */
+export type AnalyticsView = "overview" | "strength" | "training" | "records";
 export const ANALYTICS_VIEWS: Array<[AnalyticsView, string]> = [
   ["overview", "Overview"],
   ["strength", "Strength"],
-  ["volume", "Volume"],
-  ["consistency", "Consistency"],
-  ["recovery", "Recovery"],
+  ["training", "Training"],
+  ["records", "Records"],
 ];
+const LEGACY_VIEW: Record<string, AnalyticsView> = {
+  volume: "training",
+  consistency: "training",
+  recovery: "training",
+  calendar: "overview",
+  lifetime: "records",
+};
+export function viewFromSearch(v: string | null | undefined): AnalyticsView | undefined {
+  if (!v) return undefined;
+  if (ANALYTICS_VIEWS.some(([k]) => k === v)) return v as AnalyticsView;
+  return LEGACY_VIEW[v];
+}
+
+const DAY = 86_400_000;
+const isoDay = (d: Date) => format(d, "yyyy-MM-dd");
 
 /**
- * Shared client analytics dashboard — identical numbers for coach and client.
- * Extracted from the portal analytics page so the Admin → Client Profile →
- * Analytics tab renders exactly the same view a client sees, keyed to any
- * clientId. Filter state lives inside; portal wraps this with URL sync.
+ * Training analytics: identical numbers for the athlete and the coach (the
+ * coach adds programming detail). Every module reads one shared set of reads
+ * (lib/analytics: lift-strength, performance-calendar, records, sbd-workload,
+ * sbd-composition, muscle-read, recovery-intel, performance-observation), so
+ * nothing on the page can disagree with anything else.
  */
 export function ClientAnalyticsDashboard({
   clientId,
@@ -135,7 +158,6 @@ export function ClientAnalyticsDashboard({
   initialFilter,
   onFilterChange,
   showUnitToggle = true,
-  viewAllPRsNode,
   headerLeadingNode,
   canOpenLog = false,
   hideBodyweight = false,
@@ -144,6 +166,8 @@ export function ClientAnalyticsDashboard({
   initialView,
   onViewChange,
 }: ClientAnalyticsDashboardProps) {
+  const navigate = useNavigate();
+  const cleoOn = useCleoAccess();
   const {
     data: clientBlocks = [],
     isLoading: blocksLoading,
@@ -164,7 +188,22 @@ export function ClientAnalyticsDashboard({
       return (data ?? []).filter(isPrimaryProgramBlock).map(normalizeAnalyticsBlock);
     },
   });
-
+  // a block's coach-picked type, where the database has it (never blocks the page)
+  const { data: blockTypes } = useQuery({
+    queryKey: ["analytics-block-types", clientId],
+    enabled: !!clientId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pl_blocks")
+        .select("id, block_type")
+        .eq("client_id", clientId);
+      if (error) return new Map<string, string>();
+      return new Map<string, string>(
+        ((data ?? []) as any[]).filter((r) => r.block_type).map((r) => [r.id, r.block_type]),
+      );
+    },
+  });
   const resolvedCurrentBlockId = useMemo(
     () => resolveCurrentBlock(clientBlocks)?.id ?? null,
     [clientBlocks],
@@ -179,36 +218,32 @@ export function ClientAnalyticsDashboard({
     setAnalyticsFilter(initialFilter ?? defaultAnalyticsFilter(clientBlocks));
   }, [analyticsFilter, clientBlocks, initialFilter]);
   const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
-
   const handleFilterChange = (next: AnalyticsFilter) => {
     setAnalyticsFilter(next);
     onFilterChange?.(next);
   };
-
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Overview · Strength · Volume · Recovery: one page, one section at a time.
-  // A #recovery link opens Recovery.
   const [view, setView] = useState<AnalyticsView>(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#recovery") return "recovery";
-    return initialView && ANALYTICS_VIEWS.some(([v]) => v === initialView) ? initialView : "overview";
+    if (typeof window !== "undefined" && window.location.hash === "#recovery") return "training";
+    return initialView ?? "overview";
   });
   const changeView = (v: AnalyticsView) => {
     setView(v);
     onViewChange?.(v);
+    if (typeof window !== "undefined")
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   };
 
-  // Soonest upcoming meet across this athlete's prep blocks.
-  const nextMeetDate = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    return (
+  const today = isoDay(new Date());
+  const nextMeetDate = useMemo(
+    () =>
       clientBlocks
         .map((b) => b.pl_preps?.event_date ?? null)
         .filter((d): d is string => !!d && d >= today)
-        .sort()[0] ?? null
-    );
-  }, [clientBlocks]);
-
+        .sort()[0] ?? null,
+    [clientBlocks, today],
+  );
   const activeBlockId =
     filter.preset === "current_block" ||
     filter.preset === "previous_block" ||
@@ -216,23 +251,28 @@ export function ClientAnalyticsDashboard({
       ? ((filter as any).blockId as string)
       : null;
 
-  // Every logged set, read once. A period only filters it: an "all-time PR"
-  // and a strength trend are judged against the whole history, never against
-  // the first set logged inside the period (that read a block's second Rear
-  // Delt Cable Fly as a "PR").
-  const { data: allResults = [], isLoading } = useQuery({
+  // Every logged set, read once; a period only filters it (records and trends read the whole history).
+  const resultsQ = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,
-    staleTime: 30_000,
+    // The whole history (up to tens of thousands of sets): read once a visit, not on every
+    // remount, while a set logged since is still picked up on the next open.
+    staleTime: 5 * 60_000,
     queryFn: () => getClientResults(clientId),
   });
-  // A block is its own workouts (never another program's sets on the same dates).
+  const allResults = useMemo(() => resultsQ.data ?? [], [resultsQ.data]);
+  // A failed or offline read is said, never the new-athlete preview over years of training
+  const resultsState = queryView(resultsQ as any).kind;
+  const isLoading = resultsState === "loading";
   const { data: blockDayIds } = useQuery({
     queryKey: ["analytics-block-days", activeBlockId],
     enabled: !!activeBlockId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data: weeks } = await supabase.from("pl_weeks").select("id").eq("block_id", activeBlockId!);
+      const { data: weeks } = await supabase
+        .from("pl_weeks")
+        .select("id")
+        .eq("block_id", activeBlockId!);
       const ids = (weeks ?? []).map((w: any) => w.id);
       if (!ids.length) return new Set<string>();
       const { data: days } = await supabase.from("pl_days").select("id").in("week_id", ids);
@@ -245,8 +285,6 @@ export function ClientAnalyticsDashboard({
     return (allResults as any[]).filter((r) => r.day_id && blockDayIds.has(r.day_id));
   }, [allResults, activeBlockId, blockDayIds]);
   const scopeLoading = isLoading || (!!activeBlockId && !blockDayIds);
-
-  const selectedBlockId = activeBlockId;
   const firstDataDate = useMemo(() => {
     const first = (allResults as any[])[0]?.date;
     return first ? new Date(first) : null;
@@ -259,62 +297,74 @@ export function ClientAnalyticsDashboard({
     queryFn: () => getClientAnalyticsSettings(clientId),
   });
   const { data: goals } = useQuery({
-    queryKey: ["analytics-goals", clientId],
+    queryKey: ["analytics-goals-v2", clientId],
     enabled: !!clientId,
     staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("client_goals_setup")
-        .select("main_goal, training_styles")
+        .select("main_goal, main_goal_other, goal_target, training_styles")
         .eq("client_id", clientId)
         .maybeSingle();
-      return (data ?? null) as { main_goal: string | null; training_styles: string[] | null } | null;
+      return (data ?? null) as {
+        main_goal: string | null;
+        main_goal_other: string | null;
+        goal_target: string | null;
+        training_styles: string[] | null;
+      } | null;
     },
   });
+  const { data: athlete } = useQuery({
+    queryKey: ["analytics-athlete", clientId],
+    enabled: !!clientId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("clients")
+        .select("full_name, first_name, service_tier")
+        .eq("id", clientId)
+        .maybeSingle();
+      return (data ?? null) as {
+        full_name: string | null;
+        first_name: string | null;
+        service_tier: string | null;
+      } | null;
+    },
+  });
+  const coached = athlete?.service_tier !== "self_serve";
 
-  const sourceUnit: Unit = "lb";
-  const [displayUnit, setDisplayUnit] = useState<Unit>(preferredUnit);
-  const [unitSynced, setUnitSynced] = useState(false);
-  useEffect(() => {
-    if (!unitSynced) {
-      setDisplayUnit(preferredUnit);
-      setUnitSynced(true);
-    }
-  }, [preferredUnit, unitSynced]);
-
-  const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
-
-  const startMs = filter.start.getTime();
-  const endMs = filter.end.getTime() + 86_399_999;
-  const inPeriod = useCallback((iso: string | null | undefined) => {
-    if (!iso) return false;
-    const t = new Date(iso).getTime();
-    return t >= startMs && t <= endMs;
-  }, [startMs, endMs]);
-
-  const filteredResults = useMemo(
-    () => (results as any[]).filter((r: any) => inPeriod(r.date)),
-    [results, inPeriod],
-  );
-
-  const history = useMemo(
-    () => buildExerciseHistory(filteredResults as any),
-    [filteredResults],
-  );
-  // All-time PRs (against everything on file) that happened in this period.
-  const prs = useMemo(() => {
-    const scope = activeBlockId && blockDayIds ? blockDayIds : null;
-    return recentPRs(allResults as any[], 365000).filter(
-      (p: any) => inPeriod(p.date) && (!scope || (p.day_id && scope.has(p.day_id))),
-    );
-  }, [allResults, inPeriod, activeBlockId, blockDayIds]);
-
+  // one choice for every analytics screen, remembered on this phone (use-analytics-unit.ts)
+  const [displayUnit, setDisplayUnit] = useAnalyticsUnit(preferredUnit);
   const conv = useCallback(
-    (v: number) => convertWeight(Number(v) || 0, sourceUnit, displayUnit),
+    (lb: number) => (displayUnit === "kg" ? (Number(lb) || 0) / LB_PER_KG : Number(lb) || 0),
     [displayUnit],
   );
+  const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
 
-  // Volume & workload: the same read for the coach and the athlete (training-load.ts)
+  const startDay = isoDay(filter.start);
+  const endDay = isoDay(filter.end);
+  const startMs = filter.start.getTime();
+  const endMs = filter.end.getTime() + 86_399_999;
+  const filteredResults = useMemo(
+    () =>
+      (results as any[]).filter((r: any) => {
+        const t = r.date ? new Date(r.date).getTime() : NaN;
+        return t >= startMs && t <= endMs;
+      }),
+    [results, startMs, endMs],
+  );
+  const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);
+  // the competition lifts have their own chart above; this one is every other exercise
+  const otherHistory = useMemo(() => {
+    const comp = new Set(
+      (filteredResults as any[])
+        .filter((r) => compLiftOfResult(r))
+        .map((r) => String(r.exercise_name)),
+    );
+    const rest = history.filter((h) => !comp.has(h.name));
+    return rest.length ? rest : history;
+  }, [history, filteredResults]);
+
   const trainingLoad = useTrainingLoad({
     clientId,
     results: results as any[],
@@ -322,22 +372,18 @@ export function ClientAnalyticsDashboard({
     end: filter.end,
     blockId: activeBlockId,
   });
-  const loadInsights = useMemo(
-    () => trainingLoad.load.insights.filter((i) => coach || i.audience === "both"),
-    [trainingLoad.load, coach],
-  );
+  const consistency = useMemo(() => consistencyOf(trainingLoad.load), [trainingLoad.load]);
 
-  // Competition lifts: every hard set on file (the chart and "where you stand" cut it).
-  const strength = useMemo(() => strengthPoints(allResults as any[]), [allResults]);
-  const lightInPeriod = useMemo(
-    () => strength.light.filter((l) => inPeriod(`${l.day}T12:00:00`)).length,
-    [strength.light, inPeriod],
-  );
+  // ── the shared reads ────────────────────────────────────────────────
   const compSessions12w = useMemo(
-    () => compSessionsSince(allResults as any[], Date.now() - 84 * 86_400_000),
+    () => compSessionsSince(allResults as any[], Date.now() - 84 * DAY),
     [allResults],
   );
-  const hasPowerlifting = compSessions12w > 0 || strength.points.length > 0 || trainingLoad.load.lifts.some((l) => l.competitionSets > 0);
+  const anyComp = useMemo(
+    () => (allResults as any[]).some((r) => compLiftOfResult(r)),
+    [allResults],
+  );
+  const hasPowerlifting = compSessions12w > 0 || anyComp;
   const profile = analyticsProfile({
     mainGoal: goals?.main_goal,
     styles: goals?.training_styles,
@@ -345,104 +391,424 @@ export function ClientAnalyticsDashboard({
     hasMeet: !!nextMeetDate,
   });
   const competition = useCompetitionData(clientId, hasPowerlifting);
-  const { data: bodyweight } = useQuery({
-    queryKey: clientBodyweightQueryKey(clientId),
-    enabled: !!clientId && hasPowerlifting && view === "strength",
+  const meets = useMemo(() => competition.data?.meets ?? [], [competition.data]);
+  const strength = useMemo(
+    () => liftStrengths(allResults as any[], meets, today),
+    [allResults, meets, today],
+  );
+  const { records } = useMemo(
+    () => personalRecords(allResults as any[], meets),
+    [allResults, meets],
+  );
+  const lifetime = useMemo(
+    () => lifetimeTotals(allResults as any[], records),
+    [allResults, records],
+  );
+  const byExercise = useMemo(
+    () => recordsByExercise(records, allResults as any[]),
+    [records, allResults],
+  );
+  const recordsInPeriod = useMemo(
+    () => records.filter((r) => r.day >= startDay && r.day <= endDay),
+    [records, startDay, endDay],
+  );
+  const changes = useMemo(() => strengthChanges(allResults as any[]), [allResults]);
+  const [calMetric, setCalMetric] = useState<CalendarMetric>("activity");
+  const firstLog = firstDataDate ? isoDay(firstDataDate) : null;
+  const calendarDays = useMemo(
+    () =>
+      buildCalendar({
+        results: results as any[],
+        plan: trainingLoad.plan.map((p) => ({
+          day: p.day,
+          dayId: p.dayId,
+          sets: p.sets,
+          isTime: p.isTime,
+        })),
+        prs: records.map((r) => ({
+          date: `${r.day}T12:00:00`,
+          exercise_name: r.exercise,
+          load: r.load,
+          reps: r.reps,
+        })),
+        start: startDay,
+        end: endDay,
+        today,
+        metric: calMetric,
+        firstLog,
+        strength: changes,
+      }),
+    [results, trainingLoad.plan, records, startDay, endDay, today, calMetric, firstLog, changes],
+  );
+  const allLoadSets = useMemo(() => resultsToLoadSets(allResults as any[]), [allResults]);
+  const periodLoadSets = useMemo(
+    () => resultsToLoadSets(filteredResults as any[]),
+    [filteredResults],
+  );
+  const liftTrendsPeriod = useMemo(() => {
+    const out: Partial<Record<CompLift, EnvelopeTrend>> = {};
+    for (const l of COMP_LIFTS) out[l] = envelopeTrend(strength[l].envelope, startDay, endDay);
+    return out;
+  }, [strength, startDay, endDay]);
+  const named = useMemo(
+    () => musclesNamed(`${goals?.goal_target ?? ""} ${goals?.main_goal_other ?? ""}`),
+    [goals],
+  );
+  const [supportCredit, setSupportCredit] = useSupportCredit();
+  const muscleRead = useMemo(
+    () =>
+      buildMuscleRead({
+        muscles: trainingLoad.load.muscles,
+        sets: periodLoadSets,
+        history: allLoadSets,
+        weeks: trainingLoad.load.perWeekBasis.weeks,
+        partial: trainingLoad.load.perWeekBasis.partial,
+        profile,
+        named,
+        liftTrends: liftTrendsPeriod,
+        start: startDay,
+        end: endDay,
+        today,
+        coached,
+        supportCredit,
+      }),
+    [
+      trainingLoad.load,
+      periodLoadSets,
+      allLoadSets,
+      profile,
+      named,
+      liftTrendsPeriod,
+      startDay,
+      endDay,
+      today,
+      coached,
+      supportCredit,
+    ],
+  );
+  const blocksForCompare = useMemo(
+    () =>
+      clientBlocks.map((b) => ({
+        id: b.id,
+        name: b.name,
+        start_date: b.start_date,
+        end_date: b.end_date,
+        training_focus: b.training_focus,
+        block_type: blockTypes?.get(b.id) ?? null,
+      })),
+    [clientBlocks, blockTypes],
+  );
+  const blocks = useMemo(
+    () =>
+      blockRows({
+        blocks: blocksForCompare,
+        strength,
+        weeks: trainingLoad.load.weeks,
+        sets: allLoadSets,
+        today,
+      }),
+    [blocksForCompare, strength, trainingLoad.load.weeks, allLoadSets, today],
+  );
+
+  // recovery patterns read up to half a year of the athlete's own check-outs
+  const patternStart = useMemo(
+    () => new Date(Math.min(filter.start.getTime(), Date.now() - 182 * DAY)),
+    [filter.start],
+  );
+  const checkouts = useCheckouts(
+    clientId,
+    patternStart,
+    filter.end,
+    view === "overview" || view === "training",
+  );
+  const patternDays = useMemo(
+    () =>
+      buildCalendar({
+        results: allResults as any[],
+        plan: [],
+        prs: [],
+        start: isoDay(patternStart),
+        end: endDay,
+        today,
+        metric: "activity",
+        firstLog,
+        strength: changes,
+      }),
+    [allResults, patternStart, endDay, today, firstLog, changes],
+  );
+  const ratedCompSets = useMemo(
+    () =>
+      (allResults as any[])
+        .map((r) => {
+          const lift = compLiftOfResult(r);
+          const rpe = r.rpe != null && r.rpe !== "" ? Number(r.rpe) : null;
+          return lift && rpe && r.counts_load !== false && Number(r.load) > 0
+            ? {
+                day: format(new Date(r.date), "yyyy-MM-dd"),
+                lift,
+                load: Number(r.load),
+                reps: Number(r.reps) || 0,
+                rpe,
+              }
+            : null;
+        })
+        .filter(
+          (x): x is { day: string; lift: CompLift; load: number; reps: number; rpe: number } => !!x,
+        ),
+    [allResults],
+  );
+  const patterns = useMemo(
+    () =>
+      recoveryPatterns({
+        checkouts: checkouts.data ?? [],
+        days: patternDays,
+        strength,
+        ratedSets: ratedCompSets,
+        today,
+      }),
+    [checkouts.data, patternDays, strength, ratedCompSets, today],
+  );
+
+  // Cleo's one observation: the last six weeks, whatever period is on screen
+  const observation = useMemo(() => {
+    const sixAgo = isoDay(new Date(Date.now() - 42 * DAY));
+    const lastSunday = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - ((d.getDay() + 7) % 7 || 7));
+      return isoDay(d);
+    })();
+    const shiftStart = isoDay(new Date(Date.parse(`${lastSunday}T12:00:00`) - 41 * DAY));
+    const wk = (metric: "sets" | "avgRpe") =>
+      buildWorkload({
+        sets: allLoadSets,
+        metric,
+        scope: "both",
+        grain: "week",
+        start: shiftStart,
+        end: lastSunday,
+        today,
+      });
+    const liftTrends: Partial<Record<CompLift, EnvelopeTrend>> = {};
+    for (const l of COMP_LIFTS) liftTrends[l] = liftNow(strength[l], sixAgo, today).trend;
+    const cur = blocks.find((b) => b.current);
+    const currentWeekPhase =
+      trainingLoad.plan.find(
+        (p) => p.day && p.day <= today && p.day >= isoDay(new Date(Date.now() - 6 * DAY)),
+      )?.weekPhase ?? null;
+    const phase =
+      (
+        cur?.typeKey ??
+        inferBlockType({ phase: currentWeekPhase }) ??
+        currentWeekPhase ??
+        null
+      )?.toLowerCase() ?? null;
+    const recent = records
+      .filter((r) => r.day >= isoDay(new Date(Date.now() - 14 * DAY)))
+      .sort(
+        (a, b) =>
+          Number(isHeadlineRecord(b)) - Number(isHeadlineRecord(a)) || b.day.localeCompare(a.day),
+      )
+      .map((r) => ({ exercise: r.exercise, load: r.load, reps: r.reps, day: r.day }));
+    return pickObservation({
+      coached,
+      phase,
+      unit: displayUnit,
+      conv,
+      liftTrends,
+      setShifts: splitShift(wk("sets")),
+      rpeShifts: splitShift(wk("avgRpe")),
+      patterns,
+      recentRecords: recent,
+      consistency: {
+        recentPct: consistency.recent?.pct ?? null,
+        beforePct: consistency.before?.pct ?? null,
+        planned: consistency.planned ?? 0,
+      },
+      mainLift: mainLift(strength, sixAgo, today),
+      insight:
+        trainingLoad.load.insights.find((i) => i.audience === "both" && i.actionNeeded) ?? null,
+      profile,
+      muscles: muscleWindowChanges({
+        sets: allLoadSets,
+        start: sixAgo,
+        end: today,
+        profile,
+        named,
+        supportCredit,
+      }),
+    });
+  }, [
+    profile,
+    named,
+    supportCredit,
+    allLoadSets,
+    strength,
+    today,
+    blocks,
+    trainingLoad.plan,
+    trainingLoad.load.insights,
+    records,
+    coached,
+    displayUnit,
+    conv,
+    patterns,
+    consistency,
+  ]);
+
+  // the workouts' names for the calendar's day detail
+  const periodDayIds = useMemo(
+    () => [...new Set(calendarDays.flatMap((d) => d.dayIds))],
+    [calendarDays],
+  );
+  const { data: dayMeta } = useQuery({
+    queryKey: [
+      "analytics-day-meta",
+      clientId,
+      periodDayIds.length,
+      periodDayIds[0] ?? "",
+      periodDayIds[periodDayIds.length - 1] ?? "",
+    ],
+    enabled: periodDayIds.length > 0 && view === "overview",
     staleTime: 5 * 60_000,
-    queryFn: () => loadClientBodyweight(clientId),
+    queryFn: async () => {
+      const out = new Map<string, DayMeta>();
+      const blockName = new Map(
+        clientBlocks.map((b) => [b.id, b.name.replace(/^\s*block\s*\d+\s*[—–\-:·]\s*/i, "")]),
+      );
+      for (let i = 0; i < periodDayIds.length; i += 150) {
+        const ids = periodDayIds.slice(i, i + 150);
+        const { data: days } = await supabase
+          .from("pl_days")
+          .select("id, title, subtitle, week_id")
+          .in("id", ids);
+        const weekIds = [...new Set((days ?? []).map((d: any) => d.week_id))];
+        const { data: weeks } = weekIds.length
+          ? await supabase.from("pl_weeks").select("id, block_id, week_index").in("id", weekIds)
+          : { data: [] as any[] };
+        const wk = new Map((weeks ?? []).map((w: any) => [w.id, w]));
+        for (const d of (days ?? []) as any[]) {
+          const w: any = wk.get(d.week_id);
+          out.set(d.id, {
+            title: d.subtitle || d.title || null,
+            block: w ? (blockName.get(w.block_id) ?? null) : null,
+            week: w?.week_index != null ? Number(w.week_index) + 1 : null,
+          });
+        }
+      }
+      return out;
+    },
   });
-  const weighIns = useMemo(
-    () => (bodyweight?.entries ?? []).map((e) => ({ day: e.date, lb: e.unit === "kg" ? e.value * 2.2046226 : e.value })),
-    [bodyweight],
-  );
-  const todayISO = format(new Date(), "yyyy-MM-dd");
 
-  const t = trainingLoad.load.totals;
-  const perWeek = perWeekWords(trainingLoad.load);
-  const widen = () => handleFilterChange(lifetimeFilter(clientBlocks, firstDataDate));
-  const strengthChart = (
-    <CompetitionStrengthChart
-      points={strength.points}
-      lightSessions={lightInPeriod}
-      meets={competition.data?.meets ?? []}
-      maxes={competition.data?.maxes ?? []}
-      blocks={clientBlocks.map((b) => ({ id: b.id, name: b.name, start_date: b.start_date }))}
-      start={filter.start}
-      end={filter.end}
-      unit={displayUnit}
-      conv={conv}
-      weighIns={weighIns}
-      onWiden={filter.preset === "lifetime" ? undefined : widen}
-    />
+  // compositions: the estimate (when all three lifts are current) then each meet
+  const est = useMemo(() => estimatedComposition(strength, today), [strength, today]);
+  const compositions = useMemo(
+    () => [...(est.composition ? [est.composition] : []), ...meetCompositions(meets)],
+    [est, meets],
   );
 
-  // ── the four areas (analytics-areas.ts): one read each, shared by the Overview and the area ──
-  const startDay = format(filter.start, "yyyy-MM-dd");
-  const endDay = format(filter.end, "yyyy-MM-dd");
-  const consistency = useMemo(() => consistencyOf(trainingLoad.load), [trainingLoad.load]);
-  const blockStrength = useMemo(
-    () => blockStrengthRows(strength.points, clientBlocks, startDay, endDay),
-    [strength.points, clientBlocks, startDay, endDay],
-  );
-  const blockVolume = useMemo(() => blockVolumeRows(trainingLoad.load.weeks, clientBlocks), [trainingLoad.load.weeks, clientBlocks]);
+  // ── key numbers for this athlete ────────────────────────────────────
+  const fmtDay = (d: string) => format(new Date(`${d}T12:00:00`), "MMM d");
   const liftsMoving = useMemo(
     () => liftsTrending(results as any[], startDay, endDay, (x) => comparableE1rm(x as any)),
     [results, startDay, endDay],
   );
-  const fmtDay = (d: string) => {
-    const x = parseLocalDate(d);
-    return x ? format(x, "MMM d") : d;
-  };
-  // The three lifts in one row: each estimate now and how far it's moved (a compact
-  // "+12 lb"; the day it's measured from is said once, under the card's title).
-  const liftSummaries = COMP_LIFTS.map((lift) => liftSummary(strength.points, lift, startDay, endDay));
-  const liftTriplet = liftSummaries.map((sm) => {
-    const ch = changeWords(sm.trend, conv, displayUnit, fmtDay);
-    const diff = sm.trend.kind === "unclear" ? null : Math.round(conv(sm.trend.last) - conv(sm.trend.first));
-    return {
-      lift: sm.lift,
-      value: sm.latest ? Math.round(conv(sm.latest.e1rm)) : null,
-      change: !sm.latest ? null : diff == null ? "Too few hard sets" : sm.trend.kind === "steady" ? "About the same" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)} ${displayUnit}`,
-      tone: ch.tone,
-    };
+  const main =
+    mainLift(strength, startDay, endDay) ??
+    (profile === "powerlifting"
+      ? ((["squat", "bench", "deadlift"] as CompLift[]).find((l) => strength[l].sessions.length) ??
+        null)
+      : null);
+  const kpis: Kpi[] = [];
+  if (profile === "powerlifting" && main) {
+    const n = liftNow(strength[main], startDay, endDay);
+    const t = n.trend;
+    kpis.push({
+      key: "lift",
+      label: `${COMP_LIFT_LABEL[main]} strength`,
+      value: n.now ? (
+        <>
+          {Math.round(conv(n.now.value))}
+          <span className="ml-0.5 text-[13px] font-medium text-muted-foreground">{displayUnit}</span>
+        </>
+      ) : (
+        "—"
+      ),
+      sub:
+        t.kind === "unclear" ? (
+          t.reason === "held" ? (
+            "Estimated max · no hard sets lately"
+          ) : (
+            "Estimated max · too early to tell"
+          )
+        ) : (
+          <>
+            Estimated max,{" "}
+            <span className={t.kind === "up" ? "text-success" : undefined}>
+              {t.kind === "up" ? "up" : t.kind === "down" ? "down" : "steady"}
+              {t.kind !== "steady" ? ` ${Math.abs(Math.round(t.pct * 10) / 10)}%` : ""}
+            </span>{" "}
+            since {fmtDay(t.from.day)}
+          </>
+        ),
+      onOpen: () => changeView("strength"),
+    });
+  } else if (liftsMoving.tracked) {
+    kpis.push({
+      key: "moving",
+      label: "Lifts improving",
+      value: `${liftsMoving.up} of ${liftsMoving.tracked}`,
+      sub: "Based on your hardest sets",
+      onOpen: () => changeView("strength"),
+    });
+  }
+  kpis.push({
+    key: "consistency",
+    label: consistency.planned ? "Workouts done" : "Workouts",
+    value: consistency.planned ? `${consistency.pct}%` : String(consistency.logged),
+    ring: consistency.planned ? consistency.pct : undefined,
+    sub: consistency.planned
+      ? `${consistency.done} of ${consistency.planned} planned`
+      : "logged this period",
+    onOpen: () => changeView("training"),
   });
-  const tripletSince = liftSummaries
-    .map((sm) => (sm.trend.kind === "unclear" ? null : sm.trend.firstDate))
-    .filter((d): d is string => !!d)
-    .sort()[0];
-  const showLiftTriplet = profile === "powerlifting" && liftTriplet.some((r) => r.value != null);
-  const overviewOrder: Array<"strength" | "volume" | "consistency" | "recovery"> =
-    profile === "physique"
-      ? ["volume", "strength", "consistency", "recovery"]
-      : profile === "powerlifting"
-        ? ["strength", "consistency", "volume", "recovery"]
-        : ["consistency", "strength", "volume", "recovery"];
-  // the last 8 weeks of working sets (the last one this week)
-  const spark = useMemo(() => {
-    const byWeek = new Map(trainingLoad.load.weeks.map((w) => [w.key, w.sets]));
-    const last = weekOf(endDay < todayISO ? endDay : todayISO);
-    const out: number[] = [];
-    for (let i = 7; i >= 0; i--) out.push(byWeek.get(new Date(Date.parse(`${last}T12:00:00Z`) - i * 7 * 86_400_000).toISOString().slice(0, 10)) ?? 0);
-    return out;
-  }, [trainingLoad.load.weeks, endDay, todayISO]);
-  const checkouts = useCheckouts(clientId, filter.start, filter.end, view === "overview");
-  const recovery = useMemo(() => (checkouts.data ? recoverySummary(checkouts.data) : null), [checkouts.data]);
+  if (profile === "physique" && kpis.length < 3) {
+    const t = trainingLoad.load.totals;
+    kpis.push({
+      key: "sets",
+      label: trainingLoad.load.perWeekBasis.partial ? "Sets this week" : "Sets a week",
+      value: String(t.setsPerWeek),
+      sub: "Work sets, not warm-ups",
+      onOpen: () => changeView("training"),
+    });
+  }
+  kpis.push({
+    key: "records",
+    label: "New records",
+    value: String(recordsInPeriod.length),
+    sub: (() => {
+      const main = recordsInPeriod.filter(isHeadlineRecord).length;
+      return recordsInPeriod.length
+        ? main
+          ? `${main} on squat, bench or deadlift`
+          : "On other exercises"
+        : "None this period";
+    })(),
+    onOpen: () => changeView("records"),
+  });
 
-  // The period on screen as a document (progress-report-pdf.ts): this page's training load and records,
-  // plus weigh-ins and nutrition read for it; made on the tap and handed to the share sheet.
+  // The period as a PDF (progress-report-pdf.ts), made on the tap.
   const [reportBusy, setReportBusy] = useState(false);
   const downloadReport = () => {
     if (reportBusy) return;
     setReportBusy(true);
-    const from = format(filter.start, "yyyy-MM-dd");
-    const to = format(filter.end, "yyyy-MM-dd");
     void makeAndDeliverPdf("Progress report", async () => {
-      const [{ buildProgressReport, progressReportFileName }, { loadProgressReportExtras }, logo] = await Promise.all([
-        import("@/lib/analytics/progress-report-pdf"),
-        import("@/lib/analytics/progress-report-data"),
-        loadPdfLogo(),
-      ]);
-      const extra = await loadProgressReportExtras(clientId, displayUnit, from, to);
+      const [{ buildProgressReport, progressReportFileName }, { loadProgressReportExtras }, logo] =
+        await Promise.all([
+          import("@/lib/analytics/progress-report-pdf"),
+          import("@/lib/analytics/progress-report-data"),
+          loadPdfLogo(),
+        ]);
+      const extra = await loadProgressReportExtras(clientId, displayUnit, startDay, endDay);
       const doc = buildProgressReport(
         {
           athlete: extra.athlete,
@@ -450,7 +816,13 @@ export function ClientAnalyticsDashboard({
           period: { label: filter.label, start: filter.start, end: filter.end },
           unit: displayUnit,
           load: trainingLoad.load,
-          prs: prs as any[],
+          prs: recordsInPeriod.map((r) => ({
+            exercise_name: r.exercise,
+            date: `${r.day}T12:00:00`,
+            load: r.load,
+            reps: r.reps,
+            rpe: r.rpe,
+          })) as any[],
           bodyweight: extra.bodyweight,
           nutrition: extra.nutrition,
         },
@@ -460,11 +832,23 @@ export function ClientAnalyticsDashboard({
     }).finally(() => setReportBusy(false));
   };
 
+  const openWorkout = (dayId: string) => {
+    if (coach) void navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+    else void navigate({ to: "/portal/workouts/$dayId", params: { dayId } });
+  };
+  const widen = () => handleFilterChange(lifetimeFilter(clientBlocks, firstDataDate));
+  const hasSbdInPeriod = periodLoadSets.some(
+    (s) =>
+      s.isCompetitionLift ||
+      ["squat", "bench", "deadlift"].includes(
+        String(s.rowFamily ?? s.competitionLiftType ?? "").toLowerCase(),
+      ),
+  );
+
   return (
     <>
-      <div className={`space-y-4 ${className ?? ""}`}>
+      <div className={cn("mx-auto max-w-5xl space-y-4", className)}>
         {headerLeadingNode}
-        {/* One row of controls: the period (every choice in one sheet) and the unit. */}
         <div className="flex items-center gap-2" data-analytics-controls>
           <AnalyticsPeriodControl
             blocks={clientBlocks}
@@ -482,15 +866,20 @@ export function ClientAnalyticsDashboard({
               className="h-10 shrink-0 rounded-lg border border-border bg-card p-0.5"
               aria-label="Units"
             >
-              <ToggleGroupItem value="lb" className="h-8 px-2.5 text-xs font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background">
+              <ToggleGroupItem
+                value="lb"
+                className="h-8 px-2.5 text-xs font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background"
+              >
                 lb
               </ToggleGroupItem>
-              <ToggleGroupItem value="kg" className="h-8 px-2.5 text-xs font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background">
+              <ToggleGroupItem
+                value="kg"
+                className="h-8 px-2.5 text-xs font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background"
+              >
                 kg
               </ToggleGroupItem>
             </ToggleGroup>
           )}
-          {/* The period on screen as a document (progress report PDF), handed to the share sheet. */}
           {(allResults as any[]).length > 0 && (
             <Button
               variant="outline"
@@ -510,22 +899,29 @@ export function ClientAnalyticsDashboard({
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           blocks={clientBlocks}
-          selectedBlockId={selectedBlockId}
+          selectedBlockId={activeBlockId}
           resolvedCurrentBlockId={resolvedCurrentBlockId}
           isLoading={blocksLoading}
           isError={blocksError}
-          onRetry={() => { void refetchBlocks(); }}
+          onRetry={() => {
+            void refetchBlocks();
+          }}
           onSelect={(b) => handleFilterChange(exactBlockFilter(b, clientBlocks))}
         />
 
-        {filter.preset === "exact_block" && !filter.hasBlockDates && (
-          <p className="text-xs text-muted-foreground">This block has no dates yet, so its charts fill in once it's scheduled.</p>
-        )}
-
         {scopeLoading ? (
-          <Card className="p-8 text-center text-sm text-muted-foreground" role="status">
-            Loading training data…
-          </Card>
+          <div className="space-y-3" role="status" aria-label="Loading training data">
+            <div className="jf-load-reveal space-y-3">
+              <div className="jf-skeleton h-11 rounded-lg bg-muted/50" />
+              <div className="jf-skeleton h-28 rounded-2xl bg-muted/40" />
+              <div className="jf-skeleton h-64 rounded-2xl bg-muted/40" />
+            </div>
+            <SlowNote active onRetry={() => resultsQ.refetch()} what="training data" />
+          </div>
+        ) : resultsState === "offline" ? (
+          <OfflineState what="training data" />
+        ) : resultsState === "error" ? (
+          <ErrorState error={resultsQ.error} what="training data" onRetry={() => resultsQ.refetch()} retrying={resultsQ.isFetching} />
         ) : (allResults as any[]).length === 0 ? (
           <AnalyticsEmptyPreview />
         ) : (
@@ -533,234 +929,201 @@ export function ClientAnalyticsDashboard({
             <AnalyticsTabs view={view} onChange={changeView} />
 
             {view === "overview" && (
-              <div className="space-y-3" data-analytics-view="overview" data-analytics-profile={profile}>
-                {filteredResults.length === 0 && (
-                  <Card className="border-dashed border-border/70 bg-card/60 p-4 text-center text-sm text-muted-foreground">
-                    Nothing logged in this period yet.
-                  </Card>
+              <div
+                className="space-y-6"
+                data-analytics-view="overview"
+                data-analytics-profile={profile}
+              >
+                {observation && (
+                  <SectionErrorBoundary label="Observation">
+                    <CleoObservationCard
+                      o={observation}
+                      askCleo={coach && cleoOn}
+                      athleteName={athlete?.first_name ?? athlete?.full_name ?? null}
+                    />
+                  </SectionErrorBoundary>
                 )}
-                {/* One answer per area, in the order that matters most for this athlete; a tap opens the area. */}
-                <div className="grid gap-3 md:grid-cols-2">
-                  {overviewOrder.map((area) => {
-                    if (area === "strength") {
-                      return (
-                        <AreaCard
-                          key={area}
-                          area="strength"
-                          title="Strength"
-                          icon={<TrendingUp className="h-4 w-4" />}
-                          onOpen={() => changeView("strength")}
-                          value={showLiftTriplet ? undefined : liftsMoving.tracked ? `${liftsMoving.up} of ${liftsMoving.tracked}` : prs.length ? String(prs.length) : "—"}
-                          sub={
-                            showLiftTriplet
-                              ? `Estimated max${tripletSince ? ` · change since ${fmtDay(tripletSince)}` : ""}${prs.length ? ` · ${prs.length} PR${prs.length === 1 ? "" : "s"}` : ""}`
-                              : liftsMoving.tracked
-                                ? `lifts getting stronger (estimated max, hard sets)${prs.length ? ` · ${prs.length} all-time PR${prs.length === 1 ? "" : "s"}` : ""}`
-                                : prs.length
-                                  ? `all-time PR${prs.length === 1 ? "" : "s"} in this period`
-                                  : "Log RPE on your top sets to see strength trends"
-                          }
-                        >
-                          {showLiftTriplet && <LiftTriplet rows={liftTriplet} />}
-                        </AreaCard>
-                      );
-                    }
-                    if (area === "volume") {
-                      return (
-                        <AreaCard
-                          key={area}
-                          area="volume"
-                          title="Volume"
-                          icon={<BarChart3 className="h-4 w-4" />}
-                          onOpen={() => changeView("volume")}
-                          value={t.sets ? String(t.setsPerWeek) : "0"}
-                          unit={trainingLoad.load.perWeekBasis.partial ? "sets this week" : "sets a week"}
-                          sub={t.sets ? perWeek.note : "No working sets in this period"}
-                        >
-                          {spark.some((v) => v > 0) && <MiniBars values={spark} label="Working sets, last 8 weeks" />}
-                        </AreaCard>
-                      );
-                    }
-                    if (area === "consistency") {
-                      return (
-                        <AreaCard
-                          key={area}
-                          area="consistency"
-                          title="Consistency"
-                          icon={<Check className="h-4 w-4" />}
-                          onOpen={() => changeView("consistency")}
-                          value={consistency.planned ? `${consistency.done} of ${consistency.planned}` : String(consistency.logged)}
-                          sub={
-                            trainingLoad.planLoading
-                              ? "Reading the program…"
-                              : consistency.planned
-                                ? `planned workouts done · ${consistency.pct}%`
-                                : `workout${consistency.logged === 1 ? "" : "s"} logged · no planned workouts here`
-                          }
-                        >
-                          {!!consistency.planned && (
-                            <ProgressBar value={consistency.done ?? 0} max={consistency.planned} label="Planned workouts done" />
-                          )}
-                        </AreaCard>
-                      );
-                    }
-                    return (
-                      <AreaCard
-                        key={area}
-                        area="recovery"
-                        title="Recovery"
-                        icon={<Moon className="h-4 w-4" />}
-                        onOpen={() => changeView("recovery")}
-                        value={recovery && recovery.checkouts ? (recovery.sleepAvg != null ? `${recovery.sleepAvg}h` : `${recovery.recoveryAvg ?? "—"}/5`) : "—"}
-                        unit={recovery && recovery.checkouts && recovery.sleepAvg != null ? "sleep" : undefined}
+                <KpiStrip items={kpis.slice(0, 3)} />
+                <div
+                  className={cn(
+                    "grid gap-6",
+                    profile === "powerlifting" &&
+                      compositions.length > 0 &&
+                      "lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]",
+                  )}
+                >
+                  {profile === "powerlifting" && compositions.length > 0 && (
+                    <Card className="p-4" data-overview-total>
+                      <SectionTitle
+                        title="Your total"
                         sub={
-                          recovery && recovery.checkouts
-                            ? `${recovery.recoveryAvg != null ? `felt ${recovery.recoveryAvg}/5 recovered · ` : ""}${recovery.painSessions ? `pain ${recovery.painSessions}× · ` : ""}from ${recovery.checkouts} check-out${recovery.checkouts === 1 ? "" : "s"}`
-                            : "No check-outs logged in this period"
+                          est.composition
+                            ? "How much each lift adds to your squat + bench + deadlift"
+                            : "Your meet totals, lift by lift"
+                        }
+                        info={
+                          <>
+                            <p>
+                              Your total is your best squat, bench and deadlift added together, the
+                              number powerlifting meets rank you by.
+                            </p>
+                            <p>
+                              The ring shows how much of it each lift makes up. Tap a lift for its
+                              numbers. Every lifter's split is different, so it isn't a score.
+                            </p>
+                          </>
                         }
                       />
-                    );
-                  })}
+                      <SectionErrorBoundary label="Total">
+                        <SbdDonut
+                          compositions={compositions}
+                          missing={est.missing}
+                          unit={displayUnit}
+                          maxes={competition.data?.maxes ?? []}
+                        />
+                      </SectionErrorBoundary>
+                    </Card>
+                  )}
+                  <Card className="p-4" data-overview-calendar>
+                    <SectionTitle
+                      title="Training calendar"
+                      sub="Every day you trained. Tap a day to see it."
+                    />
+                    <SectionErrorBoundary label="Calendar">
+                      <PerformanceCalendar
+                        days={calendarDays}
+                        metric={calMetric}
+                        onMetric={setCalMetric}
+                        today={today}
+                        unit={displayUnit}
+                        dayMeta={dayMeta}
+                        onOpenWorkout={openWorkout}
+                      />
+                    </SectionErrorBoundary>
+                  </Card>
                 </div>
-
-                {loadInsights.length > 0 && (
-                  <SectionErrorBoundary label="Coaching insights">
-                    <TrainingLoadInsights insights={loadInsights.slice(0, 2)} coach={coach} onOpenVolume={() => changeView("volume")} />
-                  </SectionErrorBoundary>
+                {profile === "physique" && muscleRead.rows.some((r) => r.perWeek > 0) && (
+                  <section aria-label="Your most trained muscles">
+                    <SectionTitle
+                      title="Your most trained muscles"
+                      sub="Sets a week for each muscle"
+                      right={
+                        <button
+                          type="button"
+                          onClick={() => changeView("training")}
+                          className="min-h-10 text-[13px] font-medium text-foreground"
+                        >
+                          See all muscles
+                        </button>
+                      }
+                    />
+                    <ul className="space-y-1.5">
+                      {[...muscleRead.rows]
+                        .sort((a, b) => b.perWeek - a.perWeek)
+                        .slice(0, 5)
+                        .map((r, _i, top) => (
+                          <li key={r.muscle} className="flex items-center gap-3 text-[14px]">
+                            <span className="w-24 shrink-0 truncate">{r.muscle}</span>
+                            <span className="relative h-2 flex-1 rounded-full bg-muted/60">
+                              <span
+                                className="absolute inset-y-0 left-0 rounded-full bg-[var(--chart-4)]"
+                                style={{ width: `${(r.perWeek / Math.max(0.1, top[0].perWeek)) * 100}%` }}
+                              />
+                            </span>
+                            <span className="w-20 shrink-0 text-right text-[13px] tabular-nums text-muted-foreground">
+                              {r.perWeek} a week
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  </section>
                 )}
               </div>
             )}
 
             {view === "strength" && (
               <div className="space-y-6" data-analytics-view="strength">
-                {/* anyone who isn't a powerlifter: how far each lift has moved, first */}
+                {hasPowerlifting && (
+                  <Card className="p-4" data-strength-section>
+                    <SectionTitle
+                      title="Squat, bench and deadlift strength"
+                      sub="Your estimated max for each lift over time"
+                      info={
+                        <>
+                          <p>
+                            Your estimated max is the most you could likely lift for one rep,
+                            worked out from your sets: the weight, the reps and how hard they felt
+                            (RPE).
+                          </p>
+                          <p>
+                            Each dot is one workout. The line follows your hardest recent sets, so a
+                            light day doesn't pull it down. Diamonds are meet lifts.
+                          </p>
+                        </>
+                      }
+                    />
+                    <SectionErrorBoundary label="Competition lifts">
+                      <StrengthTrendChart
+                        strength={strength}
+                        start={startDay}
+                        end={endDay}
+                        unit={displayUnit}
+                        onWiden={filter.preset === "lifetime" ? undefined : widen}
+                      />
+                    </SectionErrorBoundary>
+                  </Card>
+                )}
                 {profile !== "powerlifting" && (
                   <section aria-label="Your lifts">
-                    <SectionHeading
-                      icon={<TrendingUp className="h-5 w-5" />}
+                    <SectionTitle
                       title="Your lifts"
-                      tip={
-                        <InfoTip label="About your lifts" title="Your lifts" align="start">
-                          Each lift's estimated max from hard sets (RPE 7+, 10 reps or fewer): the best of its first few
-                          sessions in this period against the best of its last few. A lift needs 4+ hard sessions over 3+
-                          weeks to show.
-                        </InfoTip>
+                      sub="How your estimated max changed this period"
+                      info={
+                        <p>
+                          Your estimated max is the most you could likely lift for one rep, worked
+                          out from your hardest sets (the weight, the reps and how hard they felt).
+                          It compares the start of the period with the end.
+                        </p>
                       }
                     />
                     <LiftsMovingCard data={liftsMoving} unit={displayUnit} conv={conv} />
                   </section>
                 )}
-                {hasPowerlifting && (
-                  <section aria-label="Competition lifts over time">
-                    <SectionHeading icon={<TrendingUp className="h-5 w-5" />} title="Competition lifts" />
-                    {strengthChart}
-                  </section>
-                )}
-
-                {hasPowerlifting && competition.data && (
-                  <SectionErrorBoundary label="Where you stand">
-                    <section aria-label="Where you stand">
-                      <SectionHeading
-                        icon={<PieChart className="h-5 w-5" />}
-                        title={coach ? "Where they stand" : "Where you stand"}
-                        tip={
-                          <InfoTip label="About these numbers" title="Four different numbers" align="start">
-                            Est. now: the best estimate from a hard set in the last 6 weeks. Last meet: what was lifted on
-                            the platform. 1RM on file: a max on the client's file, tested (with its day) or entered by the
-                            coach. Training max: the number the program works % loads from, set by the coach. They're never
-                            added together or swapped. Not tied to the period above.
-                          </InfoTip>
-                        }
-                      />
-                      <TotalStandingCard
-                        clientId={clientId}
-                        points={strength.points}
-                        data={competition.data}
-                        unit={displayUnit}
-                        conv={conv}
-                        today={todayISO}
-                        coach={coach}
-                      />
-                    </section>
+                <Card className="p-4">
+                  <SectionTitle
+                    title={hasPowerlifting ? "Other exercises" : "Any exercise"}
+                    sub="Pick an exercise to see its progress. Each dot is your best set that day."
+                  />
+                  <SectionErrorBoundary label="Exercise progress">
+                    <LiftProgressCard
+                      history={hasPowerlifting ? otherHistory : history}
+                      displayUnit={displayUnit}
+                      conv={conv}
+                      onOpenSet={setSelectedDot}
+                      compact
+                    />
                   </SectionErrorBoundary>
-                )}
-
-                {hasPowerlifting && blockStrength.length >= 2 && (
-                  <section aria-label="By block">
-                    <SectionHeading
-                      icon={<Calendar className="h-5 w-5" />}
-                      title="By block"
-                      tip={
-                        <InfoTip label="About the block comparison" title="By block" align="start">
-                          Each block's best estimated max from a hard set, by the block's own dates. Pick a phase to
-                          compare a peak with a peak, never with a base block.
-                        </InfoTip>
+                </Card>
+                {blocks.length >= 2 && (
+                  <Card className="p-4">
+                    <SectionTitle
+                      title="Compare your training blocks"
+                      sub="See how each block went, side by side"
+                      info={
+                        <p>
+                          A training block is a few weeks of training with one aim, like building
+                          muscle or peaking for a meet. Compare blocks of the same kind: a lighter
+                          block is meant to be lighter.
+                        </p>
                       }
                     />
-                    <BlockStrengthTable rows={blockStrength} unit={displayUnit} conv={conv} />
-                  </section>
+                    <SectionErrorBoundary label="Blocks">
+                      <BlockComparisonCard rows={blocks} powerlifter={hasPowerlifting} />
+                    </SectionErrorBoundary>
+                  </Card>
                 )}
-
-                <section aria-label="All-time PRs">
-                  <SectionHeading
-                    icon={<Trophy className="h-5 w-5" />}
-                    title="Personal records"
-                    action={prs.length > 0 ? viewAllPRsNode : undefined}
-                    tip={
-                      <InfoTip label="About personal records" title="Personal records" align="start">
-                        Sets in this period whose estimated max beat every earlier set of that exercise on file (Epley:
-                        weight × (1 + reps ÷ 30)). The first time you log an exercise doesn't count. The set is what you
-                        lifted; the estimate is how it compares.
-                      </InfoTip>
-                    }
-                  />
-                  {prs.length === 0 ? (
-                    <Card className="p-4 text-sm text-muted-foreground">No all-time PRs in this period.</Card>
-                  ) : (
-                    <>
-                      <Card className="divide-y divide-border/60 p-0" data-pr-list>
-                        {prs.slice(0, 8).map((p: any) => (
-                          <div key={p.id} className="flex min-h-12 items-center gap-3 px-4 py-2.5 text-[13px]">
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate font-medium text-foreground">{p.exercise_name}</div>
-                              <div className="truncate text-[12px] text-muted-foreground">{format(new Date(p.date), "EEE, MMM d")}</div>
-                            </div>
-                            <div className="shrink-0 text-right font-semibold tabular-nums text-foreground">
-                              {fmtLoad(conv(p.load))} × {p.reps}
-                              {p.rpe ? <span className="font-normal text-muted-foreground"> @{p.rpe}</span> : null}
-                            </div>
-                          </div>
-                        ))}
-                      </Card>
-                      {prs.length > 8 && viewAllPRsNode && <div className="mt-3 text-center">{viewAllPRsNode}</div>}
-                    </>
-                  )}
-                </section>
-
-                {hasPowerlifting && (competition.data?.meets.length ?? 0) > 0 && (
-                  <section aria-label="Competition results">
-                    <SectionHeading icon={<Trophy className="h-5 w-5" />} title="Competition results" />
-                    <MeetsList meets={competition.data!.meets} unit={displayUnit} conv={conv} />
-                  </section>
-                )}
-
-                <section aria-label="Lift Progress">
-                  <SectionHeading
-                    icon={<Dumbbell className="h-5 w-5" />}
-                    title="Any exercise"
-                    tip={
-                      <InfoTip label="About lift progress" title="Any exercise" align="start">
-                        One point per session: its best set. Est. max reads hard sets only (RPE 7+, 10 reps or fewer);
-                        Top set is the heaviest weight; Volume is weight × reps. Touch the chart to see a session.
-                        Variations are their own exercise, never the competition lift.
-                      </InfoTip>
-                    }
-                  />
-                  <LiftProgressCard history={history} displayUnit={displayUnit} conv={conv} onOpenSet={setSelectedDot} />
-                </section>
-
                 {coach && (
-                  <MoreDetail label="Programming detail">
+                  <MoreDetail label="Programming detail (coach)">
                     <SectionErrorBoundary label="Powerlifting exposure">
                       <PowerliftingExposureSection
                         clientId={clientId}
@@ -773,89 +1136,150 @@ export function ClientAnalyticsDashboard({
                       />
                     </SectionErrorBoundary>
                     <SectionErrorBoundary label="Predicted window">
-                      <PredictedWindowCard clientId={clientId} currentBlockId={activeBlockId ?? resolvedCurrentBlockId} />
+                      <PredictedWindowCard
+                        clientId={clientId}
+                        currentBlockId={activeBlockId ?? resolvedCurrentBlockId}
+                      />
                     </SectionErrorBoundary>
                   </MoreDetail>
                 )}
               </div>
             )}
 
-            {view === "volume" && (
-              <div className="space-y-6" data-analytics-view="volume">
-                <SectionErrorBoundary label="Volume and workload">
-                  <TrainingLoadSection
-                    load={trainingLoad.load}
-                    coach={coach}
-                    unit={displayUnit}
-                    rangeLabel={filter.short}
-                    planLoading={trainingLoad.planLoading}
-                    planError={trainingLoad.planError}
-                    hideInsights
-                    blockRows={blockVolume}
-                    header={
-                      <SectionHeading
-                        icon={<BarChart3 className="h-5 w-5" />}
-                        title="How much you train"
-                        tip={
-                          <InfoTip label="About volume" title="Volume" align="start">
-                            Working sets, never warm-ups. A muscle gets a full set from exercises aimed at it and half a set
-                            from ones that help. "How these are counted" under the charts has every definition.
-                          </InfoTip>
-                        }
+            {view === "training" && (
+              <div className="space-y-6" data-analytics-view="training">
+                {hasSbdInPeriod && (
+                  <Card className="p-4" data-training-workload>
+                    <SectionTitle
+                      title="Squat, bench and deadlift training"
+                      sub="How much you did of each lift, week by week"
+                      info={
+                        <>
+                          <p>
+                            Sets, reps and total weight lifted (weight × reps, added up) for your
+                            three main lifts.
+                          </p>
+                          <p>
+                            The outline is what your program planned, when there's a plan on file.
+                          </p>
+                        </>
+                      }
+                    />
+                    <SectionErrorBoundary label="Workload">
+                      <SbdWorkloadChart
+                        sets={periodLoadSets}
+                        plan={trainingLoad.plan}
+                        start={startDay}
+                        end={endDay}
+                        today={today}
+                        unit={displayUnit}
+                        envelopes={{
+                          squat: strength.squat.envelope,
+                          bench: strength.bench.envelope,
+                          deadlift: strength.deadlift.envelope,
+                        }}
+                        blocks={blocks.map((b) => ({
+                          id: b.id,
+                          name: b.name,
+                          start: b.start,
+                          end: b.end,
+                        }))}
                       />
-                    }
+                    </SectionErrorBoundary>
+                  </Card>
+                )}
+                <Card className="p-4" data-training-muscles>
+                  <SectionTitle
+                    title="Muscle training map"
+                    sub="See which muscles you've trained the most."
+                  />
+                  <SectionErrorBoundary label="Muscle training map">
+                    <MuscleMap
+                      read={muscleRead}
+                      coached={coached}
+                      credit={supportCredit}
+                      onCredit={setSupportCredit}
+                    />
+                  </SectionErrorBoundary>
+                </Card>
+                <section aria-label="Consistency">
+                  <SectionTitle
+                    title="How often you train"
+                    sub="Planned workouts you did, for days that have passed"
+                  />
+                  <ConsistencyBlock c={consistency} loading={trainingLoad.planLoading} />
+                </section>
+                {patterns.length > 0 && (
+                  <section aria-label="Recovery patterns">
+                    <SectionTitle
+                      title="What helps your training"
+                      sub="Patterns in your sleep, effort and recovery"
+                      info={
+                        <p>
+                          Found by comparing your own workouts and the check-ins after them. A
+                          pattern shows up only when there's enough data, and it shows what tends to
+                          go together, not what causes what.
+                        </p>
+                      }
+                    />
+                    <RecoveryPatternList patterns={patterns} />
+                  </section>
+                )}
+                <SectionErrorBoundary label="Running">
+                  <RunningAnalyticsSection
+                    clientId={clientId}
+                    rangeStart={filter.start}
+                    rangeEnd={filter.end}
+                    rangeLabel={filter.short}
                   />
                 </SectionErrorBoundary>
-                <MoreDetail>
-                  <SectionErrorBoundary label="Weight lifted">
-                    <WeightLiftedCard
+                <MoreDetail label="More: workouts, sleep, bodyweight and cardio">
+                  <section aria-label="Recent workouts">
+                    <SectionTitle
+                      title="Recent workouts"
+                      sub="What you did, set by set, next to what was planned"
+                    />
+                    <PlannedVsActualCard
                       clientId={clientId}
-                      displayUnit={displayUnit}
+                      formula={analyticsSettings?.e1rm_formula}
+                      workingRpeMin={analyticsSettings?.working_set_rpe_min}
+                      startDate={filter.start}
+                      endDate={filter.end}
+                      blockId={activeBlockId}
+                    />
+                  </section>
+                  <section aria-label="What you logged" id="recovery">
+                    <SectionTitle
+                      title="Sleep, recovery and pain"
+                      sub="What you told us after each workout"
+                    />
+                    <SectionErrorBoundary label="Recovery">
+                      <RecoveryTrendsCard
+                        clientId={clientId}
+                        start={filter.start}
+                        end={filter.end}
+                      />
+                    </SectionErrorBoundary>
+                  </section>
+                  {!hideBodyweight && (
+                    <SectionErrorBoundary label="Bodyweight trend">
+                      <BodyweightTrendCard
+                        clientId={clientId}
+                        displayUnit={displayUnit}
+                        rangeStart={filter.start}
+                        rangeEnd={filter.end}
+                        rangeLabel={filter.short}
+                      />
+                    </SectionErrorBoundary>
+                  )}
+                  <SectionErrorBoundary label="Cardio">
+                    <CardioAnalyticsSection
+                      clientId={clientId}
                       rangeStart={filter.start}
                       rangeEnd={filter.end}
                       rangeLabel={filter.short}
-                      blockId={activeBlockId}
                     />
                   </SectionErrorBoundary>
-                </MoreDetail>
-              </div>
-            )}
-
-            {view === "consistency" && (
-              <div className="space-y-6" data-analytics-view="consistency">
-                <section aria-label="Consistency">
-                  <SectionHeading
-                    icon={<Check className="h-5 w-5" />}
-                    title="Following the plan"
-                    tip={
-                      <InfoTip label="About consistency" title="Consistency" align="start">
-                        Workouts and sets your program wrote for days that have passed, against what was logged. A day
-                        still ahead is never missed; extra sets don't raise it.
-                      </InfoTip>
-                    }
-                  />
-                  <ConsistencySummary c={consistency} planLoading={trainingLoad.planLoading} planError={trainingLoad.planError} />
-                </section>
-                <section aria-label="Planned vs Actual">
-                  <SectionHeading
-                    icon={<Calendar className="h-5 w-5" />}
-                    title="Recent workouts"
-                    tip={
-                      <InfoTip label="About recent workouts" title="Recent workouts" align="start">
-                        The 5 most recent finished workouts in this period, set by set against what was written.
-                      </InfoTip>
-                    }
-                  />
-                  <PlannedVsActualCard
-                    clientId={clientId}
-                    formula={analyticsSettings?.e1rm_formula}
-                    workingRpeMin={analyticsSettings?.working_set_rpe_min}
-                    startDate={filter.start}
-                    endDate={filter.end}
-                    blockId={activeBlockId}
-                  />
-                </section>
-                <MoreDetail label="When and how long you train">
                   <SectionErrorBoundary label="Training time">
                     <TrainingTimeCard
                       clientId={clientId}
@@ -866,66 +1290,39 @@ export function ClientAnalyticsDashboard({
                       canOpenLog={canOpenLog}
                     />
                   </SectionErrorBoundary>
+                  {coach && (
+                    <SectionErrorBoundary label="Volume and workload">
+                      <TrainingLoadSection
+                        load={trainingLoad.load}
+                        coach={coach}
+                        unit={displayUnit}
+                        rangeLabel={filter.short}
+                        planLoading={trainingLoad.planLoading}
+                        planError={trainingLoad.planError}
+                        hideInsights={false}
+                        header={
+                          <SectionTitle
+                            title="Programming detail (coach)"
+                            sub="Movement patterns, how heavy, and coach-only notes"
+                          />
+                        }
+                      />
+                    </SectionErrorBoundary>
+                  )}
                 </MoreDetail>
               </div>
             )}
 
-            {view === "recovery" && (
-              <div className="space-y-6" data-analytics-view="recovery" id="recovery">
-                <section aria-label="Recovery">
-                  <SectionHeading
-                    icon={<Moon className="h-5 w-5" />}
-                    title="What you logged"
-                    tip={
-                      <InfoTip label="About check-outs" title="What you logged" align="start">
-                        From the quick check-out after a workout: sleep (logged as a range, 7–8h reads as 7.5h), how
-                        recovered you felt and pain. Recorded, never estimated. Only workouts with a check-out count.
-                      </InfoTip>
-                    }
+            {view === "records" && (
+              <div data-analytics-view="records">
+                <SectionErrorBoundary label="Records">
+                  <RecordsView
+                    lifetime={lifetime}
+                    records={records}
+                    byExercise={byExercise}
+                    meets={meets}
+                    unit={displayUnit}
                   />
-                  <SectionErrorBoundary label="Recovery">
-                    <RecoveryTrendsCard clientId={clientId} start={filter.start} end={filter.end} />
-                  </SectionErrorBoundary>
-                </section>
-
-                <section aria-label="Readiness">
-                  <SectionHeading
-                    icon={<Gauge className="h-5 w-5" />}
-                    title="Readiness (estimate)"
-                    tip={
-                      <InfoTip label="About readiness" title="Readiness" align="start">
-                        An estimate from your last check-out and recent training, not a measurement. It's a guide for how
-                        to approach a session, never a reason to go heavier.
-                      </InfoTip>
-                    }
-                  />
-                  <SectionErrorBoundary label="Readiness">
-                    <RecoveryPreviewCard clientId={clientId} analyticsTo="/portal/workouts/analytics" />
-                  </SectionErrorBoundary>
-                </section>
-
-                <SectionErrorBoundary label="Recovery patterns">
-                  <RecoveryPatternsCard clientId={clientId} rangeStart={filter.start} rangeEnd={filter.end} />
-                </SectionErrorBoundary>
-
-                {!hideBodyweight && (
-                  <SectionErrorBoundary label="Bodyweight trend">
-                    <BodyweightTrendCard
-                      clientId={clientId}
-                      displayUnit={displayUnit}
-                      rangeStart={filter.start}
-                      rangeEnd={filter.end}
-                      rangeLabel={filter.short}
-                    />
-                  </SectionErrorBoundary>
-                )}
-
-                <SectionErrorBoundary label="Cardio">
-                  <CardioAnalyticsSection clientId={clientId} rangeStart={filter.start} rangeEnd={filter.end} rangeLabel={filter.short} />
-                </SectionErrorBoundary>
-
-                <SectionErrorBoundary label="Running">
-                  <RunningAnalyticsSection clientId={clientId} rangeStart={filter.start} rangeEnd={filter.end} rangeLabel={filter.short} />
                 </SectionErrorBoundary>
               </div>
             )}
@@ -943,30 +1340,23 @@ export function ClientAnalyticsDashboard({
   );
 }
 
-/**
- * The page's areas as one row: Overview (one answer per area), Strength,
- * Volume, Consistency and Recovery. Underlined like Crew's tabs; on a narrow
- * phone it scrolls sideways and keeps the area you're on in view.
- */
-function AnalyticsTabs({ view, onChange }: { view: AnalyticsView; onChange: (v: AnalyticsView) => void }) {
-  const fade = useScrollFade();
-  // keep the area you're on in view (sideways only: never scrolls the page)
-  useEffect(() => {
-    const row = fade.ref.current;
-    const el = row?.querySelector<HTMLElement>(`[data-analytics-tab="${view}"]`);
-    if (!row || !el) return;
-    const left = el.offsetLeft - row.offsetLeft;
-    if (left < row.scrollLeft) row.scrollLeft = left - 8;
-    else if (left + el.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + el.offsetWidth - row.clientWidth + 8;
-  }, [view, fade.ref]);
+/** Four areas as one row of equal tabs: always all on screen, never a sideways scroll. */
+function AnalyticsTabs({
+  view,
+  onChange,
+}: {
+  view: AnalyticsView;
+  onChange: (v: AnalyticsView) => void;
+}) {
   return (
-    <div className="relative -mx-4 border-b border-border px-4" data-analytics-tabs-wrap>
+    <div
+      className="relative -mx-4 border-b border-border px-4 md:mx-0 md:px-0"
+      data-analytics-tabs-wrap
+    >
       <div
-        ref={fade.ref}
         role="tablist"
         aria-label="Analytics sections"
-        style={fade.style}
-        className="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="grid grid-cols-4"
         data-analytics-tabs
       >
         {ANALYTICS_VIEWS.map(([v, label]) => (
@@ -977,89 +1367,22 @@ function AnalyticsTabs({ view, onChange }: { view: AnalyticsView; onChange: (v: 
             aria-selected={view === v}
             onClick={() => onChange(v)}
             className={cn(
-              "relative h-11 shrink-0 text-[15px] font-medium transition-colors",
+              "relative h-11 min-w-0 text-[15px] font-medium transition-colors",
               view === v ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
             data-analytics-tab={v}
           >
             {label}
-            {view === v && <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-foreground" />}
+            {view === v && (
+              <span
+                aria-hidden
+                className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-foreground"
+              />
+            )}
           </button>
         ))}
       </div>
     </div>
-  );
-}
-
-/** Overview's "what stands out": the training-load insights (training-load-section.tsx's list). */
-function TrainingLoadInsights({ insights, coach, onOpenVolume }: { insights: Insight[]; coach: boolean; onOpenVolume: () => void }) {
-  return (
-    <section aria-label="Coaching insights">
-      <SectionHeading
-        icon={<TrendingUp className="h-5 w-5" />}
-        title={coach ? "Coaching insights" : "What stands out"}
-        tip={
-          <InfoTip label="About these insights" title={coach ? "Coaching insights" : "What stands out"} align="start">
-            Read from logged sets and the program, never a guess. Each says what's happening, how sure it is,
-            why it might be and whether anything needs to change. Often nothing does.
-          </InfoTip>
-        }
-      />
-      <InsightList insights={insights} coach={coach} onSeeNumbers={onOpenVolume} titled={false} />
-    </section>
-  );
-}
-
-/** Section title on its own line, so a long range label can never squeeze it. */
-function SectionHeading({
-  icon, title, tip, meta, action,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  tip?: React.ReactNode;
-  meta?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-foreground">
-          <span className="shrink-0 text-muted-foreground">{icon}</span>
-          <span className="truncate">{title}</span>
-          {tip}
-        </h2>
-        {action && <div className="shrink-0">{action}</div>}
-      </div>
-      {meta && <div className="mt-0.5 truncate text-xs font-semibold text-muted-foreground">{meta}</div>}
-    </div>
-  );
-}
-
-function StatCard({
-  icon, label, value, sublabel, tip,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sublabel?: string;
-  tip?: React.ReactNode;
-}) {
-  return (
-    <Card className="relative min-w-0 overflow-hidden p-3">
-      <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-        <span className="shrink-0">{icon}</span>
-        <span className="truncate">{label}</span>
-        {tip && <span className="ml-auto">{tip}</span>}
-      </div>
-      <div className="mt-1 truncate text-xl font-semibold tabular-nums tracking-tight text-foreground">
-        {value}
-      </div>
-      {sublabel && (
-        <div className="truncate text-[11px] text-muted-foreground">
-          {sublabel}
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -1069,10 +1392,12 @@ function AnalyticsEmptyPreview() {
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Dumbbell className="h-6 w-6" />
       </div>
-      <h2 className="mt-3 text-lg font-semibold tracking-tight text-foreground">Your analytics start with your first workout</h2>
+      <h2 className="mt-3 text-lg font-semibold tracking-tight text-foreground">
+        Your analytics start with your first workout
+      </h2>
       <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
-        Log your sets and this fills in by itself: strength over time, all-time PRs, weekly sets by muscle, and how
-        closely you follow the plan.
+        Log a workout and this page fills in by itself: when you trained, how your strength is
+        changing, which muscles you're training and your records.
       </p>
     </Card>
   );

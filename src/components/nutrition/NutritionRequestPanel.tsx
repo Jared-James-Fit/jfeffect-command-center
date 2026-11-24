@@ -4,6 +4,8 @@
  * nutrition targets.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -155,7 +157,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const [regenWorkoutMeals, setRegenWorkoutMeals] = useState<WorkoutMealsMode | null>(null);
 
   const key = ["nutrition-requests", clientId];
-  const { data, isLoading } = useQuery({
+  const requestsQ = useQuery({
     queryKey: key,
     queryFn: () => listFn({ data: { clientId } }),
     refetchInterval: (q) => {
@@ -165,6 +167,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       return waiting ? 4000 : false;
     },
   });
+  const { data } = requestsQ;
+  // A failed or offline read is said, never "Send {first} the Nutrition Update" (a second request on top of one that's out)
+  const requestsState = queryView(requestsQ as any).kind;
+  const isLoading = requestsState === "loading";
   const requests = (data?.requests ?? []) as Req[];
   const latest = currentRequest(requests, data?.requestedAt ?? null);
   const submitted = latest && latest.status !== "in_progress";
@@ -486,7 +492,11 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
 
       {/* One line for where it stands, and the one thing to do next when there is one. */}
       {isLoading ? (
-        <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-2/3 jf-skeleton rounded bg-muted" />
+      ) : requestsState === "offline" ? (
+        <OfflineState what="their Nutrition Update" size="inline" />
+      ) : requestsState === "error" ? (
+        <ErrorState error={requestsQ.error} what="their Nutrition Update" size="inline" onRetry={() => requestsQ.refetch()} retrying={requestsQ.isFetching} />
       ) : !latest && !data?.requestedAt ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">

@@ -5,7 +5,6 @@
 //
 // Uses Supabase's TUS-compatible resumable endpoint so big iPhone videos
 // survive flaky connections and the user can retry from the same point.
-import * as tus from "tus-js-client";
 import { supabase } from "@/integrations/supabase/client";
 
 const SUPABASE_URL =
@@ -104,6 +103,10 @@ export async function uploadLiftFileToStorage(
     return { path, mimeType: contentType, sizeBytes: args.file.size };
   }
 
+  // The resumable client (~60 KB with its URL and base64 helpers) is loaded only
+  // when a file is big enough to need it: this module sits under every screen
+  // that shows Crew media, and most uploads go the direct way above.
+  const tus = await import("tus-js-client");
   await new Promise<void>((resolve, reject) => {
     const upload = new tus.Upload(args.file, {
       endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,

@@ -14,6 +14,8 @@
  *   'nutrition'), which the AI follows.
  */
 import { useMemo, useState, type ReactNode } from "react";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -49,11 +51,14 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
   const qc = useQueryClient();
   const readFn = useServerFn(getFoodHistoryFn);
   const key = foodHistoryKey(clientId);
-  const { data, isLoading } = useQuery({
+  const foodQ = useQuery({
     queryKey: key,
     queryFn: () => readFn({ data: { clientId } }) as Promise<FoodRead>,
     staleTime: 30_000,
   });
+  const { data, isLoading } = foodQ;
+  // Allergies and health must never look like they're just loading when the read failed
+  const foodState = queryView(foodQ as any).kind;
   const notesKey = clientFileNotesKey(clientId);
   const { data: allNotes = [] } = useQuery({
     queryKey: notesKey,
@@ -149,10 +154,14 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
     <Card className={cn("space-y-4 border-border bg-card p-4 md:p-6", className)} data-food-notes>
       <CardHeader icon={Salad} title="Food & diet" />
 
-      {isLoading || !h || !f ? (
+      {foodState === "offline" ? (
+        <OfflineState what="their food and diet notes" />
+      ) : foodState === "error" ? (
+        <ErrorState error={foodQ.error} what="their allergies, diet and health notes" onRetry={() => foodQ.refetch()} retrying={foodQ.isFetching} />
+      ) : isLoading || !h || !f ? (
         <div className="space-y-2">
-          <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-          <div className="h-24 animate-pulse rounded-xl bg-muted" />
+          <div className="h-4 w-2/3 jf-skeleton rounded bg-muted" />
+          <div className="h-24 jf-skeleton rounded-xl bg-muted" />
         </div>
       ) : (
         <>

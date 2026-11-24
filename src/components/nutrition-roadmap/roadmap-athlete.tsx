@@ -6,7 +6,7 @@
  * they accept or decline. A coached athlete sees their roadmap only once
  * their coach approved it, and changes nothing here (their coach does).
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -27,11 +27,15 @@ import { missingAnswers, roadmapCheckinQuestions, type RoadmapQuestion } from "@
 import { GOAL_KIND_LABEL, type RoadmapRead } from "@/lib/nutrition-roadmap/types";
 import { kcalWords, toYou, type RoadmapView } from "@/lib/nutrition-roadmap/view";
 import { classLimitKg } from "@/lib/weight-management/target";
-import { RoadmapChart } from "@/components/nutrition-roadmap/roadmap-chart";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { BlockTimeline, FeasibilityDetail, HistoryList, StatusBadge, StatusLine, journeyProgress } from "@/components/nutrition-roadmap/roadmap-parts";
 import { ROADMAP_ROOT, useMyRoadmap } from "@/components/nutrition-roadmap/roadmap-queries";
 
 const day = (iso: string) => fmtDay(iso, todayLocalISO());
+
+// The chart (and the charting library under it, ~100 KB compressed) is only in the
+// roadmap's sheet: loaded when the sheet opens, never with the Nutrition page.
+const RoadmapChart = lazyWithRetry(() => import("@/components/nutrition-roadmap/roadmap-chart").then((m) => ({ default: m.RoadmapChart })));
 
 function goalLine(read: RoadmapRead, unit: "kg" | "lb"): string | null {
   const g = read.plan.goal;
@@ -97,7 +101,7 @@ export function NutritionRoadmapCard({ className }: { className?: string }) {
   return (
     <>
       <Card id="roadmap" className={cn("p-4", className)} data-roadmap-card="ready">
-        <button type="button" onClick={() => setSheet(true)} className="block w-full text-left" aria-label="Open your nutrition roadmap">
+        <button type="button" onPointerDown={() => void RoadmapChart.preload()} onClick={() => setSheet(true)} className="block w-full text-left" aria-label="Open your nutrition roadmap">
           <div className="flex items-start gap-3">
             <Route className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
             <div className="min-w-0 flex-1">
@@ -276,7 +280,9 @@ export function RoadmapSheet({ open, onOpenChange, view, onEditGoal }: { open: b
       )}
 
       <Part title="Bodyweight against the plan">
-        <RoadmapChart read={read} series={view.series} unit={view.unit} />
+        <Suspense fallback={<div className="h-[244px] w-full rounded-xl bg-muted/40" aria-hidden />}>
+          <RoadmapChart read={read} series={view.series} unit={view.unit} />
+        </Suspense>
       </Part>
 
       <Part title="The journey">

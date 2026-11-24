@@ -146,7 +146,10 @@ describe("Share to Instagram: where it is", () => {
   it("coaches only, on any post's ⋯ and its ✈️, never in View as client and never on a story", () => {
     const actions = read("src/components/community/post-actions.tsx");
     expect(actions).toContain("const canInstagram = viewerIsStaff && !isImpersonating && !post.story;");
-    expect(actions).toContain("{canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}");
+    expect(actions).toContain("{canInstagram && ig !== null && (");
+    expect(actions).toContain("<InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />");
+    // the sheet's code loads on its own (lazy-sheets.tsx), mounted on the first tap as before
+    expect(actions).toContain('import { InstagramShareSheet } from "@/components/community/lazy-sheets";');
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain('const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;');
     expect(card).toContain("onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}");

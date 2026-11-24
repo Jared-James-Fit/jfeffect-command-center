@@ -405,7 +405,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
 
         {isPending ? (
           <div className="mx-3 mt-2.5 grid grid-cols-3 gap-1.5">
-            {[0, 1, 2].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-xl bg-muted/40" />)}
+            {[0, 1, 2].map((i) => <div key={i} className="h-[88px] jf-skeleton rounded-xl bg-muted/40" />)}
           </div>
         ) : active.error ? (
           <div className="mx-3 mt-2.5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-center text-xs text-muted-foreground">
@@ -503,7 +503,7 @@ function KingTile({ label, row, value, loading, className }: {
         <Crown className="h-3 w-3 text-amber-400" /> {label}
       </div>
       {loading ? (
-        <div className="mt-2 h-9 animate-pulse rounded-lg bg-muted" />
+        <div className="mt-2 h-9 jf-skeleton rounded-lg bg-muted" />
       ) : row ? (
         <div className="mt-1.5 flex items-center gap-2">
           <LifterAvatar row={row} size="h-8 w-8" />

@@ -98,7 +98,44 @@ const DO_NOT_PERSIST_PREFIXES = [
   // never sits in the phone's storage.
   "booking-",
   "schedule-sheet-",
+  // Money is always read fresh, never painted from a disk copy up to a day old:
+  // a balance, a payment, a sale's status or the books shown from yesterday's
+  // copy reads as fact (a client already paid showing "Overdue", the books
+  // missing this morning's payment), and none of it belongs in a phone's storage
+  // after the screen closes. Each still caches in memory for the visit, so going
+  // back to a money screen is instant (`moneyQueryPrefixes`).
+  ...moneyQueryPrefixes(),
 ];
+
+/** Query keys that hold money (balances, payments, sales, the books): memory only, never the phone's storage. */
+export function moneyQueryPrefixes(): string[] {
+  return [
+    "books-",
+    "client-billing",
+    "clients-billing",
+    "billing-dashboard",
+    "client-purchases",
+    "purchase-",
+    "offer-purchases",
+    "pt-pack-purchases",
+    "pt-payment-ledger",
+    "pt-client-ledger",
+    "member-ledger",
+    "my-billing",
+    "my-jf-billing",
+    "jf-billing-",
+    "my-session-purchase",
+    "session-sale-id",
+    "sale-live",
+    "auto-pay-",
+    "payment-",
+    "pp-overview-",
+    "discount-codes",
+    "quick-sell-active-discounts",
+    "ai-credits-overview",
+    "membership-cal-billing",
+  ];
+}
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
   const first = queryKey[0];

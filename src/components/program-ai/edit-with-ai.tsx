@@ -6,6 +6,8 @@
  * athlete. Admins and the client's own coaches only (the server checks).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ErrorState } from "@/components/loading";
+import { useKeyedSingleFlight } from "@/hooks/use-load-phase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -377,7 +379,8 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
               appliedResult={applied[t.id]}
               onUndo={(v) => undoNow.mutate(v)}
               undoing={undoNow.isPending}
-              onRetry={() => send.mutate(t.instruction)}
+              onRetry={() => { if (!send.isPending) send.mutate(t.instruction); }}
+              retrying={send.isPending}
               onRemember={remember}
               savedRules={savedRules}
               target={target}
@@ -461,7 +464,7 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
   );
 }
 
-export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo, undoing, onRetry, onRemember, savedRules, target }: {
+export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo, undoing, onRetry, retrying = false, onRemember, savedRules, target }: {
   turn: any;
   latest: boolean;
   picked: Set<string>;
@@ -470,6 +473,8 @@ export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo
   onUndo: (versionId: string) => void;
   undoing: boolean;
   onRetry: () => void;
+  /** Try again is running (one retry at a time). */
+  retrying?: boolean;
   onRemember: (r: { kind: any; rule: string }) => void;
   savedRules: Set<string>;
   target: ProgramAiTarget;
@@ -489,7 +494,7 @@ export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo
         <div className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm">
           <p className="text-destructive">{turn.error ?? "Something went wrong."}</p>
           {latest && (
-            <Button size="sm" variant="outline" onClick={onRetry}>
+            <Button size="sm" variant="outline" onClick={onRetry} loading={retrying}>
               Try again
             </Button>
           )}
@@ -745,15 +750,19 @@ export function RulesPanel({ clientId }: { clientId: string | null }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const refresh = () => qc.invalidateQueries({ queryKey: ["program-rules"] });
-  const run = async (fn: () => Promise<unknown>, ok?: string) => {
-    try {
-      await fn();
-      await refresh();
-      if (ok) toast.success(ok);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't save that.");
-    }
-  };
+  // One rule change at a time: a double tap on Add rule used to save the rule twice.
+  const once = useKeyedSingleFlight();
+  const run = (fn: () => Promise<unknown>, ok?: string) =>
+    once.run("rule", async () => {
+      try {
+        await fn();
+        await refresh();
+        if (ok) toast.success(ok);
+      } catch (e: any) {
+        toast.error(e?.message ?? "Couldn't save that.");
+      }
+    });
+  const ruleBusy = once.isBusy("rule");
   const all: any[] = rules.data?.rules ?? [];
   const mine = all.filter((r) => (clientId ? r.client_id === clientId : true));
   const everyone = clientId ? all.filter((r) => !r.client_id) : [];
@@ -781,6 +790,7 @@ export function RulesPanel({ clientId }: { clientId: string | null }) {
           className="min-h-11 w-full"
           variant="outline"
           disabled={rule.trim().length < 3}
+          loading={ruleBusy}
           onClick={() =>
             run(async () => {
               await save({ data: { clientId, kind: kind as any, rule: rule.trim(), expiresOn: kind === "temporary_restriction" && until ? until : null } });
@@ -856,7 +866,11 @@ export function RulesPanel({ clientId }: { clientId: string | null }) {
           ))}
         </div>
       )}
-      {!rules.isLoading && !mine.length && !everyone.length && <p className="text-sm text-muted-foreground">No rules yet.</p>}
+      {rules.isError && !rules.data ? (
+        <ErrorState error={rules.error} what="the rules" size="inline" onRetry={() => rules.refetch()} retrying={rules.isFetching} />
+      ) : (
+        !rules.isLoading && !mine.length && !everyone.length && <p className="text-sm text-muted-foreground">No rules yet.</p>
+      )}
     </div>
   );
 }

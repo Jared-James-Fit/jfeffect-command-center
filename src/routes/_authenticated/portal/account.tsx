@@ -36,6 +36,7 @@ import {
   User,
   Watch,
   SlidersHorizontal,
+  Layers,
 } from "lucide-react";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
@@ -655,6 +656,16 @@ function AccountPage() {
               </div>
             </SettingsSection>
 
+            {/* ── Your plan: Free, a membership or coaching, one account (Manage plan, /portal/plan) ── */}
+            {!tierLoading && tier && (
+              <SettingsLink
+                to="/portal/plan"
+                icon={Layers}
+                title="Your plan"
+                summary={{ text: tier === "self_serve" ? "Free" : String(client?.coaching_package || "Coaching") }}
+              />
+            )}
+
             {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited) ── */}
             {aiCredits.data && !aiCredits.data.unlimited && (
               <SettingsSection
@@ -952,7 +963,7 @@ function accountBillingSummary(s: MySummary | null, money?: (c: number) => strin
 
 /** Account's Billing: the line My Purchases leads with, a way there, and Stripe's card page when they pay by card. */
 function AccountBilling({ view, loading }: { view: ReturnType<typeof useMyBilling>["view"]; loading: boolean }) {
-  if (loading) return <div className="h-16 animate-pulse rounded-lg bg-muted" aria-busy="true" />;
+  if (loading) return <div className="h-16 jf-skeleton rounded-lg bg-muted" aria-busy="true" />;
   const s = view?.mine.summary;
   const money = view?.money;
   const byCard = !!view?.sales.some((x: any) => x.stripe_customer_id || x.stripe_subscription_id);

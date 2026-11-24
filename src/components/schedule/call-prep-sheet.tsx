@@ -91,7 +91,7 @@ export function CallPrepSheet({ sessionId, open, onOpenChange }: { sessionId: st
               : ""}
           </SheetDescription>
         </SheetHeader>
-        {q.isLoading && <div className="mt-4 h-40 animate-pulse rounded-xl bg-muted" />}
+        {q.isLoading && <div className="mt-4 h-40 jf-skeleton rounded-xl bg-muted" />}
         {q.error && <p className="mt-4 text-[14px] text-destructive">{(q.error as Error).message}</p>}
         {p && (
           <div className="mt-4 space-y-6">

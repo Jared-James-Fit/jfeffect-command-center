@@ -171,7 +171,7 @@ describe("Crew's create flow, wired", () => {
     expect(selector).not.toContain("rounded-full bg-white\" aria-hidden />");
   });
   it("nothing is lost by accident: leaving, retaking a photo with words on it and switching to Story ask first", () => {
-    expect(studio).toContain('setDiscard({ title: story ? "Discard story?" : "Discard post?"');
+    expect(studio).toContain('title: story ? "Discard story?" : "Discard post?",');
     expect(studio).toContain('setDiscard({ title: "Discard edits?"');
     expect(studio).toContain("<Dialog open={open} onOpenChange={(o) => !o && requestLeave()}>");
     expect(composer).toContain('if (dirty && !posted) return setConfirm("story");');

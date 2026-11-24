@@ -361,6 +361,28 @@ describe("Program quality audit and scorecard", () => {
     expect(sel.status).toBe("failed");
     expect(a.repairs[0].join(" ")).toMatch(/replace Romanian Deadlift/);
   });
+  it("back-offs at a % of today's top set aren't judged as a % of a max; a single-leg target counts the split squats (Nov 23 2026)", () => {
+    const p = good();
+    // a top set of 6, then 2 × 6 at 90% of it: perfectly possible, once read as "6 reps at 90% of 1RM"
+    p.blocks[0].days[0].exercises.splice(1, 0, exr("e-csq", "Competition Squat", { role: "Primary Squat Backoff", sets: 2, reps: "6", rpe: "6-7", percentage: 90, percentage_of: "top_set", weeks: [] }));
+    const strategy = strategyFor(setup, { frequency_targets: [{ target: "Direct single-leg work", per_week: 1 }, { target: "Weighted carries", per_week: 1 }] });
+    const a = auditProgram(input(p, { strategy }));
+    expect(a.findings.map((f) => f.text).join(" ")).not.toMatch(/isn't possible/);
+    const freq = a.scorecard.find((r) => r.criterion === "frequency")!;
+    expect(freq.status).not.toBe("failed");
+    expect(freq.reasons.join(" ")).not.toMatch(/single-leg work: 0×/);
+    // a target nothing can count is said as not checked, never "0×/week" and a failure
+    expect(freq.reasons.join(" ")).toMatch(/Can't be counted automatically: Weighted carries/);
+    // a real miss still fails: no split squat on any day
+    const none = good();
+    none.blocks[0].days[0].exercises = none.blocks[0].days[0].exercises.filter((e) => e.exercise_name !== "Dumbbell Bulgarian Split Squat");
+    const b = auditProgram(input(none, { strategy }));
+    expect(b.scorecard.find((r) => r.criterion === "frequency")!.reasons.join(" ")).toMatch(/Direct single-leg work: 0×\/week in block 1; the strategy targets 1×/);
+    // a % of 1RM that can't be done is still caught
+    const hard = good();
+    hard.blocks[0].days[0].exercises[0] = exr("e-csq", "Competition Squat", { role: "Primary Squat", reps: "6", percentage: 90, percentage_of: "1rm", weeks: [] });
+    expect(auditProgram(input(hard)).findings.map((f) => f.text).join(" ")).toMatch(/6 reps at 90% isn't possible/);
+  });
   it("a frequency target is a minimum: training something more often than planned never fails", () => {
     const strategy = strategyFor(setup, { frequency_targets: [{ target: "Bench", per_week: 1 }] });
     const a = auditProgram(input(good(), { strategy }));

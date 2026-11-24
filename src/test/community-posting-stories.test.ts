@@ -38,7 +38,9 @@ describe("posting never strands people", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(studio).toContain("loadDraft(key)");
     expect(studio).toContain("void clearDraft();");
-    expect(studio).toContain('"Picked up where you left off"');
+    // it comes back quietly (Nov 23 2026): no "Picked up where you left off / Start over" over the editor
+    expect(studio).not.toContain("Picked up where you left off");
+    expect(studio).not.toContain("Your caption is back");
   });
   it("big canvases give their memory back (iPhone's canvas cap)", () => {
     const studio = read("src/components/community/share-studio.tsx");

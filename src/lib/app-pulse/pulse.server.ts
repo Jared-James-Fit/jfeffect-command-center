@@ -6,12 +6,15 @@
  *   apart in the database (app_pulse_audience); a test login is never recorded.
  * - Where: only on the visit's first beat, from the host's geolocation (Cloudflare's request.cf,
  *   or its visitor-location headers), kept to a city and a point rounded to 0.1°. Never the IP.
- *   A browser sending Global Privacy Control or Do Not Track gets no place.
+ *   This host gives only the country, so a visit is put on the map at its device's time zone's
+ *   main city when that zone is in the same country (zonePlace, tz-places.ts), else it stays a
+ *   country with no point. A browser sending Global Privacy Control or Do Not Track gets no place.
  * - Limits: 120 beats a minute per address on this server instance, 20 KB a body; the database
  *   caps a visit at 600 pages and 5 minutes of active time a beat.
  */
 import { z } from "zod";
 import { coarsePlace } from "./pulse-rules";
+import { zonePlace } from "./tz-places";
 
 const BOT_UA = /bot|crawl|spider|slurp|facebookexternalhit|preview|monitor|headless|lighthouse|pingdom|uptime/i;
 const MAX_BODY = 20_000;
@@ -44,6 +47,7 @@ const Body = z.object({
       utm_source: text(120),
       utm_medium: text(120),
       utm_campaign: text(120),
+      tz: text(60),
     })
     .optional(),
 });
@@ -139,6 +143,10 @@ export async function recordPulse(request: Request): Promise<void> {
 
   const s = parsed.start;
   const place = s && !parsed.optOut ? placeOf(request) : { country: null, region: null, city: null, lat: null, lng: null };
+  if (s && !parsed.optOut && place.lat == null) {
+    const z = zonePlace(s.tz, place.country);
+    if (z) Object.assign(place, { city: place.city ?? z.city, lat: z.lat, lng: z.lng });
+  }
   const views = parsed.views.map((v) => {
     let at = v.at ? new Date(v.at) : new Date();
     if (Number.isNaN(at.getTime())) at = new Date();

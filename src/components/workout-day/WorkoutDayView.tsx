@@ -7,6 +7,8 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader, usePageBack } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart, Pencil } from "lucide-react";
@@ -18,8 +20,9 @@ import { toast } from "sonner";
 import { formatDualLoad } from "@/lib/dual-load";
 import { resolveMovementFamily } from "@/lib/exercise-family";
 import {
+  cardRest,
   derivePurposeLabels,
-  effectiveRestSeconds,
+  exerciseMetaOf,
   resolveCategory,
   purposeLabelText,
   type ExerciseMeta,
@@ -31,7 +34,7 @@ import { plannedLoadView, type PlannedLoadView } from "@/lib/workouts/planned-lo
 import { focusNames } from "@/lib/workouts/focus-names";
 import { noteLead } from "@/lib/workouts/note-lead";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
-import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, topSetAdjustment, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
+import { hasRpeCap, isMaxBasis, referenceFamily, rpeCapValue, type LiftFamily } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
@@ -49,6 +52,7 @@ import {
   startWorkout as startWorkoutFn,
   saveDraft as saveDraftFn,
   completeWorkout as completeWorkoutFn,
+  syncFinishedWorkout as syncFinishedWorkoutFn,
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
@@ -97,14 +101,12 @@ import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
 import { LoadSuggestionCard, PlannedLoadCell, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsDoneNote, LoadSuggestionsNudge, REF_BAR, REF_CELL, REF_DIVIDER, REF_LABEL, REF_TAP, REF_VALUE } from "@/components/workout-day/load-suggestion-card";
-import { lastTimeLoad, trainedOn, ymdMs } from "@/lib/workouts/exercise-history";
-import { instanceDates } from "@/lib/workouts/history-reads";
+import { lastTimeLoad, ymdMs } from "@/lib/workouts/exercise-history";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
-import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
 import { finalWarmupRow, offersLastWarmup, warmupInUnit, warmupStyleOf, warmupsForModel } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
@@ -119,15 +121,11 @@ import { SetupLine, SetupSheet, type SetupSheetMode } from "@/components/equipme
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import {
   LIVE_WINDOW_MS,
-  cardEquipment,
+  cardSetupView,
   comparesAcrossEquipment,
-  currentSetup,
   equipmentName,
-  loadEquipmentId,
   offersSetup,
   settingsFromNote,
-  setupFor,
-  setupSummary,
 } from "@/lib/equipment/equipment";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
@@ -149,20 +147,17 @@ import { convertWeight } from "@/lib/progress-metrics";
 import {
   selectPreviousLifts,
   formatPreviousTimed,
-  matchHistoryLogs,
   type PreviousLift,
   type PreviousLiftIdentity,
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
 import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
-import { trustedSessionRpe } from "@/lib/workout-review";
 import {
   buildLoadModel,
   equipmentKindOf,
   liftKindOf,
   parseRpe,
   planningTarget,
-  predictReadiness,
   suggestionPicks,
   suggestSetLoad,
   NEUTRAL_READINESS,
@@ -170,7 +165,25 @@ import {
   type LoadSuggestion,
   type Readiness,
 } from "@/lib/load-suggestion";
-import { computeDayReads, type DayRead, type DayReadRow } from "@/lib/workout-day-read";
+import { type DayRead } from "@/lib/workout-day-read";
+import { fetchClientLiftHistory, fetchLastOtherReview, fetchLoggedE1rmByFamily } from "@/lib/workouts/card-suggestion-reads";
+import {
+  backoffPlanFor,
+  capHeldFor,
+  carryTodayIn,
+  dayReads,
+  historyByRow,
+  liftIdentityOf,
+  loadEquipmentByRow as loadEquipmentForRows,
+  parseEffortTarget,
+  prescribedWeightFor,
+  progressionPlanFor,
+  readinessFromReview,
+  todaySetsIn,
+  topSetBasisFor,
+  weightIncrement,
+  type TopSetBasis,
+} from "@/lib/workouts/card-suggestion";
 import { hasSeenFeature, markFeatureSeen } from "@/lib/feature-seen";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete, timedSetAutoDuration } from "@/lib/set-completion";
@@ -205,6 +218,7 @@ import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/comp
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
+  requiredRowsFromExerciseRows,
   summarizeCompleteness,
   type RequiredRowSpec,
   type LoggedSetSpec,
@@ -216,6 +230,7 @@ import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps 
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
+import { useFinishedWorkoutSync } from "@/hooks/use-finished-workout-sync";
 import {
   WorkoutReviewEditor,
   type ReviewInitial,
@@ -244,23 +259,6 @@ type RangeTarget = { exact?: number; min?: number; max?: number };
 
 /** The rows before they load: one array, so memos keyed on it hold. */
 const NO_ROWS: any[] = [];
-
-function parseEffortTarget(text?: string | null): RangeTarget {
-  if (!text) return {};
-  // Tolerate values like "RPE 8", "@8", "RIR 2", "rir: 1-2", "~8.5"
-  const s = String(text)
-    .replace(/rpe|rir|[@~:]/gi, " ")
-    .trim();
-  if (!s) return {};
-  const range = s.match(/^(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)$/);
-  if (range) return { min: Number(range[1]), max: Number(range[2]) };
-  const n = s.match(/^(\d+(?:\.\d+)?)$/);
-  if (n) return { exact: Number(n[1]) };
-  // Last resort: pull first number out of the string
-  const any = s.match(/(\d+(?:\.\d+)?)/);
-  if (any) return { exact: Number(any[1]) };
-  return {};
-}
 
 function repChips(t: RangeTarget): number[] {
   if (t.exact != null) {
@@ -298,22 +296,9 @@ function rirChips(t: RangeTarget): number[] {
   return [];
 }
 
-function weightIncrement(unit: "kg" | "lb"): number {
-  return unit === "kg" ? 2.5 : 5;
-}
-
-/** The step a % of the top set rounds to: a program's small plates (`load_round` "fine": 2.5 lb / 1 kg), else 5 lb / 2.5 kg. */
-function backoffRoundStep(unit: "kg" | "lb", round: string | null | undefined): number {
-  if (round === "fine") return unit === "kg" ? 1 : 2.5;
-  return weightIncrement(unit);
-}
-
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
-
-/** Today's logged top set a % back-off is worked out from, and how it went against its plan. */
-type TopSetBasis = { value: number; unit: "kg" | "lb"; reps?: number | null; rpe?: number | null; target?: string | null };
 
 /**
  * An open set's saved row holds something of the person's beyond the plan: a
@@ -652,7 +637,7 @@ function WorkoutDay({
     return clientFromQuery as any;
   }, [clientFromQuery, adapter]);
 
-  const { data: day } = useQuery({
+  const dayQ = useQuery({
     queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any>(cacheScope, "day"),
     initialDataUpdatedAt: () => cachedUpdatedAt(cacheScope, "day"),
@@ -674,6 +659,7 @@ function WorkoutDay({
       return d;
     },
   });
+  const day = dayQ.data;
 
   // Resolve week + block in a single round-trip via the FK join.
   // Previously this was three sequential queries (day → week.block_id →
@@ -983,7 +969,12 @@ function WorkoutDay({
       if (!rowIds.length) return [];
       const r = adapter
         ? await adapter.listRowResultsRaw(dayId, rowIds)
-        : (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
+        : await (async () => {
+            const { data, error } = await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id);
+            // A failed read must never become "no sets logged", or be saved over the good offline copy.
+            if (error) throw error;
+            return data ?? [];
+          })();
       writePlanCache(cacheScope, resultsCacheKey(client!.id), r);
       return r;
     },
@@ -998,33 +989,12 @@ function WorkoutDay({
   // The machine each card is on (when it changes what a weight means): "Last
   // time" and the suggestions read history on it, never another machine's.
   const { data: dayEquipment } = useAthleteEquipment(adapter?.kind === "member" ? null : client?.id ?? null);
-  const loadEquipmentByRow = useMemo(() => {
-    const map = new Map<string, string | null>();
-    for (const row of rows as any[]) {
-      const exId = row.exercises?.id ?? row.exercise_id ?? null;
-      if (!exId) continue;
-      const shown = cardEquipment((results as any[]).filter((x) => x.row_id === row.id), currentSetup(dayEquipment, exId));
-      const eq = shown.equipmentId ? dayEquipment.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
-      map.set(row.id, loadEquipmentId(eq));
-    }
-    return map;
-  }, [rows, results, dayEquipment]);
+  const loadEquipmentByRow = useMemo(
+    () => loadEquipmentForRows(rows as any[], results as any[], dayEquipment),
+    [rows, results, dayEquipment],
+  );
   const previousLiftIdentities = useMemo<PreviousLiftIdentity[]>(
-    () => (rows as any[]).map((row) => {
-      const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
-      const tracking = row.tracking_type ?? row.measurement_type ?? row.exercises?.default_measurement_type;
-      const timedRow = row.tracking_type === "time" || row.measurement_type === "time";
-      return {
-        rowId: row.id,
-        exerciseId: row.exercises?.id ?? row.exercise_id ?? null,
-        exerciseName: name,
-        repsOnly: tracking === "reps",
-        purposeLabel: row.purpose_label ?? null,
-        // a walk or a bike: last time is its time, calories and effort; a plank: its longest hold
-        timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null,
-        equipmentId: loadEquipmentByRow.get(row.id) ?? null,
-      };
-    }),
+    () => (rows as any[]).map((row) => liftIdentityOf(row, loadEquipmentByRow.get(row.id) ?? null)),
     [rows, loadEquipmentByRow],
   );
   const previousLiftIdentityKey = useMemo(
@@ -1087,82 +1057,7 @@ function WorkoutDay({
         }));
       }
 
-      const exerciseIds = Array.from(
-        new Set(previousLiftIdentities.map((identity) => identity.exerciseId).filter(Boolean) as string[]),
-      );
-      const fallbackNames = Array.from(
-        new Set(
-          previousLiftIdentities
-            .filter((identity) => !identity.exerciseId && identity.exerciseName)
-            .map((identity) => identity.exerciseName),
-        ),
-      );
-      if (!exerciseIds.length && !fallbackNames.length) return [];
-
-      const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
-          actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
-          normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
-          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m, equipment_id,
-          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, reps_text, exercises(name), pl_days(scheduled_date))`;
-      // Confirmed sets only (drafts from "apply to remaining" are not history),
-      // newest first, paged past the 1,000-row response cap so long-term
-      // clients keep their full rep-max baselines.
-      const history = (filter: (q: any) => any) => fetchAllPages((from, to) =>
-        filter((supabase as any).from("pl_row_results").select(columns).eq("client_id", historyOwnerId))
-          .not("completed_at", "is", null)
-          .order("completed_at", { ascending: false })
-          .order("id", { ascending: true })
-          .range(from, to), { maxRows: 10_000 });
-      const batches = await Promise.all([
-        exerciseIds.length ? history((q) => q.in("pl_exercise_rows.exercise_id", exerciseIds)) : Promise.resolve([]),
-        fallbackNames.length ? history((q) => q.in("pl_exercise_rows.exercise_name_override", fallbackNames)) : Promise.resolve([]),
-      ]);
-      const uniqueLogs = Array.from(
-        new Map(batches.flat().map((log: any) => [log.id, log])).values(),
-      );
-      // The day each session was trained (trainedOn: its calendar day, a moved
-      // workout's new one, never after it was logged), so "Last time · Sep 20"
-      // says the same day as the History sheet.
-      const instDates = await instanceDates(uniqueLogs.map((log: any) => log.scheduled_workout_id)).catch(() => new Map<string, string>());
-      return uniqueLogs.map((log: any) => {
-        const historyRow = log.pl_exercise_rows;
-        const enteredUnit = log.entered_unit === "kg" || log.entered_unit === "lb"
-          ? log.entered_unit
-          : log.actual_load_unit === "kg" || log.actual_load_unit === "lb"
-            ? log.actual_load_unit
-            : null;
-        return {
-          id: log.id,
-          exerciseId: historyRow?.exercise_id ?? null,
-          exerciseName: historyRow?.exercises?.name ?? historyRow?.exercise_name_override ?? null,
-          sessionKey: log.scheduled_workout_id
-            ? `instance:${log.scheduled_workout_id}`
-            : `day:${historyRow?.day_id ?? "unknown"}`,
-          occurredAt: log.completed_at ?? log.updated_at ?? log.created_at ?? null,
-          trainedOn: trainedOn({
-            instanceDate: log.scheduled_workout_id ? instDates.get(log.scheduled_workout_id) ?? null : null,
-            dayDate: historyRow?.pl_days?.scheduled_date ?? null,
-            loggedAt: log.completed_at ?? log.created_at ?? null,
-          }),
-          reps: log.actual_reps ?? null,
-          rpe: log.actual_rpe ?? null,
-          rir: log.actual_rir ?? null,
-          enteredValue: log.entered_value ?? log.actual_load ?? null,
-          enteredUnit,
-          normalizedKg: log.normalized_kg ?? null,
-          normalizedLb: log.normalized_lb ?? null,
-          isWorkingSet: log.is_working_set ?? null,
-          loadType: resolveLoadType(log.load_type, log.is_bodyweight),
-          purposeLabel: historyRow?.purpose_label ?? null,
-          repsText: historyRow?.reps_text ?? null,
-          rowId: log.row_id ?? null,
-          rowOrder: historyRow?.sort_order ?? null,
-          durationSeconds: log.completed_duration_seconds ?? null,
-          calories: log.actual_calories ?? null,
-          distanceM: log.actual_distance_m != null ? Number(log.actual_distance_m) : null,
-          equipmentId: log.equipment_id ?? null,
-        };
-      });
+      return fetchClientLiftHistory(historyOwnerId!, previousLiftIdentities);
     },
   });
   const previousLiftByRow = useMemo(
@@ -1290,79 +1185,24 @@ function WorkoutDay({
     queryKey: ["logged-e1rm", historyOwnerId, e1rmFamilies.join(",")],
     enabled: adapter?.kind !== "member" && !!historyOwnerId && e1rmFamilies.length > 0,
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<Partial<Record<LiftFamily, number>>> => {
-      const since = new Date(Date.now() - 42 * 86_400_000).toISOString();
-      const { data, error } = await (supabase as any)
-        .from("pl_row_results")
-        .select("normalized_kg, actual_load, actual_load_unit, actual_reps, actual_rpe_num, actual_rpe, completed_at, load_type, is_bodyweight, pl_exercise_rows!inner(exercises!inner(competition_lift_type))")
-        .eq("client_id", historyOwnerId)
-        .not("completed_at", "is", null)
-        .gte("completed_at", since)
-        .in("pl_exercise_rows.exercises.competition_lift_type", e1rmFamilies)
-        .order("completed_at", { ascending: false })
-        .limit(600);
-      if (error) throw error;
-      const byFamily = new Map<LiftFamily, LoggedSet[]>();
-      for (const x of (data ?? []) as any[]) {
-        if (resolveLoadType(x.load_type, x.is_bodyweight) !== "external") continue;
-        const fam = String(x.pl_exercise_rows?.exercises?.competition_lift_type ?? "") as LiftFamily;
-        const kg = x.normalized_kg != null ? Number(x.normalized_kg) : x.actual_load_unit === "lb" ? Number(x.actual_load) * 0.45359237 : Number(x.actual_load);
-        byFamily.set(fam, [...(byFamily.get(fam) ?? []), { kg, reps: Number(x.actual_reps), rpe: parseRpe(x.actual_rpe_num ?? x.actual_rpe), at: x.completed_at }]);
-      }
-      const out: Partial<Record<LiftFamily, number>> = {};
-      for (const [fam, sets] of byFamily) {
-        const e = loggedE1rm(sets);
-        if (e) out[fam] = e.kg;
-      }
-      return out;
-    },
+    queryFn: () => fetchLoggedE1rmByFamily(historyOwnerId!, e1rmFamilies),
   });
 
   // Per-row history for RPE-based load suggestions — same batch, same matching
   // rules as Last Time, current session excluded.
-  const loadHistoryByRow = useMemo(() => {
-    const map = new Map<string, PreviousLiftLog[]>();
-    const bwAt = new Map<string, number | null>();
-    const withBodyweight = (log: PreviousLiftLog): PreviousLiftLog => {
-      if (!bodyweightSeries.length || !log.occurredAt) return log;
-      const day = log.occurredAt.slice(0, 10);
-      if (!bwAt.has(day)) bwAt.set(day, smoothedBodyweightKgAt(bodyweightSeries, Date.parse(log.occurredAt)));
-      return { ...log, bodyweightKg: bwAt.get(day) ?? null };
-    };
-    for (const identity of previousLiftIdentities) {
-      map.set(identity.rowId, matchHistoryLogs(identity, previousLiftLogs, currentHistorySessionKey).map(withBodyweight));
-    }
-    return map;
-  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey, bodyweightSeries]);
+  const loadHistoryByRow = useMemo(
+    () => historyByRow(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey, bodyweightSeries),
+    [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey, bodyweightSeries],
+  );
 
   // Live across cards: how today's logged sets of each lift compare with its
   // history, so a back-off or variation adapts to the top set before its own
   // first set (load-suggestion.ts, note 9). Recomputes on every set save (the
   // results cache is patched optimistically).
-  const dayReadByRow = useMemo(() => {
-    const input: DayReadRow[] = (rows as any[]).map((r) => {
-      const family = r.exercises?.movement_family;
-      return {
-        rowId: r.id,
-        name: r.exercises?.name ?? r.exercise_name_override ?? "this lift",
-        exerciseKey: String(r.exercises?.id ?? r.exercise_id ?? r.id),
-        family: isMainLiftFamily(family) ? family : null,
-        lift: liftKindOf(r.exercises),
-        history: loadHistoryByRow.get(r.id) ?? null,
-        sets: (results as any[])
-          .filter((x) => x.row_id === r.id && x.completed_at && resolveLoadType(x.load_type, x.is_bodyweight) === "external")
-          .sort((a, b) => a.set_index - b.set_index)
-          .map((x) => ({
-            load: Number(displayLoadInUnit(x, "kg")),
-            reps: Number(x.actual_reps),
-            rpe: parseRpe(x.actual_rpe_num ?? x.actual_rpe),
-            at: Date.parse(x.completed_at),
-          }))
-          .filter((x) => x.load > 0 && x.reps > 0),
-      };
-    });
-    return computeDayReads(input, bodyweightNowKg);
-  }, [rows, results, loadHistoryByRow, bodyweightNowKg]);
+  const dayReadByRow = useMemo(
+    () => dayReads(rows as any[], results as any[], loadHistoryByRow, bodyweightNowKg),
+    [rows, results, loadHistoryByRow, bodyweightNowKg],
+  );
 
   // Predicted readiness from the most recent OTHER workout review. Only v2
   // reviews carry a real session RPE (legacy ones mapped status → fake RPE).
@@ -1371,29 +1211,10 @@ function WorkoutDay({
     enabled: secondaryHydrationReady && adapter?.kind !== "member" && !!historyOwnerId,
     staleTime: 5 * 60_000,
     retry: 1,
-    queryFn: async () => {
-      const { data, error } = await sb
-        .from("pl_workout_feedback")
-        .select("review_submitted_at, session_rpe, pain, sleep_bucket, recovery_today, review_version")
-        .eq("client_id", historyOwnerId)
-        .neq("day_id", dayId)
-        .order("review_submitted_at", { ascending: false, nullsFirst: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) return null;
-      return data ?? null;
-    },
+    queryFn: () => fetchLastOtherReview(historyOwnerId!, dayId),
   });
   const readiness = useMemo<Readiness>(
-    () => lastReview
-      ? predictReadiness({
-          submittedAt: lastReview.review_submitted_at ?? null,
-          sessionRpe: trustedSessionRpe(lastReview),
-          pain: !!lastReview.pain,
-          sleepBucket: lastReview.sleep_bucket ?? null,
-          recoveryToday: lastReview.recovery_today ?? null,
-        })
-      : NEUTRAL_READINESS,
+    () => readinessFromReview(lastReview),
     [lastReview],
   );
 
@@ -1535,6 +1356,7 @@ function WorkoutDay({
   const startWorkoutSrv = useServerFn(startWorkoutFn);
   const saveDraftSrv = useServerFn(saveDraftFn);
   const completeWorkoutSrv = useServerFn(completeWorkoutFn);
+  const syncFinishedSrv = useServerFn(syncFinishedWorkoutFn);
   const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
     queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
     enabled: secondaryHydrationReady && (rows as any[]).length > 0,
@@ -1569,7 +1391,12 @@ function WorkoutDay({
     queryFn: async () => {
       const c = adapter
         ? await adapter.getDayCompletionRaw(dayId)
-        : (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data;
+        : await (async () => {
+            const { data, error } = await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle();
+            // A failed read must never read as "not finished", or be saved over the good offline copy.
+            if (error) throw error;
+            return data;
+          })();
       writePlanCache(cacheScope, completionCacheKey(client!.id), c);
       return c;
     },
@@ -1583,7 +1410,11 @@ function WorkoutDay({
     queryFn: async () =>
       adapter
         ? await adapter.listExerciseNotesRaw(dayId)
-        : (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
+        : await (async () => {
+            const { data, error } = await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId);
+            if (error) throw error;
+            return data ?? [];
+          })(),
   });
 
   // Existing review (pl_workout_feedback) for the post-completion actions card.
@@ -1928,36 +1759,8 @@ function WorkoutDay({
   // Suggested and not lifted yet, which would plan the back-offs off a guess.
   // Resolve the nearest matching exercise above this row and feed its heaviest
   // logged load into the back-off card.
-  const topSetBasisForRow = (r: any, rowIndex: number): TopSetBasis | null => {
-    if (r.percentage_basis !== "top_set" || !r.percentage) return null;
-    const allRows = rows as any[];
-    let source: any = null;
-    if (r.basis_row_id) source = allRows.find((x) => x.id === r.basis_row_id) ?? null;
-    if (!source) {
-      for (let i = rowIndex - 1; i >= 0; i--) {
-        const candidate = allRows[i];
-        const sameExercise =
-          (r.exercise_id && candidate.exercise_id === r.exercise_id) ||
-          (!r.exercise_id && candidate.exercise_name_override === r.exercise_name_override);
-        if (sameExercise) { source = candidate; break; }
-      }
-    }
-    if (!source) return null;
-    const sourceResults = (results as any[]).filter((x) => x.row_id === source.id);
-    const numeric = sourceResults
-      .filter((x) => x.completed_at && x.actual_load != null && Number.isFinite(Number(x.actual_load)) && Number(x.actual_load) > 0)
-      .sort((a, b) => Number(b.actual_load) - Number(a.actual_load))[0];
-    if (!numeric) return null;
-    const sourceUnit: WUnit = numeric.actual_load_unit === "lb" ? "lb" : "kg";
-    return {
-      value: Number(numeric.actual_load),
-      unit: sourceUnit,
-      // how it went against its plan moves the back-offs (topSetAdjustment)
-      reps: numeric.actual_reps != null ? Number(numeric.actual_reps) : null,
-      rpe: parseRpe(numeric.actual_rpe_num ?? numeric.actual_rpe),
-      target: source.rpe ?? null,
-    };
-  };
+  const topSetBasisForRow = (r: any, rowIndex: number): TopSetBasis | null =>
+    topSetBasisFor(r, rowIndex, rows as any[], results as any[]);
 
   // Story view: one exercise at a time, full screen (workout-story.tsx). The
   // account's saved choice opens it; it's the list's own cards laid out side by
@@ -2212,6 +2015,29 @@ function WorkoutDay({
     return `${done.length}:${done.reduce((m, r) => (String(r.updated_at ?? r.completed_at) > m ? String(r.updated_at ?? r.completed_at) : m), "")}:${done.reduce((sum, r) => sum + (Number(r.normalized_kg) || 0) * (Number(r.actual_reps) || 0), 0).toFixed(1)}`;
   }, [results]);
   const isClientWorkout = adapter?.kind !== "member" && !!client?.id;
+  // Edit workout (the Workouts card's ⋯, the recap's pencil): the finished
+  // card says it's being edited, with Done, until they leave.
+  const [editingFinished, setEditingFinished] = useState(search.edit === 1);
+  // A finished workout edited here (Edit workout, a set fixed after Finish):
+  // once the edits settle, its stored numbers, set-video captions and every
+  // screen that reads logged sets catch up (use-finished-workout-sync.ts).
+  const finishedSync = useFinishedWorkoutSync({
+    enabled: isClientWorkout && !!completion?.completed_at && rowsLoaded && resultsLoaded && !rowsFetching && !resultsFetching,
+    dayId,
+    scheduledWorkoutId: scheduledWorkoutId ?? null,
+    clientId: client?.id ?? null,
+    rows: rows as any[],
+    results: results as any[],
+    sessionWeight: () => {
+      const unit: "kg" | "lb" = (client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb";
+      const s = computeWorkoutSummary(rows as any[], results as any[], { displayUnit: unit, hasNote: false });
+      return s.totalLifted > 0 ? { total: s.totalLifted, unit } : { total: null, unit: null };
+    },
+    syncOnLeave: editingFinished && !!completion?.completed_at,
+  });
+  useEffect(() => {
+    if (search.edit === 1) setEditingFinished(true);
+  }, [search.edit, dayId]);
   const { data: workoutRecords } = useWorkoutRecords(client?.id, scheduledWorkoutId, dayId, resultsVersion, isClientWorkout);
   // Points this workout earned — fetched fresh whenever the recap opens.
   const { data: workoutPoints } = useWorkoutPoints(client?.id, scheduledWorkoutId, dayId, isClientWorkout && summaryOpen);
@@ -2389,18 +2215,7 @@ function WorkoutDay({
       hasNote: false,
     });
     // The lifting: the day's cardio may come later that day and never counts as a missed log.
-    const requiredRows: RequiredRowSpec[] = (rows as any[]).filter((r: any) => !isPlanCardioRow(r)).map((r: any) => ({
-      rowId: String(r.id),
-      prescribedSets: Math.max(1, Number(r.sets) || 1),
-      skipped: !!r.skipped,
-      metricKind: ((
-        r?.tracking_type === "time" ||
-        r?.measurement_type === "time" ||
-        (r as any)?.exercises?.default_measurement_type === "time" ||
-        (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
-        /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
-      ) ? "timed" : "load_reps") as RowMetricKind,
-    }));
+    const requiredRows: RequiredRowSpec[] = requiredRowsFromExerciseRows(rows as any[]);
     const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
     const typedMin = Number.parseInt(actualMin, 10);
     // Real session time first; if the timer never ran, estimate from the
@@ -2508,6 +2323,12 @@ function WorkoutDay({
     } catch (err: any) {
       toast.error("Could not submit workout", { description: err?.message });
       return false;
+    }
+    // A set fixed after it was filmed: its video's card and film caption say
+    // the set as finished (the stored numbers were just written, so only those).
+    if (!isMember && client?.id) {
+      void syncFinishedSrv({ data: { workouts: [{ dayId, scheduledWorkoutId: scheduledWorkoutId ?? null }], clientId: client.id } })
+        .catch((err) => console.warn("[finish] set video captions", err));
     }
 
     if (draftKey) clearLocalDraft(draftKey);
@@ -2806,19 +2627,41 @@ function WorkoutDay({
   });
 
   if (!day) {
+    // Never a skeleton forever: a workout that isn't there (deleted, moved off the plan) or
+    // that couldn't load says so with a way back; offline with nothing saved says it'll load.
+    const dayState = queryView(dayQ as any).kind;
+    if (dayState === "empty" || dayState === "error" || dayState === "offline") {
+      return (
+        <div className="mx-auto w-full max-w-3xl space-y-3 p-6">
+          {dayState === "empty" ? (
+            <EmptyState title="This workout isn't on your plan anymore" detail="It may have been moved or removed by your coach." />
+          ) : dayState === "offline" ? (
+            <OfflineState what="this workout" />
+          ) : (
+            <ErrorState error={dayQ.error} what="this workout" onRetry={() => dayQ.refetch()} retrying={dayQ.isFetching} />
+          )}
+          <div className="flex justify-center">
+            <Button variant="outline" className="h-10" asChild>
+              <Link to={navigation.listPath as any}>Back to workouts</Link>
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto w-full max-w-3xl space-y-3 p-6" aria-busy="true" aria-label="Loading workout">
-        <div className="h-7 w-2/3 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+        <div className="h-7 w-2/3 jf-skeleton rounded bg-muted" />
+        <div className="h-4 w-1/3 jf-skeleton rounded bg-muted" />
         <div className="mt-2 flex gap-2">
-          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
-          <div className="h-6 w-24 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-20 jf-skeleton rounded-full bg-muted" />
+          <div className="h-6 w-24 jf-skeleton rounded-full bg-muted" />
         </div>
         <div className="space-y-2 pt-3">
-          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
-          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
-          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded-lg bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded-lg bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded-lg bg-muted" />
         </div>
+        <SlowNote active onRetry={() => dayQ.refetch()} what="this workout" />
       </div>
     );
   }
@@ -3028,11 +2871,24 @@ function WorkoutDay({
             }}
             onViewScore={(rating) => {
               setLastSessionRating(rating);
-              openRecapSummary();
+              void finishedSync.flush().finally(openRecapSummary);
             }}
             autoOpenReview={autoOpenReviewAfterFinish}
             onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
-            onOpenScore={openRecapSummary}
+            // the score reads the stored numbers too: anything waiting is sent first
+            onOpenScore={() => void finishedSync.flush().finally(openRecapSummary)}
+            editing={editingFinished}
+            syncState={finishedSync.state}
+            onDoneEditing={() => {
+              // a number still being typed saves as its box lets go, then the page goes
+              (document.activeElement as HTMLElement | null)?.blur?.();
+              window.setTimeout(() => {
+                void finishedSync.flush().finally(() => {
+                  setEditingFinished(false);
+                  pageBack();
+                });
+              }, 250);
+            }}
             filmCompletionId={isClientWorkout && !isImpersonating ? completion.id ?? null : null}
             completedAt={completion.completed_at ?? null}
             meta={
@@ -3472,6 +3328,13 @@ function WorkoutDay({
               navigate({ to: navigation.listPath });
             }
           }}
+          // a number to fix: the recap closes onto this workout, its sets ready to change
+          onEdit={isClientWorkout && completion?.completed_at ? () => {
+            recapFromSubmitRef.current = false;
+            setSummaryOpen(false);
+            setEditingFinished(true);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } : undefined}
         />
       )}
     </WorkoutRecordsContext.Provider>
@@ -3732,15 +3595,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const [noteForSetup, setNoteForSetup] = useState<string | null>(null);
   const cardSetup = useMemo(() => {
     if (!equipmentOn) return null;
-    const current = currentSetup(equipmentData, exerciseId);
-    const shown = cardEquipment(existingResults as any[], current);
-    const eq = shown.equipmentId ? equipmentData.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
-    const setup = shown.source === "current" ? current : shown.equipmentId ? setupFor(equipmentData, exerciseId, shown.equipmentId) : null;
+    // cardSetupView (equipment.ts): the same line the coach's workout quick view shows
+    const { equipmentId: shownId, equipment: eq, summary } = cardSetupView(equipmentData, exerciseId, existingResults as any[]);
     const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
     return {
-      equipmentId: shown.equipmentId,
+      equipmentId: shownId,
       equipment: eq,
-      summary: setupSummary(setup, eq),
+      summary,
       mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
       // a PR on a machine says which (its weight means nothing on another one)
       prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
@@ -4126,26 +3987,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     const label = `${formatLoadDisplay(Number(Number(from.actual_load).toFixed(2)), loadType, values.unit)}${values.reps ? ` × ${values.reps}` : ""}`;
     return { fromSet: frontier - 1, values, label, overwrites };
   })();
-  const exMeta: ExerciseMeta | null = exercise
-    ? {
-        exercise_category: exercise.exercise_category ?? null,
-        is_competition_lift: exercise.is_competition_lift ?? null,
-        competition_lift_type: exercise.competition_lift_type ?? null,
-        movement_family: exercise.movement_family ?? null,
-        name: exercise.name ?? null,
-      }
-    : null;
+  const exMeta: ExerciseMeta | null = exerciseMetaOf(exercise);
   const family = resolveMovementFamily(exMeta, row.movement_family);
   const category = resolveCategory(exMeta);
-  const effectiveRest = effectiveRestSeconds(
-    { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
-    exMeta,
-  );
+  // The rest above the sets: the program's, else the usual for this kind of exercise
+  // (cardRest, exercise-metadata.ts, which the coach's workout quick view reads too).
+  const { seconds: effectiveRest, usual: restIsUsual } = cardRest(row);
   // Always show the resolved rest value (programmed or category default), never
   // a vague range. "Auto · 4 min" makes it obvious when the value comes from
   // the category default rather than an explicit programmed rest.
   const fmtRest = (s: number) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} sec`);
-  const restIsExplicit = row.rest_seconds_override != null || row.rest_seconds != null;
+  const restIsExplicit = !restIsUsual;
   const [notesOpen, setNotesOpen] = useState(false);
   const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
@@ -4198,54 +4050,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   // The coach's % of the logged top set, moved by how that top set went against
   // its prescribed RPE (topSetAdjustment: harder brings the back-offs down before
   // the first one, a clear point easier nudges them up half an RPE's worth).
-  const backoffPlan = useMemo(() => {
-    if (row.percentage_basis !== "top_set" || !topSetBasis || !row.percentage) return null;
-    const baseInUnit = topSetBasis.unit === activeUnit
-      ? topSetBasis.value
-      : convertLoad(topSetBasis.value, topSetBasis.unit, activeUnit);
-    const exact = baseInUnit * Number(row.percentage) / 100;
-    // the builder's "Round to": small plates (2.5 lb / 1 kg) when the program says so, else 5 lb / 2.5 kg
-    const step = backoffRoundStep(activeUnit, row.load_round);
-    const plain = Math.round(exact / step) * step;
-    const adj = topSetAdjustment({ reps: topSetBasis.reps, rpe: topSetBasis.rpe, target: topSetBasis.target });
-    if (!adj) return { load: plain, plain, adjust: null };
-    const moved = exact * adj.factor;
-    // down rounds down and never above the plain %; up rounds to the nearest step
-    const load = adj.dir === "down"
-      ? Math.min(plain, Math.floor(moved / step) * step)
-      : Math.max(plain, Math.round(moved / step) * step);
-    return { load, plain, adjust: load !== plain ? adj : null };
-  }, [row.percentage_basis, row.percentage, row.load_round, topSetBasis?.value, topSetBasis?.unit, topSetBasis?.reps, topSetBasis?.rpe, topSetBasis?.target, activeUnit]);
+  const backoffPlan = useMemo(
+    () => backoffPlanFor(row, topSetBasis, activeUnit),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [row.percentage_basis, row.percentage, row.load_round, topSetBasis?.value, topSetBasis?.unit, topSetBasis?.reps, topSetBasis?.rpe, topSetBasis?.target, activeUnit],
+  );
   const percentageBackoffWeight: number | null = backoffPlan?.load ?? null;
 
-  const suggestedWeight: number | null = useMemo(() => {
-    // A prescription is one physical load. If the program only stores that
-    // load in one unit (common for fixed KG backoffs), convert it when the
-    // athlete toggles units instead of hiding the prescription.
-    const prescribedLoadInActiveUnit = (): number | null => {
-      const kg = Number(row.load_kg);
-      const lb = Number(row.load_lb);
-      const hasKg = row.load_kg != null && row.load_kg !== "" && Number.isFinite(kg);
-      const hasLb = row.load_lb != null && row.load_lb !== "" && Number.isFinite(lb);
-      if (activeUnit === "kg") {
-        if (hasKg) return kg;
-        if (hasLb) return convertLoad(lb, "lb", "kg");
-      } else {
-        if (hasLb) return lb;
-        if (hasKg) return convertLoad(kg, "kg", "lb");
-      }
-      return null;
-    };
-    if (row.manual_override) return prescribedLoadInActiveUnit();
-    if (percentageBackoffWeight != null) return percentageBackoffWeight;
-    if (computed && computed.status === "ok" && computed.load != null) {
-      // already rounded in the card's unit (computeRowLoad above)
-      if (computed.unit === activeUnit) return computed.load;
-      const step = weightIncrement(activeUnit);
-      return Math.round(convertLoad(computed.load, computed.unit, activeUnit) / step) * step;
-    }
-    return prescribedLoadInActiveUnit();
-  }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
+  const suggestedWeight: number | null = useMemo(
+    () => prescribedWeightFor(row, activeUnit, percentageBackoffWeight, computed as any),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit],
+  );
 
   const [showSuggestionCard, setShowSuggestionCard] = useShowLoadSuggestions();
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
@@ -4259,28 +4075,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   // stays down. Nothing here ever raises the load above the plan.
   const capOn = hasRpeCap(row) && suggestedWeight != null;
   const capValue = capOn ? rpeCapValue(row.rpe) : null;
-  const capHeld = useMemo(() => {
-    if (!capOn || capValue == null || suggestedWeight == null) return null;
-    const done = existingResults
-      .filter((r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
-      .sort((a: any, b: any) => a.set_index - b.set_index);
-    let held = suggestedWeight;
-    let over: { set: number; rpe: number } | null = null;
-    for (const r of done) {
-      const load = Number(displayLoadInUnit(r, activeUnit));
-      const reps = Number(r.actual_reps);
-      const rpe = parseRpe(r.actual_rpe_num ?? r.actual_rpe);
-      const next = capAdjustedLoad({
-        planned: held,
-        last: { load, reps, rpe },
-        cap: capValue,
-        targetReps: repTarget?.exact ?? repTarget?.max ?? repTarget?.min ?? reps,
-        step: weightIncrement(activeUnit),
-      });
-      if (next != null) { held = next; over = { set: r.set_index, rpe: rpe as number }; }
-    }
-    return over ? { load: held, over } : null;
-  }, [capOn, capValue, suggestedWeight, existingResults, activeUnit, repTarget?.exact, repTarget?.max, repTarget?.min]);
+  const capHeld = useMemo(
+    () => (capOn && capValue != null ? capHeldFor(row, suggestedWeight, existingResults, activeUnit, repTarget) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [capOn, capValue, suggestedWeight, existingResults, activeUnit, repTarget?.exact, repTarget?.max, repTarget?.min],
+  );
   // A run's distance, time and pace so far, under its sets.
   const runLine = useMemo(
     () => showDistance
@@ -4387,10 +4186,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   // rep range starts from last session's weight and whether it earned the next
   // step. Never a barbell squat / bench / deadlift (RPE-led) or a back-off card.
   const progressionPlan = useMemo(
-    () => (liftKind !== "competition" && !rangeLift(family, name, exercise?.equipment) && !followsSameExercise &&
-      repTarget.min != null && repTarget.max != null && repTarget.max > repTarget.min && loadPlan
-      ? { range: { lo: repTarget.min, hi: repTarget.max }, rpe: loadPlan.rpe }
-      : null),
+    () => progressionPlanFor({ liftKind, family, name, equipment: exercise?.equipment, followsSameExercise, repTarget, loadPlan }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [liftKind, family, name, exercise?.equipment, followsSameExercise, repTarget.min, repTarget.max, loadPlan],
   );
   // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
@@ -4413,18 +4210,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const equipmentKind = useMemo(() => equipmentKindOf(name, exercise?.equipment), [name, exercise?.equipment]);
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
-    const today = existingResults
-      .filter((r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
-      .sort((a: any, b: any) => a.set_index - b.set_index)
-      .map((r: any) => ({
-        load: Number(displayLoadInUnit(r, activeUnit)),
-        reps: Number(r.actual_reps),
-        rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe),
-      }))
-      .filter((x) => x.load > 0 && x.reps > 0);
+    const today = todaySetsIn(existingResults, activeUnit);
     // Live across cards: today's sets of this lift on other cards (dayRead).
-    const toUnit = (kg: number) => (activeUnit === "kg" ? kg : kg * 2.2046226218);
-    const carryToday = (dayRead?.carryKg ?? []).map((x) => ({ ...x, load: toUnit(x.load) }));
+    const carryToday = carryTodayIn(dayRead, activeUnit);
     return buildLoadModel({
       history: loadHistory, today, unit: activeUnit, readiness, warmups: warmupsList, bodyweightKg,
       dayFactor: dayRead?.factor ?? null, carryToday, lift: liftKind,
@@ -5952,7 +5740,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               )}
             </div>
             {loading && !existingNote ? (
-              <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
+              <div className="mt-1 h-[140px] w-full jf-skeleton rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
             ) : (
               <Textarea
                 id={`exercise-note-${rowId}`}
@@ -7949,10 +7737,10 @@ function WorkoutExerciseCardsSkeleton({ focusMode = false }: { focusMode?: boole
     >
       {[0, 1, 2, 3].map((index) => (
         <Card key={index} className="space-y-3 p-4">
-          <div className="h-5 w-2/3 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-          <div className="h-8 w-full animate-pulse rounded bg-muted" />
-          <div className="h-24 w-full animate-pulse rounded bg-muted" />
+          <div className="h-5 w-2/3 jf-skeleton rounded bg-muted" />
+          <div className="h-4 w-1/3 jf-skeleton rounded bg-muted" />
+          <div className="h-8 w-full jf-skeleton rounded bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded bg-muted" />
         </Card>
       ))}
     </div>

@@ -178,7 +178,7 @@ describe("clearing deleted-message placeholders", () => {
 });
 
 describe("media replies and video playback", () => {
-  const viewer = readFileSync("src/components/media-viewer.tsx", "utf8");
+  const viewer = readFileSync("src/components/media-viewer-surface.tsx", "utf8");
   const tile = readFileSync("src/components/chat-video-tile.tsx", "utf8");
   const shared = readFileSync("src/components/chat-shared.tsx", "utf8");
 

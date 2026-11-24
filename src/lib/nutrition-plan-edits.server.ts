@@ -78,6 +78,31 @@ async function latestAnswers(sb: any, clientId: string): Promise<QA[]> {
   }
 }
 
+/**
+ * The shared client intelligence for a nutrition change (client-intel/brief.server.ts), once per
+ * change: kept on the change's progress so a run that resumes reads exactly the same words. Never
+ * stops the change: with nothing readable it's left out.
+ */
+async function clientIntelFor(sb: any, clientId: string, progress: CallState, save: () => Promise<void>): Promise<string> {
+  const kept = (progress as any).intel;
+  if (typeof kept === "string") return kept;
+  let text = "";
+  try {
+    const { loadWeightManagement } = await import("@/lib/weight-management/load.server");
+    const { loadCardioWorkspace } = await import("@/lib/cardio/workspace.server");
+    const { clientIntelText } = await import("@/lib/client-intel/brief.server");
+    const loaded = await loadWeightManagement(sb, clientId);
+    const view = await loadCardioWorkspace(sb, clientId, { loaded });
+    text = await clientIntelText(sb, { clientId, loaded, cardio: { live: view.live, ctx: view.ctx, unit: view.speedUnit, outcomes: view.outcomes, read: view.read } }, "nutrition");
+    text = `${text}\n\nUse this as context for the change the coach asked for. Change cardio only by saying so in words: the cardio plan is published from the Cardio tab, never from the nutrition plan.`;
+  } catch (e: any) {
+    console.warn("[nutrition-edit] client intelligence unavailable", e?.message);
+  }
+  (progress as any).intel = text;
+  await save();
+  return text;
+}
+
 /** Queue the coach's change against the plan as it is now; an earlier unapplied answer for this plan is put away. */
 export async function queuePlanEdit(
   sb: any,
@@ -143,6 +168,10 @@ export async function runPlanEdit(sb: any, editId: string) {
     ]);
     const foodNotes = food.text;
     const before = String(row.before_targets_text ?? "");
+    // Cleo — Nutrition reads the same client intelligence as Cleo's cardio and training work (the
+    // cardio plan in force and how it's going, training, the coach's rules, what was tried before),
+    // worked out once per change and kept with its progress so a resumed run reads the same words
+    const intel = await clientIntelFor(sb, row.client_id, progress, save);
     const t = await nutritionCall(
       sb,
       progress,
@@ -150,7 +179,7 @@ export async function runPlanEdit(sb: any, editId: string) {
       "nutrition_write",
       "edit_targets",
       REVISE_TARGETS_PROMPT,
-      reviseTargetsUserPrompt(before, row.instructions),
+      [reviseTargetsUserPrompt(before, row.instructions), intel].filter(Boolean).join("\n\n"),
     );
     const next = cleanAiText(t.text);
     const targetsText = revisionLooksRight("targets", before, next) ? next : before;

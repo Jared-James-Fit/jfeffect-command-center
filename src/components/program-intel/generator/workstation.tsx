@@ -20,6 +20,7 @@
  * coach does it.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ErrorState } from "@/components/loading";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,7 +32,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
-import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
+import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, renameIntelProgramFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
 import { generatedProgramOutcomes } from "@/lib/program-intel/outcomes";
 import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "@/lib/program-intel/recommend";
 import { DEFAULT_PROGRAM_WEEKS, MAX_PROGRAM_WEEKS } from "@/lib/program-intel/horizon";
@@ -50,6 +51,8 @@ import { SetupSheet, SetupSummary, setupTiles } from "../workflow/setup-summary"
 import { AthleteSnapshot } from "../workflow/athlete-snapshot";
 import { InsightList } from "../workflow/insight-cards";
 import { buildInsights } from "@/lib/program-intel/insights";
+import { directionSend, runInstructions, sameInstructions, type DirectionStage } from "@/lib/program-intel/direction-send";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { EditWithAiSheet } from "@/components/program-ai/edit-with-ai";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +66,7 @@ const REPORT_DEFAULT: IntelSearch = { scope: "program", from: "", to: "", tab: "
  */
 export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { clientId: string; prefill?: { notes?: string; weeks?: number; days?: number; duration?: "goal" }; reportSearch?: IntelSearch }) {
   const { viewOnly, role } = useAuth();
+  const cleo = useCleoAccess();
   // The run's inspector (models, prompts, calls) is AI infrastructure: the admin's, never a coach's.
   const canInspect = role === "admin";
   const qc = useQueryClient();
@@ -78,6 +82,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   const retry = useServerFn(retryIntelJobFn);
   const assign = useServerFn(assignIntelDraftFn);
   const discard = useServerFn(discardIntelDraftFn);
+  const rename = useServerFn(renameIntelProgramFn);
   const [setup, setSetup] = useState<GenerationSetup | null>(null);
   const [edited, setEdited] = useState<Set<SetupField>>(new Set());
   const editedRef = useRef(edited);
@@ -222,7 +227,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
           });
         else toast.success(j.kind === "strategy" ? "The strategy is ready to review" : "The program is ready", { duration: 8_000 });
         document.querySelector<HTMLElement>('[data-testid="gen-scorecard"], [data-testid="gen-strategy"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else if (j.status === "error") toast.error("The run stopped", { description: j.error ?? undefined, duration: 10_000 });
+      } else if (j.status === "error") toast.error("The run stopped", { description: "What happened is on the card, with Try again.", duration: 8_000 });
     }
   }, [activeGenerate, activeStrategy, navigate]);
   const earlier = all.filter((j) => j.kind === "generate" && j !== activeGenerate && j.status !== "discarded");
@@ -231,41 +236,55 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   const outcomes = useMemo(() => (records.data ? generatedProgramOutcomes(records.data, assigned as any) : []), [records.data, assigned]);
   const recordedKeys = useMemo(() => new Set((observations.data ?? []).map((o) => o.finding_key ?? "").filter((k) => k.startsWith("outcome:"))), [observations.data]);
 
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] });
-    void qc.invalidateQueries({ queryKey: ["program-intel-observations", clientId] });
+  const refresh = async (): Promise<void> => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] }),
+      qc.invalidateQueries({ queryKey: ["program-intel-observations", clientId] }),
+    ]);
   };
-  const run = async (fn: () => Promise<unknown>, ok?: string) => {
+  // One action at a time, guarded before the first await, and busy until the jobs
+  // list has the new run on it: Generate, Approve and Assign were tappable again in
+  // the moment between the server answering and the list catching up.
+  const runningRef = useRef(false);
+  const run = async (fn: () => Promise<unknown>, ok?: string): Promise<boolean> => {
+    if (runningRef.current) return false;
+    runningRef.current = true;
     setBusy(true);
     try {
       await fn();
       if (ok) toast.success(ok);
-      refresh();
+      await refresh().catch(() => undefined);
+      return true;
     } catch (e: any) {
       toast.error(e?.message ?? "That didn't work");
+      return false;
     } finally {
+      runningRef.current = false;
       setBusy(false);
     }
   };
-  const start = (kind: "strategy" | "generate", extra: { strategy?: Strategy; strategyJobId?: string; setup?: GenerationSetup; edited?: string[] } = {}) =>
-    run(
-      () =>
-        queue({
-          data: {
-            clientId,
-            kind,
-            scope: { kind: "history" },
-            brain: (extra.setup ?? setup)!.brain,
-            options: { setup: extra.setup ?? setup!, edited: extra.edited ?? [...edited], ...(extra.strategy ? { strategy: extra.strategy, strategyJobId: extra.strategyJobId } : {}), dataHash: intel?.dataHash },
-            privacySafe,
-          },
-        }).then((r) => {
-          // the instructions are on the run now: the draft on this phone is done with
-          clearDirectionDraft(clientId);
-          return r;
-        }),
-      kind === "strategy" ? "Writing the strategy. You can leave; it keeps going." : "Building the program. You can leave; it keeps going.",
-    );
+  const renameProgram = (jobId: string) => (name: string) => run(() => rename({ data: { jobId, name } }), "Renamed");
+  type RunExtra = { strategy?: Strategy; strategyJobId?: string; setup?: GenerationSetup; edited?: string[] };
+  const queueRun = (kind: "strategy" | "generate", extra: RunExtra = {}) => {
+    const runSetup = extra.setup ?? setup!;
+    return queue({
+      data: {
+        clientId,
+        kind,
+        scope: { kind: "history" },
+        brain: runSetup.brain,
+        options: { setup: runSetup, edited: extra.edited ?? [...edited], ...(extra.strategy ? { strategy: extra.strategy, strategyJobId: extra.strategyJobId } : {}), dataHash: intel?.dataHash },
+        privacySafe,
+      },
+    }).then((r) => {
+      // the instructions are on the run now: the draft on this phone is done with. A run started
+      // from older words (an approved strategy keeps what it was written with) leaves the new ones kept.
+      if (sameInstructions(runSetup.coachNotes, setup?.coachNotes)) clearDirectionDraft(clientId);
+      return r;
+    });
+  };
+  const start = (kind: "strategy" | "generate", extra: RunExtra = {}, ok?: string) =>
+    run(() => queueRun(kind, extra), ok ?? (kind === "strategy" ? "Writing the strategy. You can leave; it keeps going." : "Building the program. You can leave; it keeps going."));
 
   if (viewOnly)
     return (
@@ -282,6 +301,50 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   const stage: "setup" | "strategy" | "building" | "review" = activeGenerate?.status === "ready" ? "review" : running(activeGenerate) ? "building" : activeStrategy ? "strategy" : "setup";
   const STEPS: Array<[typeof stage, string]> = [["setup", "Set up"], ["strategy", "Strategy"], ["building", "Build"], ["review", "Review"]];
   const stepAt = STEPS.findIndex(([k]) => k === stage);
+  // what Send does with the instructions right now (direction-send.ts)
+  const directionStage: DirectionStage = running(activeGenerate)
+    ? "building"
+    : activeGenerate?.status === "ready"
+      ? "draft_ready"
+      : activeGenerate?.status === "error"
+        ? "draft_error"
+        : running(activeStrategy)
+          ? "strategy_running"
+          : activeStrategy?.status === "ready"
+            ? "strategy_ready"
+            : activeStrategy?.status === "error"
+              ? "strategy_error"
+              : "setup";
+  const directionJob = activeGenerate ?? activeStrategy;
+  const sendInfo = setup ? directionSend({ stage: directionStage, notes: setup.coachNotes, used: runInstructions(directionJob), blocked: blockers.length > 0, cleo }) : null;
+  const strategyStale = !!activeStrategy && activeStrategy.status === "ready" && !!setup?.coachNotes.trim() && !sameInstructions(setup.coachNotes, runInstructions(activeStrategy));
+  const toRun = () => window.setTimeout(() => generateRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+  const rewriteStrategy = (ok = "Writing a new strategy") =>
+    activeStrategy ? run(async () => { await discard({ data: { jobId: activeStrategy.id } }); await queueRun("strategy"); }, ok) : Promise.resolve(false);
+  const sendDirection = async () => {
+    const who = cleo ? "Cleo's" : "It's";
+    let ok = false;
+    switch (sendInfo?.action) {
+      case "strategy":
+        ok = await start("strategy", {}, `Sent. ${who} writing the strategy with your instructions. You can leave; it keeps going.`);
+        break;
+      case "rewrite":
+        ok = await rewriteStrategy(`Sent. ${who} rewriting the strategy with your instructions.`);
+        break;
+      case "rebuild":
+        ok = await start("generate", {}, "Sent. Building a new draft with your instructions. The last one is under Earlier programs.");
+        break;
+      case "restart": {
+        const stopped = directionJob;
+        if (!stopped) return;
+        ok = await run(async () => { await discard({ data: { jobId: stopped.id } }); await queueRun(stopped.kind === "strategy" ? "strategy" : "generate"); }, "Sent. Starting over with your instructions.");
+        break;
+      }
+      default:
+        return;
+    }
+    if (ok) toRun();
+  };
   return (
     <>
       <PageHeader title="Program Intelligence" subtitle={name || undefined} backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
@@ -325,6 +388,9 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
               value={setup.coachNotes}
               onChange={(v) => change("coachNotes", v)}
               onAdjustCurrent={intel.ctx.previous || intel.ctx.schedule.currentEnd ? (text) => setAdjust(text) : undefined}
+              send={sendInfo}
+              sending={busy}
+              onSend={() => void sendDirection()}
             />
 
             {/* 2. The program's setup */}
@@ -353,10 +419,14 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                 </ol>
                 {stage === "setup" && (
                   <>
-                    <Button className="h-12 w-full text-[15px]" disabled={busy || blockers.length > 0 || busyRun} onClick={() => start("generate")} data-testid="gen-fast">
+                    {/* Until the runs on file are known, Generate waits: a failed read would hide a draft that's already there */}
+                    {jobs.isError && !jobs.data && (
+                      <ErrorState error={jobs.error} what="their earlier runs" size="inline" onRetry={() => jobs.refetch()} retrying={jobs.isFetching} />
+                    )}
+                    <Button className="h-12 w-full text-[15px]" disabled={busy || blockers.length > 0 || busyRun || !jobs.data} onClick={() => start("generate")} data-testid="gen-fast">
                       {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Generate the program
                     </Button>
-                    <Button variant="outline" className="h-11 w-full" disabled={busy || blockers.length > 0 || busyRun} onClick={() => start("strategy")} data-testid="gen-review-first">
+                    <Button variant="outline" className="h-11 w-full" disabled={busy || blockers.length > 0 || busyRun || !jobs.data} onClick={() => start("strategy")} data-testid="gen-review-first">
                       <ListChecks className="mr-2 h-4 w-4" /> Review the strategy first
                     </Button>
                     {blockers.length > 0 && <p className="text-xs text-destructive">Fix the conflicts above first: {blockers.map((b) => b.title).join("; ")}.</p>}
@@ -386,6 +456,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                   onInspect={canInspect ? () => setInspecting(activeGenerate) : undefined}
                   plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: activeGenerate.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")}
                   onDiscard={() => run(() => discard({ data: { jobId: activeGenerate.id } }), "Draft discarded")}
+                  onRename={renameProgram(activeGenerate.id)}
                 />
               )}
               {activeStrategy && (running(activeStrategy) || activeStrategy.status === "error") && (
@@ -399,8 +470,9 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                     strategy={activeStrategy.result.strategy}
                     busy={busy}
                     onApprove={(s) => start("generate", { strategy: s, strategyJobId: activeStrategy.id, setup: strategyCtx.data?.setup ?? setup, edited: strategyCtx.data?.edited ?? [...edited] })}
-                    onRegenerate={() => run(async () => { await discard({ data: { jobId: activeStrategy.id } }); await queue({ data: { clientId, kind: "strategy", scope: { kind: "history" }, brain: setup.brain, options: { setup, edited: [...edited], dataHash: intel.dataHash }, privacySafe } }); }, "Writing a new strategy")}
+                    onRegenerate={() => void rewriteStrategy(strategyStale ? "Rewriting the strategy with your instructions" : "Writing a new strategy")}
                     onDiscard={() => run(() => discard({ data: { jobId: activeStrategy.id } }), "Strategy discarded")}
+                    staleInstructions={strategyStale}
                   />
                 )
               )}
@@ -409,7 +481,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                   <summary className="cursor-pointer select-none font-medium">Earlier programs generated ({earlier.length})</summary>
                   <div className="mt-3 space-y-2">
                     {earlier.map((j) => (
-                      <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
+                      <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} onRename={renameProgram(j.id)} />
                     ))}
                   </div>
                 </details>

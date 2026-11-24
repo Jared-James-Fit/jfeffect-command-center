@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { ErrorState, ListSkeleton, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
+import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -27,13 +29,13 @@ export const Route = createFileRoute("/_authenticated/admin/nutrition-dashboard"
 function NutritionDashboardSkeleton() {
   return (
     <div className="space-y-4 p-3 sm:p-4 md:p-6">
-      <div className="h-10 w-64 animate-pulse rounded bg-muted" />
+      <div className="h-10 w-64 jf-skeleton rounded bg-muted" />
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-24 w-full animate-pulse rounded bg-muted" />
+          <div key={i} className="h-24 w-full jf-skeleton rounded bg-muted" />
         ))}
       </div>
-      <div className="h-96 w-full animate-pulse rounded bg-muted" />
+      <div className="h-96 w-full jf-skeleton rounded bg-muted" />
     </div>
   );
 }
@@ -67,17 +69,33 @@ function NutritionDashboard() {
   const [search, setSearch] = useState("");
   const [cadenceDlg, setCadenceDlg] = useState<{ targetId: string; cadence: string; interval?: number | null } | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["nutrition-dashboard", filter, search],
-    queryFn: () => list({ data: { filter, search } }),
+  // The search asks the server once typing pauses, never on every key.
+  const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setSearchQuery(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  // Its own key: ["nutrition-dashboard"] is the client food log's, and sharing it meant every
+  // food logged or plan saved refetched this list (and this page's refresh refetched food logs).
+  const listQ = useQuery({
+    queryKey: ["admin-nutrition-dashboard", filter, searchQuery],
+    queryFn: () => list({ data: { filter, search: searchQuery } }),
+    placeholderData: (prev) => prev,
   });
+  const { data } = listQ;
+  const listState = queryView(listQ as any).kind;
+  const isLoading = listState === "loading";
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["nutrition-dashboard"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["admin-nutrition-dashboard"] });
+  const failed = (e: any) => toast.error(e?.message ?? "Couldn't save that");
 
-  const pushM = useMutation({ mutationFn: (v: { targetId: string; days: number }) => pushDue({ data: v }), onSuccess: () => { toast.success("Due date pushed"); invalidate(); } });
-  const cadenceM = useMutation({ mutationFn: (v: any) => setCadence({ data: v }), onSuccess: () => { toast.success("Cadence updated"); setCadenceDlg(null); invalidate(); } });
-  const markM = useMutation({ mutationFn: (v: { targetId: string }) => markNN({ data: v }), onSuccess: () => { toast.success("Marked not needed"); invalidate(); } });
-  const allowM = useMutation({ mutationFn: (v: { clientId: string }) => allowRe({ data: v }), onSuccess: () => { toast.success("Client can submit again"); invalidate(); } });
+  const pushM = useMutation({ mutationFn: (v: { targetId: string; days: number }) => pushDue({ data: v }), onSuccess: () => { toast.success("Due date pushed"); invalidate(); }, onError: failed });
+  const cadenceM = useMutation({ mutationFn: (v: any) => setCadence({ data: v }), onSuccess: () => { toast.success("Cadence updated"); setCadenceDlg(null); invalidate(); }, onError: failed });
+  const markM = useMutation({ mutationFn: (v: { targetId: string }) => markNN({ data: v }), onSuccess: () => { toast.success("Marked not needed"); invalidate(); }, onError: failed });
+  const allowM = useMutation({ mutationFn: (v: { clientId: string }) => allowRe({ data: v }), onSuccess: () => { toast.success("Client can submit again"); invalidate(); }, onError: failed });
+  // A row action waits for the one before it (Push due twice in a row pushed it twice as far)
+  const rowBusy = pushM.isPending || cadenceM.isPending || markM.isPending || allowM.isPending;
 
   const rows = data?.rows ?? [];
   const counts = data?.counts ?? { overdue: 0, due_today: 0, submitted: 0, due_this_week: 0, up_to_date: 0, paused: 0 };
@@ -128,7 +146,14 @@ function NutritionDashboard() {
         </div>
 
         {isLoading ? (
-          <Card className="p-10 text-center text-muted-foreground">Loading…</Card>
+          <Card className="p-4">
+            <ListSkeleton rows={5} label="Loading clients" />
+            <SlowNote active onRetry={() => listQ.refetch()} what="the dashboard" />
+          </Card>
+        ) : listState === "offline" ? (
+          <OfflineState what="the dashboard" />
+        ) : listState === "error" ? (
+          <ErrorState error={listQ.error} what="the dashboard" onRetry={() => listQ.refetch()} retrying={listQ.isFetching} />
         ) : rows.length === 0 ? (
           <Card className="p-10 text-center">
             <Apple className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -181,15 +206,15 @@ function NutritionDashboard() {
                           <Button size="icon" variant="ghost"><MoreVertical className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => pushM.mutate({ targetId: r.id, days: 1 })}>Push due +1 day</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => pushM.mutate({ targetId: r.id, days: 3 })}>Push due +3 days</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => pushM.mutate({ targetId: r.id, days: 7 })}>Push due +7 days</DropdownMenuItem>
+                          <DropdownMenuItem disabled={rowBusy} onClick={() => pushM.mutate({ targetId: r.id, days: 1 })}>Push due +1 day</DropdownMenuItem>
+                          <DropdownMenuItem disabled={rowBusy} onClick={() => pushM.mutate({ targetId: r.id, days: 3 })}>Push due +3 days</DropdownMenuItem>
+                          <DropdownMenuItem disabled={rowBusy} onClick={() => pushM.mutate({ targetId: r.id, days: 7 })}>Push due +7 days</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => setCadenceDlg({ targetId: r.id, cadence: r.update_cadence, interval: r.cadence_interval_days })}>Change cadence…</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => markM.mutate({ targetId: r.id })}>Mark not needed</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => cadenceM.mutate({ targetId: r.id, cadence: "paused" })}>Pause tracking</DropdownMenuItem>
+                          <DropdownMenuItem disabled={rowBusy} onClick={() => markM.mutate({ targetId: r.id })}>Mark not needed</DropdownMenuItem>
+                          <DropdownMenuItem disabled={rowBusy} onClick={() => cadenceM.mutate({ targetId: r.id, cadence: "paused" })}>Pause tracking</DropdownMenuItem>
                           {r.open_submission ? (
-                            <DropdownMenuItem onClick={() => allowM.mutate({ clientId: r.client_id })}>Allow resubmit</DropdownMenuItem>
+                            <DropdownMenuItem disabled={rowBusy} onClick={() => allowM.mutate({ clientId: r.client_id })}>Allow resubmit</DropdownMenuItem>
                           ) : null}
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -228,7 +253,7 @@ function NutritionDashboard() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCadenceDlg(null)}>Cancel</Button>
-            <Button onClick={() => cadenceDlg && cadenceM.mutate({ targetId: cadenceDlg.targetId, cadence: cadenceDlg.cadence, cadence_interval_days: cadenceDlg.interval ?? undefined })}>Save</Button>
+            <Button loading={cadenceM.isPending} onClick={() => cadenceDlg && cadenceM.mutate({ targetId: cadenceDlg.targetId, cadence: cadenceDlg.cadence, cadence_interval_days: cadenceDlg.interval ?? undefined })}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

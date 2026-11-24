@@ -7,6 +7,7 @@ import {
   PUBLIC_NAV,
   activeNavKey,
   headerCtaFor,
+  homeTapAction,
 } from "@/lib/public-nav";
 import { stickyCtaChoice, stickyCtaState } from "@/lib/sticky-cta";
 
@@ -71,6 +72,37 @@ describe("the public navigation", () => {
     }
     const join = readFileSync("src/components/join/membership-application.tsx", "utf8");
     expect(join.match(/<SalesPageShell [^>]*hideMarketingNav/g)?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the logo and Home on a tap", () => {
+  it("go back to the top on the home page, whatever section is in the address", () => {
+    expect(homeTapAction("/")).toBe("top");
+    expect(homeTapAction("")).toBe("top");
+    expect(homeTapAction("//")).toBe("top");
+  });
+
+  it("go home from every other page", () => {
+    for (const p of ["/coaching", "/coaching/apply", "/about", "/join", "/auth"]) {
+      expect(homeTapAction(p)).toBe("home");
+    }
+  });
+
+  it("are handled before the link, so the router can't put the page back where it was", () => {
+    const header = readFileSync("src/components/sales/public-header.tsx", "utf8");
+    expect(header).toContain("homeTapAction(window.location.pathname)");
+    expect(header).toContain("e.preventDefault()");
+    expect(header).toContain("resetScroll: false");
+    expect(header).toContain('prefers-reduced-motion: reduce');
+    // a new tab or window stays the browser's
+    expect(header).toMatch(/e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey/);
+    // the logo, the desktop Home link and the phone menu's Home row all use it
+    // (the menu is its own chunk, public-menu.tsx, loaded on the first tap)
+    const menu = readFileSync("src/components/sales/public-menu.tsx", "utf8");
+    expect(header.match(/useHomeTap\(/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(menu).toContain("useHomeTap(close)");
+    expect(menu).toContain('onClick={item.key === "home" ? homeTap : close}');
+    expect(header + menu).not.toContain("scrollHomeTop");
   });
 });
 

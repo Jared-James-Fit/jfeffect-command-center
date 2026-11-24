@@ -142,15 +142,18 @@ describe("SBD card wiring", () => {
 
   it("reads comp lifts (never variations) through the shared loads and outlier guard", () => {
     // getClientResults' load is resultLoadLb's; the guard runs before any estimate
-    expect(dash).toContain("strengthPoints(allResults as any[])");
+    expect(dash).toContain("liftStrengths(allResults as any[], meets, today)");
+    const ls = readFileSync("src/lib/analytics/lift-strength.ts", "utf8");
+    expect(ls).toContain("neutralizeObviousLoadOutliers(");
     expect(lib).toContain("neutralizeObviousLoadOutliers(");
     expect(lib).toContain('if (!r || r.is_competition_lift !== true) return null;');
   });
 
-  it("Where you stand (meet, current estimate, training max kept apart) sits after the summary, ahead of lift progress", () => {
-    const sbd = dash.indexOf("<TotalStandingCard");
-    expect(sbd).toBeGreaterThan(dash.indexOf('aria-label="Summary"'));
-    expect(sbd).toBeLessThan(dash.indexOf('aria-label="Lift Progress"'));
+  it("the total (an estimate, a meet, never mixed; maxes on file per lift) is the Overview's donut, ahead of the calendar", () => {
+    const sbd = dash.indexOf("<SbdDonut");
+    expect(sbd).toBeGreaterThan(dash.indexOf("<KpiStrip"));
+    expect(sbd).toBeLessThan(dash.indexOf("<PerformanceCalendar"));
+    expect(dash).toContain("estimatedComposition(strength, today)");
     // the old card mixed an August e1RM, a coach max and today into one "estimated total"
     expect(dash).not.toContain("<SbdSplitCard");
   });
