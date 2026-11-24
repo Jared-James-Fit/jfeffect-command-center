@@ -41,6 +41,7 @@ import { introducedHardToFind, type HardToFind } from "@/lib/nutrition-targets/p
 import { allergenConflictLine, allergenConflicts, foodHistoryKey, onFileRules, type AllergenHit, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
+import { isReviewAsk } from "@/lib/plan-quality";
 import { useCoachVoice, VoiceButton, VoiceStatus } from "@/components/program-ai/coach-voice";
 
 /** Changes coaches ask for most: a tap puts the words in the box to edit or send. */
@@ -295,8 +296,8 @@ export function PlanAiChange({
           {review.error ? (
             <p className="text-[13px] text-destructive">{review.error}</p>
           ) : review.nothing ? (
-            <p className="text-[13px] text-muted-foreground">
-              Nothing changed. Try saying it a different way.
+            <p className="text-[13px] text-muted-foreground" data-plan-ai-kept>
+              {isReviewAsk(edit.instructions) ? "No changes: Cleo would keep the plan as it is." : "Nothing changed. Try saying it a different way."}
             </p>
           ) : (
             <>

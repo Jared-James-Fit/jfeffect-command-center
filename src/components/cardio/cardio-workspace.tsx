@@ -248,7 +248,7 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   };
 
   const cleoPanel = (
-    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust cardio"} subtitle={`Cardio · ${view.firstName}`} branded={cleo} conversationClientId={clientId}>
+    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust cardio"} subtitle={`Cardio · ${view.firstName}`} branded={cleo} handle={CARDIO_CLEO_ANCHOR} conversationClientId={clientId}>
       <DockBrief dock={dock} />
       <CardioCleoPanel
         scorePlan={(p) => scoreCardioPlan(p, view.scoreCtx).score}
@@ -334,6 +334,9 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
     </div>
   );
 }
+
+/** The strip's Cleo buttons (overview or draft), or the strip while it loads: the tab's one way into Cleo. */
+const CARDIO_CLEO_ANCHOR = "[data-plan-intelligence='cardio'] [data-quality-actions], [data-plan-intelligence='cardio'][aria-busy]";
 
 /**
  * The Clients list's quick look at cardio: what's in force and one tap to the Cardio tab, where it's

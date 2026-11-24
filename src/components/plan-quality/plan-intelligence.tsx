@@ -1,40 +1,62 @@
 /**
  * Plan intelligence (Nov 24 2026): the one compact strip at the top of a
  * client's Training, Nutrition and Cardio tabs, the same everywhere. A dial with
- * the design score and its band, the verdict in one line (what's going on and
- * whether the coach needs to act), how it's being followed and whether it's
- * working beside it (never in the score), then Optimize with Cleo and Ask Cleo.
- * The breakdown folds out: what's working, what would help most (ranked by how
- * much each would lift the score), what their other plans mean for this one,
- * and every category. Colour only means something: green working, amber worth
- * a look or action needed, the dial's colour its band. Never presented as a
- * validated or clinical measure.
+ * the design score and its band, the verdict in one line (what needs the coach
+ * first and whether to act), how it's being followed and whether it's working
+ * beside it (never in the score), then Optimize with Cleo and Ask Cleo, the
+ * page's one way into its Cleo (the dock's handle takes over once the strip
+ * scrolls away).
  *
- * Optimize opens the tab's Cleo with the brief (OptimizeBrief): the ranked
- * opportunities, each ticked, to draft as proposals the coach approves one by
- * one or all together. Nothing changes a live prescription from here.
+ * A high score never hides a concern: anything flagged (safety, recovery, a
+ * weak or client-critical category, adherence, results) leads the verdict and
+ * is counted beside it. A thin read or a plan too new for its results is marked
+ * provisional, and "not enough data" shows no number at all. The breakdown
+ * folds out: concerns, what would help most (ranked by what matters for this
+ * client, never by points), optional fine-tuning, what's working, what their
+ * other plans mean for this one, and every category. Colour only means
+ * something: green working, amber worth a look or a concern, red urgent, the
+ * dial's colour its band (never green with a concern open). Never presented as
+ * a validated or clinical measure.
+ *
+ * Optimize is always there: it opens the tab's Cleo on the brief
+ * (OptimizeBrief) with what matters ticked and the optional fine-tuning not,
+ * or, when the plan is working, a review whose answer may well be "keep it".
+ * Nothing changes a live prescription from here.
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDashed, Dumbbell, Footprints, Gauge, Link2, MessageCircle, Salad, TrendingUp } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, CircleDashed, Clock, Dumbbell, Footprints, Gauge, Link2, MessageCircle, Salad, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CleoMark } from "@/components/summer/cleo-mark";
-import { BAND_LABEL, CONFIDENCE_LABEL, optimizeAskFrom, type QualityDomain, type QualityOpportunity, type QualityScore } from "@/lib/plan-quality";
+import {
+  BAND_LABEL,
+  CONFIDENCE_LABEL,
+  optimizeAskFrom,
+  reviewAskFrom,
+  type QualityConcern,
+  type QualityDomain,
+  type QualityOpportunity,
+  type QualityScore,
+} from "@/lib/plan-quality";
 
 const DOMAIN_ICON: Record<QualityDomain, typeof Dumbbell> = { training: Dumbbell, nutrition: Salad, cardio: Footprints };
 const DOMAIN_WORD: Record<QualityDomain, string> = { training: "Training", nutrition: "Nutrition", cardio: "Cardio" };
+const REASON_WORD: Record<QualityConcern["reason"], string> = { safety: "Safety", recovery: "Recovery", timeline: "Meet prep", results: "Results", adherence: "Following it", weak_spot: "Weak spot" };
 
-function bandStroke(band: QualityScore["band"]) {
-  return band === "strong" ? "stroke-success" : band === "good" ? "stroke-foreground" : band === "fair" ? "stroke-warning" : band === "weak" ? "stroke-destructive" : "stroke-muted-foreground/40";
+function dialStroke(q: Pick<QualityScore, "band" | "concerns" | "provisional">) {
+  if (q.provisional) return "stroke-muted-foreground/60";
+  if (q.band === "strong") return q.concerns.length ? "stroke-foreground" : "stroke-success";
+  return q.band === "good" ? "stroke-foreground" : q.band === "fair" ? "stroke-warning" : q.band === "weak" ? "stroke-destructive" : "stroke-muted-foreground/40";
 }
 function barTone(score: number) {
   return score >= 85 ? "bg-success" : score >= 70 ? "bg-foreground/70" : score >= 55 ? "bg-warning" : "bg-destructive";
 }
 
-/** The score as a dial: the arc is the score, its colour the band. */
-export function ScoreDial({ score, band, size = 64, label }: { score: number | null; band: QualityScore["band"]; size?: number; label?: string }) {
+/** The score as a dial: the arc is the score, its colour the band (dashed and muted while provisional, never green with a concern). */
+export function ScoreDial({ quality, size = 64, label }: { quality: Pick<QualityScore, "score" | "band" | "concerns" | "provisional">; size?: number; label?: string }) {
+  const { score } = quality;
   const stroke = size >= 56 ? 5 : 4;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -50,15 +72,19 @@ export function ScoreDial({ score, band, size = 64, label }: { score: number | n
             r={r}
             fill="none"
             strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={c * (1 - pct)}
-            className={cn("transition-[stroke-dashoffset] duration-700 ease-out motion-reduce:transition-none", bandStroke(band))}
+            strokeLinecap={quality.provisional ? "butt" : "round"}
+            strokeDasharray={quality.provisional ? `${(c * pct).toFixed(1)} ${c.toFixed(1)}` : c}
+            strokeDashoffset={quality.provisional ? 0 : c * (1 - pct)}
+            className={cn("transition-[stroke-dashoffset] duration-700 ease-out motion-reduce:transition-none", dialStroke(quality))}
           />
         )}
       </svg>
       <span className="absolute inset-0 grid place-items-center" aria-hidden>
-        {score == null ? <Gauge className="h-5 w-5 text-muted-foreground" /> : <span className={cn("font-semibold tabular-nums tracking-tight", size >= 56 ? "text-[19px]" : "text-[15px]")}>{score}</span>}
+        {score == null ? (
+          <Gauge className="h-5 w-5 text-muted-foreground" />
+        ) : (
+          <span className={cn("font-semibold tabular-nums tracking-tight", size >= 56 ? "text-[19px]" : "text-[15px]", quality.provisional && "text-muted-foreground")}>{score}</span>
+        )}
       </span>
     </div>
   );
@@ -93,6 +119,8 @@ function useScoreDelta(score: number | null, key: string): number | null {
   return delta;
 }
 
+const changedWords = (days: number) => (days === 0 ? "Changed today" : days === 1 ? "Changed yesterday" : `Changed ${days} days ago`);
+
 export function PlanIntelligence({
   domain,
   clientKey,
@@ -115,7 +143,7 @@ export function PlanIntelligence({
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
-  /** Open the tab's Cleo with the ranked brief. */
+  /** Open the tab's Cleo with the brief (offered whatever the score, while there's an ask). */
   onOptimize?: (quality: QualityScore) => void;
   /** Open the tab's Cleo to ask anything. */
   onAskCleo?: () => void;
@@ -163,25 +191,43 @@ export function PlanIntelligence({
   const a = ACTION[q.verdict.action];
   const adh = q.execution.adherence;
   const out = q.execution.outcome;
-  const hasBreakdown = q.categories.length > 0 || q.connections.length > 0 || q.missing.length > 0;
+  const main = q.opportunities.filter((o) => !o.optional);
+  const optional = q.opportunities.filter((o) => o.optional);
+  const urgent = q.concerns.some((c) => c.severity === "urgent");
+  const hasBreakdown = q.categories.length > 0 || q.connections.length > 0 || q.missing.length > 0 || q.concerns.length > 0;
   const canOptimize = !!onOptimize && !!q.optimize;
+  const thin = q.confidence === "low" || q.confidence === "insufficient";
+  const extra = main.filter((o) => !q.concerns.some((c) => c.category === o.key)).length;
+  const toggleLabel = open
+    ? "Hide the breakdown"
+    : q.concerns.length
+      ? `Concerns and what would help (${q.concerns.length + extra})`
+      : main.length
+        ? `What would help most (${main.length})`
+        : optional.length
+          ? `Optional fine-tuning (${optional.length})`
+          : "See the breakdown";
 
   return (
-    <section className={cn("rounded-2xl border border-border bg-card", className)} data-plan-intelligence={domain} data-verdict={q.verdict.kind}>
+    <section className={cn("rounded-2xl border border-border bg-card", className)} data-plan-intelligence={domain} data-verdict={q.verdict.kind} data-provisional={q.provisional || undefined}>
       <div className="flex flex-col gap-3 p-3 sm:p-4 md:flex-row md:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <ScoreDial score={q.score} band={q.band} label={q.score == null ? "Not scored" : `${heading}: ${q.score} out of 100, ${q.band ? BAND_LABEL[q.band] : ""}`} />
+          <ScoreDial quality={q} label={q.score == null ? "Not scored" : `${heading}: ${q.score} out of 100, ${q.provisional ? "provisional" : q.band ? BAND_LABEL[q.band] : ""}`} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <h3 className="flex items-center gap-1.5 text-[15px] font-semibold leading-tight">
                 <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
                 {heading}
               </h3>
-              {q.band && <span className="text-[13px] text-muted-foreground">{BAND_LABEL[q.band]}</span>}
+              {q.band && <span className="text-[13px] text-muted-foreground">{q.provisional ? `Provisional · ${BAND_LABEL[q.band]}` : BAND_LABEL[q.band]}</span>}
               {delta != null && (
-                <span className={cn("inline-flex items-center gap-0.5 text-[12px] font-medium tabular-nums", delta > 0 ? "text-success" : "text-muted-foreground")} data-score-delta>
+                <span
+                  className={cn("inline-flex items-center gap-0.5 text-[12px] font-medium tabular-nums", delta > 0 ? "text-success" : "text-muted-foreground")}
+                  title="The plan's design, read again after your change. Results come later."
+                  data-score-delta
+                >
                   {delta > 0 ? <ArrowUp className="h-3 w-3" aria-hidden /> : <ArrowDown className="h-3 w-3" aria-hidden />}
-                  {delta > 0 ? `+${delta}` : delta} since your change
+                  Design {delta > 0 ? `+${delta}` : delta} after your change{q.settling ? ", results not in yet" : ""}
                 </span>
               )}
             </div>
@@ -190,9 +236,24 @@ export function PlanIntelligence({
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <Pill className={a.text}>
-                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", a.dot)} aria-hidden />
+                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", urgent ? "bg-destructive" : a.dot)} aria-hidden />
                 {a.word}
               </Pill>
+              {q.concerns.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className={cn(
+                    "inline-flex h-6 cursor-pointer items-center gap-1 rounded-full px-2 text-[12px] font-medium transition-colors",
+                    urgent ? "bg-destructive/10 text-destructive hover:bg-destructive/15" : "bg-warning/15 text-foreground hover:bg-warning/25",
+                  )}
+                  aria-controls={panelId}
+                  data-quality-concerns-count={q.concerns.length}
+                >
+                  <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+                  {q.concerns.length} concern{q.concerns.length === 1 ? "" : "s"}
+                </button>
+              )}
               {adh && (
                 <Pill title={adh.label}>
                   <Check className="h-3 w-3 shrink-0" aria-hidden />
@@ -205,6 +266,12 @@ export function PlanIntelligence({
                   <span className="truncate">{out.status === "on_track" ? "On track" : out.status === "behind" ? "Behind" : "Off track"}</span>
                 </Pill>
               )}
+              {q.settling && (
+                <Pill title={`Results take about ${Math.round(q.settling.window / 7)} weeks to show a change`}>
+                  <Clock className="h-3 w-3 shrink-0" aria-hidden />
+                  {changedWords(q.settling.days)}
+                </Pill>
+              )}
               {draft && draft.score != null && draft.score !== q.score && (
                 <Pill title="Your unpublished draft">
                   <CircleDashed className="h-3 w-3 shrink-0" aria-hidden />
@@ -213,10 +280,16 @@ export function PlanIntelligence({
               )}
               <span className="text-[11px] text-muted-foreground">{CONFIDENCE_LABEL[q.confidence]}</span>
             </div>
+            {thin && q.missing.length > 0 && (
+              <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground" data-quality-missing-inline>
+                {q.score == null ? "To score it: " : "Would make it surer: "}
+                {q.missing.slice(0, 3).join(", ").toLowerCase()}.
+              </p>
+            )}
           </div>
         </div>
         {(canOptimize || onAskCleo) && (
-          <div className="flex shrink-0 gap-2 md:flex-col lg:flex-row">
+          <div className="flex shrink-0 gap-2 md:flex-col lg:flex-row" data-quality-actions>
             {canOptimize && (
               <Button className="h-10 flex-1 gap-1.5 md:flex-none" variant={q.verdict.action === "act" ? "default" : "outline"} onClick={() => onOptimize!(q)} data-quality-optimize>
                 {cleo ? <CleoMark size={16} /> : null}
@@ -243,17 +316,36 @@ export function PlanIntelligence({
             className="flex min-h-10 w-full cursor-pointer items-center justify-between border-t border-border px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:px-4"
             data-quality-toggle
           >
-            {open ? "Hide the breakdown" : q.opportunities.length ? `What would help most (${q.opportunities.length})` : "See the breakdown"}
+            {toggleLabel}
             <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
           </button>
           {open && (
             <div id={panelId} className="grid gap-4 border-t border-border p-3 sm:p-4 lg:grid-cols-2" data-quality-breakdown>
               <div className="min-w-0 space-y-4">
-                {q.opportunities.length > 0 && (
+                {q.concerns.length > 0 && (
+                  <div>
+                    <p className="text-[12px] font-semibold text-muted-foreground">Needs your attention</p>
+                    <ul className="mt-1.5 space-y-1.5" data-quality-concerns>
+                      {q.concerns.map((c) => (
+                        <li key={c.key} className="flex gap-2 text-[13px] leading-snug">
+                          <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", c.severity === "urgent" ? "bg-destructive" : "bg-warning")} aria-hidden />
+                          <span className="min-w-0">
+                            {c.text}
+                            <span className="ml-1 text-[11px] text-muted-foreground">
+                              {c.severity === "urgent" ? "Urgent · " : ""}
+                              {REASON_WORD[c.reason]}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {main.length > 0 && (
                   <div>
                     <p className="text-[12px] font-semibold text-muted-foreground">What would help most</p>
                     <ol className="mt-1.5 space-y-2" data-quality-opportunities>
-                      {q.opportunities.map((o, i) => (
+                      {main.map((o, i) => (
                         <li key={o.key} className="flex gap-2 text-[13px] leading-snug">
                           <span className="mt-px w-4 shrink-0 text-right tabular-nums text-muted-foreground">{i + 1}</span>
                           <span className="min-w-0">
@@ -263,6 +355,18 @@ export function PlanIntelligence({
                         </li>
                       ))}
                     </ol>
+                  </div>
+                )}
+                {optional.length > 0 && (
+                  <div>
+                    <p className="text-[12px] font-semibold text-muted-foreground">{main.length || q.concerns.length ? "Optional fine-tuning" : "Optional fine-tuning (keeping it as is is fine)"}</p>
+                    <ul className="mt-1.5 space-y-1" data-quality-optional>
+                      {optional.map((o) => (
+                        <li key={o.key} className="text-[13px] leading-snug text-muted-foreground">
+                          {o.title} <span className="text-[11px]">· {o.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {q.strengths.length > 0 && (
@@ -297,12 +401,17 @@ export function PlanIntelligence({
                     </ul>
                   </div>
                 )}
-                {(adh || out) && (
+                {(adh || out || q.settling) && (
                   <div>
                     <p className="text-[12px] font-semibold text-muted-foreground">How it's going (not in the score)</p>
                     <ul className="mt-1.5 space-y-1 text-[13px] leading-snug">
                       {adh && <li>{adh.label}</li>}
                       {out && <li>{out.label}</li>}
+                      {q.settling && (
+                        <li>
+                          {changedWords(q.settling.days)}: results take about {Math.round(q.settling.window / 7)} weeks to show it
+                        </li>
+                      )}
                     </ul>
                   </div>
                 )}
@@ -311,10 +420,17 @@ export function PlanIntelligence({
                 {q.categories.length > 0 && (
                   <ul className="space-y-2.5" data-quality-categories>
                     {q.categories.map((c) => (
-                      <li key={c.key}>
+                      <li key={c.key} data-quality-category={c.key}>
                         <div className="flex items-center justify-between gap-2 text-[13px]">
-                          <span className="font-medium">{c.label}</span>
-                          <span className="tabular-nums text-muted-foreground">{c.score == null ? "Not enough data" : c.score}</span>
+                          <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                            {c.label}
+                            {c.critical && (
+                              <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground" title={`Key for them: ${c.critical}`} data-quality-critical>
+                                Key for them
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-muted-foreground">{c.score == null ? "Not enough data" : c.score}</span>
                         </div>
                         {c.score != null && (
                           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
@@ -327,7 +443,9 @@ export function PlanIntelligence({
                   </ul>
                 )}
                 {q.missing.length > 0 && <p className="mt-3 text-[12px] text-muted-foreground">Would make it surer: {q.missing.join(", ").toLowerCase()}.</p>}
-                <p className="mt-2 text-[11px] text-muted-foreground">The score rates the plan's design from what's on file; how it's followed sits beside it. A coaching check, not a clinical measure.</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  The score rates the plan's design from what's on file; how it's followed sits beside it, and a concern is said whatever the score. A coaching check, not a clinical measure.
+                </p>
               </div>
             </div>
           )}
@@ -338,9 +456,10 @@ export function PlanIntelligence({
 }
 
 function ImpactTag({ o }: { o: QualityOpportunity }) {
+  const word = o.optional ? "Optional" : o.impact === "high" ? "High priority" : o.impact === "medium" ? "Medium" : "Low";
   return (
-    <span className={cn("ml-0.5 inline-flex items-center rounded-full px-1.5 text-[11px] font-medium tabular-nums", o.impact === "high" ? "bg-warning/15 text-foreground" : "bg-muted text-muted-foreground")}>
-      {o.impact === "high" ? "High impact" : o.impact === "medium" ? "Medium" : "Low"} · +{Math.round(o.gain)}
+    <span className={cn("ml-0.5 inline-flex items-center rounded-full px-1.5 text-[11px] font-medium", !o.optional && o.impact === "high" ? "bg-warning/15 text-foreground" : "bg-muted text-muted-foreground")}>
+      {word} · {o.reason}
     </span>
   );
 }
@@ -349,94 +468,141 @@ function ImpactTag({ o }: { o: QualityOpportunity }) {
 
 export type OptimizeBriefData = { domain: QualityDomain; what: string; quality: QualityScore; nonce: number };
 
-/** The ask built from the opportunities the coach kept ticked. */
-export function briefAsk(b: OptimizeBriefData, keys: Set<string>): string | null {
-  const opp = b.quality.opportunities.filter((o) => keys.has(o.key));
-  if (!opp.length) return null;
-  return optimizeAskFrom(b.what, { ...b.quality, opportunities: opp });
+/** One thing the brief offers: a plan-wide concern (recovery, adherence, results) or an opportunity. */
+export type BriefItem = { key: string; title: string; detail: string; tag: string; urgent: boolean; optional: boolean; concern: boolean };
+
+export function briefItems(q: QualityScore): BriefItem[] {
+  const planWide = q.concerns.filter((c) => !q.opportunities.some((o) => o.key === c.category));
+  return [
+    ...planWide.map((c) => ({ key: `concern:${c.key}`, title: c.text, detail: REASON_WORD[c.reason], tag: c.severity === "urgent" ? "Urgent" : "Concern", urgent: c.severity === "urgent", optional: false, concern: true })),
+    ...q.opportunities.map((o) => {
+      const c = q.concerns.find((x) => x.category === o.key);
+      return {
+        key: o.key,
+        title: o.title,
+        detail: [o.label, o.why].filter(Boolean).join(" · "),
+        tag: c ? (c.severity === "urgent" ? "Urgent" : "Concern") : o.optional ? "Optional" : o.impact === "high" ? "High priority" : o.impact === "medium" ? "Medium" : "Low",
+        urgent: c?.severity === "urgent",
+        optional: o.optional,
+        concern: !!c,
+      };
+    }),
+  ];
+}
+
+/** The ask built from what the coach kept ticked; nothing ticked is a review (which may say keep it). */
+export function briefAsk(b: OptimizeBriefData, keys: Set<string>): string {
+  const q = b.quality;
+  const concerns = q.concerns.filter((c) => keys.has(`concern:${c.key}`));
+  const opportunities = q.opportunities.filter((o) => keys.has(o.key));
+  if (!concerns.length && !opportunities.length) return reviewAskFrom(b.what, q);
+  return optimizeAskFrom(b.what, { ...q, concerns, opportunities }) ?? reviewAskFrom(b.what, q);
 }
 
 /**
- * What Optimize opens in a Cleo dock first: the ranked opportunities, each
- * ticked, with why and how much each should help. Draft sends them to Cleo,
- * which proposes each change with what it is now and what it'd become; the
- * coach approves them one at a time or all together.
+ * What Optimize opens in a Cleo dock first: what matters for this client, ranked (concerns and the
+ * changes worth making ticked, optional fine-tuning not), or, when the plan is working, Cleo's read
+ * that it can stay as it is with a review one tap away. Draft sends the ticked ones to Cleo, which
+ * proposes each change with what it is now and what it'd become; the coach approves them one at a
+ * time or all together.
  */
 export function OptimizeBrief({ brief, onDraft, onEdit, onClose, busy }: { brief: OptimizeBriefData; onDraft: (ask: string) => void; onEdit: (ask: string) => void; onClose: () => void; busy?: boolean }) {
-  const [keys, setKeys] = useState<Set<string>>(() => new Set(brief.quality.opportunities.map((o) => o.key)));
+  const q = brief.quality;
+  const items = useMemo(() => briefItems(q), [q]);
+  const [keys, setKeys] = useState<Set<string>>(() => new Set(items.filter((i) => !i.optional).map((i) => i.key)));
   const [sent, setSent] = useState(false);
   useEffect(() => {
-    setKeys(new Set(brief.quality.opportunities.map((o) => o.key)));
+    setKeys(new Set(items.filter((i) => !i.optional).map((i) => i.key)));
     setSent(false);
-  }, [brief.nonce, brief.quality.opportunities]);
+  }, [brief.nonce, items]);
   const ask = briefAsk(brief, keys);
-  const q = brief.quality;
+  const main = items.filter((i) => !i.optional);
+  const optional = items.filter((i) => i.optional);
+  const keep = main.length === 0;
+  const n = keys.size;
+  const toggle = (key: string, on: boolean) =>
+    setKeys((s) => {
+      const next = new Set(s);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
   if (sent) {
     return (
       <div className="mx-3 mt-3 flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2 text-[12px] text-muted-foreground" data-optimize-brief="sent">
         <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="min-w-0 flex-1">Optimizing {keys.size} thing{keys.size === 1 ? "" : "s"}: review each proposed change below before anything is applied.</span>
+        <span className="min-w-0 flex-1">
+          {n ? `Optimizing ${n} thing${n === 1 ? "" : "s"}: review each proposed change below before anything is applied.` : "Cleo's reviewing it. Keeping it as it is may be the answer; any change comes to you first."}
+        </span>
         <button type="button" className="cursor-pointer font-medium text-foreground underline-offset-2 hover:underline" onClick={onClose}>
           Done
         </button>
       </div>
     );
   }
+  const row = (i: BriefItem) => {
+    const on = keys.has(i.key);
+    return (
+      <li key={i.key}>
+        <label className={cn("flex cursor-pointer gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50", !on && "opacity-70")}>
+          <Checkbox checked={on} onCheckedChange={(v) => toggle(i.key, !!v)} className="mt-0.5" aria-label={i.title} />
+          <span className="min-w-0 text-[13px] leading-snug">
+            <span className="font-medium">{i.title}</span>{" "}
+            <span
+              className={cn(
+                "ml-0.5 inline-flex items-center rounded-full px-1.5 text-[11px] font-medium",
+                i.urgent ? "bg-destructive/10 text-destructive" : i.concern || i.tag === "High priority" ? "bg-warning/15 text-foreground" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {i.tag}
+            </span>
+            {i.detail && <span className="block text-[12px] text-muted-foreground">{i.detail}</span>}
+          </span>
+        </label>
+      </li>
+    );
+  };
   return (
-    <div className="mx-3 mt-3 rounded-2xl border border-border bg-card p-3" data-optimize-brief>
+    <div className="mx-3 mt-3 rounded-2xl border border-border bg-card p-3" data-optimize-brief={keep ? "keep" : "ranked"}>
       <div className="flex items-center gap-2.5">
-        <ScoreDial score={q.score} band={q.band} size={40} />
+        <ScoreDial quality={q} size={40} />
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold leading-tight">What would help most</p>
-          <p className="text-[12px] text-muted-foreground">Ranked by how much each should lift the score. Untick anything you'd keep.</p>
+          <p className="text-[14px] font-semibold leading-tight">{!keep ? "What matters most" : q.verdict.action === "none" ? "Nothing needs changing" : "Nothing urgent to change"}</p>
+          <p className="text-[12px] text-muted-foreground">
+            {!keep
+              ? "Ranked by what matters for them (safety and recovery first), not by points. Untick anything you'd keep."
+              : q.verdict.action === "none"
+                ? "Cleo's read is to keep it as is. Ask for a review anyway, or tick something optional."
+                : "Worth a look, but nothing in it needs changing on its own. Ask Cleo to review it, or tick what you'd change."}
+          </p>
         </div>
       </div>
-      <ul className="mt-2.5 space-y-1.5">
-        {q.opportunities.map((o) => {
-          const on = keys.has(o.key);
-          return (
-            <li key={o.key}>
-              <label className={cn("flex cursor-pointer gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50", !on && "opacity-60")}>
-                <Checkbox
-                  checked={on}
-                  onCheckedChange={(v) =>
-                    setKeys((s) => {
-                      const n = new Set(s);
-                      if (v) n.add(o.key);
-                      else n.delete(o.key);
-                      return n;
-                    })
-                  }
-                  className="mt-0.5"
-                  aria-label={o.title}
-                />
-                <span className="min-w-0 text-[13px] leading-snug">
-                  <span className="font-medium">{o.title}</span> <ImpactTag o={o} />
-                  <span className="block text-[12px] text-muted-foreground">
-                    {o.label}
-                    {o.why ? ` · ${o.why}` : ""}
-                  </span>
-                </span>
-              </label>
-            </li>
-          );
-        })}
-      </ul>
-      {q.connections.length > 0 && <p className="mt-1.5 px-2 text-[12px] text-muted-foreground">Cleo also reads their {q.connections.map((c) => DOMAIN_WORD[c.domain].toLowerCase()).filter((v, i, a) => a.indexOf(v) === i).join(" and ")} plan for this.</p>}
+      {main.length > 0 && <ul className="mt-2.5 space-y-1.5">{main.map(row)}</ul>}
+      {optional.length > 0 && (
+        <div className="mt-2">
+          <p className="px-2 text-[11px] font-semibold text-muted-foreground">Optional fine-tuning (only if clearly worth it)</p>
+          <ul className="mt-1 space-y-1">{optional.map(row)}</ul>
+        </div>
+      )}
+      {q.connections.length > 0 && (
+        <p className="mt-1.5 px-2 text-[12px] text-muted-foreground">
+          Cleo also reads their {q.connections.map((c) => DOMAIN_WORD[c.domain].toLowerCase()).filter((v, i, a) => a.indexOf(v) === i).join(" and ")} plan for this.
+        </p>
+      )}
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <Button
           className="h-10 gap-1.5"
-          disabled={!ask || busy}
+          variant={n ? "default" : "outline"}
+          disabled={busy}
           onClick={() => {
-            if (!ask) return;
             setSent(true);
             onDraft(ask);
           }}
           data-optimize-draft
         >
-          <CleoMark size={15} /> Draft {keys.size} change{keys.size === 1 ? "" : "s"}
+          <CleoMark size={15} /> {n ? `Draft ${n} change${n === 1 ? "" : "s"}` : "Ask Cleo to review it"}
         </Button>
-        <Button variant="ghost" className="h-10" disabled={!ask} onClick={() => ask && onEdit(ask)}>
+        <Button variant="ghost" className="h-10" onClick={() => onEdit(ask)}>
           Edit the ask
         </Button>
         <button type="button" onClick={onClose} className="ml-auto h-10 cursor-pointer px-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">

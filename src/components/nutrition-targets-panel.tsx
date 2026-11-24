@@ -32,7 +32,16 @@ import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
 
-export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }: { clientId: string; className?: string }) {
+export function NutritionTargetsPanel({
+  clientId,
+  className = "md:col-span-3",
+  cleoEntry = true,
+}: {
+  clientId: string;
+  className?: string;
+  /** The card's own way into Cleo: only where no dock is mounted (a quick sheet); the Nutrition tab's is its plan-quality strip. */
+  cleoEntry?: boolean;
+}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -245,8 +254,9 @@ export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }:
             // meals that don't cover a day's targets: the fix lands in Change it with AI for the coach to send and review
             onFixMeals={() => prefillPlanAiChange(clientId, BRING_MEALS_TO_TARGETS)}
           />
-          {/* Adjusting the plan with Cleo happens in the docked panel (nutrition-cleo-dock.tsx), beside the plan */}
-          <NutritionCleoEntry clientId={clientId} />
+          {/* Adjusting the plan with Cleo happens in the docked panel (nutrition-cleo-dock.tsx), opened from the
+              tab's plan-quality strip; this entry is only for a quick sheet, where no dock is mounted */}
+          {cleoEntry && <NutritionCleoEntry clientId={clientId} />}
           {current.slice(1).map((t: any) => (
             // More than one plan running is rare (two made the same day): each is shown, newest first.
             <div key={t.id} className="space-y-2 rounded-xl border border-border p-3">

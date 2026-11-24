@@ -24,6 +24,13 @@
  *
  * Branded Cleo for whoever has Cleo (useCleoAccess); anyone else who may adjust
  * the program sees the same dock as "Adjust program": nobody loses it.
+ *
+ * One way in per page (Nov 24 2026): a client's Training, Nutrition and Cardio
+ * tabs open their dock from the plan-quality strip (Optimize, Ask Cleo), never a
+ * second launcher beside it. Once the strip has scrolled away (or isn't there),
+ * the closed dock shows its handle (`handle`): a slim tab on the right edge on a
+ * computer, a small pill above the tab bar on a phone, so Cleo stays one tap
+ * away anywhere on the page without a second button competing with the strip.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, Maximize2, MessagesSquare, Minimize2, SlidersHorizontal, X } from "lucide-react";
@@ -189,6 +196,7 @@ export function CleoDockFrame({
   subtitle,
   branded,
   header,
+  handle,
   children,
   conversationClientId,
 }: {
@@ -200,11 +208,19 @@ export function CleoDockFrame({
   branded: boolean;
   /** What goes under the title row (scope, tabs, a specialty line). */
   header?: ReactNode;
+  /**
+   * The page's own way in (a CSS selector, the strip's Cleo buttons): while it's on screen the
+   * closed dock shows nothing extra; once it scrolls away (or isn't there) the handle shows.
+   * Leave it out where a header launcher is always in view (the block editor).
+   */
+  handle?: string | null;
   children: ReactNode;
   /** A client's dock: "Conversation" continues in Cleo's panel, in that client's conversation. */
   conversationClientId?: string | null;
 }) {
   const phone = useIsMobileNow();
+  const anchorInView = useAnchorInView(handle ?? null);
+  const showHandle = !!handle && !dock.open && !anchorInView;
 
   // mounted on first open and kept (hidden) after, so the conversation and the draft survive closing
   const [mounted, setMounted] = useState(false);
@@ -320,7 +336,8 @@ export function CleoDockFrame({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [dock]);
 
-  if (!mounted) return null;
+  const handleEl = handle ? <CleoHandle dock={dock} name={name} branded={branded} phone={phone} shown={showHandle} /> : null;
+  if (!mounted) return handleEl;
   const keyboardUp = phone && !!box?.keyboard;
   const phoneStyle = phone
     ? keyboardUp && box
@@ -329,6 +346,8 @@ export function CleoDockFrame({
     : { width: deskW };
 
   return (
+    <>
+    {handleEl}
     <aside
       role="complementary"
       aria-label={name}
@@ -429,6 +448,82 @@ export function CleoDockFrame({
 
       {children}
     </aside>
+    </>
+  );
+}
+
+/**
+ * Whether the page's own way into Cleo is on screen (the strip's buttons). Missing counts as not
+ * on screen. Re-found when the page re-renders it (one check a frame at most).
+ */
+export function useAnchorInView(selector: string | null): boolean {
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    if (!selector || typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    let el: Element | null = null;
+    let io: IntersectionObserver | null = null;
+    let frame = 0;
+    const attach = () => {
+      frame = 0;
+      const next = document.querySelector(selector);
+      if (next === el) return;
+      io?.disconnect();
+      io = null;
+      el = next;
+      if (!el) {
+        setInView(false);
+        return;
+      }
+      // the app's top bar covers the first 56px
+      io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: "-56px 0px 0px 0px" });
+      io.observe(el);
+    };
+    attach();
+    const mo = new MutationObserver(() => {
+      if (!frame) frame = window.requestAnimationFrame(attach);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      io?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [selector]);
+  return inView;
+}
+
+/**
+ * The closed dock's handle: where Cleo lives on the page once the strip has scrolled away. A slim
+ * tab on the right edge on a computer (where the dock opens), a small pill above the tab bar on a
+ * phone (where the sheet rises from). Slides in and out; hidden while typing.
+ */
+function CleoHandle({ dock, name, branded, phone, shown }: { dock: CleoDockHandle; name: string; branded: boolean; phone: boolean; shown: boolean }) {
+  const short = branded ? "Cleo" : name.split(" ")[0];
+  return (
+    <button
+      type="button"
+      onClick={() => dock.setOpen(true)}
+      aria-label={branded ? "Open Cleo" : `Open ${name}`}
+      aria-hidden={!shown}
+      tabIndex={shown ? 0 : -1}
+      title={branded ? "Cleo: ask about or change this plan" : name}
+      data-cleo-handle={shown ? "shown" : "hidden"}
+      data-hide-on-keyboard
+      className={cn(
+        "fixed z-30 cursor-pointer border border-border bg-background text-foreground shadow-[0_6px_20px_-10px_rgba(0,0,0,0.35)] transition-[transform,opacity] duration-200 ease-out hover:bg-muted motion-reduce:transition-none dark:bg-card",
+        phone
+          ? "right-3 flex h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold"
+          : "right-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-l-xl border-r-0 px-1.5 py-3 text-[12px] font-semibold",
+        shown ? "opacity-100" : phone ? "pointer-events-none translate-y-3 opacity-0" : "pointer-events-none translate-x-full opacity-0",
+      )}
+      style={phone ? { bottom: "calc(var(--bottom-nav-clearance, 0px) + 12px)" } : undefined}
+    >
+      {branded ? <CleoMark size={phone ? 17 : 18} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
+      <span className={phone ? undefined : "[writing-mode:vertical-rl]"}>{short}</span>
+    </button>
   );
 }
 
@@ -439,6 +534,7 @@ export function CleoDock({
   onApplied,
   beforeSend,
   scopes = ["day", "week", "block", "program"],
+  handle,
 }: {
   dock: CleoDockHandle;
   target: ProgramAiTarget;
@@ -449,6 +545,8 @@ export function CleoDock({
   beforeSend?: () => Promise<void> | void;
   /** The scopes to offer (the client's Training tab, outside the builder, is the whole program). */
   scopes?: CleoScope[];
+  /** The page's own way in, for the closed dock's handle (CleoDockFrame). */
+  handle?: string | null;
 }) {
   const cleo = useCleoAccess();
   const here = useBuilderHere();
@@ -512,7 +610,7 @@ export function CleoDock({
   );
 
   return (
-    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header} conversationClientId={target.kind === "client" ? target.clientId : null}>
+    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header} handle={handle} conversationClientId={target.kind === "client" ? target.clientId : null}>
       <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== "chat"}>
         <DockBrief dock={dock} />
         <ChatPanel target={target} onApplied={onApplied} context={context} beforeSend={beforeSend} quickActions={quick} seed={dock.seed} />
