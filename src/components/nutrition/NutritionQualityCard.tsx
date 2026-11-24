@@ -9,7 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getNutritionQualityFn } from "@/lib/cardio/cardio.functions";
-import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
+import { PlanIntelligence, pendingReminder } from "@/components/plan-quality/plan-intelligence";
 import { openNutritionCleo, optimizeNutritionCleo } from "@/components/nutrition/nutrition-cleo-dock";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 
@@ -36,6 +36,8 @@ export function NutritionQualityCard({ clientId, className }: { clientId: string
       className={className}
       onOptimize={(quality) => optimizeNutritionCleo(clientId, quality)}
       onAskCleo={() => openNutritionCleo(clientId)}
+      messageClientId={clientId}
+      pending={q.data?.pending ? pendingReminder("nutrition", q.data.pending.at, { cleo, onOpen: () => openNutritionCleo(clientId) }) : null}
     />
   );
 }

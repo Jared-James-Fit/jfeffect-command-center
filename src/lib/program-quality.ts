@@ -34,7 +34,7 @@ import { estimateDayMinutes } from "@/lib/pl-programs";
 import { mainLiftProgression, programCheck, type CheckFinding, type CheckInput, type ProgramStyle } from "@/lib/program-check";
 import { MUSCLE_DOSE, LIFT_DOSE, type ExperienceLevel } from "@/lib/program-intel/first-program";
 import { blockTypeFamily, resolveBlockType } from "@/lib/block-types";
-import { adherencePct, clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, settlingOf, type CategoryConcern, type QualityCategory, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
+import { adherencePct, clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, settlingOf, type CategoryConcern, type QualityCategory, type QualityChange, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
 
 export type ProgramQualityContext = {
   today: string;
@@ -65,7 +65,36 @@ export type ProgramQualityContext = {
   checkins: number;
   /** When the program last changed (the current block's start, or an applied Adjust program change). */
   changedOn?: string | null;
+  /** The change log's read (plan-changes.ts changeRead): wins over changedOn when there is one. */
+  changeLog?: { changes: QualityChange[]; settling: QualityScore["settling"] } | null;
+  /**
+   * Logged sets at the coach's loads that ran 2+ RPE under target (the loads are lighter than
+   * written: room to progress faster), counted with `effort`.
+   */
+  easier?: number;
+  /** What their check-ins say gets in the way (barriersFromCheckins). */
+  barriers?: string[];
+  firstName?: string | null;
 };
+
+/** The phase the athlete is in, from the live block's type and the live week's phase words. */
+export type TrainingPhase = "accumulation" | "intensification" | "peak" | "taper" | "deload" | "other";
+export function phaseOf(input: CheckInput, live: { bi: number; wi: number } | null): TrainingPhase {
+  if (!live) return "other";
+  const b = input.blocks[live.bi];
+  const wk = String(b?.weeks[live.wi]?.phase ?? "");
+  if (/deload|unload|recovery week|light week/i.test(wk)) return "deload";
+  if (/taper/i.test(wk)) return "taper";
+  if (/peak|meet week|opener/i.test(wk)) return "peak";
+  if (/overreach|accumul|volume/i.test(wk)) return "accumulation";
+  const fam = blockTypeFamily(resolveBlockType({ block_type: b.blockType, block_meta: b.blockMeta, phase: b.phase, training_focus: b.trainingFocus, name: b.name }, input.blockTypes).type);
+  if (fam === "deload") return "deload";
+  if (fam === "taper") return "taper";
+  if (fam === "peaking") return "peak";
+  if (fam === "accumulation" || fam === "hypertrophy") return "accumulation";
+  if (fam === "intensification" || fam === "strength") return "intensification";
+  return "other";
+}
 
 const rows = (d: any) => ((d?.rows ?? []) as any[]).filter(Boolean);
 const isTimed = (r: any) => r?.measurement_type === "time";
@@ -193,9 +222,23 @@ export function liveWeekOf(input: CheckInput): { bi: number; wi: number } | null
 
 const byId = (fs: CheckFinding[], prefix: string) => fs.filter((f) => f.id === prefix || f.id.startsWith(`${prefix}:`));
 
-function executionOf(ctx: ProgramQualityContext): QualityExecution {
+function executionOf(ctx: ProgramQualityContext, phase: TrainingPhase, harder: boolean): QualityExecution {
   const a = ctx.adherence;
   const pct = a ? adherencePct(a.done, a.planned) : null;
+  // a high-volume block costs some strength on the way (planned, accumulated fatigue): expected while
+  // recovery holds up and the loads feel as written, not a sign the program isn't working
+  // and heavier, lower-rep sets (an intensification, peak or taper) often estimate a lower max than
+  // sets of five did: the estimate dips while the strength that counts holds
+  const calm = ctx.lowerPerformance === "down" && ctx.recoveryFlags === 0 && !harder;
+  const expected = !calm
+    ? null
+    : phase === "deload"
+      ? "Lower-body strength dipped going into a lighter week, as planned"
+      : phase === "accumulation"
+        ? "Lower-body strength is a little down in a high-volume block: accumulated fatigue, planned, and it should come back as the volume drops"
+        : phase === "intensification" || phase === "peak" || phase === "taper"
+          ? `Lower-body strength reads a little down, but heavier, lower-rep sets in ${phase === "intensification" ? "an intensification block" : `a ${phase}`} often estimate lower than sets of five did, with no recovery flags or loads running heavy. Judge the heavy singles${ctx.meet && ctx.meet.weeksOut <= 4 ? " and the meet" : ""}, not the estimate`
+          : null;
   return {
     adherence: pct != null && a ? { pct, label: `${Math.min(a.done, a.planned)} of ${a.planned} planned workouts done in 4 weeks` } : null,
     outcome:
@@ -204,13 +247,17 @@ function executionOf(ctx: ProgramQualityContext): QualityExecution {
         : ctx.lowerPerformance === "down"
           ? { status: "behind", label: "Lower-body strength is down lately" }
           : null,
+    barriers: ctx.barriers ?? [],
+    expected,
   };
 }
 
 export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): QualityScore {
-  const execution = executionOf(ctx);
-  const adh = execution.adherence?.pct ?? null;
   const live = liveWeekOf(input);
+  const phase = phaseOf(input, live);
+  const harder = !!ctx.effort && ctx.effort.rated >= 6 && ctx.effort.harder / ctx.effort.rated >= 0.4;
+  const execution = executionOf(ctx, phase, harder);
+  const adh = execution.adherence?.pct ?? null;
   const week = live ? weekStats(input, live.bi, live.wi) : null;
   const points = [ctx.style != null, ctx.level != null, ctx.trainingDays.length > 0, !!input.athlete?.sessionLimit?.minutes, !!input.athlete?.equipment && input.athlete.equipment.confidence !== "unknown", adh != null].filter(Boolean).length;
   const missing: string[] = [];
@@ -227,6 +274,9 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       points,
       missing,
       execution,
+      domain: "training",
+      firstName: ctx.firstName,
+      changes: ctx.changeLog?.changes,
       none: { headline: input.blocks.length ? "Nothing left to train on the current program. Plan their next block." : "No program on their calendar yet.", action: input.blocks.length ? "act" : "review" },
     });
   }
@@ -239,9 +289,10 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
   const connections: QualityConnection[] = [];
 
   const meetIn = ctx.meet && ctx.meet.weeksOut >= 0 ? Math.round(ctx.meet.weeksOut) : null;
-  const harder = !!ctx.effort && ctx.effort.rated >= 6 && ctx.effort.harder / ctx.effort.rated >= 0.4;
   const recovery = recoveryTrend({ lowerPerformance: ctx.lowerPerformance, recoveryFlags: ctx.recoveryFlags, harderThanWritten: harder });
-  const settling = settlingOf("training", ctx.changedOn ?? null, ctx.today);
+  // the change log decides when there is one (a minor edit never restarts the read); else the last change
+  const settling = ctx.changeLog ? ctx.changeLog.settling : settlingOf("training", ctx.changedOn ?? null, ctx.today);
+  const lightWeek = phase === "deload" || phase === "taper" || phase === "peak";
 
   // ── Goal alignment ──
   const goalConcerns: CategoryConcern[] = [];
@@ -302,9 +353,9 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
     for (const f of pain) {
       s -= 15;
       const place = f.title.split(":")[0];
-      notes.push(`${place} pain on file and the program loads it`);
+      notes.push(`${place}: pain on file, and the program loads it`);
       const worst = Number(/worst (\d+)\/10/.exec(f.title)?.[1] ?? 0);
-      concerns.push({ text: `${place} pain${/getting worse/.test(f.title) ? " is getting worse" : " is on file"} and the program still loads it`, severity: /getting worse/.test(f.title) || worst >= 7 ? "urgent" : "significant", reason: "safety" });
+      concerns.push({ text: `${place}: pain ${/getting worse/.test(f.title) ? "getting worse" : "on file"}, and the program still loads it`, severity: /getting worse/.test(f.title) || worst >= 7 ? "urgent" : "significant", reason: "safety" });
     }
     const equip = findings.find((f) => f.id === "warning:equipment");
     if (equip) {
@@ -356,7 +407,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
         else if (sets > Math.max(24, target * 2)) high.push(`${group} ${sets}`);
         if (g && week.days >= 3 && g.days.size < 2 && style !== "powerlifting") rare.push(group);
       }
-      if (low.length) {
+      if (low.length && !lightWeek) {
         s -= Math.min(30, low.length * 8);
         notes.push(`Low weekly sets for ${level === "beginner" ? "a beginner" : `an ${level} lifter`}: ${low.join(", ")}`);
       }
@@ -375,7 +426,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       for (const l of ["squat", "bench", "deadlift"] as Lift[]) {
         const x = compLift(l);
         const want = Math.max(2, Math.round(dose[(l.charAt(0).toUpperCase() + l.slice(1)) as "Squat" | "Bench" | "Deadlift"] * lshare));
-        if (x.sets && x.sets < want * 0.5) {
+        if (x.sets && x.sets < want * 0.5 && !lightWeek) {
           s -= 6;
           notes.push(`${l.charAt(0).toUpperCase() + l.slice(1)} ${x.sets} sets a week (about ${want} for their level)`);
         }
@@ -391,7 +442,8 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       s -= Math.min(20, n * 2);
       notes.push(effortless.title);
     }
-    if (!notes.length) notes.push(`${week.sets} working sets a week, spread to suit ${level === "beginner" ? "a beginner" : `an ${level} lifter`}`);
+    if (!notes.length)
+      notes.push(lightWeek ? `A lighter ${phase === "deload" ? "deload" : phase} week by design (${week.sets} working sets)` : `${week.sets} working sets a week, spread to suit ${level === "beginner" ? "a beginner" : `an ${level} lifter`}`);
     cats.push({ key: "dose", label: "Volume, intensity and frequency", score: clampScore(s), weight: 0.14, notes });
   }
 
@@ -471,6 +523,11 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       s -= Math.min(36, Math.round(share * 40) + 4);
       notes.push(`${prog.missing.length} main lift${prog.missing.length === 1 ? " stays" : "s stay"} the same every week with no note on how to progress`);
     }
+    const easier = ctx.easier ?? 0;
+    if (ctx.effort && ctx.effort.rated >= 6 && easier / ctx.effort.rated >= 0.4 && !lightWeek) {
+      s -= 12;
+      notes.push(`${easier} of ${ctx.effort.rated} sets at the loads you set ran 2+ RPE under target lately: room to progress the loads faster`);
+    }
     const typeVol = byId(findings, "decision:type-volume");
     if (typeVol.length) {
       s -= 10;
@@ -482,7 +539,7 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
       notes.push(`${untyped === input.blocks.length ? "No block type set" : `${untyped} block${untyped === 1 ? "" : "s"} with no type set`} (read from the name)`);
     }
     if (!notes.length) notes.push(prog.total ? "Main lifts progress week to week" : "Progression is set for the work that needs it");
-    cats.push({ key: "progression", label: "Progression and periodization", score: clampScore(s), weight: 0.12, notes, critical: ctx.lowerPerformance === "down" && adh != null && adh >= FOLLOW_LOW ? "strength is down while they follow it" : null });
+    cats.push({ key: "progression", label: "Progression and periodization", score: clampScore(s), weight: 0.12, notes, critical: ctx.lowerPerformance === "down" && !execution.expected && adh != null && adh >= FOLLOW_LOW ? "strength is down while they follow it" : null });
   }
 
   // ── Exercise order and equipment efficiency ──
@@ -611,5 +668,5 @@ export function scoreProgram(input: CheckInput, ctx: ProgramQualityContext): Qua
     cats.push({ key: "timeline", label: "Competition timeline", score: clampScore(s), weight: 0.08, notes, critical: ctx.meet.weeksOut <= 12 ? `a meet in ${Math.round(ctx.meet.weeksOut)} weeks` : null, concerns });
   }
 
-  return finishQuality(cats, { what: "training program", points, missing, execution, connections, recovery, settling });
+  return finishQuality(cats, { what: "training program", points, missing, execution, connections, recovery, settling, changes: ctx.changeLog?.changes, domain: "training", firstName: ctx.firstName });
 }

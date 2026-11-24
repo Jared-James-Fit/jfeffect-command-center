@@ -32,7 +32,7 @@
  * computer, a small pill above the tab bar on a phone, so Cleo stays one tap
  * away anywhere on the page without a second button competing with the strip.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { ChevronDown, ChevronUp, Maximize2, MessagesSquare, Minimize2, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
@@ -495,31 +495,141 @@ export function useAnchorInView(selector: string | null): boolean {
   return inView;
 }
 
+/** A dialog, sheet, menu, popover or list is open over the page (Radix portals mount on <body>). */
+export function overlayOpen(doc: Document = document): boolean {
+  return !!doc.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [data-radix-popper-content-wrapper], [data-vaul-drawer][data-state="open"]');
+}
+
+/** Whether the phone pill may show at this moment: never scrolling down, never at the page's end. */
+export function pillRoom(o: { scrollingDown: boolean; nearEnd: boolean; overlay: boolean }): boolean {
+  return !o.scrollingDown && !o.nearEnd && !o.overlay;
+}
+
+/** The computer tab steps aside (a sliver) while the pointer works near the right edge, not on the tab. */
+export function tabPeeks(o: { x: number; y: number; vw: number; tabTop: number; tabBottom: number }): boolean {
+  const fromEdge = o.vw - o.x;
+  return fromEdge > 18 && fromEdge < 140 && o.y > o.tabTop - 60 && o.y < o.tabBottom + 60;
+}
+
+/**
+ * When the handle has room to show without getting in the way: hidden while a dialog, sheet or menu
+ * is open; on a phone, hidden while scrolling down and at the page's end (so the last controls are
+ * reachable), back on scrolling up or a beat after scrolling stops; on a computer, a sliver while the
+ * pointer works on page controls near the right edge, and clear of an inner scroll area's scrollbar.
+ */
+function useHandleRoom(active: boolean, phone: boolean, tabRef: RefObject<HTMLButtonElement | null>) {
+  const [overlay, setOverlay] = useState(false);
+  const [scrollingDown, setScrollingDown] = useState(false);
+  const [nearEnd, setNearEnd] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    const check = () => setOverlay(overlayOpen());
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: false, attributes: true, attributeFilter: ["data-scroll-locked", "style"] });
+    // a dialog closing flips data-state before its portal leaves
+    const t = window.setInterval(check, 800);
+    return () => {
+      mo.disconnect();
+      window.clearInterval(t);
+    };
+  }, [active]);
+  useEffect(() => {
+    if (!active || !phone) return;
+    let last = new Map<EventTarget, number>();
+    let idle = 0;
+    const onScroll = (e: Event) => {
+      const el = e.target === document ? document.scrollingElement : (e.target as HTMLElement | null);
+      if (!el || !(el instanceof HTMLElement)) return;
+      const y = el.scrollTop;
+      const prev = last.get(el) ?? y;
+      last.set(el, y);
+      if (Math.abs(y - prev) > 2) setScrollingDown(y > prev);
+      setNearEnd(el.scrollHeight - el.clientHeight - y < 96 && el.scrollHeight > el.clientHeight + 200);
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setScrollingDown(false), 900);
+    };
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true } as any);
+      window.clearTimeout(idle);
+      last = new Map();
+    };
+  }, [active, phone]);
+  useEffect(() => {
+    if (!active || phone) return;
+    // an inner scroll area that reaches the right edge keeps its scrollbar: the tab sits left of it
+    const main = document.querySelector("[data-shell-root] main") as HTMLElement | null;
+    const measure = () => {
+      if (!main) return setInset(0);
+      const r = main.getBoundingClientRect();
+      const scrolls = main.scrollHeight > main.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(main).overflowY);
+      setInset(scrolls && Math.abs(window.innerWidth - r.right) < 2 ? Math.max(0, main.offsetWidth - main.clientWidth) : 0);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    let frame = 0;
+    const onMove = (e: PointerEvent) => {
+      if (frame || e.pointerType === "touch") return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const tab = tabRef.current?.getBoundingClientRect();
+        if (!tab) return;
+        if (e.clientX >= tab.left - 4 && e.clientY >= tab.top && e.clientY <= tab.bottom) return setPeek(false);
+        setPeek(tabPeeks({ x: e.clientX, y: e.clientY, vw: window.innerWidth, tabTop: tab.top, tabBottom: tab.bottom }));
+      });
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("pointermove", onMove);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [active, phone, tabRef]);
+  return { room: phone ? pillRoom({ scrollingDown, nearEnd, overlay }) : !overlay, peek: !phone && peek, inset };
+}
+
 /**
  * The closed dock's handle: where Cleo lives on the page once the strip has scrolled away. A slim
  * tab on the right edge on a computer (where the dock opens), a small pill above the tab bar on a
- * phone (where the sheet rises from). Slides in and out; hidden while typing.
+ * phone (where the sheet rises from). Slides in and out, and steps out of the way: hidden while
+ * typing, while a dialog or menu is open, while scrolling down and at the page's end on a phone, a
+ * sliver while the pointer works near it on a computer. Never over the tab bar or the app's bars.
  */
 function CleoHandle({ dock, name, branded, phone, shown }: { dock: CleoDockHandle; name: string; branded: boolean; phone: boolean; shown: boolean }) {
   const short = branded ? "Cleo" : name.split(" ")[0];
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const { room, peek, inset } = useHandleRoom(shown, phone, ref);
+  const visible = shown && room;
   return (
     <button
+      ref={ref}
       type="button"
       onClick={() => dock.setOpen(true)}
       aria-label={branded ? "Open Cleo" : `Open ${name}`}
-      aria-hidden={!shown}
-      tabIndex={shown ? 0 : -1}
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
       title={branded ? "Cleo: ask about or change this plan" : name}
-      data-cleo-handle={shown ? "shown" : "hidden"}
+      data-cleo-handle={visible ? (peek ? "peek" : "shown") : "hidden"}
       data-hide-on-keyboard
       className={cn(
-        "fixed z-30 cursor-pointer border border-border bg-background text-foreground shadow-[0_6px_20px_-10px_rgba(0,0,0,0.35)] transition-[transform,opacity] duration-200 ease-out hover:bg-muted motion-reduce:transition-none dark:bg-card",
+        "fixed z-30 cursor-pointer border border-border bg-background text-foreground shadow-[0_6px_20px_-10px_rgba(0,0,0,0.35)] transition-[transform,opacity] duration-200 ease-out hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none dark:bg-card",
         phone
           ? "right-3 flex h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold"
-          : "right-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-l-xl border-r-0 px-1.5 py-3 text-[12px] font-semibold",
-        shown ? "opacity-100" : phone ? "pointer-events-none translate-y-3 opacity-0" : "pointer-events-none translate-x-full opacity-0",
+          : "top-1/2 flex flex-col items-center gap-1.5 rounded-l-xl border-r-0 px-1.5 py-3 text-[12px] font-semibold",
+        visible ? "opacity-100" : "pointer-events-none opacity-0",
       )}
-      style={phone ? { bottom: "calc(var(--bottom-nav-clearance, 0px) + 12px)" } : undefined}
+      style={
+        phone
+          ? { bottom: "calc(var(--bottom-nav-clearance, 0px) + 12px)", transform: visible ? undefined : "translateY(12px)" }
+          : {
+              right: inset,
+              // a sliver while the pointer works near it (still a target: moving onto it brings it back)
+              transform: `translateY(-50%) translateX(${!visible ? "100%" : peek ? "calc(100% - 8px)" : "0"})`,
+            }
+      }
     >
       {branded ? <CleoMark size={phone ? 17 : 18} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
       <span className={phone ? undefined : "[writing-mode:vertical-rl]"}>{short}</span>

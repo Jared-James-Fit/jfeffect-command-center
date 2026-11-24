@@ -7,7 +7,7 @@
  * and whether the client gets a message. Templates, Duplicate, Copy to other
  * days and the weekly total make the common jobs one or two taps.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, Plus, Redo2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,7 @@ export function CardioBuilder({
   publishing,
   dock,
   onAskCleo,
+  publishNonce = 0,
 }: {
   view: CardioWorkspaceView;
   plan: CardioPlan;
@@ -76,9 +77,17 @@ export function CardioBuilder({
   publishing: boolean;
   dock: CleoDockHandle;
   onAskCleo: (ask: string) => void;
+  /** Bumped by Cleo's "Publish or schedule" after a proposal lands on the draft: opens the publish dialog. */
+  publishNonce?: number;
 }) {
   const ctx = view.ctx;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const seenNonce = useRef(publishNonce);
+  useEffect(() => {
+    if (publishNonce === seenNonce.current) return;
+    seenNonce.current = publishNonce;
+    setReviewOpen(true);
+  }, [publishNonce]);
   const [notify, setNotify] = useState(view.hasLogin);
   const [weekly, setWeekly] = useState("");
   const problems = useMemo(() => planProblems(plan, ctx), [plan, ctx]);

@@ -26,7 +26,7 @@
  * plan itself shows why: that's the difference between a poorly designed plan
  * and a sound one they're struggling to follow (the verdict says which).
  */
-import { clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, settlingOf, UNPROVEN_MAX, type CategoryConcern, type QualityCategory, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
+import { clampScore, finishQuality, FOLLOW_LOW, recoveryTrend, settlingOf, UNPROVEN_MAX, type CategoryConcern, type QualityCategory, type QualityChange, type QualityConnection, type QualityExecution, type QualityScore } from "@/lib/plan-quality";
 import { structureMealPlanDay } from "@/lib/nutrition-targets/meal-plan-structure";
 import { dayCoverage } from "@/lib/nutrition-targets/plan-coverage";
 import { hardToFindFoods, prepDrift } from "@/lib/nutrition-targets/plan-foods";
@@ -94,6 +94,11 @@ export type NutritionScoreContext = {
   /** When the plan last changed (its start, or an edit since), and today, for "too new to judge". */
   changedOn?: string | null;
   today?: string | null;
+  /** The change log's read (plan-changes.ts changeRead): wins over changedOn when there is one. */
+  changeLog?: { changes: QualityChange[]; settling: QualityScore["settling"] } | null;
+  /** What their check-ins say gets in the way (barriersFromCheckins). */
+  barriers?: string[];
+  firstName?: string | null;
 };
 
 const kcalOf = (d: NutritionDayIn) => (d.protein != null && d.carbs != null && d.fats != null ? d.protein * 4 + d.carbs * 4 + d.fats * 9 : null);
@@ -163,7 +168,9 @@ export function mealFactsOf(
 
 function executionOf(ctx: NutritionScoreContext): QualityExecution {
   const r = ctx.adherence;
-  const t = ctx.trendStatus;
+  // "the wrong way" only on a trend that's clear of day-to-day noise (water, salt, food in the gut);
+  // a noisy one is read as not moving yet, never as a reason to react
+  const t = ctx.trendStatus === "wrong_way" && ctx.trend && !ctx.trend.clear ? "stalled" : ctx.trendStatus;
   const outcome =
     ctx.direction && ctx.direction !== "maintain" && t
       ? t === "on_track" || t === "ahead" || t === "reached"
@@ -177,6 +184,7 @@ function executionOf(ctx: NutritionScoreContext): QualityExecution {
   return {
     adherence: r != null ? { pct: Math.round(Math.max(0, Math.min(5, r)) * 20), label: `Rated their consistency ${r}/5 on recent check-ins` } : null,
     outcome,
+    barriers: ctx.barriers ?? [],
   };
 }
 
@@ -196,7 +204,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
   const onTrack = execution.outcome?.status === "on_track";
   const meals = ctx.meals ?? null;
   // a plan too new for its results: they neither count against it nor flatter it
-  const settling = ctx.today ? settlingOf("nutrition", ctx.changedOn ?? null, ctx.today) : null;
+  const settling = ctx.changeLog ? ctx.changeLog.settling : ctx.today ? settlingOf("nutrition", ctx.changedOn ?? null, ctx.today) : null;
   const evidence = !settling;
 
   // Goal alignment: calories against what they maintain on; results are evidence only while it's followed
@@ -238,7 +246,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       s -= 15;
       notes.unshift(`Followed well (${adh}%) while ${execution.outcome!.label.toLowerCase()}: the targets aren't doing the job`);
     }
-    if (s != null && settling) {
+    if (s != null && settling && !settling.minor) {
       // a plan only reaches top marks here once its own results back it
       capped = s > UNPROVEN_MAX;
       s = Math.min(s, UNPROVEN_MAX);
@@ -257,8 +265,8 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
       const under = withKcal.filter((d) => (d.kcal as number) < floor);
       if (under.length) {
         s -= 35;
-        notes.push(`${under.map((d) => d.label).join(", ")} under ${floor.toLocaleString("en-US")} kcal`);
-        calConcerns.push({ text: `${under.map((d) => d.label).join(", ")} under ${floor.toLocaleString("en-US")} kcal`, severity: ctx.safety.length ? "urgent" : "significant", reason: "safety" });
+        notes.push(`Under ${floor.toLocaleString("en-US")} kcal on ${under.map((d) => d.label).join(", ")}`);
+        calConcerns.push({ text: `Under ${floor.toLocaleString("en-US")} kcal on ${under.map((d) => d.label).join(", ")}`, severity: ctx.safety.length ? "urgent" : "significant", reason: "safety" });
       }
       const off = withKcal.filter((d) => {
         const k = kcalOf(d);
@@ -524,7 +532,7 @@ export function scoreNutritionPlan(days: NutritionDayIn[], ctx: NutritionScoreCo
   if (ctx.adherence == null) missing.push("Check-in nutrition ratings");
   if (!ctx.hasMeals) missing.push("Meals written on the plan");
   const recovery = recoveryTrend({ lowerPerformance: ctx.lowerPerformance, recoveryFlags: ctx.recoveryFlags });
-  return finishQuality(cats, { what: "nutrition plan", points, missing, execution, connections, recovery, settling });
+  return finishQuality(cats, { what: "nutrition plan", points, missing, execution, connections, recovery, settling, changes: ctx.changeLog?.changes, domain: "nutrition", firstName: ctx.firstName });
 }
 
 /** A plan day's kind from its label (Training / Rest / High), for the score. */

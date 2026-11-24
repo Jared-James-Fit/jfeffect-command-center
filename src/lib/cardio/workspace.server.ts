@@ -93,7 +93,7 @@ export async function loadCardioWorkspace(sb: any, clientId: string, opts: { loa
   const since26w = addDays(today, -182);
 
   const [client, rows, draftRow, versions, proposals, completions, sets, wear, feedback] = await Promise.all([
-    safe<any>(() => sb.from("clients").select("preferred_high_days, committed_training_days, user_id").eq("id", clientId).maybeSingle(), null),
+    safe<any>(() => sb.from("clients").select("preferred_high_days, committed_training_days, user_id, full_name").eq("id", clientId).maybeSingle(), null),
     safe<any[]>(() => sb.from("cardio_targets").select("*").eq("client_id", clientId).order("start_date", { ascending: true }), []),
     available ? safe<any>(() => sb.from("cardio_plan_drafts").select("*").eq("client_id", clientId).maybeSingle(), null) : Promise.resolve(null),
     available
@@ -251,6 +251,27 @@ export async function loadCardioWorkspace(sb: any, clientId: string, opts: { loa
     .sort()
     .pop() ?? null;
 
+  // ── the change log: each published version against the one before, and edits made outside a publish ──
+  const { barriersFromCheckins } = await import("@/lib/plan-quality");
+  const { cardioFingerprint, cardioSlots, cardioVersionChanges, changeRead } = await import("@/lib/plan-changes");
+  const liveVersions = (versions as any[]).filter((v) => v.state !== "replaced");
+  const known = cardioVersionChanges(
+    liveVersions.map((v) => ({ effective_date: String(v.effective_date), state: String(v.state), sessions: cardioSlots(Array.isArray(v.sessions) ? v.sessions : []) })),
+    today,
+  );
+  const latestVersion = liveVersions.reduce((m, v) => Math.max(m, Number(v.version_no) || 0), 0);
+  const fp = cardioFingerprint(cardioSlots(live.sessions as any[]));
+  (fp.items._plan as any).version = latestVersion;
+  const { trackPlanChanges } = await import("@/lib/plan-changes.server");
+  // a publish is read from its version above; the snapshot catches edits made any other way
+  const logged = await trackPlanChanges(sb, clientId, "cardio", fp, today, { comparable: (prev) => Number((prev.items._plan as any)?.version ?? 0) === latestVersion });
+  if (!known.length && !logged.length && lastChanged && lastChanged >= addDays(today, -28))
+    known.push({ domain: "cardio", area: "cardio_dose", size: "minor", summary: "Cardio targets edited", on: lastChanged, unknown: true });
+  const weighIns14 = input.weighIns.filter((w) => w.date >= addDays(today, -14)).length;
+  const changeLog = changeRead("cardio", [...logged, ...known], today, { meetWeeksOut: assessment.meetWeeksOut, weighIns14 });
+  // they log their lifting but hardly any cardio: likely unlogged, not undone
+  const unlogged = !!adherence && adherence.planned >= 8 && adherence.done / adherence.planned <= 0.25 && recentSets >= 6;
+
   const scoreCtx: CardioScoreContext = {
     ...ctx,
     direction: input.goal?.type || assessment.goal ? assessment.direction : input.plan.phase ? assessment.direction : null,
@@ -269,6 +290,11 @@ export async function loadCardioWorkspace(sb: any, clientId: string, opts: { loa
     checkins: assessment.checkins.count,
     lowerPerformance: input.performance.lower,
     hungerHigh: assessment.checkins.hungerHigh,
+    changeLog,
+    barriers: barriersFromCheckins(input.checkins.slice().sort((a, b) => b.date.localeCompare(a.date))),
+    firstName: String(client?.full_name ?? "").trim().split(/\s+/)[0] || null,
+    unlogged,
+    trainingVolume: { recent: recentSets || null, prior: priorSets || null },
   };
 
   const draft = draftRow
