@@ -512,7 +512,7 @@ describe("wiring", () => {
     const r = read("src/lib/competition/release.server.ts");
     expect(r).toMatch(/internal_test/);
     expect(r).toMatch(/same_person_as/);
-    const m = read("supabase/migrations/20270526090000_competition_intelligence.sql");
+    const m = read("supabase/migrations/20270527090000_competition_intelligence.sql");
     expect(m).toMatch(/internal_test boolean NOT NULL DEFAULT false/);
     expect(m).toMatch(/field_status text NOT NULL DEFAULT 'confirmed'/);
     expect(m).toMatch(/research jsonb NOT NULL DEFAULT/);
