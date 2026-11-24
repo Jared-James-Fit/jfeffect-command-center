@@ -230,7 +230,7 @@ export function hashText(text: string): string {
 const MAX_DIGEST = 28_000;
 
 /** Bump when the prompt changes, so every block is rewritten in the new style. */
-export const ROADMAP_PROMPT_VERSION = 5;
+export const ROADMAP_PROMPT_VERSION = 6;
 
 /**
  * The block as Cleo reads it, plus a hash of only what the notes depend on
@@ -491,8 +491,8 @@ export function plainBlockLabel(words: string, meet: boolean): string | null {
 }
 
 /**
- * Cleo's reply with anything that doesn't read plainly swapped for words that do: a week from its
- * own shape, the block's name from the coach's words (or nothing), its purpose left out. What the
+ * Cleo's reply with anything that doesn't read plainly swapped for words that do: a week (its name
+ * and sentence together) from its own shape, the block's name from the coach's words (or nothing), its purpose left out. What the
  * athlete reads is always plain, whatever the model wrote.
  */
 export function plainReply(r: RoadmapReply, digest: { shapes: WeekShape[]; blockWords: string }, meet = false): RoadmapReply {
@@ -501,12 +501,9 @@ export function plainReply(r: RoadmapReply, digest: { shapes: WeekShape[]; block
   const byWeek = new Map(r.weeks.map((w) => [w.week, w]));
   const weeks = digest.shapes.map((shape) => {
     const w = byWeek.get(shape.week);
-    const fallback = plainWeekWords(shape);
-    return {
-      week: shape.week,
-      label: w && !plainProblems(w.label, PLAIN_MAX.weekLabel).length ? w.label : fallback.label,
-      focus: w && !plainProblems(w.focus, PLAIN_MAX.focus).length ? w.focus : fallback.focus,
-    };
+    // a week's name and its sentence go together: never Cleo's "Heaviest week" over a fallback "Same plan as last week"
+    const ok = !!w && !plainProblems(w.label, PLAIN_MAX.weekLabel).length && !plainProblems(w.focus, PLAIN_MAX.focus).length;
+    return ok ? { week: shape.week, label: w!.label, focus: w!.focus } : { week: shape.week, ...plainWeekWords(shape) };
   });
   return { style: r.style, label, purpose, weeks };
 }
