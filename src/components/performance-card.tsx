@@ -25,20 +25,28 @@ const WEEKS = 12;
  * planned workouts as a ring, one headline number (the main lift's estimated
  * strength, else the month's records) and the latest record worth naming.
  * The whole card opens Training analytics, which reads the same logged sets
- * (`["pl-results", clientId, null]`).
+ * (`["pl-results", clientId, null]`). The coach's Training tab shows the same
+ * card for the client (`analytics`: their analytics page, `emptyText` in the
+ * coach's words), so both read one set of numbers.
  */
 export function PerformanceCard({
   clientId,
   unit: accountUnit = "lb",
   month,
   hideWhenEmpty = false,
+  analytics,
+  emptyText = "Your performance fills in after your first logged workout.",
 }: {
   clientId: string;
   unit?: Unit;
   /** this calendar month's workouts on the program that are due, and how many are done */
   month?: { label: string; planned: number; done: number } | null;
   hideWhenEmpty?: boolean;
+  /** where the card opens: the athlete's own analytics unless a coach's page is given */
+  analytics?: { to: string; params?: Record<string, string> };
+  emptyText?: string;
 }) {
+  const link = analytics ?? { to: "/portal/workouts/analytics" };
   // the same lb / kg the analytics page shows, remembered on this phone
   const [unit] = useAnalyticsUnit(accountUnit);
   const { data: results = [], isLoading } = useQuery({
@@ -106,8 +114,21 @@ export function PerformanceCard({
   if (!read) {
     if (hideWhenEmpty) return null;
     return (
-      <Card className="p-4 text-sm text-muted-foreground">
-        Your performance fills in after your first logged workout.
+      <Card className="p-4" data-performance-card data-performance-empty>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-[16px] font-semibold">Performance</h2>
+          {analytics && (
+            <Link
+              to={link.to as any}
+              params={link.params as any}
+              className="inline-flex min-h-[40px] items-center gap-0.5 text-[13px] font-medium text-muted-foreground"
+              data-analytics-entry
+            >
+              Analytics <ChevronRight className="h-4 w-4" aria-hidden />
+            </Link>
+          )}
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">{emptyText}</p>
       </Card>
     );
   }
@@ -119,8 +140,9 @@ export function PerformanceCard({
   return (
     <Card className="overflow-hidden p-0" data-performance-card>
       <Link
-        to="/portal/workouts/analytics"
-        className="block p-4 transition active:bg-muted/40"
+        to={link.to as any}
+        params={link.params as any}
+        className="block p-4 transition hover:bg-muted/30 active:bg-muted/40"
         aria-label="Performance. Open training analytics"
         data-analytics-entry
       >

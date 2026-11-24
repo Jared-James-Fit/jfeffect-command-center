@@ -340,7 +340,7 @@ describe("the screens", () => {
     expect(wo).toContain("data-header-analytics");
     expect(wo).toContain("<PerformanceCard");
     const card = read("src/components/performance-card.tsx");
-    expect(card).toContain('to="/portal/workouts/analytics"');
+    expect(card).toContain('analytics ?? { to: "/portal/workouts/analytics" }');
     expect(card).not.toContain("Collapsible");
     expect(card).not.toContain("More about");
   });
