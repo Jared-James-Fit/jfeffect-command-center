@@ -1387,7 +1387,7 @@ export function PostMedia({
           />
         ) : (
           <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
-            {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+            {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
           </div>
         )}
       </FitBox>
@@ -1398,7 +1398,7 @@ export function PostMedia({
   if (leads.length) return <div className="relative w-full overflow-hidden bg-muted" style={frame}>{leads[0]}</div>;
   return (
     <div className={cn("relative w-full overflow-hidden", clipCover ? "bg-black" : "bg-muted")} style={frame} data-clip-frame={clipCover ? "" : undefined}>
-      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
     </div>
   );
 }
@@ -1555,7 +1555,7 @@ function SlideMedia({
       ) : page && !shrunk && fit === "cover" ? (
         // framed for the whole screen (9:16, screenFit): it fills it edge to edge like a clip, the words over its foot
         <div data-pinch-zoom className="absolute inset-0" data-photo-fit="cover">
-          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
         </div>
       ) : page && !shrunk && zoom ? (
         // between Crew's bar and the words: the full width, a slightly taller photo zoomed a little (photoZoomBox), never stretched;
@@ -1564,7 +1564,7 @@ function SlideMedia({
           <AmbientFill src={thumbUrl ?? src} />
           <div data-pinch-zoom className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-photo-fit="zoom">
             <div className="absolute" style={zoom}>
-              {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+              {src ? <FadeImg src={src} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
             </div>
           </div>
         </>
@@ -1573,7 +1573,7 @@ function SlideMedia({
         <>
           {page && !shrunk && <AmbientFill src={thumbUrl ?? src} />}
           <div data-pinch-zoom className="absolute inset-0" style={page ? BETWEEN_BARS : undefined}>
-            {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+            {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full jf-skeleton bg-muted" />}
           </div>
         </>
       )}
@@ -1667,7 +1667,7 @@ function FadeImg({ src, position, whole = false }: { src: string; position?: str
   }, [src]);
   return (
     <>
-      {!loaded && <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden />}
+      {!loaded && <div className="absolute inset-0 jf-skeleton bg-muted" aria-hidden />}
       <img
         ref={ref}
         src={src}

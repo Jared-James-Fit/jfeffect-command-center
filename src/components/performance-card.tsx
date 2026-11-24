@@ -101,7 +101,7 @@ export function PerformanceCard({
 
   if (isLoading)
     return hideWhenEmpty ? null : (
-      <Card className="h-[176px] animate-pulse bg-muted/30" aria-hidden />
+      <Card className="h-[176px] jf-skeleton bg-muted/30" aria-hidden />
     );
   if (!read) {
     if (hideWhenEmpty) return null;

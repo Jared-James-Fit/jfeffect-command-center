@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { combineQueryViews, queryView } from "@/lib/loading/load-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -120,21 +122,24 @@ export function ClientSessionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const { data: sessions = [], isLoading: sessionsLoading } = useQuery<any[]>(ptSessionsQuery(clientId));
+  const sessionsQ = useQuery<any[]>(ptSessionsQuery(clientId));
+  const sessions = useMemo(() => sessionsQ.data ?? [], [sessionsQ.data]);
 
   // Why a session was cancelled, moved or missed: the coach's own notes, never shown to the client.
   const { data: coachNotes } = useCoachNotes(clientId);
 
-  const { data: balance = [] } = useQuery<SessionBalanceRow[]>({
+  const balanceQ = useQuery<SessionBalanceRow[]>({
     queryKey: ["pt-balance", clientId],
     queryFn: async () => {
-      const { data } = await (supabase as any).rpc("session_balance", { _client_id: clientId });
+      const { data, error } = await (supabase as any).rpc("session_balance", { _client_id: clientId });
+      if (error) throw error;
       return (data ?? []) as SessionBalanceRow[];
     },
   });
+  const balance = useMemo(() => balanceQ.data ?? [], [balanceQ.data]);
 
   // Every column the package reading needs (its own key: other screens load a few columns under ["pt-pack-purchases", id]).
-  const { data: purchases = [] } = useQuery<any[]>({
+  const purchasesQ = useQuery<any[]>({
     queryKey: ["pt-pack-purchases", clientId, "full"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -147,20 +152,29 @@ export function ClientSessionsPanel({
       return data ?? [];
     },
   });
+  const purchases = useMemo(() => purchasesQ.data ?? [], [purchasesQ.data]);
 
   // The whole session ledger, page by page: which package each session is on.
-  const { data: events = [] } = useQuery<PackageLedgerEvent[]>(ptClientLedgerQuery(clientId) as any);
+  const eventsQ = useQuery<PackageLedgerEvent[]>(ptClientLedgerQuery(clientId) as any);
+  const events = useMemo(() => eventsQ.data ?? [], [eventsQ.data]);
 
-  const { data: payments = [] } = useQuery<any[]>({
+  const paymentsQ = useQuery<any[]>({
     queryKey: ["pt-payment-ledger", clientId],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("payment_ledger")
         .select("id, purchase_id, txn_type, amount_minor, tax_minor, voided, transaction_date, method, source")
         .eq("client_id", clientId);
+      if (error) throw error;
       return (data ?? []) as any[];
     },
   });
+  const payments = useMemo(() => paymentsQ.data ?? [], [paymentsQ.data]);
+  // Every read the packages are worked out from: a failure in any is said (with Try again), never
+  // packages read from half the records ("No session package yet. Sell one" over a failed read).
+  const sessionReads = [sessionsQ, balanceQ, purchasesQ, eventsQ, paymentsQ];
+  const readsState = combineQueryViews(sessionReads.map((q) => queryView(q as any))).kind;
+  const retryReads = () => Promise.all(sessionReads.filter((q) => q.data === undefined || q.isError).map((q) => q.refetch()));
 
   // Money, read the way Billing reads it: one line here.
   const billing = useClientPayments(clientId);
@@ -204,7 +218,7 @@ export function ClientSessionsPanel({
     </DropdownMenu>
   ) : null;
 
-  const loading = sessionsLoading && sessions.length === 0;
+  const loading = readsState === "loading";
 
   return (
     <>
@@ -226,9 +240,19 @@ export function ClientSessionsPanel({
 
         {loading ? (
           <div className="space-y-3" aria-busy="true">
-            <div className="h-28 animate-pulse rounded-xl bg-muted" />
-            <div className="h-36 animate-pulse rounded-xl bg-muted" />
+            <div className="h-28 jf-skeleton rounded-xl bg-muted" />
+            <div className="h-36 jf-skeleton rounded-xl bg-muted" />
+            <SlowNote active onRetry={retryReads} what="their sessions" />
           </div>
+        ) : readsState === "offline" ? (
+          <OfflineState what="their sessions" />
+        ) : readsState === "error" ? (
+          <ErrorState
+            error={sessionReads.find((q) => q.isError)?.error}
+            what="their sessions and packages"
+            onRetry={retryReads}
+            retrying={sessionReads.some((q) => q.isFetching)}
+          />
         ) : (
           <SessionsTrackerBody
             model={model}
@@ -366,7 +390,7 @@ export function SessionsTrackerBody({
           showCoaching={false}
         />
       ) : (
-        <div className="h-40 animate-pulse rounded-2xl bg-muted" aria-busy="true" />
+        <div className="h-40 jf-skeleton rounded-2xl bg-muted" aria-busy="true" />
       )}
 
       {needsReview.length > 0 && (

@@ -74,7 +74,9 @@ describe("loading looks like the page it opens into", () => {
     const nutrition = read("src/routes/_authenticated/portal/nutrition-targets.tsx");
     expect(nutrition).not.toContain("Loading your nutrition plan…");
     // the meal plan's spot is held while it loads, so it never drops in above the targets
-    expect(nutrition).toContain("{planQ.isLoading && <MealPlanCardSkeleton />}");
+    expect(nutrition).toMatch(/\{planQ\.isLoading && \(\s*<>\s*<MealPlanCardSkeleton \/>/);
+    // and a long wait says so, with Try again (the loading system's SlowNote)
+    expect(nutrition).toContain('<SlowNote active onRetry={() => planQ.refetch()} what="your plan" />');
     expect(nutrition).toContain("<TargetsCardSkeleton />");
   });
 

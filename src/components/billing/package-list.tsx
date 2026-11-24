@@ -12,6 +12,8 @@
  * where it came from. The tab it's on decides which comes first.
  */
 import { useMemo, useState, type ReactNode } from "react";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { combineQueryViews, queryView } from "@/lib/loading/load-state";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, Check, ChevronDown, ChevronRight, ExternalLink, Paperclip } from "lucide-react";
@@ -383,7 +385,21 @@ function PackageAppointments({ clientId, saleId }: { clientId: string; saleId: s
       .filter((s) => places.get(s.id)?.purchaseId === saleId)
       .sort((a, b) => `${a.session_date}${a.start_time}`.localeCompare(`${b.session_date}${b.start_time}`));
   }, [sessionsQ.data, ledgerQ.data, saleId]);
-  if (sessionsQ.isLoading || ledgerQ.isLoading) return <div className="h-16 animate-pulse rounded-lg bg-muted" aria-busy="true" />;
+  const state = combineQueryViews([queryView(sessionsQ as any), queryView(ledgerQ as any)]).kind;
+  if (state === "loading") return <div className="h-16 jf-skeleton rounded-lg bg-muted" aria-busy="true" />;
+  // a failed or offline read is said, never "No sessions on it."
+  if (state === "offline") return <OfflineState what="its sessions" size="inline" />;
+  if (state === "error") {
+    return (
+      <ErrorState
+        error={sessionsQ.error ?? ledgerQ.error}
+        what="its sessions"
+        size="inline"
+        onRetry={() => Promise.all([sessionsQ.refetch(), ledgerQ.refetch()])}
+        retrying={sessionsQ.isFetching || ledgerQ.isFetching}
+      />
+    );
+  }
   if (rows.length === 0) return <p className="text-[13px] text-muted-foreground">No sessions on it.</p>;
   return (
     <ul className="divide-y divide-border rounded-lg border border-border" data-package-appointments>

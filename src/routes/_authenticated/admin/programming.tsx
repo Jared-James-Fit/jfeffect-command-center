@@ -43,13 +43,13 @@ export const Route = createFileRoute("/_authenticated/admin/programming")({
 function ProgrammingSkeleton() {
   return (
     <div className="space-y-4 p-3 sm:p-4 md:p-6">
-      <div className="h-10 w-48 animate-pulse rounded bg-muted" />
+      <div className="h-10 w-48 jf-skeleton rounded bg-muted" />
       <div className="flex gap-2">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-9 w-24 animate-pulse rounded bg-muted" />
+          <div key={i} className="h-9 w-24 jf-skeleton rounded bg-muted" />
         ))}
       </div>
-      <div className="h-72 w-full animate-pulse rounded bg-muted" />
+      <div className="h-72 w-full jf-skeleton rounded bg-muted" />
     </div>
   );
 }

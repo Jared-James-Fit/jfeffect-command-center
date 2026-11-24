@@ -963,7 +963,7 @@ function accountBillingSummary(s: MySummary | null, money?: (c: number) => strin
 
 /** Account's Billing: the line My Purchases leads with, a way there, and Stripe's card page when they pay by card. */
 function AccountBilling({ view, loading }: { view: ReturnType<typeof useMyBilling>["view"]; loading: boolean }) {
-  if (loading) return <div className="h-16 animate-pulse rounded-lg bg-muted" aria-busy="true" />;
+  if (loading) return <div className="h-16 jf-skeleton rounded-lg bg-muted" aria-busy="true" />;
   const s = view?.mine.summary;
   const money = view?.money;
   const byCard = !!view?.sales.some((x: any) => x.stripe_customer_id || x.stripe_subscription_id);

@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ErrorState, ListSkeleton, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,19 +33,21 @@ const PAGE_SIZE = 24;
 
 function AllPRsPage() {
   const portalUserId = usePortalUserId();
-  const { data: client } = useQuery({
+  const clientQ = useQuery({
     queryKey: ["my-client-prs", portalUserId],
     enabled: !!portalUserId,
     staleTime: 60_000,
-    queryFn: async () =>
-      (
-        await supabase
-          .from("clients")
-          .select("id, full_name, preferred_weight_unit")
-          .eq("user_id", portalUserId!)
-          .maybeSingle()
-      ).data,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, full_name, preferred_weight_unit")
+        .eq("user_id", portalUserId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
   });
+  const client = clientQ.data;
 
   const sourceUnit: Unit = "lb";
   const preferredUnit: Unit = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
@@ -57,12 +61,21 @@ function AllPRsPage() {
   }, [client, preferredUnit, unitSynced]);
   const conv = (v: number) => convertWeight(Number(v) || 0, sourceUnit, displayUnit);
 
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ["pl-results-all", client?.id],
+  // The same read, under the same key, as Training analytics: going from its
+  // records to "View all" PRs never downloads the whole history again.
+  const resultsQ = useQuery({
+    queryKey: ["pl-results", client?.id, null],
     enabled: !!client?.id,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
     queryFn: () => getClientResults(client!.id),
   });
+  const results = useMemo(() => resultsQ.data ?? [], [resultsQ.data]);
+  // waiting on who they are or their sets is loading; never "No PRs yet" before the answer
+  // Who they are, then their sets: either one waiting offline or failing is said as such.
+  const clientState = queryView(clientQ as any).kind;
+  const resultsState = !client ? (clientState === "ready" || clientState === "empty" ? "loading" : clientState) : queryView(resultsQ as any).kind;
+  const retryResults = () => (!client ? clientQ.refetch() : resultsQ.refetch());
+  const isLoading = resultsState === "loading";
 
   const prs = useMemo(
     () => recentPRs(results as any[], 365000),
@@ -142,10 +155,19 @@ function AllPRsPage() {
       </div>
 
       <div className="text-xs font-semibold text-muted-foreground">
-        {isLoading ? "Loading…" : `${filtered.length} PR${filtered.length === 1 ? "" : "s"}`}
+        {resultsState === "ready" || resultsState === "empty" ? `${filtered.length} PR${filtered.length === 1 ? "" : "s"}` : null}
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <>
+          <ListSkeleton rows={4} avatar={false} label="Loading your PRs" />
+          <SlowNote active onRetry={retryResults} what="your PRs" />
+        </>
+      ) : resultsState === "offline" ? (
+        <OfflineState what="your PRs" />
+      ) : resultsState === "error" ? (
+        <ErrorState error={!client ? clientQ.error : resultsQ.error} what="your PRs" onRetry={retryResults} retrying={clientQ.isFetching || resultsQ.isFetching} />
+      ) : filtered.length === 0 ? (
         <Card className="p-6 text-base text-muted-foreground">
           {prs.length === 0 ? "No PRs yet — keep training!" : "No PRs match your filters."}
         </Card>

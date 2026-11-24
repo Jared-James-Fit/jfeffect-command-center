@@ -494,7 +494,7 @@ function BodyView({
       >
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
         {mode3d === "loading" && (
-          <div className="absolute inset-0 animate-pulse rounded-2xl bg-muted/40" aria-hidden />
+          <div className="absolute inset-0 jf-skeleton rounded-2xl bg-muted/40" aria-hidden />
         )}
       </div>
       <div className="mt-2 flex items-center gap-2">

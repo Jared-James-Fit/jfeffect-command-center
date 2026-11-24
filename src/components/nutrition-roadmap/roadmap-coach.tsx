@@ -61,7 +61,7 @@ export function RoadmapCoachCard({ clientId, className }: { clientId: string; cl
   }, [v]);
 
   const header = (chip?: ReactNode, actions?: ReactNode) => <CardHeader icon={Route} title="Nutrition roadmap" chip={chip} actions={actions} />;
-  if (q.isLoading) return <Card id="roadmap" className={cn("p-4 md:p-5", className)}>{header()}<div className="mt-3 h-16 animate-pulse rounded-lg bg-muted" /></Card>;
+  if (q.isLoading) return <Card id="roadmap" className={cn("p-4 md:p-5", className)}>{header()}<div className="mt-3 h-16 jf-skeleton rounded-lg bg-muted" /></Card>;
   if (q.isError || !v) return <Card id="roadmap" className={cn("p-4 md:p-5", className)}>{header()}<p className="mt-2 text-[14px] text-muted-foreground">Couldn't load the roadmap.</p></Card>;
 
   const done = async (fn: () => Promise<unknown>, label: string) => {

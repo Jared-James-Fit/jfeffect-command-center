@@ -139,7 +139,7 @@ export function GridSkeleton({ rows = 3, edge = true }: { rows?: number; edge?: 
   return (
     <div className={cn("grid grid-cols-3 gap-[2px]", edge && "-mx-3 sm:mx-0 sm:overflow-hidden sm:rounded-xl")} aria-hidden data-grid-skeleton>
       {Array.from({ length: rows * 3 }).map((_, i) => (
-        <div key={i} className="aspect-[3/4] w-full animate-pulse bg-muted" />
+        <div key={i} className="aspect-[3/4] w-full jf-skeleton bg-muted" />
       ))}
     </div>
   );

@@ -126,7 +126,7 @@ function PackagesTab({ onShare }: { onShare: (slug: string) => void }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (q.isLoading) return <div className="h-40 animate-pulse rounded-2xl bg-muted" />;
+  if (q.isLoading) return <div className="h-40 jf-skeleton rounded-2xl bg-muted" />;
   if (q.error) return <p className="text-[14px] text-destructive">{(q.error as Error).message}</p>;
   const canEdit = !!q.data?.canEdit;
   const all = q.data?.packages ?? [];

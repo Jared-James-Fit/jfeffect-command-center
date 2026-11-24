@@ -97,8 +97,8 @@ export function HealthCard({ clientId, className, bare }: { clientId: string; cl
 
       {isLoading || !p ? (
         <div className="space-y-2">
-          <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-          <div className="h-20 animate-pulse rounded-xl bg-muted" />
+          <div className="h-4 w-2/3 jf-skeleton rounded bg-muted" />
+          <div className="h-20 jf-skeleton rounded-xl bg-muted" />
         </div>
       ) : (
         <>

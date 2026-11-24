@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSingleFlight } from "@/hooks/use-load-phase";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -739,10 +740,10 @@ function SubmissionGridSkeleton() {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <Card key={i} className="overflow-hidden">
-          <div className="aspect-square w-full animate-pulse bg-muted" />
+          <div className="aspect-square w-full jf-skeleton bg-muted" />
           <div className="p-3 space-y-2">
-            <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
-            <div className="h-2 w-1/2 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-3/4 jf-skeleton rounded bg-muted" />
+            <div className="h-2 w-1/2 jf-skeleton rounded bg-muted" />
           </div>
         </Card>
       ))}
@@ -1871,19 +1872,26 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
     } finally { setSavingEdit(false); }
   }
 
-  async function submitReply() {
+  // One send at a time (a double tap posted the feedback twice), and a failure is said, never silent.
+  const replying = useSingleFlight(async () => {
     if (!body.trim()) return;
-    await addReviewResponse({
-      submission_id: submissionId, reviewer_id: ctx.userId,
-      body, kind: internal ? "internal" : "overall",
-    });
+    try {
+      await addReviewResponse({
+        submission_id: submissionId, reviewer_id: ctx.userId,
+        body, kind: internal ? "internal" : "overall",
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't send the feedback");
+      return;
+    }
     setBody(""); setInternal(false);
     qc.invalidateQueries({ queryKey: ["progress-reviews", submissionId] });
     qc.invalidateQueries({ queryKey: ["progress-sub", submissionId] });
     qc.invalidateQueries({ queryKey: ["progress-subs", ctx.userId] });
     qc.invalidateQueries({ queryKey: ["progress-subs-paged", ctx.userId] });
     toast.success("Sent");
-  }
+  });
+  const submitReply = () => void replying.run();
 
   async function removeSub() {
     if (!confirm("Delete this whole check-in (photos/videos and feedback)?")) return;
@@ -1989,7 +1997,7 @@ function SubmissionDetailDialog({ ctx, submissionId, onClose }: { ctx: ProgressC
                   <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
                   Internal note (hidden from client)
                 </label>
-                <Button size="sm" onClick={submitReply} disabled={!body.trim()}>Send</Button>
+                <Button size="sm" onClick={submitReply} disabled={!body.trim()} loading={replying.pending}>Send</Button>
               </div>
             </div>
           )}

@@ -974,7 +974,7 @@ function PickGrid({ tray, list, focused, onFocus, onPick }: { tray: ReturnType<t
                 aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : `${it.kind === "video" ? "Clip" : "Photo"} ${i + 1}${on ? ", showing" : ""}`}
                 aria-pressed={on}
               >
-                {it.preview ? <img src={it.preview} alt="" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-zinc-800" />}
+                {it.preview ? <img src={it.preview} alt="" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full jf-skeleton bg-zinc-800" />}
               </button>
               {on && <span className="pointer-events-none absolute inset-0 bg-white/25" />}
               <span key={`${i}-${list.length}`} className="pointer-events-none absolute right-1.5 top-1.5 grid h-[22px] min-w-[22px] place-items-center rounded-full border-[1.5px] border-white bg-primary px-1 text-[12px] font-bold text-white shadow animate-in zoom-in-50 duration-200">

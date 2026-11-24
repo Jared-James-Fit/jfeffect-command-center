@@ -7,6 +7,8 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader, usePageBack } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart, Pencil } from "lucide-react";
@@ -635,7 +637,7 @@ function WorkoutDay({
     return clientFromQuery as any;
   }, [clientFromQuery, adapter]);
 
-  const { data: day } = useQuery({
+  const dayQ = useQuery({
     queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any>(cacheScope, "day"),
     initialDataUpdatedAt: () => cachedUpdatedAt(cacheScope, "day"),
@@ -657,6 +659,7 @@ function WorkoutDay({
       return d;
     },
   });
+  const day = dayQ.data;
 
   // Resolve week + block in a single round-trip via the FK join.
   // Previously this was three sequential queries (day → week.block_id →
@@ -966,7 +969,12 @@ function WorkoutDay({
       if (!rowIds.length) return [];
       const r = adapter
         ? await adapter.listRowResultsRaw(dayId, rowIds)
-        : (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
+        : await (async () => {
+            const { data, error } = await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id);
+            // A failed read must never become "no sets logged", or be saved over the good offline copy.
+            if (error) throw error;
+            return data ?? [];
+          })();
       writePlanCache(cacheScope, resultsCacheKey(client!.id), r);
       return r;
     },
@@ -1383,7 +1391,12 @@ function WorkoutDay({
     queryFn: async () => {
       const c = adapter
         ? await adapter.getDayCompletionRaw(dayId)
-        : (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data;
+        : await (async () => {
+            const { data, error } = await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle();
+            // A failed read must never read as "not finished", or be saved over the good offline copy.
+            if (error) throw error;
+            return data;
+          })();
       writePlanCache(cacheScope, completionCacheKey(client!.id), c);
       return c;
     },
@@ -1397,7 +1410,11 @@ function WorkoutDay({
     queryFn: async () =>
       adapter
         ? await adapter.listExerciseNotesRaw(dayId)
-        : (await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId)).data ?? [],
+        : await (async () => {
+            const { data, error } = await sb.from("pl_exercise_notes").select("*").eq("client_id", client!.id).eq("day_id", dayId);
+            if (error) throw error;
+            return data ?? [];
+          })(),
   });
 
   // Existing review (pl_workout_feedback) for the post-completion actions card.
@@ -2610,19 +2627,41 @@ function WorkoutDay({
   });
 
   if (!day) {
+    // Never a skeleton forever: a workout that isn't there (deleted, moved off the plan) or
+    // that couldn't load says so with a way back; offline with nothing saved says it'll load.
+    const dayState = queryView(dayQ as any).kind;
+    if (dayState === "empty" || dayState === "error" || dayState === "offline") {
+      return (
+        <div className="mx-auto w-full max-w-3xl space-y-3 p-6">
+          {dayState === "empty" ? (
+            <EmptyState title="This workout isn't on your plan anymore" detail="It may have been moved or removed by your coach." />
+          ) : dayState === "offline" ? (
+            <OfflineState what="this workout" />
+          ) : (
+            <ErrorState error={dayQ.error} what="this workout" onRetry={() => dayQ.refetch()} retrying={dayQ.isFetching} />
+          )}
+          <div className="flex justify-center">
+            <Button variant="outline" className="h-10" asChild>
+              <Link to={navigation.listPath as any}>Back to workouts</Link>
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto w-full max-w-3xl space-y-3 p-6" aria-busy="true" aria-label="Loading workout">
-        <div className="h-7 w-2/3 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+        <div className="h-7 w-2/3 jf-skeleton rounded bg-muted" />
+        <div className="h-4 w-1/3 jf-skeleton rounded bg-muted" />
         <div className="mt-2 flex gap-2">
-          <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
-          <div className="h-6 w-24 animate-pulse rounded-full bg-muted" />
+          <div className="h-6 w-20 jf-skeleton rounded-full bg-muted" />
+          <div className="h-6 w-24 jf-skeleton rounded-full bg-muted" />
         </div>
         <div className="space-y-2 pt-3">
-          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
-          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
-          <div className="h-24 w-full animate-pulse rounded-lg bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded-lg bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded-lg bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded-lg bg-muted" />
         </div>
+        <SlowNote active onRetry={() => dayQ.refetch()} what="this workout" />
       </div>
     );
   }
@@ -5701,7 +5740,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               )}
             </div>
             {loading && !existingNote ? (
-              <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
+              <div className="mt-1 h-[140px] w-full jf-skeleton rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
             ) : (
               <Textarea
                 id={`exercise-note-${rowId}`}
@@ -7698,10 +7737,10 @@ function WorkoutExerciseCardsSkeleton({ focusMode = false }: { focusMode?: boole
     >
       {[0, 1, 2, 3].map((index) => (
         <Card key={index} className="space-y-3 p-4">
-          <div className="h-5 w-2/3 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-          <div className="h-8 w-full animate-pulse rounded bg-muted" />
-          <div className="h-24 w-full animate-pulse rounded bg-muted" />
+          <div className="h-5 w-2/3 jf-skeleton rounded bg-muted" />
+          <div className="h-4 w-1/3 jf-skeleton rounded bg-muted" />
+          <div className="h-8 w-full jf-skeleton rounded bg-muted" />
+          <div className="h-24 w-full jf-skeleton rounded bg-muted" />
         </Card>
       ))}
     </div>

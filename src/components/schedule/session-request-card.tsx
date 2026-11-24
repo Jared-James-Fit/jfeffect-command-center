@@ -159,7 +159,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
     kickGoogleSync();
   };
 
-  if (isLoading) return <div className="h-24 w-64 animate-pulse rounded-2xl bg-secondary/40" />;
+  if (isLoading) return <div className="h-24 w-64 jf-skeleton rounded-2xl bg-secondary/40" />;
   if (!req) return null;
 
   const tone = req.status === "approved" ? "border-emerald-500/40 bg-emerald-500/10"

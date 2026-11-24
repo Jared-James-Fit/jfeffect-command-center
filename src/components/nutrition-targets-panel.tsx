@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -64,7 +66,11 @@ export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }:
   const viewerRole: "owner" | "admin" | "coach" =
     role === "admin" ? "admin" : "coach";
 
-  const { data: targets = [] } = useQuery(clientPlansQuery(clientId));
+  const plansQ = useQuery(clientPlansQuery(clientId));
+  const targets = useMemo(() => plansQ.data ?? [], [plansQ.data]);
+  // Waiting, offline or failed with nothing to show: said as such, never "No plan yet" with Build a plan
+  // (a coach building a second plan over one that just didn't load).
+  const plansState = queryView(plansQ as any).kind;
   const { current, previous } = splitPlans(targets);
   const [reusing, setReusing] = useState<string | null>(null);
 
@@ -205,7 +211,17 @@ export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }:
         }
       />
 
-      {plan ? (
+      {plansState === "loading" ? (
+        <div className="space-y-2" aria-busy="true">
+          <div className="h-4 w-2/3 jf-skeleton rounded bg-muted" />
+          <div className="h-32 jf-skeleton rounded-xl bg-muted" />
+          <SlowNote active onRetry={() => plansQ.refetch()} what="their plan" />
+        </div>
+      ) : plansState === "offline" ? (
+        <OfflineState what="their plan" />
+      ) : plansState === "error" ? (
+        <ErrorState error={plansQ.error} what="their plan" onRetry={() => plansQ.refetch()} retrying={plansQ.isFetching} />
+      ) : plan ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">{planLine(plan)}</p>
           {d && (d.state === "ending-soon" || d.state === "due-today" || d.state === "past-due") && (

@@ -55,7 +55,7 @@ export function DashboardTodayCard({ clientId }: { clientId: string }) {
 
 function DashboardTodaySkeleton() {
   return (
-    <div className="rounded-xl border border-border bg-card/40 animate-pulse h-24" />
+    <div className="rounded-xl border border-border bg-card/40 jf-skeleton h-24" />
   );
 }
 

@@ -14,7 +14,10 @@ export function useIsBusinessOwner(): boolean | undefined {
     queryKey: ["is-business-owner", user?.id],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("is_business_owner", { _uid: user!.id });
-      return !error && data === true;
+      // A failed check is unknown, not "not the owner": thrown, it's retried instead of
+      // hiding the books for ten minutes (still undefined while it retries).
+      if (error) throw error;
+      return data === true;
     },
     enabled: !!user?.id && role === "admin",
     staleTime: 10 * 60_000,

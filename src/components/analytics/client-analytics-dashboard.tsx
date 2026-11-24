@@ -1,4 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -250,12 +252,18 @@ export function ClientAnalyticsDashboard({
       : null;
 
   // Every logged set, read once; a period only filters it (records and trends read the whole history).
-  const { data: allResults = [], isLoading } = useQuery({
+  const resultsQ = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,
-    staleTime: 30_000,
+    // The whole history (up to tens of thousands of sets): read once a visit, not on every
+    // remount, while a set logged since is still picked up on the next open.
+    staleTime: 5 * 60_000,
     queryFn: () => getClientResults(clientId),
   });
+  const allResults = useMemo(() => resultsQ.data ?? [], [resultsQ.data]);
+  // A failed or offline read is said, never the new-athlete preview over years of training
+  const resultsState = queryView(resultsQ as any).kind;
+  const isLoading = resultsState === "loading";
   const { data: blockDayIds } = useQuery({
     queryKey: ["analytics-block-days", activeBlockId],
     enabled: !!activeBlockId,
@@ -869,10 +877,17 @@ export function ClientAnalyticsDashboard({
 
         {scopeLoading ? (
           <div className="space-y-3" role="status" aria-label="Loading training data">
-            <div className="h-11 animate-pulse rounded-lg bg-muted/50" />
-            <div className="h-28 animate-pulse rounded-2xl bg-muted/40" />
-            <div className="h-64 animate-pulse rounded-2xl bg-muted/40" />
+            <div className="jf-load-reveal space-y-3">
+              <div className="jf-skeleton h-11 rounded-lg bg-muted/50" />
+              <div className="jf-skeleton h-28 rounded-2xl bg-muted/40" />
+              <div className="jf-skeleton h-64 rounded-2xl bg-muted/40" />
+            </div>
+            <SlowNote active onRetry={() => resultsQ.refetch()} what="training data" />
           </div>
+        ) : resultsState === "offline" ? (
+          <OfflineState what="training data" />
+        ) : resultsState === "error" ? (
+          <ErrorState error={resultsQ.error} what="training data" onRetry={() => resultsQ.refetch()} retrying={resultsQ.isFetching} />
         ) : (allResults as any[]).length === 0 ? (
           <AnalyticsEmptyPreview />
         ) : (

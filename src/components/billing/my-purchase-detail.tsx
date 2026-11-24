@@ -5,6 +5,7 @@
  * the terms and Pay. The route loads; this draws (fixtures can draw it too).
  */
 import { Link } from "@tanstack/react-router";
+import { useSingleFlight } from "@/hooks/use-load-phase";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -195,7 +196,8 @@ function PayPanel({ sale, clientId, cents, money }: { sale: any; clientId: strin
     toast.success("Terms accepted");
     void qc.invalidateQueries({ queryKey: myBillingKey(clientId) });
   };
-  const pay = async () => {
+  // One open at a time: a second tap while the secure link is being found does nothing.
+  const paying = useSingleFlight(async () => {
     if (preview) return void toast.info("Preview only. Only the client can pay.");
     // Never the stored (possibly expired) checkout link: the current one, resolved on the server.
     const t = toast.loading("Opening secure payment…");
@@ -208,7 +210,7 @@ function PayPanel({ sale, clientId, cents, money }: { sale: any; clientId: strin
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open the payment", { id: t });
     }
-  };
+  });
 
   return (
     <Panel className="space-y-3 border-warning/50 px-4 py-4" data-my-pay>
@@ -229,7 +231,7 @@ function PayPanel({ sale, clientId, cents, money }: { sale: any; clientId: strin
         </div>
       )}
       {sale.stripe_payment_link || sale.stripe_checkout_session_id ? (
-        <Button className="h-11 w-full" disabled={!accepted} onClick={() => void pay()}>
+        <Button className="h-11 w-full" disabled={!accepted} loading={paying.pending} onClick={() => void paying.run()}>
           Pay {money(cents)}<ExternalLink className="ml-2 h-4 w-4" />
         </Button>
       ) : (

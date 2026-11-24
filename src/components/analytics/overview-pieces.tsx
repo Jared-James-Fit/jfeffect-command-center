@@ -230,7 +230,7 @@ export function RecoveryPatternList({ patterns }: { patterns: RecoveryPattern[] 
 /** Planned workouts done as a ring, and the weeks as small bars (done filled, planned outlined). */
 export function ConsistencyBlock({ c, loading }: { c: Consistency; loading?: boolean }) {
   if (loading)
-    return <div className="h-[120px] animate-pulse rounded-xl bg-muted/40" aria-hidden />;
+    return <div className="h-[120px] jf-skeleton rounded-xl bg-muted/40" aria-hidden />;
   if (!c.planned)
     return (
       <p className="text-[13px] text-muted-foreground" data-consistency-empty>

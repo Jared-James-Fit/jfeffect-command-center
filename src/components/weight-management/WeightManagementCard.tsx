@@ -105,7 +105,7 @@ export function WeightManagementCard({ clientId, className }: { clientId: string
     return (
       <Card id="weight" className={cn("space-y-4 border-border bg-card p-4 md:p-6", className)} data-weight-card>
         {header()}
-        <div className="h-[260px] animate-pulse rounded-xl bg-muted" />
+        <div className="h-[260px] jf-skeleton rounded-xl bg-muted" />
       </Card>
     );
   }

@@ -101,7 +101,7 @@ function CoachImport({
     }
   };
 
-  if (loading || !row) return <div className="h-24 animate-pulse rounded-xl bg-muted" aria-hidden />;
+  if (loading || !row) return <div className="h-24 jf-skeleton rounded-xl bg-muted" aria-hidden />;
   if (row.status === "pending" || row.status === "reading")
     return (
       <div className="flex flex-col items-center py-6 text-center" aria-live="polite">
