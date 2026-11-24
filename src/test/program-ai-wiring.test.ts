@@ -11,7 +11,7 @@ const MIGRATION = read("supabase/migrations/20270216090000_program_ai_editor.sql
 
 describe("Edit with AI is where the coach edits programs, and only there", () => {
   it("the client's Training tab, the block builder and the template editor each have it", () => {
-    expect(read("src/components/clients/client-training-tab.tsx")).toContain('target={{ kind: "client", clientId, focusBlockId: focus.id }}');
+    expect(read("src/components/clients/client-training-tab.tsx")).toContain('target={{ kind: "client", clientId, focusBlockId: focusId }}');
     const builder = read("src/routes/_authenticated/admin/blocks.$blockId.tsx");
     expect(builder).toContain('target={{ kind: "client", clientId, focusBlockId: blockId }}');
     // what's on screen is saved first, and the builder re-reads the program after

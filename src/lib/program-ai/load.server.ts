@@ -30,7 +30,7 @@ export function toFullDays(days: readonly string[]): string[] {
   return WEEKDAYS.map((d, i) => (days.includes(d) ? FULL_DAY[i] : null)).filter(Boolean) as string[];
 }
 
-async function all(q: () => any, what: string): Promise<any[]> {
+export async function all(q: () => any, what: string): Promise<any[]> {
   const out: any[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await q().range(from, from + 999);
@@ -41,7 +41,7 @@ async function all(q: () => any, what: string): Promise<any[]> {
   return out;
 }
 
-async function inChunks(ids: string[], what: string, q: (chunk: string[]) => any): Promise<any[]> {
+export async function inChunks(ids: string[], what: string, q: (chunk: string[]) => any): Promise<any[]> {
   const out: any[] = [];
   const uniq = [...new Set(ids.filter(Boolean))];
   for (let i = 0; i < uniq.length; i += CHUNK) out.push(...(await all(() => q(uniq.slice(i, i + CHUNK)), what)));
@@ -95,7 +95,7 @@ function rowSnap(r: any, ref: string, name: string): RowSnap {
  * team's own types, best effort: a database without them yet reads every
  * block's type from its name and focus.
  */
-async function blockTypesFor(db: Db, ids: string[]): Promise<{ rows: Map<string, { block_type?: string | null; block_meta?: any; training_focus?: string | null }>; library: ReturnType<typeof blockTypeLibrary> }> {
+export async function blockTypesFor(db: Db, ids: string[]): Promise<{ rows: Map<string, { block_type?: string | null; block_meta?: any; training_focus?: string | null }>; library: ReturnType<typeof blockTypeLibrary> }> {
   const rows = new Map<string, { block_type?: string | null; block_meta?: any; training_focus?: string | null }>();
   let library = blockTypeLibrary([]);
   if (ids.length) try {

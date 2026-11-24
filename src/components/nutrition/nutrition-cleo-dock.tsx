@@ -13,7 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
-import { CleoDockFrame, useCleoDock } from "@/components/program-ai/cleo-dock";
+import { CleoDockFrame, DockBrief, useCleoDock } from "@/components/program-ai/cleo-dock";
+import type { QualityScore } from "@/lib/plan-quality";
 import { CleoMark } from "@/components/summer/cleo-mark";
 import { PlanAiChange } from "@/components/nutrition/PlanAiChange";
 import { clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
@@ -22,6 +23,7 @@ import { PLAN_AI_PREFILL_EVENT, prefillPlanAiChange } from "@/lib/weight-managem
 import { cn } from "@/lib/utils";
 
 export const NUTRITION_CLEO_OPEN_EVENT = "jf:nutrition-cleo-open";
+export const NUTRITION_CLEO_OPTIMIZE_EVENT = "jf:nutrition-cleo-optimize";
 
 export const NUTRITION_QUICK_ASKS = [
   "Adjust their nutrition for the next four weeks",
@@ -38,6 +40,12 @@ export function openNutritionCleo(clientId: string, text?: string) {
   if (typeof window === "undefined") return;
   if (text) prefillPlanAiChange(clientId, text);
   else window.dispatchEvent(new CustomEvent(NUTRITION_CLEO_OPEN_EVENT, { detail: { clientId } }));
+}
+
+/** Optimize with Cleo: the dock opens on the ranked brief (plan-intelligence.tsx). */
+export function optimizeNutritionCleo(clientId: string, quality: QualityScore) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(NUTRITION_CLEO_OPTIMIZE_EVENT, { detail: { clientId, quality } }));
 }
 
 /** The Current plan card's way in. */
@@ -89,25 +97,34 @@ export function NutritionCleoDock({ clientId }: { clientId: string }) {
     };
   }, [clientId]);
 
+  const { ask: dockAsk, optimize: dockOptimize } = dock;
   useEffect(() => {
     const onPrefill = (e: Event) => {
       const d = (e as CustomEvent<{ clientId: string; text?: string }>).detail;
       if (!d || d.clientId !== clientId) return;
-      dock.ask(d.text);
+      dockAsk(d.text);
+    };
+    const onOptimize = (e: Event) => {
+      const d = (e as CustomEvent<{ clientId: string; quality: QualityScore }>).detail;
+      if (!d || d.clientId !== clientId || !d.quality) return;
+      dockOptimize({ domain: "nutrition", what: "nutrition plan", quality: d.quality });
     };
     window.addEventListener(PLAN_AI_PREFILL_EVENT, onPrefill);
     window.addEventListener(NUTRITION_CLEO_OPEN_EVENT, onPrefill);
+    window.addEventListener(NUTRITION_CLEO_OPTIMIZE_EVENT, onOptimize);
     return () => {
       window.removeEventListener(PLAN_AI_PREFILL_EVENT, onPrefill);
       window.removeEventListener(NUTRITION_CLEO_OPEN_EVENT, onPrefill);
+      window.removeEventListener(NUTRITION_CLEO_OPTIMIZE_EVENT, onOptimize);
     };
-  }, [clientId, dock.ask]);
+  }, [clientId, dockAsk, dockOptimize]);
 
   return (
     <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo}>
+      <DockBrief dock={dock} />
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-nutrition-cleo>
         <p className="text-[13px] leading-snug text-muted-foreground">
-          I read their plan, food on file, bodyweight trend, check-ins, training and cardio. Tell me what to change; nothing reaches {firstName ?? "them"} until you put it on the plan.
+          I read their plan, food on file, bodyweight trend, check-ins, training and cardio. Tell me what to change; you pick which days change, and nothing reaches {firstName ?? "them"} until you put it on the plan.
         </p>
         <div className="flex flex-wrap gap-1.5" data-nutrition-quick>
           {NUTRITION_QUICK_ASKS.map((q) => (

@@ -239,9 +239,21 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       .limit(30);
     const observations = athleteId && obs.data?.length ? (obs.data as any[]).map((o) => `- ${o.corrected_statement || o.statement}`).join("\n") : null;
 
+    // their cardio, nutrition and recovery (so a change can account for cardio against lifting recovery…)
+    let otherPlans: string | null = null;
+    if (edit.target_kind === "client" && athleteId) {
+      try {
+        const { otherPlansForTraining } = await import("@/lib/client-intel/brief.server");
+        otherPlans = await otherPlansForTraining(admin, athleteId);
+      } catch {
+        otherPlans = null;
+      }
+    }
+
     const user = editUserPrompt({
       target: snap.kind === "client" ? `Client: ${snap.title}` : `Template: ${snap.title}`,
       templateNote,
+      otherPlans,
       brief,
       rules: rulesText(rules),
       observations,

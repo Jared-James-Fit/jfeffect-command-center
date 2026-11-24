@@ -201,8 +201,8 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
   beforeSend?: () => Promise<void> | void;
   /** One-tap asks for where the coach is (Cleo's dock): they fill the box, never send by themselves. */
   quickActions?: string[];
-  /** Words put in the box from elsewhere (Program Check's "Ask Cleo"): a new nonce puts them in again. */
-  seed?: { text: string; nonce: number } | null;
+  /** Words put in the box from elsewhere (Program Check's "Ask Cleo"): a new nonce puts them in again; `send` sends them (Optimize's Draft). */
+  seed?: { text: string; nonce: number; send?: boolean } | null;
 
 }) {
   const qc = useQueryClient();
@@ -333,6 +333,16 @@ export function ChatPanel({ target, onApplied, initialText, context, beforeSend,
       toast.error(e?.message ?? "Couldn't save that rule.");
     }
   };
+
+  // Optimize's Draft: sent once the conversation it belongs to is known and nothing is running
+  const sentSeed = useRef<number | null>(null);
+  useEffect(() => {
+    if (!seed?.send || !seed.text || sentSeed.current === seed.nonce || !resumed || working || send.isPending) return;
+    sentSeed.current = seed.nonce;
+    setText("");
+    send.mutate(seed.text.slice(0, 4000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.nonce, resumed, working, send.isPending]);
 
   const okCount = proposal.filter((c) => c.ok && picked.has(c.id)).length;
   const starters = quickActions?.length ? quickActions : target.kind === "client" ? CLIENT_STARTERS : TEMPLATE_STARTERS;

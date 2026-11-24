@@ -13,6 +13,7 @@ import { AlertTriangle, Loader2, SlidersHorizontal, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { DayMeals } from "@/components/nutrition/nutrition-ui";
 import {
@@ -75,18 +76,18 @@ export function PlanAiChange({
   clientId: string;
   plan: PlanEditPlan & { id: string; status?: string | null; visible_to_client?: boolean | null };
   firstName: string | null;
-  /** Words to start the box with (Cleo's dock opened from a recommendation or Optimize). */
-  seed?: { text: string; nonce: number } | null;
+  /** Words to start the box with (Cleo's dock opened from a recommendation or Optimize); `send` writes the change at once (Optimize's Draft). */
+  seed?: { text: string; nonce: number; send?: boolean } | null;
 }) {
   const qc = useQueryClient();
   const ask = useServerFn(askPlanEditFn);
   const apply = useServerFn(applyPlanEditFn);
   const undo = useServerFn(undoPlanEditFn);
   const discard = useServerFn(discardPlanEditFn);
-  const [text, setText] = useState(() => (seed?.text ?? "").slice(0, REVISE_MAX_CHARS));
+  const [text, setText] = useState(() => (seed?.send ? "" : (seed?.text ?? "")).slice(0, REVISE_MAX_CHARS));
   useEffect(() => {
-    if (seed?.text) setText(seed.text.slice(0, REVISE_MAX_CHARS));
-  }, [seed?.nonce, seed?.text]);
+    if (seed?.text && !seed.send) setText(seed.text.slice(0, REVISE_MAX_CHARS));
+  }, [seed?.nonce, seed?.text, seed?.send]);
   const key = ["nutrition-plan-edit", plan.id];
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -135,6 +136,7 @@ export function PlanAiChange({
   const edit = editQ.data ?? null;
 
   const refreshPlan = () => {
+    qc.invalidateQueries({ queryKey: ["nutrition-quality", clientId] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", clientId] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: key });
@@ -154,6 +156,21 @@ export function PlanAiChange({
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't send that change"),
   });
+  // Optimize's Draft: written at once, unless a change is already being written or waiting
+  const sentSeed = useRef<number | null>(null);
+  useEffect(() => {
+    if (!seed?.send || !seed.text || sentSeed.current === seed.nonce || editQ.isLoading) return;
+    sentSeed.current = seed.nonce;
+    const busy = !!editQ.data && (WORKING.has(editQ.data.status) || editQ.data.status === "ready");
+    if (busy) {
+      setText(seed.text.slice(0, REVISE_MAX_CHARS));
+      toast("A change is already waiting. The ask is in the box for when it's done.");
+      return;
+    }
+    askM.mutate(seed.text.slice(0, REVISE_MAX_CHARS));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.nonce, editQ.isLoading]);
+
   const undoM = useMutation({
     mutationFn: (editId: string) => undo({ data: { editId } }),
     onSuccess: () => {
@@ -164,8 +181,8 @@ export function PlanAiChange({
     onError: (e: any) => toast.error(e?.message ?? "Couldn't undo"),
   });
   const applyM = useMutation({
-    mutationFn: (editId: string) => apply({ data: { editId } }),
-    onSuccess: (_r, editId) => {
+    mutationFn: (x: { editId: string; days?: number[] }) => apply({ data: x }),
+    onSuccess: (_r, { editId }) => {
       toast.success(`${firstName ? `${firstName}'s` : "The"} plan is updated`, {
         action: { label: "Undo", onClick: () => undoM.mutate(editId) },
       });
@@ -232,6 +249,14 @@ export function PlanAiChange({
     }
   }, [edit, plan, allergens]);
 
+  // which days take the change: every changed day to start; the coach unticks what they'd keep
+  const changedIdx = useMemo(() => (review?.changes ?? []).map((c, i) => (isSameDay(c) ? -1 : i)).filter((i) => i >= 0), [review]);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    setPicked(new Set(changedIdx));
+  }, [edit?.id, changedIdx]);
+  const partial = changedIdx.length > 1 && picked.size < changedIdx.length;
+
   const working = !!edit && WORKING.has(edit.status);
   const canUndo =
     edit?.status === "applied" &&
@@ -278,7 +303,19 @@ export function PlanAiChange({
                   now.
                 </p>
               )}
-              <ChangeRows changes={review.changes} />
+              <ChangeRows
+                changes={review.changes}
+                picked={changedIdx.length > 1 ? picked : null}
+                onToggle={(i, on) =>
+                  setPicked((p) => {
+                    const n = new Set(p);
+                    if (on) n.add(i);
+                    else n.delete(i);
+                    return n;
+                  })
+                }
+              />
+              {partial && review.rulesChanged && <p className="text-[12px] text-muted-foreground">The food-weighing rules change only when every day is picked.</p>}
               {review.short.length > 0 && (
                 <div className="space-y-1" data-plan-ai-short>
                   {review.short.map((line) => (
@@ -315,12 +352,15 @@ export function PlanAiChange({
               <Button
                 variant="default"
                 className="h-11 flex-1 sm:flex-none"
-                disabled={applyM.isPending}
-                onClick={() => applyM.mutate(edit.id)}
+                disabled={applyM.isPending || (changedIdx.length > 1 && picked.size === 0)}
+                onClick={() => applyM.mutate({ editId: edit.id, days: partial ? [...picked] : undefined })}
+                data-plan-ai-apply
               >
                 {applyM.isPending
                   ? "Updating…"
-                  : `Update ${firstName ? `${firstName}'s` : "the"} plan`}
+                  : partial
+                    ? `Update ${picked.size} of ${changedIdx.length} days`
+                    : `Update ${firstName ? `${firstName}'s` : "the"} plan`}
               </Button>
             )}
             <Button
@@ -419,26 +459,32 @@ export function PlanAiChange({
 
 const fmt = (v: number | null) => (v == null ? "—" : String(v));
 
-/** Each day: calories before → after, the macros after (what moved in bold), which meals changed, and the new meals on a tap. */
-function ChangeRows({ changes }: { changes: DayChange[] }) {
+/** A day the change leaves exactly as it was. */
+function isSameDay(c: DayChange): boolean {
+  return !c.meals.length && c.before.kcal === c.after.kcal && c.before.protein === c.after.protein && c.before.carbs === c.after.carbs && c.before.fat === c.after.fat;
+}
+
+/** Each day: calories before → after, the macros after (what moved in bold), which meals changed, and the new meals on a tap; a tick per changed day when there's more than one. */
+function ChangeRows({ changes, picked, onToggle }: { changes: DayChange[]; picked?: Set<number> | null; onToggle?: (i: number, on: boolean) => void }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
     <div className="divide-y divide-border rounded-xl border border-border" data-plan-ai-changes>
       {changes.map((c, i) => {
         const moved = c.before.kcal !== c.after.kcal;
-        const same =
-          !c.meals.length &&
-          !moved &&
-          c.before.protein === c.after.protein &&
-          c.before.carbs === c.after.carbs &&
-          c.before.fat === c.after.fat;
+        const same = isSameDay(c);
         const macro = (label: string, k: "protein" | "carbs" | "fat") => (
           <span className={cn(c.before[k] !== c.after[k] && "font-medium text-foreground")}>
             {label} {fmt(c.after[k])}
           </span>
         );
         return (
-          <div key={i}>
+          <div key={i} className={cn("flex items-stretch", picked && !same && !picked.has(i) && "opacity-60")}>
+            {picked && !same && onToggle && (
+              <label className="flex shrink-0 cursor-pointer items-start pl-3 pt-3" aria-label={`Change ${c.label}`}>
+                <Checkbox checked={picked.has(i)} onCheckedChange={(v) => onToggle(i, !!v)} data-plan-ai-day-pick />
+              </label>
+            )}
+            <div className="min-w-0 flex-1">
             <button
               type="button"
               className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:hover:bg-transparent"
@@ -478,6 +524,7 @@ function ChangeRows({ changes }: { changes: DayChange[] }) {
                 <DayMeals text={c.notes} />
               </div>
             ) : null}
+            </div>
           </div>
         );
       })}

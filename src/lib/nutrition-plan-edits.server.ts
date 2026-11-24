@@ -359,7 +359,7 @@ async function writeDays(
  * AI read it, so a change never lands on a plan someone edited since. The
  * days and weighing rules from before are kept on the change for Undo.
  */
-export async function applyPlanEdit(sb: any, editId: string, userId: string) {
+export async function applyPlanEdit(sb: any, editId: string, userId: string, onlyDays?: number[]) {
   const { data: edit } = await sb
     .from("nutrition_plan_edits")
     .select("*")
@@ -382,9 +382,15 @@ export async function applyPlanEdit(sb: any, editId: string, userId: string) {
     );
   const edited = readEditedPlan(plan, edit.meal_plan_text, edit.targets_text);
   const restore = { days: planDays(plan), food_weighing_rules: plan.food_weighing_rules ?? null };
+  // the coach's pick: only the ticked days take the change (the rest, and the weighing rules unless
+  // every day was picked, stay exactly as they are)
+  const picked = onlyDays && onlyDays.length < edited.days.length ? new Set(onlyDays) : null;
+  if (picked && !picked.size) throw new Error("Pick at least one day to change");
+  const nextDays = picked ? edited.days.map((d: any, i: number) => (picked.has(i) ? d : restore.days[i] ?? d)) : edited.days;
+  const nextRules = picked ? restore.food_weighing_rules : edited.foodWeighingRules;
   const now = new Date().toISOString();
   try {
-    await writeDays(sb, plan.id, edited.days, edited.foodWeighingRules, now);
+    await writeDays(sb, plan.id, nextDays, nextRules, now);
   } catch (e: any) {
     // put the plan back as it was before saying it failed
     await writeDays(
