@@ -6,9 +6,9 @@
  *   "openai:gpt-5.5"   the OpenAI key, Responses API: the model's reasoning is carried from one
  *                      look-up to the next (encrypted, nothing stored on OpenAI's side), and the
  *                      prompt is cached per person (promptCacheKey) so a follow-up starts faster;
- *   "gateway:…"        the Lovable gateway's chat completions (Lovable credits), only when an admin
- *                      names one. Its provider is called "google" so Gemini 3's thought signature is
- *                      sent back on every tool step.
+ *   "gateway:…"        the Lovable gateway's chat completions (Lovable credits), only for the
+ *                      benchmark: an admin override naming one is dropped (openaiOnly). Its provider is
+ *                      called "google" so Gemini 3's thought signature is sent back on every tool step.
  * Server only.
  */
 import { resolveRoute, type Route } from "@/lib/ai/routing";
@@ -24,7 +24,9 @@ export type CleoModel = {
 
 /** Cleo's models for this answer, best first. `asked` (a benchmark) replaces the route's list. */
 export function cleoRoute(override: Partial<Record<string, string[]>> | null, asked?: { models?: string[]; effort?: Effort } | null): Route {
-  const route = resolveRoute("assistant", override as any);
+  // Cleo answers on the OpenAI key only (Nov 24 2026): an override naming a `gateway:` model is
+  // dropped, so no answer spends Lovable credits. Only the benchmark (`asked`) compares gateway models.
+  const route = resolveRoute("assistant", override as any, { openaiOnly: true });
   const models = asked?.models?.filter((m) => /^(openai|gateway):[\w./-]+$/.test(m)) ?? [];
   return { ...route, models: models.length ? models : route.models, effort: asked?.effort ?? route.effort };
 }

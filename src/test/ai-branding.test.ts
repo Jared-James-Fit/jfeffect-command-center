@@ -74,7 +74,7 @@ describe("AI is the engine, not the product", () => {
   });
 
   it("no AI-style glow: no gradient orb on Cleo, no violet tint for anything AI-made", () => {
-    const chat = FILES.find((f) => f.path === "components/admin/books/summer-chat.tsx")!.text;
+    const chat = FILES.find((f) => f.path === "components/cleo/cleo-panel.tsx")!.text;
     expect(chat).not.toMatch(/bg-gradient|from-amber-300|to-pink-500/);
     const label = FILES.find((f) => f.path === "components/legal/ai-assistance-label.tsx")!.text;
     expect(label).not.toMatch(/violet|purple/);
@@ -96,7 +96,7 @@ describe("AI is the engine, not the product", () => {
   it("Cleo is the one AI identity, and says so where people talk to it", () => {
     const avatar = FILES.find((f) => f.path === "components/summer/cleo-avatar.tsx")!.text;
     expect(avatar).toContain('CLEO_ROLE_LINE = "AI assistant"');
-    for (const p of ["components/admin/books/summer-chat.tsx", "route-pages/_authenticated/admin/messages.tsx"]) {
+    for (const p of ["components/cleo/cleo-panel.tsx", "route-pages/_authenticated/admin/messages.tsx"]) {
       expect(FILES.find((f) => f.path === p)!.text, p).toContain("CLEO_ROLE_LINE");
     }
   });

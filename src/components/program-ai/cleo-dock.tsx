@@ -26,13 +26,14 @@
  * the program sees the same dock as "Adjust program": nobody loses it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Maximize2, Minimize2, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Maximize2, MessagesSquare, Minimize2, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { builderNav, type BuilderHere } from "@/lib/builder-nav";
 import { CleoMark } from "@/components/summer/cleo-mark";
+import { CLEO_PANEL_OPENED, closeSummer, openSummer } from "@/lib/cleo-open";
 import { ChatPanel, HistoryPanel, RulesPanel } from "@/components/program-ai/edit-with-ai";
 import { OptimizeBrief, type OptimizeBriefData } from "@/components/plan-quality/plan-intelligence";
 import type { ProgramAiTarget } from "@/lib/program-ai/program-ai.functions";
@@ -189,6 +190,7 @@ export function CleoDockFrame({
   branded,
   header,
   children,
+  conversationClientId,
 }: {
   dock: CleoDockHandle;
   /** "Cleo" (or the unbranded name for someone without Cleo). */
@@ -199,6 +201,8 @@ export function CleoDockFrame({
   /** What goes under the title row (scope, tabs, a specialty line). */
   header?: ReactNode;
   children: ReactNode;
+  /** A client's dock: "Conversation" continues in Cleo's panel, in that client's conversation. */
+  conversationClientId?: string | null;
 }) {
   const phone = useIsMobileNow();
 
@@ -207,6 +211,18 @@ export function CleoDockFrame({
   useEffect(() => {
     if (dock.open) setMounted(true);
   }, [dock.open]);
+
+  // one Cleo on screen at a time (Nov 24 2026): this dock puts Cleo's panel away, and the panel folds this dock
+  useEffect(() => {
+    if (dock.open) closeSummer();
+  }, [dock.open]);
+  const setOpenRef = useRef(dock.setOpen);
+  setOpenRef.current = dock.setOpen;
+  useEffect(() => {
+    const fold = () => setOpenRef.current(false);
+    window.addEventListener(CLEO_PANEL_OPENED, fold);
+    return () => window.removeEventListener(CLEO_PANEL_OPENED, fold);
+  }, []);
 
   // computer: docked or expanded, and the docked width, remembered
   const [mode, setMode] = useState<DeskMode>(() => {
@@ -370,6 +386,17 @@ export function CleoDockFrame({
             <p className="text-sm font-semibold leading-tight tracking-[-0.01em]">{name}</p>
             <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
           </div>
+          {branded && conversationClientId && (
+            <button
+              type="button"
+              onClick={() => openSummer({ clientId: conversationClientId })}
+              className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Continue in your conversation with Cleo about this client"
+              data-cleo-dock-conversation
+            >
+              <MessagesSquare className="h-4 w-4" /> Conversation
+            </button>
+          )}
           {phone ? (
             <button type="button" onClick={() => setFull((v) => !v)} aria-label={full ? "Smaller" : "Full screen"} className="grid h-10 w-10 cursor-pointer place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
               {full ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
@@ -485,7 +512,7 @@ export function CleoDock({
   );
 
   return (
-    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header}>
+    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header} conversationClientId={target.kind === "client" ? target.clientId : null}>
       <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== "chat"}>
         <DockBrief dock={dock} />
         <ChatPanel target={target} onApplied={onApplied} context={context} beforeSend={beforeSend} quickActions={quick} seed={dock.seed} />

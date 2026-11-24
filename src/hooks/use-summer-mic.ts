@@ -128,6 +128,11 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
       finishRef.current = finish;
       cleanupRef.current = () => finish(false);
 
+      // The phone took the mic away (a call, the app sent to the background, a
+      // headset unplugged): keep what was said rather than hanging.
+      for (const t of stream.getAudioTracks()) t.addEventListener("ended", () => finish(true), { once: true });
+      rec.onerror = () => finish(true);
+
       rec.start(250);
       setListening(true);
       setElapsedMs(0);

@@ -64,7 +64,7 @@ describe("wiring", () => {
   const server = readFileSync("src/lib/summer.server.ts", "utf8");
   const chats = readFileSync("src/lib/cleo-chats.server.ts", "utf8");
   const sql = readFileSync("supabase/migrations/20261120090000_cleo_attachments.sql", "utf8");
-  const chat = readFileSync("src/components/admin/books/summer-chat.tsx", "utf8");
+  const chat = readFileSync("src/components/cleo/cleo-panel.tsx", "utf8") + readFileSync("src/components/cleo/cleo-composer.tsx", "utf8");
 
   it("Cleo sees the files with the question, keeps what it read, and the files belong to the message", () => {
     expect(server).toContain("files.assertOwnAttachments(userId, attachments)");
@@ -83,6 +83,6 @@ describe("wiring", () => {
   it("the composer has an attach button, a tray, and pasted screenshots go in it", () => {
     expect(chat).toContain('aria-label="Attach photos, videos or files"');
     expect(chat).toContain("<AttachmentTray");
-    expect(chat).toContain("tray.add(pasted)");
+    expect(chat).toContain("onPasteFiles={(files) => tray.add(files)}");
   });
 });
