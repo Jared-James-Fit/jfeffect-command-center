@@ -1,124 +1,17 @@
 /**
- * Cleo's chat in admin, with no floating button of its own: it opens from
- * Cleo's row in Messages (tap to type, the mic to talk), ⌘/Ctrl+Shift+S,
- * "/admin#cleo" (Cleo's approval and decision pushes) and window events other
- * screens use to open it ("summer:open", "summer:toggle", "summer:close";
- * detail { year?, dictate? }).
+ * Cleo in admin (Nov 24 2026): one panel, mounted once in the admin layout for
+ * whoever has Cleo, that never resets (cleo-panel.tsx). It opens from the Cleo
+ * button in the shell's bar, Cleo's row in Messages (tap to type, the mic to
+ * dictate), ⌘/Ctrl+Shift+S, "/admin#cleo" (Cleo's approval and decision
+ * pushes) and the window events other screens use ("summer:open",
+ * "summer:toggle", "summer:close"; detail in cleo-open.ts).
  *
- * Admin only; mounted once in the admin layout.
+ * No floating button of its own: the panel is drawn only while it's open.
  */
-import { useCallback, useEffect, useState } from "react";
-import { useRouterState } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { getSummerProfile } from "@/lib/business-books.functions";
-import { summerSpeaker } from "@/lib/summer-speaker";
-import { SummerChat } from "@/components/admin/books/summer-chat";
+import { CleoPanel } from "@/components/cleo/cleo-panel";
 
-/** `dictate`: open straight into listening (the mic on Cleo's row in Messages). */
-/** `prompt`: words put in the box (never sent) so a screen can ask about what's on it. */
-export type SummerOpenDetail = { year?: number; dictate?: boolean; prompt?: string };
-
-export function openSummer(detail: SummerOpenDetail = {}) {
-  // Called from a tap: unlock audio now so the first spoken reply can autoplay.
-  if (detail.dictate) summerSpeaker().unlock();
-  try {
-    window.dispatchEvent(new CustomEvent<SummerOpenDetail>("summer:open", { detail }));
-  } catch {
-    // SSR or very old browser
-  }
-}
+export { openSummer, type SummerOpenDetail } from "@/lib/cleo-open";
 
 export function SummerAssistant() {
-  const qc = useQueryClient();
-  const profileFn = useServerFn(getSummerProfile);
-  const href = useRouterState({ select: (r) => r.location.href });
-  const hash = useRouterState({ select: (r) => r.location.hash });
-  const [open, setOpen] = useState(false);
-  const [year, setYear] = useState<number | undefined>(undefined);
-  const [startDictating, setStartDictating] = useState(false);
-  const [prefill, setPrefill] = useState<string | null>(null);
-
-  const { data: persona } = useQuery({
-    queryKey: ["summer-profile"],
-    queryFn: () => profileFn() as Promise<{ tone: string | null; instructions: string | null; isOwner: boolean; isFinance?: boolean }>,
-    staleTime: 5 * 60_000,
-  });
-
-  const show = useCallback((detail: SummerOpenDetail = {}) => {
-    if (detail.year) setYear(detail.year);
-    if (detail.dictate) setStartDictating(true);
-    if (detail.prompt) setPrefill(detail.prompt);
-    setOpen(true);
-  }, []);
-
-  useEffect(() => {
-    const onOpen = (e: Event) => show((e as CustomEvent<SummerOpenDetail>).detail ?? {});
-    const onToggle = (e: Event) => {
-      const d = (e as CustomEvent<SummerOpenDetail>).detail ?? {};
-      setOpen((o) => {
-        if (!o) {
-          if (d.year) setYear(d.year);
-          if (d.dictate) setStartDictating(true);
-        }
-        return !o;
-      });
-    };
-    const onClose = () => setOpen(false);
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "S" || e.key === "s")) {
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-    };
-    window.addEventListener("summer:open", onOpen);
-    window.addEventListener("summer:toggle", onToggle);
-    window.addEventListener("summer:close", onClose);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("summer:open", onOpen);
-      window.removeEventListener("summer:toggle", onToggle);
-      window.removeEventListener("summer:close", onClose);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [show]);
-
-  // "/admin#cleo" (Cleo's approval and decision pushes) opens the chat.
-  useEffect(() => {
-    if (hash !== "cleo" && hash !== "#cleo") return;
-    setOpen(true);
-    void qc.invalidateQueries({ queryKey: ["cleo-actions"] });
-    try {
-      history.replaceState(history.state, "", window.location.pathname + window.location.search);
-    } catch {
-      // ignore
-    }
-  }, [hash, qc]);
-
-  // Year from Taxes & Books applies while the chat is open from there; reset after.
-  useEffect(() => {
-    if (!open) setYear(undefined);
-  }, [open]);
-
-  return (
-    <>
-      <SummerChat
-        open={open}
-        onOpenChange={setOpen}
-        year={year}
-        persona={{ tone: persona?.tone, instructions: persona?.instructions }}
-        onPersonaSaved={() => {
-          qc.invalidateQueries({ queryKey: ["summer-profile"] });
-          qc.invalidateQueries({ queryKey: ["books-data"] });
-        }}
-        route={href}
-        isOwner={persona?.isOwner ?? false}
-        isFinance={persona?.isFinance ?? false}
-        startDictating={startDictating}
-        onDictationStarted={() => setStartDictating(false)}
-        prefill={prefill}
-        onPrefilled={() => setPrefill(null)}
-      />
-    </>
-  );
+  return <CleoPanel />;
 }

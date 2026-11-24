@@ -97,6 +97,51 @@ export async function targetClientOf(admin: any, kind: CleoActionKind, p: any): 
 }
 
 /**
+ * Whose a card would change, for a client's conversation (Nov 24 2026): the
+ * client it resolves to, or null when it's about nobody in particular (a task)
+ * or can't be told yet (it's then checked again when it runs). Service role,
+ * read only; never throws.
+ */
+export async function scopeClientOf(kind: CleoActionKind, p: any): Promise<string | null> {
+  try {
+    const admin = await service();
+    switch (kind) {
+      case "edit_program_day":
+        return await clientOfDay(admin, p.day_id);
+      case "publish_program": {
+        const { data } = await admin.from("pl_blocks").select("client_id").eq("id", p.block_id).maybeSingle();
+        return data?.client_id ?? null;
+      }
+      case "correct_logged_exercise": {
+        const { data } = await admin.from("pl_exercise_rows").select("day_id").eq("id", p.row_id).maybeSingle();
+        return data?.day_id ? await clientOfDay(admin, data.day_id) : null;
+      }
+      case "record_payment":
+      case "send_payment_link": {
+        const { data } = await admin.from("purchase_records").select("client_id").eq("id", p.purchase_id).maybeSingle();
+        return data?.client_id ?? null;
+      }
+      case "move_workout":
+      case "remove_workout": {
+        if (p.workout_id) {
+          const { data } = await admin.from("pl_scheduled_workouts").select("client_id").eq("id", p.workout_id).maybeSingle();
+          return data?.client_id ?? null;
+        }
+        return p.day_id ? await clientOfDay(admin, p.day_id) : null;
+      }
+      case "restore_program_version": {
+        const { data } = await admin.from("pl_program_versions").select("client_id").eq("id", p.version_id).maybeSingle();
+        return data?.client_id ?? null;
+      }
+      default:
+        return typeof p?.client_id === "string" ? p.client_id : null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
  * May this person act on this client right now? The admin, or the client's
  * own active coach (`cleo_action_target_allowed`, a definer check that reads
  * the requester's roles and coach record, never the caller's session).

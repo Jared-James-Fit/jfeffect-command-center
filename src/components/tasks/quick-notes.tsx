@@ -847,6 +847,7 @@ function NotesPanel({
         <button
           type="button"
           data-viewport-pinned
+          data-cleo-avoid
           onClick={addNote}
           aria-label="New note"
           title="New note"

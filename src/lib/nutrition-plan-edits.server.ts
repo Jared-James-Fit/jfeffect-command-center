@@ -83,7 +83,7 @@ async function latestAnswers(sb: any, clientId: string): Promise<QA[]> {
  * change: kept on the change's progress so a run that resumes reads exactly the same words. Never
  * stops the change: with nothing readable it's left out.
  */
-async function clientIntelFor(sb: any, clientId: string, progress: CallState, save: () => Promise<void>): Promise<string> {
+async function clientIntelFor(sb: any, clientId: string, progress: CallState, save: () => Promise<void>, viewer: string | null = null): Promise<string> {
   const kept = (progress as any).intel;
   if (typeof kept === "string") return kept;
   let text = "";
@@ -93,7 +93,7 @@ async function clientIntelFor(sb: any, clientId: string, progress: CallState, sa
     const { clientIntelText } = await import("@/lib/client-intel/brief.server");
     const loaded = await loadWeightManagement(sb, clientId);
     const view = await loadCardioWorkspace(sb, clientId, { loaded });
-    text = await clientIntelText(sb, { clientId, loaded, cardio: { live: view.live, ctx: view.ctx, unit: view.speedUnit, outcomes: view.outcomes, read: view.read } }, "nutrition");
+    text = await clientIntelText(sb, { clientId, loaded, viewer, cardio: { live: view.live, ctx: view.ctx, unit: view.speedUnit, outcomes: view.outcomes, read: view.read } }, "nutrition");
     text = `${text}\n\nUse this as context for the change the coach asked for. Change cardio only by saying so in words: the cardio plan is published from the Cardio tab, never from the nutrition plan.`;
   } catch (e: any) {
     console.warn("[nutrition-edit] client intelligence unavailable", e?.message);
@@ -171,7 +171,7 @@ export async function runPlanEdit(sb: any, editId: string) {
     // Cleo — Nutrition reads the same client intelligence as Cleo's cardio and training work (the
     // cardio plan in force and how it's going, training, the coach's rules, what was tried before),
     // worked out once per change and kept with its progress so a resumed run reads the same words
-    const intel = await clientIntelFor(sb, row.client_id, progress, save);
+    const intel = await clientIntelFor(sb, row.client_id, progress, save, row.created_by ?? null);
     const t = await nutritionCall(
       sb,
       progress,

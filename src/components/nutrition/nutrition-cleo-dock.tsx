@@ -104,7 +104,7 @@ export function NutritionCleoDock({ clientId }: { clientId: string }) {
   }, [clientId, dock.ask]);
 
   return (
-    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo}>
+    <CleoDockFrame dock={dock} name={cleo ? "Cleo" : "Adjust plan"} subtitle={`Nutrition${firstName ? ` · ${firstName}` : ""}`} branded={cleo} conversationClientId={clientId}>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3" data-nutrition-cleo>
         <p className="text-[13px] leading-snug text-muted-foreground">
           I read their plan, food on file, bodyweight trend, check-ins, training and cardio. Tell me what to change; nothing reaches {firstName ?? "them"} until you put it on the plan.

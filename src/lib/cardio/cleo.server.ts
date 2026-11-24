@@ -100,7 +100,7 @@ export async function askCardioCleo(
   const view = await loadCardioWorkspace(sb, x.clientId, { loaded });
   const base = cleanPlan(x.draft, view.ctx);
   // the coach's private notes and keys stay theirs whatever comes back
-  const intel = await clientIntelText(sb, { clientId: x.clientId, loaded, cardio: { live: view.live, ctx: view.ctx, unit: view.speedUnit, outcomes: view.outcomes, read: view.read } }, "cardio");
+  const intel = await clientIntelText(sb, { clientId: x.clientId, loaded, viewer: x.userId, cardio: { live: view.live, ctx: view.ctx, unit: view.speedUnit, outcomes: view.outcomes, read: view.read } }, "cardio");
   const totals = planTotals(base, view.ctx, view.scoreCtx.bodyweightKg);
   const prompt = [
     intel,

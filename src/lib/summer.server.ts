@@ -174,48 +174,6 @@ export function audioFormat(mime: string): string {
   return "webm";
 }
 
-/**
- * `names`: the people they might mention (clients), so they're spelled the
- * way the app spells them.
- */
-export async function transcribeAudio(b64: string, mime: string, names: string[] = []): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
-  const res = await fetch(`${GATEWAY}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        {
-          role: "system",
-          content:
-            [
-              "You transcribe what a strength and physique coach says to their assistant, Cleo: questions and instructions about clients, training, programs, the calendar and the business. It can be long, with pauses and restarts.",
-              "Return every word spoken, in order, with normal punctuation and sentence breaks. Drop filler (um, uh) and false starts, but never shorten, summarize or skip content.",
-              "Spell coaching terms the way coaches write them: RPE, RIR, e1RM, 1RM, AMRAP, PR, deload, high bar, low bar, RDL, SSB, top set, back-off sets, kg, lb. Business words: GST, HST, CRA, check-in, Stripe. Write numbers and dollar amounts as digits.",
-              ...(names.length ? [`People they may mention (spell exactly like this): ${names.slice(0, 300).join(", ")}.`] : []),
-              "If nothing intelligible was said, return an empty string.",
-            ].join(" "),
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Transcribe this." },
-            { type: "input_audio", input_audio: { data: b64, format: audioFormat(mime) } },
-          ],
-        },
-      ],
-    }),
-  });
-  if (res.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
-  if (res.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
-  if (!res.ok) throw new Error(`Couldn't hear that (${res.status}).`);
-  const json: any = await res.json();
-  const text = json?.choices?.[0]?.message?.content;
-  return typeof text === "string" ? text.trim().replace(/^["']|["']$/g, "") : "";
-}
-
 // ---------------------------------------------------------------------------
 // Voice: text to speech. Tries the server voices in order (ElevenLabs when
 // a key is set, then OpenAI, then Gemini); the browser falls back to a device
@@ -396,7 +354,16 @@ function providers(): Provider[] {
       },
     });
   }
-  const lovable = process.env.LOVABLE_API_KEY;
+  // Cleo's own voice runs on the OpenAI key (Nov 24 2026: never Lovable credits); the Lovable
+  // gateway's voices are only a stand-in for a setup with no OpenAI key.
+  const openai = process.env.OPENAI_API_KEY;
+  if (openai) {
+    list.push({
+      name: "openai:gpt-4o-mini-tts",
+      run: (req) => speechEndpoint("https://api.openai.com/v1/audio/speech", { Authorization: `Bearer ${openai}` }, "gpt-4o-mini-tts", req),
+    });
+  }
+  const lovable = openai ? null : process.env.LOVABLE_API_KEY;
   if (lovable) {
     // Google's voices first (the most natural), OpenAI's right behind.
     list.push({
@@ -420,13 +387,6 @@ function providers(): Provider[] {
     list.push({
       name: "lovable:openai/gpt-4o-mini-tts",
       run: (req) => speechEndpoint(`${GATEWAY}/audio/speech`, { "Lovable-API-Key": lovable }, "openai/gpt-4o-mini-tts", req),
-    });
-  }
-  const openai = process.env.OPENAI_API_KEY;
-  if (openai) {
-    list.push({
-      name: "openai:gpt-4o-mini-tts",
-      run: (req) => speechEndpoint("https://api.openai.com/v1/audio/speech", { Authorization: `Bearer ${openai}` }, "gpt-4o-mini-tts", req),
     });
   }
   return list;
@@ -502,6 +462,28 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 // ---------------------------------------------------------------------------
 // One answer path for chat and voice.
 
+/** The person tapped Stop: the answer is dropped, any card it set up with it. */
+export class CleoStopped extends Error {
+  constructor() {
+    super("Stopped");
+    this.name = "CleoStopped";
+  }
+}
+
+/** One signal from two (either aborts it); undefined when there are none. */
+function joinSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const c = new AbortController();
+  const stop = () => c.abort();
+  if (a.aborted || b.aborted) c.abort();
+  else {
+    a.addEventListener("abort", stop, { once: true });
+    b.addEventListener("abort", stop, { once: true });
+  }
+  return c.signal;
+}
+
 export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; chat_id?: string | null; attachments?: CleoAttachment[] | null };
 
 type CleoInput = { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; coach?: boolean; own?: any; chatId?: string | null; attachments?: CleoAttachment[] };
@@ -537,7 +519,21 @@ export async function cleoAnswer(
   supabase: any,
   userId: string,
   input: CleoInput,
-  opts: { bench?: { models?: string[]; effort?: "low" | "medium" | "high"; tone?: string } } = {},
+  opts: {
+    bench?: { models?: string[]; effort?: "low" | "medium" | "high"; tone?: string };
+    /** The conversation so far, oldest first (a background turn picks it: recent messages, not the whole history). */
+    history?: Array<{ role: string; content: string; attachments?: CleoAttachment[] | null }>;
+    /** The conversation's own context (who it's about, its summary, waiting cards), sent after the instructions. */
+    memory?: string | null;
+    /** Stop: the person tapped Stop (checked between steps and by the model call). */
+    signal?: AbortSignal;
+    /** After each step, the look-ups it made (the progress line). */
+    onStep?: (toolNames: string[]) => void;
+    /** A client's conversation: cards for anyone else are refused here. */
+    scopeClient?: { id: string; name: string } | null;
+    /** More look-ups (past_conversations). */
+    extraTools?: Record<string, unknown>;
+  } = {},
 ) {
   const t0 = Date.now();
   const books = await import("@/lib/business-books.server");
@@ -579,8 +575,10 @@ export async function cleoAnswer(
     loadAppSnapshot(supabase).catch(() => EMPTY_APP_SNAPSHOT),
     summerLinkCatalog(input.coach ? "coach" : "admin"),
     // Only this chat: a new chat starts with a clean slate, so an old topic
-    // never leaks into a new answer.
-    input.chatId
+    // never leaks into a new answer. A background turn hands over its own (recent messages + a summary).
+    opts.history
+      ? Promise.resolve({ data: [...opts.history].reverse(), error: null })
+      : input.chatId
       ? supabase
           .from("summer_messages")
           .select("role, content, attachments")
@@ -655,6 +653,14 @@ export async function cleoAnswer(
         execute: async (params: unknown) => {
           if (proposed.length >= 3) return "Too many cards in one answer. Ask which one they want first.";
           try {
+            // A client's conversation only ever changes that client.
+            if (opts.scopeClient) {
+              const { scopeClientOf } = await import("@/lib/cleo-actions.server");
+              const target = await scopeClientOf(kind, params).catch(() => null);
+              if (target && target !== opts.scopeClient.id) {
+                return wellFormed(`Not set up: this conversation is ${opts.scopeClient.name}'s, and that change is for someone else. Tell them to open Cleo on that client's page (or start a general conversation) to change it, so the two never get mixed up.`);
+              }
+            }
             const r = await proposeAction({ supabase: own, db: supabase, userId }, caller, kind, params);
             proposed.push(r.id);
             return wellFormed(
@@ -688,7 +694,7 @@ export async function cleoAnswer(
   // Not strict: OpenAI's Responses API makes every field of a strict tool required, and the model then fills
   // the optional ones with placeholders (Nov 18 2026's benchmark: a calf raise card at "0.0001 lb, 1% of 1RM").
   const tools = Object.fromEntries(
-    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance, money: owner || finance || caller.isAdmin, caller: userId }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
+    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance, money: owner || finance || caller.isAdmin, caller: userId }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...(opts.extraTools ?? {}), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
   );
 
   // Earlier attachments come back as words (what was read from them); the
@@ -699,6 +705,8 @@ export async function cleoAnswer(
   const now = `[${new Date().toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${BUSINESS_TZ}). Today is ${businessToday()}.]`;
   const ask = wellFormed(`${now}\n${input.message.trim() || "Take a look at this."}`);
   const convo = [
+    // The conversation's own context goes after the instructions, so those stay cached.
+    ...(opts.memory?.trim() ? [{ role: "system" as const, content: wellFormed(opts.memory.trim()) }] : []),
     ...past.map((m) => {
       if (m.role === "assistant") return { role: "assistant" as const, content: wellFormed(m.content) };
       const text = wellFormed([m.content, files.attachmentsInHistory(m.attachments)].filter(Boolean).join("\n"));
@@ -715,14 +723,22 @@ export async function cleoAnswer(
   const trace: CleoTrace = { model: null, effort: route.effort, ms: { context: Date.now() - t0, model: 0, total: 0 }, steps: 0, tools: [], usage: { input: null, cachedInput: null, output: null, reasoning: null }, systemChars: system.length, attempts: [] };
   const run = async (ref: string, timeoutMs?: number) => {
     const m = await cleoModel(ref, { effort: route.effort, userId });
+    const signal = joinSignals(opts.signal, timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined);
     const r = await generateText({
       model: m.model,
       system,
-      messages: convo,
+      messages: convo as any,
       tools,
       stopWhen: stepCountIs(20),
       ...(m.providerOptions ? { providerOptions: m.providerOptions } : {}),
-      ...(timeoutMs ? { abortSignal: AbortSignal.timeout(timeoutMs) } : {}),
+      ...(signal ? { abortSignal: signal } : {}),
+      onStepFinish: (step: any) => {
+        try {
+          opts.onStep?.((step?.toolCalls ?? []).map((c: any) => String(c?.toolName ?? "")));
+        } catch {
+          // progress is a nicety
+        }
+      },
     });
     const steps = [...r.steps];
     let usage = usageOf(r.totalUsage);
@@ -731,13 +747,15 @@ export async function cleoAnswer(
     if (!text && !proposed.length && !choices) {
       // Every step went on look-ups and nothing was written back. Ask for the
       // answer from what was found, with no more tool calls.
+      if (opts.signal?.aborted) throw new DOMException("Stopped", "AbortError");
       const again = await generateText({
         model: m.model,
         system,
-        messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer my question now from what you found. No more lookups." }],
+        messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer my question now from what you found. No more lookups." }] as any,
         tools,
         toolChoice: "none",
         ...(m.providerOptions ? { providerOptions: m.providerOptions } : {}),
+        ...(opts.signal ? { abortSignal: opts.signal } : {}),
       });
       steps.push(...again.steps);
       const u2 = usageOf(again.totalUsage);
@@ -763,6 +781,8 @@ export async function cleoAnswer(
         trace.model = models[i];
         break;
       } catch (e: any) {
+        // Stopped by the person: no other model, nothing more.
+        if (opts.signal?.aborted) throw e;
         const f = cleoFailure(e);
         trace.attempts.push({ model: models[i], ms: Date.now() - started, error: `${f.timedOut ? "timeout" : f.status ?? "error"}: ${String(e?.message ?? e).slice(0, 160)}` });
         if (!f.retry || i === models.length - 1) throw e;
@@ -772,6 +792,10 @@ export async function cleoAnswer(
       }
     }
   } catch (e: any) {
+    if (opts.signal?.aborted) {
+      await discardProposals(userId, proposed.splice(0));
+      throw new CleoStopped();
+    }
     const f = cleoFailure(e);
     console.error("[cleo] no model answered", trace.attempts);
     try {
