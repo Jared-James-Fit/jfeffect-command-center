@@ -326,7 +326,16 @@ export async function createAssignmentCheckout(
   supabase: any,
   userId: string | null,
   data: z.infer<typeof CreateAssignmentCheckoutInput>,
-  opts: { updateSource?: string } = {},
+  opts: {
+    updateSource?: string;
+    /** Where Stripe sends them back (plan changes land on Manage plan, not My Purchases). */
+    successUrl?: string;
+    cancelUrl?: string;
+    /** Extra metadata on the session AND the subscription (e.g. plan_change_id). */
+    metadata?: Record<string, string>;
+    /** The Coaching Agreement notice above Pay (default on; off for a membership). */
+    agreementNotice?: boolean;
+  } = {},
 ) {
   // Load the purchase record
   const { data: purchase, error: pErr } = await supabase
@@ -449,8 +458,8 @@ export async function createAssignmentCheckout(
     "line_items[0][price]": priceId,
     "line_items[0][quantity]": "1",
     mode: checkoutMode,
-    success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${data.origin}/portal/purchases`,
+    success_url: opts.successUrl ?? `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: opts.cancelUrl ?? `${data.origin}/portal/purchases`,
     ...(appliedDiscount
       ? {
           "discounts[0][promotion_code]": appliedDiscount.promotionCodeId,
@@ -478,6 +487,10 @@ export async function createAssignmentCheckout(
     // The in-app Coaching Agreement covers every purchase; point at it here.
     ...AGREEMENT_CHECKOUT_PARAMS,
   };
+  // A membership (a paid self-serve plan) isn't sold under the Coaching Agreement: plans.server.ts
+  // passes agreementNotice: false for it, and only for it. Every coaching checkout keeps the notice.
+  if (opts.agreementNotice === false) delete sessionParams["custom_text[submit][message]"];
+  for (const [k, v] of Object.entries(opts.metadata ?? {})) sessionParams[`metadata[${k}]`] = v;
   // Link the client's auth user when one exists (never required).
   const { data: clientUser } = await supabase
     .from("clients").select("user_id").eq("id", client.id).maybeSingle();
@@ -496,6 +509,7 @@ export async function createAssignmentCheckout(
     sessionParams["subscription_data[metadata][client_id]"] = client.id;
     sessionParams["subscription_data[metadata][offer_id]"] = purchase.offer_id ?? "";
     sessionParams["subscription_data[metadata][workspace]"] = "jfeffect";
+    for (const [k, v] of Object.entries(opts.metadata ?? {})) sessionParams[`subscription_data[metadata][${k}]`] = v;
 
     // Agreed future first payment: Stripe collects the payment method now and
     // charges NOTHING until this date (trial_end), then anchors every later

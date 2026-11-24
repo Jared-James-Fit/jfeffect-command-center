@@ -150,6 +150,9 @@ describe("contract-with-payment is retired", () => {
   it("points at the agreement from every Stripe Checkout session it creates", () => {
     const src = read("src/lib/stripe-checkout.functions.ts");
     expect(src.match(/\.\.\.AGREEMENT_CHECKOUT_PARAMS/g) ?? []).toHaveLength(2);
+    // the one opt-out: a membership bought from Manage plan (never coaching)
+    expect(src.match(/agreementNotice === false/g) ?? []).toHaveLength(1);
+    expect(read("src/lib/plans/plans.server.ts")).toContain('agreementNotice: target.family === "coaching"');
     expect(AGREEMENT_CHECKOUT_NOTICE).toContain(`](${AGREEMENT_PUBLIC_URL})`);
     expect(AGREEMENT_PUBLIC_URL).toMatch(/\/coaching-agreement$/);
     expect(AGREEMENT_CHECKOUT_NOTICE.length).toBeLessThanOrEqual(1200);

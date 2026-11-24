@@ -16,6 +16,7 @@
  * disagree. Amounts are in the dollars the client pays. Nothing here charges
  * anyone.
  */
+import { ClientPlanCard } from "@/components/plans/client-plan-card";
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -103,6 +104,7 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
       {payments && data && (
         <>
           {(payments.packages.length > 0 || payments.coaching.length > 0) && <ClientPackageSnapshot clientId={clientId} onOpenSessions={onOpenSessions} money={false} />}
+          <ClientPlanCard clientId={clientId} />
           <BillingOverview
             p={payments}
             ledger={data.ledger ?? []}

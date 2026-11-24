@@ -36,6 +36,7 @@ import {
   User,
   Watch,
   SlidersHorizontal,
+  Layers,
 } from "lucide-react";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
@@ -654,6 +655,16 @@ function AccountPage() {
                 <DeleteAccountPanel />
               </div>
             </SettingsSection>
+
+            {/* ── Your plan: Free, a membership or coaching, one account (Manage plan, /portal/plan) ── */}
+            {!tierLoading && tier && (
+              <SettingsLink
+                to="/portal/plan"
+                icon={Layers}
+                title="Your plan"
+                summary={{ text: tier === "self_serve" ? "Free" : String(client?.coaching_package || "Coaching") }}
+              />
+            )}
 
             {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited) ── */}
             {aiCredits.data && !aiCredits.data.unlimited && (
