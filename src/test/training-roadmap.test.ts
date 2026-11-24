@@ -229,7 +229,8 @@ describe("roadmap wiring", () => {
 describe("Cleo's wording rules", () => {
   it("speaks in prescriptions, not week totals, and backup blocks are skipped", async () => {
     const { ROADMAP_SYSTEM_PROMPT } = await import("@/lib/training-roadmap");
-    expect(ROADMAP_SYSTEM_PROMPT).toMatch(/Never quote the week's totals or averages/);
+    expect(ROADMAP_SYSTEM_PROMPT).toMatch(/No numbers or percentages at all/);
+    expect(ROADMAP_SYSTEM_PROMPT).toMatch(/Never use: RPE, RIR, top set, back-off/);
     const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
     expect(server).toMatch(/isAtHomeBackupSessionBlock\(loaded\.block\)/);
   });
@@ -282,5 +283,84 @@ describe("the program card's heading and its one progress line", () => {
     expect(meetWords(1)).toBe("Meet tomorrow");
     expect(meetWords(13)).toBe("Meet in 13 days");
     expect(meetWords(21)).toBe("Meet in 3 weeks");
+  });
+});
+
+describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6, 7 (2, 3 RIR)… 90% top_set\")", () => {
+  it("a number, a coaching term, a code word or too many characters is a problem", async () => {
+    const { plainProblems } = await import("@/lib/training-roadmap");
+    expect(plainProblems("Lighter weights so you get the feel of the main lifts back.", 110)).toEqual([]);
+    expect(plainProblems("Top sets at RPE 6, 7 with 90% top_set on back-off sets", 200)).toEqual([
+      "it has a number in it",
+      'it uses "Top sets"',
+      "it has a code word in it",
+    ]);
+    expect(plainProblems("Accumulation 1", 24)).toContain('it uses "Accumulation"');
+    expect(plainProblems("SBD reintroduction", 24)).toContain('it uses "SBD"');
+    expect(plainProblems("Re-Specificity", 32)).toContain('it uses "Re-Specificity"');
+    expect(plainProblems("Specific week", 24)).toContain('it uses "Specific"');
+    expect(plainProblems("Stay within the coach's effort cap.", 110)).toContain('it uses "cap"');
+    expect(plainProblems("x".repeat(40), 24)).toContain("it's longer than 24 characters");
+    expect(plainProblems("", 24)).toEqual(["it's empty"]);
+  });
+  it("a week that fails is said from its own shape, never from the model's jargon", async () => {
+    const { plainWeekWords } = await import("@/lib/training-roadmap");
+    const w = (x: Partial<import("@/lib/training-roadmap").WeekShape>) => plainWeekWords({ week: 2, phase: null, start: null, volume: "same", heavier: false, ...x });
+    expect(w({ phase: "SBD reintroduction / baseline RPE calibration", start: "first" }).label).toBe("Ease in");
+    expect(w({ phase: "Pivot / low-fatigue technique week" }).label).toBe("Lighter week");
+    expect(w({ volume: "much_less" }).label).toBe("Lighter week");
+    expect(w({ phase: "Taper" }).label).toBe("Taper");
+    expect(w({ phase: "Realization: heavy singles" }).label).toBe("Peak");
+    expect(w({ start: "next" }).label).toBe("New phase");
+    expect(w({ heavier: true }).label).toBe("A bit heavier");
+    expect(w({ volume: "more" }).label).toBe("Build");
+    expect(w({}).label).toBe("Keep building");
+    for (const x of [w({}), w({ heavier: true }), w({ phase: "Taper" }), w({ start: "first" })]) {
+      const { plainProblems } = await import("@/lib/training-roadmap");
+      expect(plainProblems(x.label, 24)).toEqual([]);
+      expect(plainProblems(x.focus, 110)).toEqual([]);
+    }
+  });
+  it("plainReply keeps Cleo's plain words and swaps only what isn't", async () => {
+    const { plainReply, replyProblems, plainBlockLabel } = await import("@/lib/training-roadmap");
+    const reply = {
+      style: "strength" as const,
+      label: "Re-Specificity",
+      purpose: "Reintroduce competition squat while keeping the incline Smith press that progressed; conservative RPE top sets.",
+      weeks: [
+        { week: 1, label: "Ease in", focus: "Lighter weights so you get the feel of the main lifts back." },
+        { week: 2, label: "Accumulation 1", focus: "Top sets at RPE 6, 7 with 90% top_set on back-off sets." },
+      ],
+    };
+    expect(replyProblems(reply).length).toBeGreaterThan(0);
+    const shapes = [
+      { week: 1, phase: "SBD reintroduction", start: "first" as const, volume: null, heavier: false },
+      { week: 2, phase: "Accumulation 1", start: null, volume: "same" as const, heavier: true },
+    ];
+    const out = plainReply(reply, { shapes, blockWords: "Foundation / Re-Specificity Accumulation" });
+    expect(out.label).toBe("Build a base");
+    expect(out.purpose).toBe("");
+    expect(out.weeks[0]).toEqual(reply.weeks[0]);
+    expect(out.weeks[1]).toEqual({ week: 2, label: "A bit heavier", focus: "Same idea as last week, a little heavier." });
+    expect(replyProblems({ ...out, label: out.label, purpose: "Get back into the main lifts." })).toEqual([]);
+    expect(plainBlockLabel("Peak / Taper", true)).toBe("Taper");
+    expect(plainBlockLabel("Peak block", true)).toBe("Peak for the meet");
+    expect(plainBlockLabel("Hypertrophy 1", false)).toBe("Build muscle");
+  });
+  it("a range is said as a range, never as a list", () => {
+    const r = parseRoadmapReply('{"style":"strength","label":"Build","purpose":"Sets of 8–12.","weeks":[{"week":1,"label":"Build","focus":"Effort 6–7, then rest."}]}', [1]);
+    expect(r?.purpose).toBe("Sets of 8 to 12.");
+    expect(r?.weeks[0].focus).toBe("Effort 6 to 7, then rest.");
+  });
+  it("the writer asks again with what was wrong, then falls back to plain words; the version moved so live roadmaps are rewritten", async () => {
+    const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
+    expect(server).toContain("const problems = replyProblems(parsed);");
+    expect(server).toContain("Your last reply broke the plain-words rules.");
+    expect(server).toContain("return plainReply(best.reply, digest, meet);");
+    const { ROADMAP_PROMPT_VERSION, digestBlock: digest } = await import("@/lib/training-roadmap");
+    expect(ROADMAP_PROMPT_VERSION).toBe(5);
+    const d = digest(block(3));
+    expect(d.shapes.map((s) => s.week)).toEqual([1, 2, 3]);
+    expect(d.shapes[0].start).toBe("first");
   });
 });

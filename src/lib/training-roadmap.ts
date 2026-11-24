@@ -230,7 +230,7 @@ export function hashText(text: string): string {
 const MAX_DIGEST = 28_000;
 
 /** Bump when the prompt changes, so every block is rewritten in the new style. */
-export const ROADMAP_PROMPT_VERSION = 3;
+export const ROADMAP_PROMPT_VERSION = 5;
 
 /**
  * The block as Cleo reads it, plus a hash of only what the notes depend on
@@ -244,7 +244,7 @@ export function digestBlock(input: {
   days: DigestDay[];
   rows: DigestRow[];
   context?: DigestContext;
-}): { text: string; hash: string; hasTraining: boolean; weekIndexes: number[] } {
+}): { text: string; hash: string; hasTraining: boolean; weekIndexes: number[]; shapes: WeekShape[]; blockWords: string } {
   const { block, context } = input;
   const weeks = input.weeks.slice().sort((a, b) => a.week_index - b.week_index);
   const rows = input.rows.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
@@ -290,6 +290,7 @@ export function digestBlock(input: {
   const hashParts: string[] = [`v${ROADMAP_PROMPT_VERSION}`, block.goal ?? "", block.training_focus ?? "", meetLine.replace(/ on \d{4}-\d{2}-\d{2}/, "")];
   let hasTraining = false;
   let prev: WeekStats | null = null;
+  const shapes: WeekShape[] = [];
   for (const w of weeks) {
     const days = (daysByWeek.get(w.id) ?? []).slice().sort((a, b) => a.day_index - b.day_index);
     const wRows = days.flatMap((d) => rowsByDay.get(d.id) ?? []);
@@ -297,6 +298,7 @@ export function digestBlock(input: {
     const s = weekStats(days, wRows);
     const prevStats = prev;
     prev = s;
+    shapes.push(weekShape(w, s, prevStats, (context?.position?.index ?? 1) > 1));
     const dates = weekDates(block, w);
     const lines = [`Week ${w.week_index}${dates ? ` (${dates.start} to ${dates.end})` : ""}${w.phase ? ` [coach's phase: ${w.phase}]` : ""}: ${statsLine(s, prevStats)}`];
     for (const d of days) {
@@ -322,6 +324,8 @@ export function digestBlock(input: {
     hash: hashText(hashParts.join("\n")),
     hasTraining,
     weekIndexes: weeks.map((w) => w.week_index),
+    shapes,
+    blockWords: [block.training_focus, block.goal, block.name].filter(Boolean).join(" / "),
   };
 }
 
@@ -333,7 +337,7 @@ export const ROADMAP_STYLES = ["powerlifting", "meet_prep", "strength", "hypertr
 const short = (max: number) =>
   z
     .string()
-    .transform((s) => s.replace(/\s+/g, " ").replace(/\s*[—–]\s*/g, ", ").trim())
+    .transform((s) => s.replace(/\s+/g, " ").replace(/(\d)\s*[—–]\s*(?=\d)/g, "$1 to ").replace(/\s*[—–]\s*/g, ", ").trim())
     .transform((s) => (s.length > max ? `${s.slice(0, max - 1).replace(/[\s,.;:]+\S*$/, "")}…` : s));
 
 const replySchema = z.object({
@@ -384,21 +388,128 @@ export function parseRoadmapReply(text: string, weekIndexes: number[]): RoadmapR
   return { style, label: r.label, purpose: r.purpose, weeks };
 }
 
-export const ROADMAP_SYSTEM_PROMPT = `You are Cleo, the assistant to the strength coaches at JF Effect. A coach has already written this training block. You write the short explanations the athlete reads on their phone: what this block is for, and what each week focuses on.
+export const ROADMAP_SYSTEM_PROMPT = `You are Cleo, the assistant to the strength coaches at JF Effect. A coach has already written this training block. You write the few words the athlete reads about it on their phone: what this part of their program is for, and what each week is like. Most athletes aren't coaches: anyone who lifts should get it in one read.
 
 Rules:
-- Describe only what the program data shows. Never invent exercises, numbers, dates, goals, injuries or meet details. If something isn't in the data, leave it out.
+- Describe only what the program data shows. Never invent exercises, numbers, dates, goals, injuries or meet details.
 - Never prescribe, add or change training. You explain the coach's plan; you don't edit it.
-- Read the structure like an experienced strength coach: how sets, reps, RPE/RIR and percentages move from week to week (volume building, intensity rising, a deload, a heavy single/test week, a taper before a meet), how much is competition squat/bench/deadlift versus accessories, and rep ranges.
-- If the coach gave a goal, focus or week phase, follow it and use their wording.
-- Style: plain, specific, confident. Second person ("you"). No hype, no emojis, no em dashes, no filler like "this is a great week".
-- Numbers you mention must appear in the data, and only as prescriptions the athlete will see on their workouts: "top sets at RPE 8", "1 to 2 RIR", "sets of 8 to 12", "around 80%". Never quote the week's totals or averages (total working sets, exercise counts, "average RPE"); the stats are for your reading only. Say how the week changes in plain words instead: "same volume as last week", "about a third fewer sets", "sets taken to 0 to 1 RIR".
+- Read the structure like an experienced strength coach (how sets, reps, effort and loads move from week to week: building up, getting heavier, a lighter week to recover, a test or heavy singles, a taper before a meet), then say it in everyday words.
+- Plain words only. No numbers or percentages at all (the app shows the dates, weeks and the workouts themselves). Never use: RPE, RIR, top set, back-off, volume, intensity, intensification, accumulation, specific, specificity, SBD, deload, pivot, realization, hypertrophy, periodization, fatigue, stimulus, calibration, consolidation, benchmark, cap. Say it the way you'd tell a friend at the gym: lighter, heavier, more sets, fewer sets, easier, harder, the main lifts (or squat, bench and deadlift), build muscle, get stronger, recover, the meet.
+- If the coach gave a goal, focus or week phase, keep its meaning and say it in plain words: "Accumulation 2" is "Build", "Deload" is "Lighter week", "Intensification" is "Heavier", "Realization" is "Peak".
+- Second person ("you"). Short, calm and confident. No hype, no emojis, no dashes, no filler.
 
 Pick "style" from: powerlifting, meet_prep, strength, hypertrophy, bodybuilding, general_fitness. Use meet_prep only when a competition date is given.
 
 Reply with JSON only, no markdown:
-{"style": "...", "label": "1 to 3 word phase name, e.g. Hypertrophy, Strength Base, Intensification, Peak, Taper, Deload", "purpose": "1 to 2 sentences, at most 240 characters: what this block builds and why it sits here in the program", "weeks": [{"week": 1, "label": "2 to 4 words, e.g. Intro week, Volume build, Heaviest week, Deload, Meet week", "focus": "1 sentence, at most 160 characters: what this week asks of you and how it differs from the week before"}]}
+{"style": "...", "label": "2 to 4 plain words for this part of the program, e.g. Back to the main lifts, Build a base, Build muscle, Get stronger, Peak for the meet, Taper", "purpose": "1 short sentence, at most 110 characters: what this part does for you", "weeks": [{"week": 1, "label": "1 to 3 plain words, e.g. Ease in, Build, A bit heavier, Hardest week, Lighter week, Test week, Meet week", "focus": "1 short sentence, at most 90 characters: what this week is like, compared with the week before"}]}
 Include every week listed, using its week number.`;
+
+// ---------------------------------------------------------------------------
+// Plain words: what the athlete reads is checked in code, never trusted as written
+
+/** A week's shape, read from its prescriptions: what the plain fallback says when Cleo's words don't pass. */
+export type WeekShape = {
+  week: number;
+  phase: string | null;
+  /** The block's first week: "first" opens the program, "next" opens a later block. */
+  start: "first" | "next" | null;
+  volume: "same" | "more" | "less" | "much_less" | null;
+  heavier: boolean;
+};
+
+function weekShape(w: DigestWeek, s: WeekStats, prev: WeekStats | null, laterBlock: boolean): WeekShape {
+  let volume: WeekShape["volume"] = null;
+  if (prev && prev.sets > 0) {
+    const change = (s.sets - prev.sets) / prev.sets;
+    volume = change <= -0.3 ? "much_less" : change <= -0.08 ? "less" : change >= 0.08 ? "more" : "same";
+  }
+  const up = (a: number | null, b: number | null, by: number) => a != null && b != null && a >= b + by;
+  const heavier = !!prev && (up(s.rpeMax, prev.rpeMax, 0.5) || up(s.pctMax, prev.pctMax, 2) || up(prev.rirMin, s.rirMin, 1));
+  return { week: w.week_index, phase: clean(w.phase), start: prev ? null : laterBlock ? "next" : "first", volume, heavier };
+}
+
+/** Words an athlete shouldn't have to learn to read their own plan. */
+const JARGON =
+  /\b(?:rpe|rir|e?1rm|amrap|top[\s_-]?sets?|back[\s_-]?offs?|volume|intensit(?:y|ies)|intensif\w*|accumulat\w*|(?:re-?)?specific(?:ity)?|caps?|sbd|deloads?|pivot|reali[sz]ation|hypertrophy|periodi[sz]\w*|fatigue|stimulus|calibrat\w*|consolidat\w*|benchmark\w*|mesocycle|microcycle|tempo)\b/i;
+
+/** What's wrong with one piece of athlete text, in words Cleo can act on. Empty = fine. */
+export function plainProblems(text: string | null | undefined, max: number): string[] {
+  const t = (text ?? "").trim();
+  if (!t) return ["it's empty"];
+  const out: string[] = [];
+  if (/\d/.test(t)) out.push("it has a number in it");
+  const jargon = t.match(JARGON);
+  if (jargon) out.push(`it uses "${jargon[0]}"`);
+  if (/_/.test(t)) out.push("it has a code word in it");
+  if (t.length > max) out.push(`it's longer than ${max} characters`);
+  return out;
+}
+
+export const PLAIN_MAX = { label: 32, purpose: 130, weekLabel: 24, focus: 110 } as const;
+
+/** Every problem in a reply, named by where it is ("week 2 focus: it uses \"RPE\""). */
+export function replyProblems(r: RoadmapReply): string[] {
+  const out: string[] = [];
+  const add = (where: string, ps: string[]) => ps.forEach((p) => out.push(`${where}: ${p}`));
+  add("label", plainProblems(r.label, PLAIN_MAX.label));
+  add("purpose", plainProblems(r.purpose, PLAIN_MAX.purpose));
+  for (const w of r.weeks) {
+    add(`week ${w.week} label`, plainProblems(w.label, PLAIN_MAX.weekLabel));
+    add(`week ${w.week} focus`, plainProblems(w.focus, PLAIN_MAX.focus));
+  }
+  return out;
+}
+
+/** What a week is, in plain words, from its phase and how it changed: never a number or a coaching term. */
+export function plainWeekWords(shape: WeekShape): { label: string; focus: string } {
+  const p = (shape.phase ?? "").toLowerCase();
+  if (/(?:meet|competition)\s*(?:week|day)/.test(p)) return { label: "Meet week", focus: "Stay sharp and rested. It's meet week." };
+  if (/taper/.test(p)) return { label: "Taper", focus: "Less work so you feel fresh for the meet." };
+  if (/deload|pivot|low[\s-]?fatigue|recover|unload|lighter/.test(p) || shape.volume === "much_less")
+    return { label: "Lighter week", focus: "Less work this week so you recover and come back stronger." };
+  if (/peak|reali[sz]|opener|single/.test(p)) return { label: "Peak", focus: "Heavier lifts and fewer reps to get you ready." };
+  if (/\btest|benchmark|\bmax\b/.test(p)) return { label: "Test week", focus: "A chance to see how strong you are right now." };
+  if (shape.start === "first") return { label: "Ease in", focus: "Learn the workouts and find good weights to start with." };
+  if (shape.start === "next") return { label: "New phase", focus: "A new part of your program starts this week." };
+  if (shape.heavier) return { label: "A bit heavier", focus: "Same idea as last week, a little heavier." };
+  if (shape.volume === "more") return { label: "Build", focus: "A few more sets than last week." };
+  if (shape.volume === "less") return { label: "A bit less", focus: "Slightly less work than last week." };
+  return { label: "Keep building", focus: "Same plan as last week. Keep it smooth and steady." };
+}
+
+/** What a block is, in plain words, from the coach's name and focus for it; null when nothing reads clearly. */
+export function plainBlockLabel(words: string, meet: boolean): string | null {
+  const t = words.toLowerCase();
+  if (/taper/.test(t)) return "Taper";
+  if (/peak|reali[sz]/.test(t)) return meet ? "Peak for the meet" : "Peak";
+  if (/deload|recover/.test(t)) return "Lighter phase";
+  if (/hypertroph|muscle|bodybuild/.test(t)) return "Build muscle";
+  if (/intensif|strength|heavy/.test(t)) return "Get stronger";
+  if (/accumul|volume|base|foundation|build/.test(t)) return "Build a base";
+  if (/re-?intro|specific|technique|skill/.test(t)) return "Practice the main lifts";
+  return null;
+}
+
+/**
+ * Cleo's reply with anything that doesn't read plainly swapped for words that do: a week from its
+ * own shape, the block's name from the coach's words (or nothing), its purpose left out. What the
+ * athlete reads is always plain, whatever the model wrote.
+ */
+export function plainReply(r: RoadmapReply, digest: { shapes: WeekShape[]; blockWords: string }, meet = false): RoadmapReply {
+  const label = plainProblems(r.label, PLAIN_MAX.label).length ? plainBlockLabel(digest.blockWords, meet) ?? "" : r.label;
+  const purpose = plainProblems(r.purpose, PLAIN_MAX.purpose).length ? "" : r.purpose;
+  const byWeek = new Map(r.weeks.map((w) => [w.week, w]));
+  const weeks = digest.shapes.map((shape) => {
+    const w = byWeek.get(shape.week);
+    const fallback = plainWeekWords(shape);
+    return {
+      week: shape.week,
+      label: w && !plainProblems(w.label, PLAIN_MAX.weekLabel).length ? w.label : fallback.label,
+      focus: w && !plainProblems(w.focus, PLAIN_MAX.focus).length ? w.focus : fallback.focus,
+    };
+  });
+  return { style: r.style, label, purpose, weeks };
+}
 
 // ---------------------------------------------------------------------------
 // The athlete's program roadmap (client side)

@@ -18,8 +18,9 @@ import { toast } from "sonner";
 import { formatDualLoad } from "@/lib/dual-load";
 import { resolveMovementFamily } from "@/lib/exercise-family";
 import {
+  cardRest,
   derivePurposeLabels,
-  effectiveRestSeconds,
+  exerciseMetaOf,
   resolveCategory,
   purposeLabelText,
   type ExerciseMeta,
@@ -118,14 +119,11 @@ import { SetupLine, SetupSheet, type SetupSheetMode } from "@/components/equipme
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import {
   LIVE_WINDOW_MS,
-  cardEquipment,
+  cardSetupView,
   comparesAcrossEquipment,
-  currentSetup,
   equipmentName,
   offersSetup,
   settingsFromNote,
-  setupFor,
-  setupSummary,
 } from "@/lib/equipment/equipment";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
@@ -3558,15 +3556,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const [noteForSetup, setNoteForSetup] = useState<string | null>(null);
   const cardSetup = useMemo(() => {
     if (!equipmentOn) return null;
-    const current = currentSetup(equipmentData, exerciseId);
-    const shown = cardEquipment(existingResults as any[], current);
-    const eq = shown.equipmentId ? equipmentData.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
-    const setup = shown.source === "current" ? current : shown.equipmentId ? setupFor(equipmentData, exerciseId, shown.equipmentId) : null;
+    // cardSetupView (equipment.ts): the same line the coach's workout quick view shows
+    const { equipmentId: shownId, equipment: eq, summary } = cardSetupView(equipmentData, exerciseId, existingResults as any[]);
     const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
     return {
-      equipmentId: shown.equipmentId,
+      equipmentId: shownId,
       equipment: eq,
-      summary: setupSummary(setup, eq),
+      summary,
       mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
       // a PR on a machine says which (its weight means nothing on another one)
       prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
@@ -3952,26 +3948,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     const label = `${formatLoadDisplay(Number(Number(from.actual_load).toFixed(2)), loadType, values.unit)}${values.reps ? ` × ${values.reps}` : ""}`;
     return { fromSet: frontier - 1, values, label, overwrites };
   })();
-  const exMeta: ExerciseMeta | null = exercise
-    ? {
-        exercise_category: exercise.exercise_category ?? null,
-        is_competition_lift: exercise.is_competition_lift ?? null,
-        competition_lift_type: exercise.competition_lift_type ?? null,
-        movement_family: exercise.movement_family ?? null,
-        name: exercise.name ?? null,
-      }
-    : null;
+  const exMeta: ExerciseMeta | null = exerciseMetaOf(exercise);
   const family = resolveMovementFamily(exMeta, row.movement_family);
   const category = resolveCategory(exMeta);
-  const effectiveRest = effectiveRestSeconds(
-    { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
-    exMeta,
-  );
+  // The rest above the sets: the program's, else the usual for this kind of exercise
+  // (cardRest, exercise-metadata.ts, which the coach's workout quick view reads too).
+  const { seconds: effectiveRest, usual: restIsUsual } = cardRest(row);
   // Always show the resolved rest value (programmed or category default), never
   // a vague range. "Auto · 4 min" makes it obvious when the value comes from
   // the category default rather than an explicit programmed rest.
   const fmtRest = (s: number) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} sec`);
-  const restIsExplicit = row.rest_seconds_override != null || row.rest_seconds != null;
+  const restIsExplicit = !restIsUsual;
   const [notesOpen, setNotesOpen] = useState(false);
   const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);

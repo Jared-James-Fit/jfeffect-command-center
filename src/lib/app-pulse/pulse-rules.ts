@@ -9,8 +9,10 @@
  *   the platform is how they opened JF Effect (the iPhone or Android app, the home-screen app, a
  *   browser tab).
  * - A place comes only from the host's IP geolocation, on the server, kept to a city and a point
- *   rounded to 0.1° (about 11 km). A browser sending Global Privacy Control or Do Not Track gets no
- *   place at all, and an anonymous public-site visitor who sends one isn't recorded.
+ *   rounded to 0.1° (about 11 km); this host gives only the country, so the point is the device's
+ *   time zone's main city when that zone is in the same country (tz-places.ts). A browser sending
+ *   Global Privacy Control or Do Not Track gets no place at all, and an anonymous public-site
+ *   visitor who sends one isn't recorded.
  */
 
 export type Surface = "site" | "app" | "admin";
@@ -180,18 +182,25 @@ export function coarsePlace(raw: {
       return s.slice(0, max);
     }
   };
+  // a missing value is missing: Number(null) and Number("") are 0, which put every visit the host
+  // gave no coordinates for at 0°, 0° in the Atlantic (Nov 23 2026)
   const num = (v: unknown, lim: number) => {
+    if (v == null || (typeof v === "string" && !v.trim())) return null;
     const n = typeof v === "number" ? v : Number(v);
     if (!Number.isFinite(n) || Math.abs(n) > lim) return null;
     return Math.round(n * 10) / 10;
   };
   const country = text(raw.country, 2)?.toUpperCase() ?? null;
+  let lat = num(raw.latitude, 90);
+  let lng = num(raw.longitude, 180);
+  // a point needs both halves, and 0°, 0° is the ocean, never a visitor
+  if (lat == null || lng == null || (lat === 0 && lng === 0)) lat = lng = null;
   return {
     country: country && /^[A-Z]{2}$/.test(country) ? country : null,
     region: text(raw.region, 80),
     city: text(raw.city, 80),
-    lat: num(raw.latitude, 90),
-    lng: num(raw.longitude, 180),
+    lat,
+    lng,
   };
 }
 

@@ -24,6 +24,16 @@ import {
 } from "./pulse-rules";
 
 const VISIT_KEY = "jf_visit_v1";
+
+/** The device's time zone (Intl), which the server reads only to place a visit within its country. */
+function deviceTimeZone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof tz === "string" && tz.length <= 60 ? tz : null;
+  } catch {
+    return null;
+  }
+}
 const ENDPOINT = "/api/public/app-pulse";
 
 type View = { path: string; feature: string; at: string };
@@ -170,6 +180,7 @@ async function send(final: boolean): Promise<void> {
       utm_source: src.utm_source ?? null,
       utm_medium: src.utm_medium ?? null,
       utm_campaign: src.utm_campaign ?? null,
+      tz: deviceTimeZone(),
     };
   }
   sentFirst = true;

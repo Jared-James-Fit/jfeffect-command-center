@@ -19,6 +19,7 @@ import { statusOfRow, workoutName, type CoachStatus } from "@/lib/coach-schedule
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import { loggedSetHasInput, pickCompletion, setsForSession, type SrcCompletion } from "@/lib/workouts/training-report-data";
 import { exerciseName, loggedLines, prescriptionLine, roleOf, type LoggedSet, type PrescriptionRow } from "@/lib/workouts/training-words";
+import { cardRest } from "@/lib/exercise-metadata";
 import { planCheck, type PlanCheck } from "@/lib/workouts/plan-vs-actual";
 
 /* ───────────────────────────── Dates ───────────────────────────── */
@@ -268,8 +269,14 @@ export type PeekRow = PrescriptionRow & {
   rest_seconds_override?: number | null;
   tracking_type?: string | null;
   cardio_target_id?: string | null;
+  exercise_id?: string | null;
   exercises?: {
+    id?: string | null;
     name?: string | null;
+    exercise_category?: string | null;
+    is_competition_lift?: boolean | null;
+    competition_lift_type?: string | null;
+    movement_family?: string | null;
     primary_muscle_group?: string | null;
     muscle_group?: string | null;
     equipment?: string | null;
@@ -286,6 +293,7 @@ export type PeekResult = LoggedSet & {
   scheduled_workout_id?: string | null;
   completed_at?: string | null;
   is_working_set?: boolean | null;
+  equipment_id?: string | null;
 };
 
 export type PeekNote = { id?: string; row_id?: string | null; exercise_name?: string | null; content: string; updated_at?: string | null };
@@ -313,10 +321,16 @@ export type PeekDaySource = {
 
 export type PeekExercise = {
   id: string;
+  /** The library exercise (its setup is saved per exercise). */
+  exerciseId: string | null;
   name: string;
   role: string | null;
-  /** The prescription as the coach wrote it ("4 × 5 @ 75% TM · RPE 7 · rest 3 min"). */
+  /** The prescription as the coach wrote it ("4 × 5 @ 75% TM · RPE 7"); its rest is `rest`. */
   plan: string;
+  /** The rest the athlete's card shows: the program's, else the usual for the kind of exercise (cardRest). Never on the day's cardio. */
+  rest: { seconds: number; usual: boolean } | null;
+  /** This session's sets of it (what its equipment line reads). */
+  sets: PeekResult[];
   /** What was logged, identical sets in a row said once ("Sets 1–3: 140 kg × 5 · RPE 8"). */
   logged: string[];
   setsPlanned: number | null;
@@ -405,13 +419,18 @@ export function buildPeekDay(src: PeekDaySource, opts: { instanceId: string | nu
     const cardio = !!r.cardio_target_id;
     if (planned && !cardio) setsPlanned += planned;
     if (!cardio) setsLogged += Math.min(done.length, planned ?? done.length);
-    const row: PrescriptionRow = { ...r, rest_seconds: r.rest_seconds_override ?? r.rest_seconds ?? null };
+    // the rest is its own line (Rest), so the plan doesn't say it twice
+    const row: PrescriptionRow = { ...r, rest_seconds: null };
     const ex = r.exercises ?? null;
+    const rest = cardRest(r as any);
     return {
       id: r.id,
+      exerciseId: ex?.id ?? r.exercise_id ?? null,
       name: exerciseName(row),
       role: roleOf(row),
       plan: prescriptionLine(row),
+      rest: !cardio && rest.seconds && rest.seconds > 0 ? { seconds: rest.seconds, usual: rest.usual } : null,
+      sets,
       logged: loggedLines(done),
       setsPlanned: planned,
       setsLogged: done.length,

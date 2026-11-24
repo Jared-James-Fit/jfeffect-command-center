@@ -38,6 +38,7 @@ import { CATEGORIES, MODES, STATUS_WORDS, modeAllowed, riskReasonWords, type Aut
 import { needsEyes, queueOrder } from "@/lib/recovery-automation/categories";
 import { regionOf } from "@/lib/pain/regions";
 import { getAiPausedFn } from "@/lib/ai/ai-usage.functions";
+import { useAuth } from "@/lib/auth";
 
 export const RECOVERY_QUEUE_KEY = ["recovery-queue"] as const;
 
@@ -128,6 +129,11 @@ export function useAiPaused(enabled = true) {
   return useQuery({ queryKey: ["ai-paused"], queryFn: () => get(), enabled, staleTime: 60_000, refetchInterval: 5 * 60_000, retry: false });
 }
 
+/**
+ * Why drafting is paused, for the admin only: what's behind the app's drafting
+ * is the admin's to see (AGENTS.md, "AI is the engine"); a coach is only told
+ * that drafting is paused and that nothing goes out meanwhile.
+ */
 const PAUSED_WORDS: Record<string, string> = {
   credits: "OpenAI credits ran out",
   auth: "the OpenAI key was refused",
@@ -172,7 +178,7 @@ export function RecoveryInboxRow() {
           </span>
         }
         name="Coaching queue"
-        preview={data.settings.paused ? `Paused · ${preview}` : paused?.paused ? `AI paused · ${preview}` : preview}
+        preview={data.settings.paused ? `Paused · ${preview}` : paused?.paused ? `Drafts paused · ${preview}` : preview}
         at={lead?.updated_at ?? null}
         unread={todo.length > 0}
         unreadLabel={`${todo.length} waiting`}
@@ -221,6 +227,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
   const rules = queue?.enabled ? queue.rules : [];
   const list = tab === "todo" ? todo : tab === "coming" ? coming : done;
   const ai = useAiPaused(open && !!queue?.enabled).data;
+  const isAdmin = useAuth().accountRole === "admin";
   const parked = coming.filter(waitingForAi).length;
 
   return (
@@ -258,7 +265,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
               <div className="flex items-start gap-2 rounded-xl border border-warning/50 bg-warning/5 p-3 text-[13px]" data-recovery-ai-paused>
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
                 <span>
-                  <span className="font-semibold">AI drafts are paused: {PAUSED_WORDS[ai.reason] ?? "OpenAI isn't answering"}.</span>{" "}
+                  <span className="font-semibold">Drafts are paused{isAdmin ? `: ${PAUSED_WORDS[ai.reason] ?? "OpenAI isn't answering"}` : ""}.</span>{" "}
                   {parked ? `${parked} ${parked === 1 ? "reply is" : "replies are"} waiting and ` : "Anything new "}
                   will be written once it's back. Nothing is sent in the meantime, and nothing is written from a template.
                 </span>
@@ -318,6 +325,7 @@ function ItemCard({
   onOpenProgress: () => void;
 }) {
   const qc = useQueryClient();
+  const isAdmin = useAuth().accountRole === "admin";
   const approveFn = useServerFn(approveRecoveryItemFn);
   const dismissFn = useServerFn(dismissRecoveryItemFn);
   const retryFn = useServerFn(retryRecoveryItemFn);
@@ -390,7 +398,7 @@ function ItemCard({
           <p className="text-[12px] text-muted-foreground">{itemTitle(item)}</p>
         </div>
         <span className={cn("shrink-0 text-right text-[12px] font-semibold", item.status === "failed" ? "text-destructive" : waiting ? "text-warning" : "text-muted-foreground")}>
-          {item.status === "sent" ? `${autoSent ? "Sent automatically" : "Sent"} ${whenWords(item.sent_at)}` : waitingForAi(item) ? "Waiting for AI" : COMING.has(item.status) ? `${STATUS_WORDS[item.status]} · ${whenWords(item.due_at)}` : STATUS_WORDS[item.status] ?? item.status}
+          {item.status === "sent" ? `${autoSent ? "Sent automatically" : "Sent"} ${whenWords(item.sent_at)}` : waitingForAi(item) ? "Waiting to be written" : COMING.has(item.status) ? `${STATUS_WORDS[item.status]} · ${whenWords(item.due_at)}` : STATUS_WORDS[item.status] ?? item.status}
         </span>
       </div>
 
@@ -416,7 +424,7 @@ function ItemCard({
       )}
       {item.why && <p className="text-[12px] text-muted-foreground">{item.why}</p>}
       {item.status === "failed" && item.error && <p className="text-[12px] text-destructive">Couldn't write it: {item.error}</p>}
-      {waitingForAi(item) && <p className="text-[12px] text-muted-foreground" data-recovery-waiting-ai>{item.error}. It's written as soon as AI answers again, from their records as they are then.</p>}
+      {waitingForAi(item) && <p className="text-[12px] text-muted-foreground" data-recovery-waiting-ai>{isAdmin ? `${item.error}. ` : ""}It's written as soon as drafting is back, from their records as they are then.</p>}
 
       {waiting ? (
         <>

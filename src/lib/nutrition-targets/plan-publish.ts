@@ -32,7 +32,9 @@ export async function loadCardioContext(clientId: string, client: any = db): Pro
   const [rows, prefs] = await Promise.all([
     db
       .from("cardio_targets")
-      .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at")
+      // every column: a published-from-the-Cardio-tab session (plan_version_id) is left alone, and an
+      // older database without that column still reads
+      .select("*")
       .eq("client_id", clientId),
     db.from("clients").select("committed_training_days, preferred_training_days, preferred_high_days").eq("id", clientId).maybeSingle(),
   ]);

@@ -117,7 +117,13 @@ type CardioRow = {
   updated_at?: string | null;
   /** who set it: nutrition / coach / program (proposed with a generated program) / program_rows (read from the program) */
   source?: string | null;
+  /** Published from the Cardio tab's builder (cardio_plan_versions): the nutrition plan leaves it alone. */
+  plan_version_id?: string | null;
+  end_date?: string | null;
 };
+
+/** A session published from the Cardio tab is the cardio plan's own: a nutrition publish never rewrites it (Nov 23 2026). */
+const builderOwned = (r: CardioRow | undefined, today: string) => !!r?.plan_version_id && (!r.end_date || r.end_date >= today);
 
 const live = (rows: CardioRow[]) => rows.filter((r) => String(r.status ?? "Active") !== "Archived");
 
@@ -206,6 +212,8 @@ export function planCardioSync(input: {
       show_calories_to_client: !!kcal,
     };
     const row = draft.rowId ? byId.get(draft.rowId) : undefined;
+    // cardio is its own plan now: a day the Cardio tab published for is never changed from here
+    if (builderOwned(row, input.today) || input.rows.some((r) => builderOwned(r, input.today) && dayKey(r.day_type) === dayKey(label) && String(r.status ?? "Active") !== "Archived")) continue;
     if (row) {
       const patch: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(wanted)) {
