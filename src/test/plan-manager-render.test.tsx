@@ -44,6 +44,8 @@ function view(over: Partial<PlanView> = {}): PlanView {
       subscriptionId: "sub_1",
       nextBillingDate: "2026-12-09",
       specialPrice: false,
+      grandfathered: false,
+      cancelable: true,
       features: ["A program written for you", "Message me in the app", "Weekly check-ins", "Meet prep"],
       slug: "complete",
       includedCalls: 0,
@@ -60,6 +62,10 @@ function view(over: Partial<PlanView> = {}): PlanView {
     preview: false,
     endedInStripe: false,
     tier: "coaching",
+    access: { state: "client" },
+    offer: null,
+    agreementVersion: "3.0",
+    approval: null,
     ...over,
   };
 }
@@ -123,5 +129,39 @@ describe("Manage plan renders every state", () => {
     expect(preview).toContain("disabled");
     expect(render(view({ current: { ...view().current, status: "ending" } }), "admin")).not.toContain("Keep my plan");
     expect(render(view(), "admin")).toContain("Change their plan");
+  });
+
+  it("an offer from the coach shows its terms and the exact words they agree to", () => {
+    const html = render(
+      view({
+        offer: {
+          id: "o1",
+          fromName: "Online Coaching — Legacy $65",
+          fromPriceCents: 6500,
+          toName: "Complete Online Coaching",
+          toPriceCents: 13000,
+          timing: "period_end",
+          expiresAt: "2026-12-08T00:00:00Z",
+          note: "Moving everyone onto Complete",
+          hasSubscription: true,
+          nextBillingDate: "2026-12-09",
+          grandfathered: true,
+          lines: ["Complete Online Coaching: $130 a month, plus tax.", "Your $65 price is one you keep only on Online Coaching — Legacy $65. Accepting ends it, and it can't be brought back later."],
+          consentText: "I accept Complete Online Coaching at $130 a month plus tax, switching on Dec 9, 2026. My $65 price on Online Coaching — Legacy $65 ends.",
+        },
+      }),
+    );
+    expect(html).toContain("data-plan-offer");
+    expect(html).toContain("An offer from your coach");
+    expect(html).toContain("can&#x27;t be brought back later");
+    expect(html).toContain("My $65 price on Online Coaching — Legacy $65 ends.");
+    expect(html).toContain("No thanks");
+  });
+
+  it("a member waiting on the coach is told where it stands; an approved one is told to pick", () => {
+    expect(render(view({ tier: "self_serve", access: { state: "applied", at: "2026-11-20T00:00:00Z" } }))).toContain("Your application is with your coach");
+    expect(render(view({ tier: "self_serve", access: { state: "approved", packageId: null, packageName: "Complete Online Coaching", expiresAt: "2026-12-20T00:00:00Z" } }))).toContain(
+      "Your coach approved you for Complete Online Coaching",
+    );
   });
 });

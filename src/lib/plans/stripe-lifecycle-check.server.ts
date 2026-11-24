@@ -12,6 +12,13 @@
  *      after the period ends is at the new price.
  *   4. A cancel at period end ends the subscription when the period ends;
  *      keeping it (cancel_at_period_end=false) undoes that.
+ *   5. A coach's offer accepted on a grandfathered price ($65 → $130 at the
+ *      period's end) charges nothing today and renews at the new price.
+ *   6. A renewal on a card that fails leaves the subscription past due with
+ *      the invoice open; a new card and paying the invoice make it active.
+ *   7. The app's own billing page (Customer Portal) lets a client update their
+ *      card and details and see invoices, and never change or cancel a plan;
+ *      a portal session opens with it.
  *
  * Never runs with a live key. Creates its own test products and prices (CAD,
  * monthly, looked up by key so a second run reuses them) and deletes its test
@@ -56,7 +63,7 @@ async function customerWithSub(apiKey: string, clock: string, priceId: string, c
   return { cus: cus.id as string, sub: sub.id as string };
 }
 
-export async function runStripeLifecycleCheck(): Promise<{ ok: boolean; steps: Step[] }> {
+export async function runStripeLifecycleCheck(db?: any, part: "core" | "more" | "all" = "all"): Promise<{ ok: boolean; steps: Step[] }> {
   const apiKey = getStripeKeyForMode("test");
   if (!apiKey) return { ok: false, steps: [{ step: "setup", ok: false, detail: "No Stripe TEST key (STRIPE_SECRET_KEY_TEST). This check never runs against live." }] };
   const steps: Step[] = [];
@@ -64,6 +71,7 @@ export async function runStripeLifecycleCheck(): Promise<{ ok: boolean; steps: S
   const clocks: string[] = [];
   try {
     const [comp, plus, nut] = await Promise.all([price(apiKey, 13000), price(apiKey, 24900), price(apiKey, 9900)]);
+    if (part !== "more") {
     const start = Math.floor(Date.now() / 1000);
     const clock = await stripeFetch("/test_helpers/test_clocks", { method: "POST", apiKey, body: formEncode({ frozen_time: start, name: "JF plan check" }) });
     clocks.push(clock.id);
@@ -123,6 +131,50 @@ export async function runStripeLifecycleCheck(): Promise<{ ok: boolean; steps: S
     add("the renewal is at the new price", rInv?.subtotal === 9900 && subState(renewed).priceId === nut, `renewal subtotal ${rInv?.subtotal}`);
     const gone = await stripeFetch(`/subscriptions/${bad.sub}`, { apiKey });
     add("a cancel ends at the period's end", gone.status === "canceled", `status ${gone.status}`);
+    }
+    if (part === "core") return { ok: steps.every((x) => x.ok), steps };
+
+    // 5 + 6 on a second clock (a test clock holds three customers)
+    const legacyPrice = await price(apiKey, 6500);
+    const start2 = Math.floor(Date.now() / 1000);
+    const clock2 = await stripeFetch("/test_helpers/test_clocks", { method: "POST", apiKey, body: formEncode({ frozen_time: start2, name: "JF plan check 2" }) });
+    clocks.push(clock2.id);
+    const legacy = await customerWithSub(apiKey, clock2.id, legacyPrice);
+    const failing = await customerWithSub(apiKey, clock2.id, comp);
+    await advance(apiKey, clock2.id, start2 + 10 * DAY);
+    const ls = subState(await stripeFetch(`/subscriptions/${legacy.sub}`, { apiKey }));
+    const offered = await stripeFetch(`/subscriptions/${legacy.sub}`, { method: "POST", apiKey, body: formEncode({ ...swapLaterParams(ls, comp), "expand[0]": "latest_invoice" }) });
+    const firstInv = await stripeFetch(`/invoices?subscription=${legacy.sub}&limit=5`, { apiKey });
+    add("an accepted offer charges nothing today", (firstInv?.data ?? []).length === 1 && subState(offered).priceId === comp, `${(firstInv?.data ?? []).length} invoice(s) so far`);
+
+    const failPm = await stripeFetch(`/payment_methods/pm_card_chargeCustomerFail/attach`, { method: "POST", apiKey, body: formEncode({ customer: failing.cus }) });
+    await stripeFetch(`/customers/${failing.cus}`, { method: "POST", apiKey, body: formEncode({ "invoice_settings[default_payment_method]": failPm.id }) });
+    await advance(apiKey, clock2.id, start2 + 32 * DAY);
+    const lr = await stripeFetch(`/subscriptions/${legacy.sub}?expand[]=latest_invoice`, { apiKey });
+    add("the offer renews at the new price", lr.latest_invoice?.subtotal === 13000, `renewal subtotal ${lr.latest_invoice?.subtotal}`);
+    const fs = await stripeFetch(`/subscriptions/${failing.sub}?expand[]=latest_invoice`, { apiKey });
+    add("a failed renewal is past due", fs.status === "past_due" && fs.latest_invoice?.status === "open", `status ${fs.status}, invoice ${fs.latest_invoice?.status}`);
+    const goodPm = await stripeFetch(`/payment_methods/pm_card_visa/attach`, { method: "POST", apiKey, body: formEncode({ customer: failing.cus }) });
+    await stripeFetch(`/customers/${failing.cus}`, { method: "POST", apiKey, body: formEncode({ "invoice_settings[default_payment_method]": goodPm.id }) });
+    if (fs.latest_invoice?.id) await stripeFetch(`/invoices/${fs.latest_invoice.id}/pay`, { method: "POST", apiKey, body: formEncode({ payment_method: goodPm.id }) }).catch(() => null);
+    const fixed = await stripeFetch(`/subscriptions/${failing.sub}`, { apiKey });
+    add("a new card brings it back", fixed.status === "active", `status ${fixed.status}`);
+
+    // 7: the billing page
+    if (db) {
+      const { ensurePortalConfig } = await import("@/lib/plans/billing-portal.server");
+      const rep = await ensurePortalConfig(db, "test", { apply: true });
+      add("our billing page is locked to billing details", !!rep.ours.check?.ok, rep.ours.check?.problems.join("; ") || `config ${rep.ours.id}${rep.ours.created ? " (made now)" : ""}`);
+      add(
+        "Stripe's default billing page (read only)",
+        true,
+        rep.default.check ? (rep.default.check.ok ? "default is billing details only" : `default allows: ${rep.default.check.problems.join("; ")}`) : "no default configuration",
+      );
+      if (rep.ours.id) {
+        const sess = await stripeFetch("/billing_portal/sessions", { method: "POST", apiKey, body: formEncode({ customer: legacy.cus, configuration: rep.ours.id, return_url: "https://jfeffect.com/portal/plan" }) });
+        add("a billing page session opens with it", sess?.configuration === rep.ours.id && /^https:\/\//.test(sess?.url ?? ""), `configuration ${sess?.configuration}`);
+      }
+    }
   } catch (e: any) {
     add("run", false, String(e?.message ?? e));
   } finally {

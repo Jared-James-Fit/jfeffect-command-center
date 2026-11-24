@@ -30,7 +30,7 @@ export const AGREEMENT_SLUG = "coaching-agreement";
 export const AGREEMENT_TITLE = "JF Effect Coaching Agreement";
 export const AGREEMENT_SUBTITLE =
   "Liability Waiver, Release of Claims, Assumption of Risk & Indemnity";
-export const AGREEMENT_EFFECTIVE_DATE = "2026-11-23";
+export const AGREEMENT_EFFECTIVE_DATE = "2026-11-24";
 
 // Version numbers live in ./version so the always-loaded status rules never import this file.
 export { AGREEMENT_VERSION, RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
@@ -105,7 +105,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Official email.",
-        text: "Cancellations, freeze requests, billing questions and other written notices to the Coach must be sent to **coaching@jfeffect.com**.",
+        text: "Freeze requests, billing questions and other written notices to the Coach must be sent to **coaching@jfeffect.com**. Monthly plans can also be cancelled or changed in the app (see Section {{n:billing}}).",
       },
       {
         label: "Your details.",
@@ -155,7 +155,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "“In writing”.",
-        text: "“In writing” means an email, invoice or receipt, checkout confirmation, or a message sent through the coaching app or platform used for the Services. Cancellation and freeze requests must still be emailed to the official email address (see Sections {{n:billing}} and {{n:freeze}}), and social media messages and Instagram DMs do not count as written notice.",
+        text: "“In writing” means an email, invoice or receipt, checkout confirmation, or a message sent through the coaching app or platform used for the Services. Freeze requests must still be emailed to the official email address (see Section {{n:freeze}}), a cancellation must be made in the app or emailed there (see Section {{n:billing}}), and social media messages and Instagram DMs do not count as written notice.",
       },
     ],
   },
@@ -163,7 +163,7 @@ const RAW_SECTIONS: RawSection[] = [
     id: "billing",
     title: "Pricing, Billing & Payments",
     inShort:
-      "Recurring plans renew automatically until you cancel by email before the next billing date.",
+      "Monthly plans renew automatically. You can cancel or change your plan in the app or by email, and the app shows what you’ll pay and when before you confirm.",
     clauses: [
       {
         label: "Price.",
@@ -179,7 +179,23 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Cancelling recurring billing.",
-        text: "To cancel, you must give written notice by email to **coaching@jfeffect.com** before your next billing date (no later than 11:59 p.m. Winnipeg time on the day before). Cancellation applies to the next billing cycle, and charges already processed are not refundable. Social media messages and Instagram DMs do not count as written notice. If you are on a fixed-term commitment or installment plan, cancelling billing does not end your payment obligations (see Section {{n:commitments}}).",
+        text: "You can cancel a monthly plan yourself in the app (Account → Your plan), or by written notice by email to **coaching@jfeffect.com**, before your next billing date (no later than 11:59 p.m. Winnipeg time on the day before). A cancellation takes effect at the end of the billing period you’ve already paid for: you keep your plan until then, nothing more is charged, and charges already processed are not refundable. You can keep your plan any time before it ends. Social media messages and Instagram DMs do not count as notice. If you are on a fixed-term commitment or installment plan, cancelling billing does not end your payment obligations (see Section {{n:commitments}}).",
+      },
+      {
+        label: "Changing plans.",
+        text: "You can move between monthly plans in the app. Moving to a plan that costs more takes effect right away: you’re charged the difference for the rest of your current billing period (prorated), and the new price applies from your next billing date. Moving to a plan that costs less, or to the free app, takes effect at the end of the billing period you’ve already paid for, and nothing is refunded or credited for the current period. Before you confirm any change, the app shows what you’ll pay today, what you’ll pay going forward and the date it happens. If a payment for a change doesn’t go through, your plan stays as it was.",
+      },
+      {
+        label: "Starting or returning to coaching.",
+        text: "Coaching is offered by approval. If you are not a current coaching client, you apply (or ask to come back) in the app or on the website, and the Coach decides whether to accept you and for which package. A coaching package can be purchased only after the Coach approves it.",
+      },
+      {
+        label: "Special pricing.",
+        text: "If you pay a price other than the one advertised for your plan (for example a grandfathered or custom price), you keep that price for as long as you stay on that plan and keep paying for it. The Coach will not raise it or move you to another plan without your consent. Switching to another plan or cancelling ends that price, and it can’t be brought back later; the app tells you this before you confirm. The Coach may offer you a switch in the app, and nothing changes unless you accept it.",
+      },
+      {
+        label: "Billing details.",
+        text: "You can update your card and billing details and see your invoices and receipts in the app (Account → Your plan), through Stripe. Plan changes are made in the app, not in Stripe’s billing page.",
       },
       {
         label: "Billing errors.",
@@ -752,8 +768,8 @@ const KEY_TERMS: { title: string; text: string }[] = [
     text: "Fixed terms and installment plans must be paid in full. Leaving early doesn’t cancel the balance. The Coach may offer a buyout at 50% of what’s left, at the Coach’s discretion.",
   },
   {
-    title: "Cancel by email",
-    text: "Recurring plans renew automatically. To cancel, email coaching@jfeffect.com before your next billing date.",
+    title: "Cancel or change in the app",
+    text: "Monthly plans renew automatically. Cancel or change your plan in the app (or email coaching@jfeffect.com) before your next billing date. Upgrades start now and are prorated; downgrades and cancellations take effect when your paid month ends. A special price ends if you switch.",
   },
   {
     title: "Failed payments",
@@ -897,6 +913,7 @@ export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.2": "6d231b21d08cd23cfea6ba7041444926ebf3d9c2a0396bad9a4a90b1209f7fc3",
   "2.3": "9fa2bd20456320164bed343be8199f08e7d3e5e777c53be4a0ab29a433e48a93",
   "2.4": "77fae52a80171c522cf0e2f637407855ec809f5e5299b8b7baff2ac65e97201f",
+  "3.0": "21bb52730789bcdd840e40c8a207939a8a7a6e6c8dc3cd6349f579fe8d1c061b",
 };
 
 export function sectionNumber(id: string): number {

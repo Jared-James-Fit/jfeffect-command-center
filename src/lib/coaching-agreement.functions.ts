@@ -131,6 +131,23 @@ async function loadAgreementForClient(supabase: any, clientId: string) {
   return { signatures, adminState, state };
 }
 
+/**
+ * A JF member the coach approved for coaching signs the Coaching Agreement
+ * before paying (Manage plan asks for it first). Read through their own login
+ * (RLS: their own approvals only).
+ */
+async function memberApprovedForCoaching(supabase: any, clientId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("coaching_purchase_approvals")
+    .select("id")
+    .eq("client_id", clientId)
+    .is("used_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .limit(1);
+  return !!data?.length;
+}
+
 function isActiveClient(client: any): boolean {
   if (!client) return false;
   if (client.archived) return false;
@@ -346,7 +363,8 @@ export const getAgreementSigningContext = createServerFn({ method: "GET" })
       .maybeSingle();
     if (error || !client) throw new Error("We couldn't find your client profile.");
     // a JF member accepts the Membership Agreement, never this one (e.g. via /setup)
-    if (client.service_tier === "self_serve") throw new Error("JF Membership accounts don't sign the Coaching Agreement.");
+    if (client.service_tier === "self_serve" && !(await memberApprovedForCoaching(supabase, client.id)))
+      throw new Error("JF Membership accounts don't sign the Coaching Agreement.");
     if (!isActiveClient(client))
       throw new Error("Your account isn't active, so there's nothing to sign.");
 
@@ -408,7 +426,8 @@ export const signCoachingAgreement = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
     if (clientError || !client) throw new Error("We couldn't find your client profile.");
-    if ((client as any).service_tier === "self_serve") throw new Error("JF Membership accounts don't sign the Coaching Agreement.");
+    if ((client as any).service_tier === "self_serve" && !(await memberApprovedForCoaching(supabase, client.id)))
+      throw new Error("JF Membership accounts don't sign the Coaching Agreement.");
     if (!isActiveClient(client))
       throw new Error("Your account isn't active, so there's nothing to sign.");
 

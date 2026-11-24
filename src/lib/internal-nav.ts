@@ -178,6 +178,11 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "sales"] },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Sales",
     visibleTo: ["admin", "sales"] },
+  // Plans and subscriptions: prices, decisions (members applying, requests to
+  // come back), grandfathered prices, scheduled changes, failed payments.
+  { to: "/admin/plans", label: "Plans", icon: Layers, group: "Sales",
+    visibleTo: ["admin"],
+    keywords: ["plans", "subscriptions", "upgrade", "downgrade", "cancel", "grandfathered", "legacy price", "approve coaching", "reactivation", "failed payments", "billing changes", "switch plan"] },
   { to: "/admin/payments", label: "Overview", icon: BarChart3, group: "Sales", searchOnly: true,
     visibleTo: ["admin", "sales"],
     keywords: ["overview", "dashboard", "revenue", "mrr", "gross", "net", "sales"] },

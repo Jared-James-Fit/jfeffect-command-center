@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
@@ -11,7 +11,11 @@ import { PlanManager, type PlanApi } from "@/components/plans/plan-manager";
 import { UpdateCardButton } from "@/components/billing/my-purchases-view";
 import { usePovArgs } from "@/lib/client-pov-args";
 import { isNative } from "@/platform";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import {
+  acceptMyOffer,
+  applyForCoaching,
+  declineMyOffer,
   confirmMyPlanChange,
   getMyPlan,
   getMyPlanChange,
@@ -29,6 +33,10 @@ export const Route = createFileRoute("/_authenticated/portal/plan")({
 });
 
 const myPlanKey = (who: string | null) => ["my-plan", who] as const;
+
+const AgreementSignFlow = lazyWithRetry(() =>
+  import("@/components/coaching-agreement/agreement-sign-flow").then((m) => ({ default: m.AgreementSignFlow })),
+);
 
 /**
  * Your plan: Free, a membership or a coaching package, on one account. What
@@ -51,6 +59,9 @@ function PlanPage() {
   const undoFn = useServerFn(undoMyPlanChange);
   const keepFn = useServerFn(keepMyPlan);
   const changeFn = useServerFn(getMyPlanChange);
+  const applyFn = useServerFn(applyForCoaching);
+  const acceptFn = useServerFn(acceptMyOffer);
+  const declineFn = useServerFn(declineMyOffer);
 
   const q = useQuery({
     queryKey: myPlanKey(who),
@@ -106,12 +117,39 @@ function PlanPage() {
     () => ({
       preview: (toSlug) => previewFn({ data: { ...pov, toSlug, native } }),
       confirm: (toSlug, extra) =>
-        confirmFn({ data: { ...pov, toSlug, native, origin: window.location.origin, prorationDate: extra.prorationDate ?? null, note: extra.note ?? null } }),
+        confirmFn({
+          data: {
+            ...pov,
+            toSlug,
+            native,
+            origin: window.location.origin,
+            prorationDate: extra.prorationDate ?? null,
+            note: extra.note ?? null,
+            acknowledgeForfeit: !!extra.acknowledgeForfeit,
+          },
+        }),
       undo: (changeId) => undoFn({ data: { ...pov, changeId } }),
       keep: () => keepFn({ data: { ...pov } }),
-      updateCard: <UpdateCardButton />,
+      updateCard: <UpdateCardButton returnPath="/portal/plan" />,
+      billingDetails: <UpdateCardButton label="Open" variant="outline" returnPath="/portal/plan" />,
+      apply: (input) => applyFn({ data: { ...pov, ...input } }),
+      acceptOffer: (changeId, consentText) => acceptFn({ data: { ...pov, changeId, consentText, origin: window.location.origin } }),
+      declineOffer: (changeId) => declineFn({ data: { ...pov, changeId } }),
+      agreementFlow: ({ open, onOpenChange, onSigned }) =>
+        open ? (
+          <Suspense fallback={null}>
+            <AgreementSignFlow
+              open={open}
+              onOpenChange={onOpenChange}
+              onSigned={() => {
+                void qc.invalidateQueries({ queryKey: myPlanKey(who) });
+                onSigned();
+              }}
+            />
+          </Suspense>
+        ) : null,
     }),
-    [previewFn, confirmFn, undoFn, keepFn, pov, native],
+    [previewFn, confirmFn, undoFn, keepFn, applyFn, acceptFn, declineFn, pov, native, qc, who],
   );
 
   const refresh = () => {

@@ -88,8 +88,8 @@ describe("the owner's commercial terms are preserved", () => {
     ["24 hours' notice to reschedule", /\*\*24 hours.{1,3}notice\*\*/],
     ["12 month limit on claims", /\*\*12 months\*\*/],
     [
-      "email-only written cancellation",
-      /Social media messages and Instagram DMs do not count as written notice/,
+      "cancelling in the app or by email, never by DM",
+      /cancel a monthly plan yourself in the app \(Account → Your plan\), or by written notice by email[\s\S]*Social media messages and Instagram DMs do not count as notice/,
     ],
     [
       "early termination keeps the balance owed",
@@ -150,6 +150,23 @@ describe("2.3: messages are kept as coaching records", () => {
   });
   it("keeps 2.2 exactly as signed in the archive", () => {
     expect(createHash("sha256").update(readFileSync("supabase/agreement-archive/2.2.json", "utf8")).digest("hex")).toBe(PUBLISHED_CONTENT_HASHES["2.2"]);
+  });
+});
+
+describe("3.0: plans in the app", () => {
+  const billing = () => AGREEMENT_CONTENT.sections.find((s) => s.id === "billing")!.clauses.map((c) => c.text).join(" ");
+  it("says how upgrades, downgrades and cancellations work, and that coaching is by approval", () => {
+    expect(billing()).toMatch(/Moving to a plan that costs more takes effect right away: you’re charged the difference for the rest of your current billing period \(prorated\)/);
+    expect(billing()).toMatch(/Moving to a plan that costs less, or to the free app, takes effect at the end of the billing period you’ve already paid for/);
+    expect(billing()).toMatch(/A coaching package can be purchased only after the Coach approves it/);
+    expect(billing()).toMatch(/The Coach will not raise it or move you to another plan without your consent/);
+    expect(billing()).toMatch(/Plan changes are made in the app, not in Stripe’s billing page/);
+  });
+  it("keeps fixed terms owed in full even when billing is cancelled in the app", () => {
+    expect(billing()).toMatch(/cancelling billing does not end your payment obligations/);
+  });
+  it("keeps 2.4 exactly as signed in the archive", () => {
+    expect(createHash("sha256").update(readFileSync("supabase/agreement-archive/2.4.json", "utf8")).digest("hex")).toBe(PUBLISHED_CONTENT_HASHES["2.4"]);
   });
 });
 
@@ -220,13 +237,14 @@ describe("people who signed an earlier version are left exactly as they are", ()
     resolveAgreementState({ latestSignature: sig(version), exempt: null, resignRequestedAt: null, resignNote: null }).state;
 
   it("does not ask anyone who signed 2.0 to sign again", () => {
-    expect(AGREEMENT_VERSION).toBe("2.4");
+    expect(AGREEMENT_VERSION).toBe("3.0");
     expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
     expect(state("2.0")).toBe("signed");
     expect(state("2.1")).toBe("signed");
     expect(state("2.2")).toBe("signed");
     expect(state("2.3")).toBe("signed");
     expect(state("2.4")).toBe("signed");
+    expect(state("3.0")).toBe("signed");
     expect(state("1.0")).toBe("needs_signature");
   });
 

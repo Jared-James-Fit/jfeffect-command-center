@@ -3,7 +3,7 @@
  * that only compares versions (the status rules and the launch popup, which load on every
  * signed-in page) doesn't pull the whole text into the app's main bundle.
  */
-export const AGREEMENT_VERSION = "2.4";
+export const AGREEMENT_VERSION = "3.0";
 
 /**
  * Clients whose latest signed version is below this must sign again. Raise it only
@@ -29,6 +29,14 @@ export const AGREEMENT_VERSION = "2.4";
  * to coaching@jfeffect.com (the JF Effect business inbox) instead of a personal Gmail address. Nothing
  * else changes, so nobody is asked to sign again. Earlier signers keep the address in their signed
  * copy, and that inbox stays monitored.
+ *
+ * 3.0 (Nov 24 2026) says how plans work in the app: a monthly plan is cancelled or changed in the
+ * app (or by email), upgrades start now and are prorated, downgrades and cancellations take effect when
+ * the paid period ends, coaching is bought only after the Coach approves it, a special (grandfathered)
+ * price is kept until the client switches or cancels and is never changed without consent, and billing
+ * details are updated through Stripe from the app. Nobody who signed earlier is asked to sign again
+ * (their signed copy stays theirs); signing 3.0 is asked before a coaching purchase or a self-service
+ * plan switch (plan-engine.ts PLAN_AGREEMENT_VERSION), because 3.0 is the text that describes it.
  *
  * This must stay "2.0" (the database view coaching_agreement_resign_below_version() says the
  * same, and a test checks it).
