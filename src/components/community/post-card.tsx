@@ -39,6 +39,8 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl, usePrefetchPostReactors, useSlideThumbUrls } from "@/lib/community.queries";
 import { AMBIENT_SIZE, paintAmbient } from "@/lib/ambient-fill";
+import { whenStill } from "@/lib/post-art";
+import { carouselPlace, rememberCarouselPlace } from "@/lib/carousel-places";
 import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, cleanFocus, clipFrame, feedAspect, focusPosition, photoZoomBox, screenFit, slideAspect, videoAspect, type MediaFocus } from "@/lib/photo-frame";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
@@ -797,6 +799,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               hint={!!openHint && !under && !sheetOpen}
               onSlide={showSlide}
               onReachEnd={onRecapSeen}
+              place={`page:${post.id}`}
             />
           ) : (
             // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
@@ -1377,6 +1380,7 @@ export function PostMedia({
             control={control}
             hint={hint}
             onReachEnd={onReachEnd}
+            place={`page:${post.id}`}
           />
         ) : (
           <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
@@ -1521,7 +1525,8 @@ function SlideMedia({
   shrunk?: boolean;
 }) {
   const isVideo = slide.type === "video";
-  const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
+  // the full-size copy for the slide on screen and the ones either side, so a swipe lands on it already sharp
+  const { data: fullUrl } = useFullMediaUrl(slide.path, full && (active || !!warm) && !isVideo);
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
   const position = focusPosition(slide.focus);
@@ -1635,13 +1640,18 @@ function AmbientFill({ src }: { src: string | null }) {
     let alive = true;
     const img = new Image();
     img.decoding = "async";
+    // drawn once the screen is still (whenStill, post-art.ts): drawing a photo onto a canvas decodes it on the main
+    // thread there and then, which landed in the middle of the swipe that brought its slide on (Nov 23 2026)
     img.onload = () => {
-      if (!alive || !ref.current) return;
-      try {
-        paintAmbient(ref.current, img);
-      } catch {
-        /* a picture that can't be drawn leaves the screen black, as before */
-      }
+      if (!alive) return;
+      void whenStill().then(() => {
+        if (!alive || !ref.current) return;
+        try {
+          paintAmbient(ref.current, img);
+        } catch {
+          /* a picture that can't be drawn leaves the screen black, as before */
+        }
+      });
     };
     img.src = src;
     return () => {
@@ -1652,22 +1662,59 @@ function AmbientFill({ src }: { src: string | null }) {
   return <canvas ref={ref} width={AMBIENT_SIZE.w} height={AMBIENT_SIZE.h} aria-hidden data-ambient-fill className="pointer-events-none absolute inset-0 h-full w-full" />;
 }
 
+/** Pictures already on screen once this visit: shown again at once (no grey, no fade), a remount or a swipe back included. */
+const shownPictures = new Set<string>();
+
+/**
+ * A slide's photo. The first time a picture loads it fades in over grey; a
+ * picture already shown this visit is simply there. A sharper copy (the
+ * thumbnail's full-size one) is decoded off screen and swapped in only once
+ * it's ready, so the slide never goes grey in between (Nov 23 2026: the swap
+ * blanked it and faded the new one in over 280 ms, mid-swipe).
+ */
 function FadeImg({ src, position, whole = false }: { src: string; position?: string; whole?: boolean }) {
-  const [loaded, setLoaded] = useState(false);
+  const [shown, setShown] = useState(src);
+  const [loaded, setLoaded] = useState(() => shownPictures.has(src));
   const ref = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
-    setLoaded(!!ref.current?.complete && (ref.current?.naturalWidth ?? 0) > 0);
-  }, [src]);
+    if (src === shown) return;
+    if (shownPictures.has(src) || !loaded) return void setShown(src);
+    let alive = true;
+    const next = new Image();
+    next.decoding = "async";
+    next.src = src;
+    const swap = () => {
+      if (!alive) return;
+      shownPictures.add(src);
+      setShown(src);
+    };
+    if (typeof next.decode === "function") next.decode().then(swap, swap);
+    else next.onload = next.onerror = swap;
+    return () => {
+      alive = false;
+    };
+  }, [src, shown, loaded]);
+  // in the browser's memory already: on screen before the first paint, never faded in
+  useLayoutEffect(() => {
+    const img = ref.current;
+    if (img?.complete && img.naturalWidth > 0) {
+      shownPictures.add(shown);
+      setLoaded(true);
+    }
+  }, [shown]);
   return (
     <>
       {!loaded && <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden />}
       <img
         ref={ref}
-        src={src}
+        src={shown}
         alt=""
         decoding="async"
         draggable={false}
-        onLoad={() => setLoaded(true)}
+        onLoad={() => {
+          shownPictures.add(shown);
+          setLoaded(true);
+        }}
         data-loaded={loaded ? "" : undefined}
         // on a post's screen a photo shows whole, centred (black above and below); a frame at its own shape fills either way
         className={cn("media-fade relative h-full w-full", whole ? "object-contain" : "object-cover")}
@@ -1679,6 +1726,13 @@ function FadeImg({ src, position, whole = false }: { src: string; position?: str
 
 /** Slide a post's carousel from outside it (its words' workout chip, its card's recap row). */
 export type CarouselControl = { toEnd: () => void };
+
+/** A carousel's scroll this close to a slide (a share of its width) is on it: the swipe has settled. */
+const SLIDE_SETTLED = 0.01;
+/** No scroll for this long and it has settled where it is (a browser with no scrollend, a finger held still). */
+const SLIDE_SETTLE_MS = 140;
+/** Slides either side of the one showing that are on the page (photos load and decode ahead; a clip its poster). */
+const SLIDES_AHEAD = 2;
 
 /**
  * A slide drawn after the post's own (a workout's recap): `load` once the
@@ -1712,6 +1766,7 @@ function PostCarousel({
   hint = false,
   onReachEnd,
   bare = false,
+  place,
 }: {
   slides: PostSlide[];
   coverUrl: string | null;
@@ -1737,9 +1792,13 @@ function PostCarousel({
   onReachEnd?: () => void;
   /** No black of its own: the post's screen shows through (a workout's card on words). */
   bare?: boolean;
+  /** Remembers the slide it's left on under this key for the visit, and opens on it (carousel-places.ts). */
+  place?: string;
 }) {
-  const [index, setIndex] = useState(0);
-  const [seen, setSeen] = useState(1);
+  // the slide it was last left on, when the feed lets the post go and brings it back (worked out once, on mounting)
+  const [start] = useState(() => carouselPlace(place, slides.length + leads.length + (trail || pageTrail ? 1 : 0)));
+  const [index, setIndex] = useState(start);
+  const [seen, setSeen] = useState(start + 1);
   const track = useRef<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
   const setRoot = useCallback(
@@ -1767,13 +1826,67 @@ function PostCarousel({
   }, [pageTrail, index, last]);
   // the post on screen (half of it at least): only then does its last slide load what it needs
   const onScreen = useOnScreen(root, !!pageTrail);
+  // A swipe is the browser's own (scroll snap on the compositor): nothing re-renders while a finger moves it.
+  // "2/4" follows the finger as it passes halfway (its text written straight in), and the slide it lands on
+  // becomes the carousel's (which clip plays, what loads next, the post's words) once the swipe settles: on a
+  // snap point, at scrollend, or a beat after the last scroll. Rendering at the halfway mark used to start the
+  // next clip, mount the slide after it and re-render the whole post in the middle of the swipe.
+  const countRef = useRef<HTMLSpanElement | null>(null);
+  const liveRef = useRef(start);
+  const settleTimer = useRef(0);
+  // opening on a remembered slide: the track is put there before the first paint (a retry the next frame if it has no size yet)
+  useLayoutEffect(() => {
+    if (!start) return;
+    let raf = 0;
+    const put = () => {
+      const el = track.current;
+      if (!el) return;
+      if (!el.clientWidth) {
+        raf = requestAnimationFrame(put);
+        return;
+      }
+      el.scrollLeft = start * el.clientWidth;
+    };
+    put();
+    return () => cancelAnimationFrame(raf);
+  }, [start]);
+  const slideAt = (el: HTMLDivElement) => Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / el.clientWidth)));
+  const settleOn = (i: number) => {
+    window.clearTimeout(settleTimer.current);
+    settleTimer.current = 0;
+    setIndex(i);
+    setSeen((n) => Math.max(n, i + 1));
+    if (place) rememberCarouselPlace(place, i);
+  };
   const onScroll = () => {
     const el = track.current;
     if (!el || !el.clientWidth) return;
-    const i = Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / el.clientWidth)));
-    if (i !== index) setIndex(i);
-    if (i + 1 > seen) setSeen(i + 1);
+    const x = el.scrollLeft / el.clientWidth;
+    const i = slideAt(el);
+    if (i !== liveRef.current) {
+      liveRef.current = i;
+      // React's own text node, given its new value (never replaced, so the next render still owns it)
+      const text = countRef.current?.firstChild;
+      if (text && text.nodeType === Node.TEXT_NODE) text.nodeValue = `${i + 1}/${count}`;
+    }
+    if (Math.abs(x - i) < SLIDE_SETTLED) return settleOn(i);
+    window.clearTimeout(settleTimer.current);
+    settleTimer.current = window.setTimeout(() => {
+      const t = track.current;
+      if (t?.clientWidth) settleOn(slideAt(t));
+    }, SLIDE_SETTLE_MS);
   };
+  useEffect(() => {
+    const el = track.current;
+    if (!el || !("onscrollend" in window)) return;
+    const end = () => {
+      if (el.clientWidth) settleOn(slideAt(el));
+    };
+    el.addEventListener("scrollend", end);
+    return () => el.removeEventListener("scrollend", end);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- settleOn / slideAt read only `count`, `place` and stable setters
+  }, [count]);
+  useEffect(() => () => window.clearTimeout(settleTimer.current), []);
   const go = (dir: 1 | -1) => {
     const el = track.current;
     if (el) el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
@@ -1822,7 +1935,9 @@ function PostCarousel({
         ))}
         {slides.map((sl, j) => {
           const i = j + off;
-          const near = Math.abs(i - index) <= 1 || i < seen;
+          // two either side are on the page (a photo loads and decodes ahead, a clip shows its poster), so two quick
+          // swipes in a row never land on an empty slide; only the slide on screen and its neighbours hold a clip
+          const near = Math.abs(i - index) <= SLIDES_AHEAD || i < seen;
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
             <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`} data-fit={page ? fits?.[j] : undefined}>
@@ -1855,13 +1970,13 @@ function PostCarousel({
         >
           <ChevronsLeft className="jf-recap-nudge h-3.5 w-3.5" aria-hidden />
           Swipe for workout
-          <span className="ml-0.5 font-bold tabular-nums text-white/70">
-            {index + 1}/{count}
+          <span ref={countRef} className="ml-0.5 font-bold tabular-nums text-white/70">
+            {`${index + 1}/${count}`}
           </span>
         </button>
       ) : (
-        <span className={cn("pointer-events-none absolute right-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur", page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5")} data-carousel-count>
-          {index + 1}/{count}
+        <span ref={countRef} className={cn("pointer-events-none absolute right-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur", page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5")} data-carousel-count>
+          {`${index + 1}/${count}`}
         </span>
       )}
       {/* the dots; on a post's screen its words and buttons sit at the bottom, so "2/4" up top says it */}

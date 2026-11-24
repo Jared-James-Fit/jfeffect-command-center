@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDragDropTouch } from "@/lib/drag-drop-touch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -1152,6 +1153,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   // sidebar (exercises go in with each day's + buttons), no zoom, no full
   // screen, and every card opens (compact rows only help on a wide screen).
   const phone = useIsMobileNow();
+  // the exercise library drags into a day by touch too (an iPad): the polyfill's listeners on this box only
+  const dragRoot = useRef<HTMLDivElement | null>(null);
+  useDragDropTouch(dragRoot, !phone);
   const zoom = phone ? 1 : zoomPref;
   const compact = phone ? false : compactPref;
   const [weekSlot, setWeekSlot] = useState<HTMLDivElement | null>(null);
@@ -1387,7 +1391,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     {maxesOpen && clientId && blockId && (
       <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
     )}
-    <div className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
+    <div ref={dragRoot} className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
       {!portalToolbar && (
         <div className="sticky top-0 z-20 border-b border-border bg-background">
           {toolbar}

@@ -307,7 +307,9 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
     },
     onError: (_e, _v, ctx) => ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data)),
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["community-feed"] });
+      // the feed already shows the like (onMutate): marked stale, never refetched page by page under a finger
+      // that's still swiping (a double-tap used to reload every page of posts loaded so far)
+      qc.invalidateQueries({ queryKey: ["community-feed"], refetchType: "none" });
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
       qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
     },
