@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { REACTION, likedByLine, reactionEmoji, reactionKinds, reactorsSeenAs, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { usePostReactors, usePovViewer, usePrefetchPostReactors } from "@/lib/community.queries";
 import { FollowButton } from "@/components/community/follow-button";
+import { useOpenedOnce } from "@/hooks/use-opened-once";
 
 /**
  * Instagram's Likes: everyone who liked a post, for anyone who can see it
@@ -18,17 +19,19 @@ import { FollowButton } from "@/components/community/follow-button";
  * the photo. Tap someone for their profile; Follow right from the list.
  * Swipe down, ✕ or a tap above it closes it.
  */
-export function ReactorsSheet({
-  postId,
-  onClose,
-  onOpenAuthor,
-  title = "Likes",
-}: {
+type ReactorsSheetProps = {
   postId: string | null;
   onClose: () => void;
   onOpenAuthor?: (a: CommunityAuthor) => void;
   title?: string;
-}) {
+};
+
+export function ReactorsSheet(props: ReactorsSheetProps) {
+  // mounted the first time it opens (then kept, for its closing slide): every post carries one
+  return useOpenedOnce(!!props.postId) ? <ReactorsSheetBody {...props} /> : null;
+}
+
+function ReactorsSheetBody({ postId, onClose, onOpenAuthor, title = "Likes" }: ReactorsSheetProps) {
   const { data, isLoading, isError, refetch } = usePostReactors(postId);
   // View as client: "You" is the client being previewed, never the coach's own like
   const pov = usePovViewer();

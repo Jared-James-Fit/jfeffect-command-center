@@ -11,6 +11,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls } from "@/lib/community.queries";
 import { RepostNoteEditor } from "@/components/community/repost-note-editor";
 import { useAlbumPosts, useCreateAlbum, useRepost, useSavedOverview, useSavePost, type SaveCover } from "@/lib/community-saves";
+import { useOpenedOnce } from "@/hooks/use-opened-once";
 import {
   floatingNote,
   isEmojiOnly,
@@ -96,6 +97,8 @@ export function SaveButton({ post, stacked = false }: { post: CommunityPost; sta
   const save = useSavePost();
   const albumPosts = useAlbumPosts();
   const [picker, setPicker] = useState(false);
+  // every post carries this button: the album list mounts the first time it opens
+  const pickerMounted = useOpenedOnce(picker);
   const [pop, setPop] = useState(0);
   const timer = useRef<number | null>(null);
   const held = useRef(false);
@@ -185,7 +188,7 @@ export function SaveButton({ post, stacked = false }: { post: CommunityPost; sta
         </span>
         <HapticTap />
       </button>
-      <AlbumPickerSheet post={post} open={picker} onOpenChange={setPicker} />
+      {pickerMounted && <AlbumPickerSheet post={post} open={picker} onOpenChange={setPicker} />}
     </>
   );
 }

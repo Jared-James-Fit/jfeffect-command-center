@@ -51,7 +51,7 @@ describe("Add to your story: what can be shared", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(studio).toContain("const sharedPostId = share && items.some((i) => i.id === SHARE_CARD_ID) ? share.postId : null;");
     // a share never saves over (or restores) the studio's draft
-    expect(studio).toContain("if (!open || !post || reply || share || restoredFor.current === post.key) return;");
+    expect(studio).toContain("if (!open || !post || reply || share || draftKey.current) return;");
   });
 
   it("is offered only where the story camera can open, never in a coach's View as client", () => {
