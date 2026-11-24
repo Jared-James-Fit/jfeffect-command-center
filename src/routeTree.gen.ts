@@ -286,6 +286,7 @@ import { Route as ApiPublicHooksNutritionImportsTickRouteImport } from './routes
 import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
 import { Route as ApiPublicHooksNutritionRoadmapTickRouteImport } from './routes/api/public/hooks/nutrition-roadmap-tick'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
+import { Route as ApiPublicHooksOpenipfNotifyRouteImport } from './routes/api/public/hooks/openipf-notify'
 import { Route as ApiPublicHooksPaymentProofImportRouteImport } from './routes/api/public/hooks/payment-proof-import'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPlanChangesTickRouteImport } from './routes/api/public/hooks/plan-changes-tick'
@@ -1918,6 +1919,12 @@ const ApiPublicHooksNutritionTickRoute =
     path: '/api/public/hooks/nutrition-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksOpenipfNotifyRoute =
+  ApiPublicHooksOpenipfNotifyRouteImport.update({
+    id: '/api/public/hooks/openipf-notify',
+    path: '/api/public/hooks/openipf-notify',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksPaymentProofImportRoute =
   ApiPublicHooksPaymentProofImportRouteImport.update({
     id: '/api/public/hooks/payment-proof-import',
@@ -2428,6 +2435,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/openipf-notify': typeof ApiPublicHooksOpenipfNotifyRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
@@ -2744,6 +2752,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/openipf-notify': typeof ApiPublicHooksOpenipfNotifyRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
@@ -3066,6 +3075,7 @@ export interface FileRoutesById {
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/openipf-notify': typeof ApiPublicHooksOpenipfNotifyRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
@@ -3388,6 +3398,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/openipf-notify'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/plan-changes-tick'
@@ -3704,6 +3715,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/openipf-notify'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/plan-changes-tick'
@@ -4025,6 +4037,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/openipf-notify'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/plan-changes-tick'
@@ -4169,6 +4182,7 @@ export interface RootRouteChildren {
   ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
   ApiPublicHooksNutritionRoadmapTickRoute: typeof ApiPublicHooksNutritionRoadmapTickRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
+  ApiPublicHooksOpenipfNotifyRoute: typeof ApiPublicHooksOpenipfNotifyRoute
   ApiPublicHooksPaymentProofImportRoute: typeof ApiPublicHooksPaymentProofImportRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPlanChangesTickRoute: typeof ApiPublicHooksPlanChangesTickRoute
@@ -6141,6 +6155,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksNutritionTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/openipf-notify': {
+      id: '/api/public/hooks/openipf-notify'
+      path: '/api/public/hooks/openipf-notify'
+      fullPath: '/api/public/hooks/openipf-notify'
+      preLoaderRoute: typeof ApiPublicHooksOpenipfNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/payment-proof-import': {
       id: '/api/public/hooks/payment-proof-import'
       path: '/api/public/hooks/payment-proof-import'
@@ -7196,6 +7217,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksNutritionRoadmapTickRoute:
     ApiPublicHooksNutritionRoadmapTickRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
+  ApiPublicHooksOpenipfNotifyRoute: ApiPublicHooksOpenipfNotifyRoute,
   ApiPublicHooksPaymentProofImportRoute: ApiPublicHooksPaymentProofImportRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPlanChangesTickRoute: ApiPublicHooksPlanChangesTickRoute,

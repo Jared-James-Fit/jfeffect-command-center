@@ -27,7 +27,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   AlertTriangle, Archive, Trash2, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
-  Download, Dumbbell, Flame, FlagOff, HeartPulse, FilePlus2, History, Layers, LineChart, Loader2, MoreHorizontal, Pencil, PenLine, Plus, SlidersHorizontal, Trophy,
+  Download, Dumbbell, Flame, FlagOff, HeartPulse, FilePlus2, History, Layers, LineChart, Loader2, Medal, MoreHorizontal, Pencil, PenLine, Plus, SlidersHorizontal, Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -70,6 +70,8 @@ import { ClientNotesCard } from "@/components/messages/client-notes-log";
 import { HealthCard, useHealthProfile } from "@/components/health/HealthCard";
 import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
 import { healthSummary } from "@/lib/health/health-profile";
+import { useOpenIpfStatus } from "@/lib/openipf.queries";
+import { openIpfSummary } from "@/lib/openipf";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 const ScheduleManagerShell = lazyWithRetry(() =>
@@ -78,6 +80,7 @@ const ScheduleManagerShell = lazyWithRetry(() =>
 const ClientMaxesPanel = lazyWithRetry(() => import("@/components/client-maxes-panel").then((m) => ({ default: m.ClientMaxesPanel })));
 const PerformanceCard = lazyWithRetry(() => import("@/components/performance-card").then((m) => ({ default: m.PerformanceCard })));
 const ClientWarmupCard = lazyWithRetry(() => import("@/components/client-warmup-card").then((m) => ({ default: m.ClientWarmupCard })));
+const OpenIpfPanel = lazyWithRetry(() => import("@/components/openipf/openipf-panel").then((m) => ({ default: m.OpenIpfPanel })));
 
 type ClientRow = {
   id: string;
@@ -815,10 +818,20 @@ function NewBlockDialog({
 
 /* ───────────────────────────── Setup ───────────────────────────── */
 
-type SetupSheet = "days" | "maxes" | "warmup" | "health" | "competition" | "equipment" | null;
+type SetupSheet = "days" | "maxes" | "warmup" | "health" | "competition" | "equipment" | "openipf" | null;
+
+/** Element id / hash that opens a client's OpenIPF (a push or the Messages sheet's Open client). */
+export const OPENIPF_ANCHOR = "openipf";
 
 function AthleteSetupCard({ clientId, client }: { clientId: string; client: ClientRow | null }) {
   const [sheet, setSheet] = useState<SetupSheet>(null);
+  // their OpenIPF link and meets (coaching clients only; a free member's is never looked up)
+  const coaching = (client as any)?.service_tier === "coaching";
+  const openipf = useOpenIpfStatus(clientId, coaching);
+  const hash = useRouterState({ select: (r) => r.location.hash });
+  useEffect(() => {
+    if (coaching && hash.replace(/^#/, "") === OPENIPF_ANCHOR) setSheet("openipf");
+  }, [hash, coaching]);
   const { data: maxes = [] } = useQuery({
     queryKey: ["pl-client-maxes", clientId],
     queryFn: () => listClientMaxes(clientId),
@@ -860,11 +873,14 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
       {competes && (
         <SetupRow icon={<Trophy className="h-4 w-4" />} title="Competition" value={profileSummary(competition)} empty="Weight class and age classes not set" onClick={() => setSheet("competition")} />
       )}
+      {coaching && openipf.data?.eligible && (
+        <SetupRow icon={<Medal className="h-4 w-4" />} title="OpenIPF" value={openIpfSummary(openipf.data)} empty="Not linked" onClick={() => setSheet("openipf")} />
+      )}
 
       <Sheet open={sheet !== null} onOpenChange={(v) => !v && setSheet(null)}>
         <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
           <SheetHeader className="mb-3 text-left">
-            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : sheet === "competition" ? "Competition" : sheet === "equipment" ? "Equipment & setups" : "Warm-up"}</SheetTitle>
+            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : sheet === "competition" ? "Competition" : sheet === "equipment" ? "Equipment & setups" : sheet === "openipf" ? "OpenIPF" : "Warm-up"}</SheetTitle>
             <SheetDescription>
               {sheet === "days"
                 ? "Their upcoming workouts move onto the days you pick."
@@ -876,7 +892,9 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
                       ? "Their powerlifting forms start from this, and what they send updates it."
                       : sheet === "equipment"
                         ? "Their racks and machines and how they set each one up. A setup you add shows on their workout card."
-                        : "Which warm-up they get before each workout."}
+                        : sheet === "openipf"
+                          ? "Their meets from OpenIPF, kept up to date. They go in the Hall of Strength."
+                          : "Which warm-up they get before each workout."}
             </SheetDescription>
           </SheetHeader>
           <Suspense fallback={<div className="py-6 text-sm text-muted-foreground">Loading…</div>}>
@@ -894,6 +912,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
             {sheet === "warmup" && <ClientWarmupCard clientId={clientId} embedded onSaved={() => setSheet(null)} />}
             {sheet === "health" && <HealthCard clientId={clientId} bare />}
             {sheet === "competition" && <CompetitionProfileEditor clientId={clientId} as="coach" />}
+            {sheet === "openipf" && <OpenIpfPanel clientId={clientId} firstName={(client?.full_name as string | null)?.split(" ")[0] ?? null} />}
             {sheet === "equipment" && (
               <EquipmentManager clientId={clientId} coachView athleteFirstName={(client?.full_name as string | null)?.split(" ")[0] ?? null} />
             )}

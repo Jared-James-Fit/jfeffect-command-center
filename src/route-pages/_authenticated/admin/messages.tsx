@@ -4,6 +4,7 @@ import { queryView } from "@/lib/loading/load-state";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
 import { RecoveryInboxRow } from "@/components/recovery/recovery-queue";
 import { MemberApplicationsInboxRow } from "@/components/applications/member-applications-entry";
+import { OpenIpfInboxRow } from "@/components/openipf/openipf-review";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo, useState } from "react";
@@ -1057,6 +1058,8 @@ export function MessagesInbox({
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
           {/* Free membership applications waiting on a decision (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <MemberApplicationsInboxRow />}
+          {/* Their athletes found on OpenIPF and new meets for the linked ones (a coach sees their own clients'). */}
+          {!search && filter === "Inbox" && <OpenIpfInboxRow />}
           {listRows.length === 0 && clientsState === "loading" ? (
             <ListSkeleton rows={6} className="p-4" label="Loading conversations" />
           ) : listRows.length === 0 && clientsState === "offline" ? (
