@@ -21,7 +21,19 @@ export function batchTitle(list: Pick<OpenIpfSuggestion, "kind">[]): string {
   return `OpenIPF: ${parts.join(", ")}`;
 }
 
-export async function runOpenIpfNotify(admin: Db): Promise<{ suggestions: number; pushed: number }> {
+/**
+ * Whether a batch has been told: a push went, or waits for the end of quiet
+ * hours, or the person has no device to send to. A push held back by the day's
+ * cap (or the half-hour limit) isn't telling anyone, so the batch stays
+ * waiting and the tick tries again (the cap resets at their midnight).
+ */
+export function batchTold(results: { sent: number; skipped: string | null }[]): boolean {
+  if (!results.length) return true;
+  return results.some((r) => r.sent > 0 || r.skipped === "queued_quiet_hours" || r.skipped === "no_subs" || r.skipped === "master_off" || (r.skipped ?? "").startsWith("category_off"))
+    || results.every((r) => r.skipped === "not_configured");
+}
+
+export async function runOpenIpfNotify(admin: Db): Promise<{ suggestions: number; pushed: number; told: boolean }> {
   const { data: rows, error } = await admin
     .from("openipf_suggestions")
     .select("*, scan:openipf_scans(finished_at)")
@@ -31,7 +43,7 @@ export async function runOpenIpfNotify(admin: Db): Promise<{ suggestions: number
   if (error) throw new Error(error.message);
   // a search still running tells once it's done, with everything it found
   const ready = ((rows ?? []) as any[]).filter((r) => r.kind === "new_meet" || !r.scan_id || r.scan?.finished_at) as OpenIpfSuggestion[];
-  if (!ready.length) return { suggestions: 0, pushed: 0 };
+  if (!ready.length) return { suggestions: 0, pushed: 0, told: true };
 
   const { data: admins } = await admin.from("user_roles").select("user_id").eq("role", "admin");
   const adminIds = ((admins ?? []) as any[]).map((a) => a.user_id).filter(Boolean) as string[];
@@ -60,7 +72,7 @@ export async function runOpenIpfNotify(admin: Db): Promise<{ suggestions: number
   const { sendWebPushToUser } = await import("@/lib/push/push.server");
   const { safeDisplayName } = await import("@/lib/push/notification-payload");
   let pushed = 0;
-  const batch = ready.map((s) => s.id).sort().join(",").slice(0, 400);
+  const results: { sent: number; skipped: string | null }[] = [];
   for (const [userId, list] of byUser) {
     const sorted = [...list].sort(suggestionOrder).map((s) => ({ ...s, subject_name: safeDisplayName(s.subject_name, "An athlete") }));
     const anyPr = sorted.some((s) => s.kind === "new_meet" && prLine(s.prs));
@@ -76,24 +88,16 @@ export async function runOpenIpfNotify(admin: Db): Promise<{ suggestions: number
       },
       {
         category: anyPr ? "wins" : "workouts",
-        eventKey: `openipf:${hash(batch)}:${userId}`,
+        // once per half hour at most; what's been told is the suggestions' notified_at
         rateKey: `openipf:${userId}`,
         rateWindowMinutes: 30,
         priority: "normal",
       },
     );
     pushed += r.sent;
+    results.push(r);
   }
-  await admin.from("openipf_suggestions").update({ notified_at: new Date().toISOString() }).in("id", ready.map((s) => s.id));
-  return { suggestions: ready.length, pushed };
-}
-
-/** A short stable key for one batch (the push's dedupe key). */
-function hash(s: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(36);
+  const told = batchTold(results);
+  if (told) await admin.from("openipf_suggestions").update({ notified_at: new Date().toISOString() }).in("id", ready.map((s) => s.id));
+  return { suggestions: ready.length, pushed, told };
 }

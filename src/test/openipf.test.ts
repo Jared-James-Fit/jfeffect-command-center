@@ -10,7 +10,7 @@ import {
   openipfFold, parseProfileUrl, plainLifterName, prLine, profileUrl, siteName, suggestionOrder,
   type OpenIpfSuggestion,
 } from "@/lib/openipf";
-import { batchTitle } from "@/lib/openipf.server";
+import { batchTitle, batchTold } from "@/lib/openipf.server";
 import { CLEO_ACTION_RULES, routeFor } from "@/lib/cleo-actions";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -83,6 +83,18 @@ describe("what a suggestion says", () => {
     expect(openIpfSummary({ linked: true, meet_count: 18, last_meet: "2026-09-18", pending: 0 })).toBe("18 meets · last Sep 18, 2026");
     expect(openIpfSummary({ linked: false, meet_count: 0, last_meet: null, pending: 1 })).toBe("A possible match is waiting");
     expect(openIpfSummary({ linked: false, meet_count: 0, last_meet: null, pending: 0 })).toBeNull();
+  });
+});
+
+describe("the push", () => {
+  it("a batch is told once a push went or waits out quiet hours, never when the day's cap held it back", () => {
+    expect(batchTold([{ sent: 1, skipped: null }])).toBe(true);
+    expect(batchTold([{ sent: 0, skipped: "queued_quiet_hours" }])).toBe(true);
+    expect(batchTold([{ sent: 0, skipped: "no_subs" }])).toBe(true);
+    // Nov 24 2026: the owner's six pushes for the day were used, and the first batch was marked told anyway
+    expect(batchTold([{ sent: 0, skipped: "daily_cap" }])).toBe(false);
+    expect(batchTold([{ sent: 0, skipped: "rate_limited" }, { sent: 0, skipped: "daily_cap" }])).toBe(false);
+    expect(batchTold([{ sent: 0, skipped: "daily_cap" }, { sent: 1, skipped: null }])).toBe(true);
   });
 });
 
