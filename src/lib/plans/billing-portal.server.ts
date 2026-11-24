@@ -66,7 +66,7 @@ export async function ensurePortalConfig(db: Db, mode: StripeMode, opts: { apply
       method: "POST",
       apiKey,
       body: formEncode(portalConfigParams(opts.site)),
-      idempotencyKey: `${PORTAL_CONFIG_TAG}_${mode}_${new Date().toISOString().slice(0, 10)}`,
+      idempotencyKey: `${PORTAL_CONFIG_TAG}_${mode}_${new Date().toISOString().slice(0, 10)}_b`,
     });
     report.ours = { id: cfg.id, check: checkPortalConfig(cfg), created: true, error: null };
     await writeSetting(db, { ...saved, [mode]: cfg.id });
