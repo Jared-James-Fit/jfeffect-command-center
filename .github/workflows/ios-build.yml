@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload the build to TestFlight (off = build and check only)
+        type: boolean
+        default: true
 
 jobs:
   build-ios:
@@ -97,6 +102,7 @@ jobs:
           def capacitor_pods
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
             pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+            pod 'JfPhotos', :path => '../../native/jf-photos'
           end
           target 'App' do
             capacitor_pods
@@ -186,10 +192,13 @@ jobs:
           strings = {
               "NSCameraUsageDescription": "JF Effect uses the camera when you take a photo or video for a post, record a lift video, take a progress photo or set your profile picture.",
               "NSMicrophoneUsageDescription": "JF Effect uses the microphone when you talk to Cleo, record a voice note or record a video with sound.",
-              "NSPhotoLibraryUsageDescription": "JF Effect opens your photos when you choose one to post, send in a message or use as your profile picture.",
+              "NSPhotoLibraryUsageDescription": "JF Effect shows your photos and videos when you make a post, so you can pick what to share, and opens the ones you choose to send in a message or use as your profile picture.",
               "NSPhotoLibraryAddUsageDescription": "JF Effect saves photos and share cards to your library when you tap Save.",
           }
           pl.update(strings)
+          # with "Limit access", iOS would ask to select more photos on every launch; the
+          # New post screen has its own Manage instead (Instagram does the same)
+          pl["PHPhotoLibraryPreventAutomaticLimitedAccessAlert"] = True
           with open(info, "wb") as f:
               plistlib.dump(pl, f)
           with open(info, "rb") as f:
@@ -221,6 +230,11 @@ jobs:
       # The web app can tell which iPhone build it's running in (e.g. to say
       # "update the app" when a build is too old for the camera): Capacitor
       # appends this to the web view's user agent. The App plugin isn't linked.
+      # Plus the plugins the app links itself. `cap add ios`'s own sync never runs here
+      # (no dist folder: the app loads jfeffect.com), so Capacitor never writes the
+      # plugin list; the bridge registers only the classes named in it. JfPhotosPlugin
+      # is native/jf-photos, linked by the Podfile above: New post's camera roll
+      # (src/lib/native-photos.ts).
       - name: Stamp the build number on the web view
         run: |
           python3 << 'PYEOF'
@@ -228,8 +242,10 @@ jobs:
           path = "ios/App/App/capacitor.config.json"
           cfg = json.load(open(path))
           cfg["appendUserAgent"] = f"JFEffectApp/{os.environ['BUILD_NUMBER']}"
+          cfg["packageClassList"] = sorted(set(cfg.get("packageClassList") or []) | {"JfPhotosPlugin"})
           json.dump(cfg, open(path, "w"), indent=2)
           print("✅ User agent stamp:", cfg["appendUserAgent"])
+          print("✅ Plugins the app registers:", cfg["packageClassList"])
           PYEOF
 
       - name: Install Pillow for icon generation
@@ -460,6 +476,9 @@ jobs:
             echo "✅ $k: $v"
           done
           grep -o '"appendUserAgent": *"[^"]*"' "$APP/capacitor.config.json" || echo "::warning::No build number stamp in capacitor.config.json"
+          grep -q '"JfPhotosPlugin"' "$APP/capacitor.config.json" || { echo "::error::JfPhotosPlugin is not on the app's plugin list"; exit 1; }
+          ls -d "$APP/Frameworks/JfPhotos.framework" >/dev/null 2>&1 || { echo "::error::JfPhotos.framework is not in the app"; exit 1; }
+          echo "✅ Camera roll plugin linked"
           # And that the iPhone app going to TestFlight is portrait only (Capacitor's
           # CAPBridgeViewController reads this list for supportedInterfaceOrientations).
           ORI=$(/usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations" "$APP/Info.plist" 2>/dev/null) || { echo "::error::UISupportedInterfaceOrientations is missing from the built app"; exit 1; }
@@ -469,6 +488,7 @@ jobs:
           echo "✅ iPhone app: portrait only"
 
       - name: Export and Upload to TestFlight
+        if: ${{ github.event_name == 'push' || inputs.upload }}
         run: |
           cat > /tmp/ExportOptions.plist << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>

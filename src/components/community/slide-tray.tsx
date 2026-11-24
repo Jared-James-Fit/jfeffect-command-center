@@ -226,9 +226,10 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
    * `place`: how a clip filmed in the camera sits (Nov 23 2026): filling the
    * frame, framed exactly as the viewfinder showed it, never decided again from
    * its shape (a 3:4 recording used to start "whole", boxed in on a story).
+   * `onAdded`: the new slides' ids, in order (none for a file that didn't fit).
    */
   const add = useCallback(
-    async (files: File[], place?: { framing?: Framing | null; whole?: boolean }) => {
+    async (files: File[], place?: { framing?: Framing | null; whole?: boolean }, opts?: { onAdded?: (ids: string[]) => void }) => {
       const current = [...Array.from({ length: coverCount }, () => ({ kind: "image" as const })), ...itemsRef.current.map((it) => ({ kind: it.kind }))];
       const tagged = files.map((file) => ({ file, kind: (file.type.startsWith("video/") ? "video" : "image") as "image" | "video" }));
       const fit = fitSlides(current, tagged);
@@ -237,6 +238,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       const placed = place ? { ...(place.framing ? { framing: place.framing } : {}), ...(place.whole !== undefined ? { whole: place.whole } : {}) } : {};
       setItems((list) => [...list, ...fresh.map((f) => ({ id: f.id, kind: f.kind, status: "preparing" as const, progress: 0, preview: null, slide: null, existing: false, ...placed }))]);
       for (const f of fresh) defer(f.id);
+      // which slides these files became (the camera roll ties each tile to its slide)
+      opts?.onAdded?.(fresh.map((f) => f.id));
       // read them one at a time (decoding is the heavy bit; a long clip opens the trimmer); each uploads as soon as it's ready
       const clips = fresh.filter((f) => f.kind === "video" || looksLikeVideo(f.file));
       for (const f of fresh) {
