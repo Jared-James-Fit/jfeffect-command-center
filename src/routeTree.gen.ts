@@ -143,6 +143,7 @@ import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authen
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
 import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_authenticated/portal/appointments'
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
+import { Route as AuthenticatedPortalCardioRouteImport } from './routes/_authenticated/portal/cardio'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCommunityRouteImport } from './routes/_authenticated/portal/community'
@@ -1069,6 +1070,12 @@ const AuthenticatedPortalCalendarRoute =
   AuthenticatedPortalCalendarRouteImport.update({
     id: '/calendar',
     path: '/calendar',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalCardioRoute =
+  AuthenticatedPortalCardioRouteImport.update({
+    id: '/cardio',
+    path: '/cardio',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalCheckInRoute =
@@ -2288,6 +2295,7 @@ export interface FileRoutesByFullPath {
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
+  '/portal/cardio': typeof AuthenticatedPortalCardioRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
@@ -2602,6 +2610,7 @@ export interface FileRoutesByTo {
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
+  '/portal/cardio': typeof AuthenticatedPortalCardioRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
@@ -2922,6 +2931,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
+  '/_authenticated/portal/cardio': typeof AuthenticatedPortalCardioRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/_authenticated/portal/community': typeof AuthenticatedPortalCommunityRoute
@@ -3242,6 +3252,7 @@ export interface FileRouteTypes {
     | '/portal/announcements'
     | '/portal/appointments'
     | '/portal/calendar'
+    | '/portal/cardio'
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/community'
@@ -3556,6 +3567,7 @@ export interface FileRouteTypes {
     | '/portal/announcements'
     | '/portal/appointments'
     | '/portal/calendar'
+    | '/portal/cardio'
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/community'
@@ -3875,6 +3887,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
     | '/_authenticated/portal/calendar'
+    | '/_authenticated/portal/cardio'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
     | '/_authenticated/portal/community'
@@ -5112,6 +5125,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/portal/calendar'
       preLoaderRoute: typeof AuthenticatedPortalCalendarRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/cardio': {
+      id: '/_authenticated/portal/cardio'
+      path: '/cardio'
+      fullPath: '/portal/cardio'
+      preLoaderRoute: typeof AuthenticatedPortalCardioRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/check-in': {
@@ -6912,6 +6932,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAnnouncementsRoute: typeof AuthenticatedPortalAnnouncementsRoute
   AuthenticatedPortalAppointmentsRoute: typeof AuthenticatedPortalAppointmentsRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
+  AuthenticatedPortalCardioRoute: typeof AuthenticatedPortalCardioRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRoute
   AuthenticatedPortalCommunityRoute: typeof AuthenticatedPortalCommunityRoute
@@ -6962,6 +6983,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalAnnouncementsRoute,
     AuthenticatedPortalAppointmentsRoute: AuthenticatedPortalAppointmentsRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
+    AuthenticatedPortalCardioRoute: AuthenticatedPortalCardioRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute: AuthenticatedPortalCheckInsRoute,
     AuthenticatedPortalCommunityRoute: AuthenticatedPortalCommunityRoute,

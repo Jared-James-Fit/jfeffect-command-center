@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -149,6 +149,13 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * In the background, never a client waiting. OpenAI key only.
    */
   recovery_write: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
+  /**
+   * Cleo in the Cardio tab (cardio/cleo.server.ts, Nov 23 2026): builds, reviews and edits a client's
+   * cardio draft from the shared client intelligence. Every number comes back as JSON that code cleans
+   * and checks (cleanPlan, planProblems) and the coach applies to the draft, never the live plan.
+   * Answered while the coach waits, so the quicker strong writer first; OpenAI key only.
+   */
+  cardio_plan: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
 };
 
 /**
