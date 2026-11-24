@@ -84,6 +84,7 @@ const NutritionProgressCard = lazyDefault(() => import("@/components/nutrition/N
 const WeightManagementCard = lazyDefault(() => import("@/components/weight-management/WeightManagementCard"), "WeightManagementCard");
 const RoadmapCoachCard = lazyDefault(() => import("@/components/nutrition-roadmap/roadmap-coach"), "RoadmapCoachCard");
 const CardioWorkspace = lazyDefault(() => import("@/components/cardio/cardio-workspace"), "CardioWorkspace");
+const CompetitionWorkspace = lazyDefault(() => import("@/components/competition/competition-tab"), "CompetitionWorkspace");
 const NutritionCleoDock = lazyDefault(() => import("@/components/nutrition/nutrition-cleo-dock"), "NutritionCleoDock");
 const NutritionQualityCard = lazyDefault(() => import("@/components/nutrition/NutritionQualityCard"), "NutritionQualityCard");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
@@ -838,6 +839,17 @@ export function ClientProfileWorkspace({
         <TabsContent value="cardio" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <Suspense fallback={<TabFallback />}>
             <CardioWorkspace clientId={id} />
+          </Suspense>
+        </TabsContent>
+
+        {/*
+          Competition (Nov 24 2026): every meet's preparation on its own schedule (the
+          research, projections, field, attempts and game plan already done), the meet-day
+          command centre one tap away.
+        */}
+        <TabsContent value="competition" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <CompetitionWorkspace clientId={id} />
           </Suspense>
         </TabsContent>
 
