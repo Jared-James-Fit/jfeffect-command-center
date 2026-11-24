@@ -42,7 +42,7 @@ describe("the story camera asks for a 9:16 picture", () => {
     expect(studio).toContain("setShotWhole(story && !reply && !share && !s.live && storyStartsWhole(drawableSize(s.src as Drawable)));");
     // a clip: filling the story, framed by the camera's guide on a post (never re-decided from its 3:4 shape)
     expect(studio).toContain("const place = { whole: false, framing: !v || story ? CENTRED : framingFromGuide({ w: v.w, h: v.h }, v.view, v.guide) };");
-    expect(read("src/components/community/slide-tray.tsx")).toContain("async (files: File[], place?: { framing?: Framing | null; whole?: boolean }) => {");
+    expect(read("src/components/community/slide-tray.tsx")).toContain("async (files: File[], place?: { framing?: Framing | null; whole?: boolean }, opts?: { onAdded?: (ids: string[]) => void }) => {");
   });
   it("the viewfinder shows once it's measured (no box that jumps to full screen), and a flip holds the last frame", () => {
     expect(studio).toContain('visibility: phase === "shoot" && !measured ? "hidden" : undefined');
