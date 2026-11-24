@@ -160,6 +160,7 @@ describe("Stripe's billing page", () => {
     expect(p["features[payment_method_update][enabled]"]).toBe("true");
     expect(p["features[invoice_history][enabled]"]).toBe("true");
     expect(p.default_return_url).toBe("https://jfeffect.com/portal/plan");
+    expect(p["business_profile[headline]"].length).toBeLessThanOrEqual(60); // Stripe refuses a longer one
   });
   it("flags a configuration that would let plans change in Stripe", () => {
     const ok = { active: true, features: { payment_method_update: { enabled: true }, invoice_history: { enabled: true }, customer_update: { enabled: true }, subscription_cancel: { enabled: false }, subscription_update: { enabled: false } } };
