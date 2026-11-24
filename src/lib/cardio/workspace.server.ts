@@ -267,6 +267,8 @@ export async function loadCardioWorkspace(sb: any, clientId: string, opts: { loa
     lastChanged,
     today,
     checkins: assessment.checkins.count,
+    lowerPerformance: input.performance.lower,
+    hungerHigh: assessment.checkins.hungerHigh,
   };
 
   const draft = draftRow

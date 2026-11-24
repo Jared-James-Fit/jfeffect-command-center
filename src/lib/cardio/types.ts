@@ -80,6 +80,8 @@ export type CardioProposal = {
   change: boolean;
   plan: CardioPlan | null;
   changeLines: string[];
+  /** The same changes grouped by session (diffPlans' keys), for picking which to apply. */
+  changes?: Array<{ key: string; kind: string; lines: string[] }>;
   reasons: string[];
   nutritionNote: string | null;
   problems: Array<{ level: "error" | "warn"; text: string }>;

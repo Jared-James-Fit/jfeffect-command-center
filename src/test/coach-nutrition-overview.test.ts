@@ -172,10 +172,10 @@ describe("the plan reads a day at a time: targets, then meals", () => {
     expect(review).toContain("const was = published ? null : now.get(dayKey(r.label)) ?? null;");
   });
 
-  it("the tab: the update, Food & diet and plan quality beside the plan, how it's going; cardio is its own tab", () => {
+  it("the tab: plan quality first, the update, Food & diet beside the plan, how it's going; cardio is its own tab", () => {
     const tab = read("src/route-pages/_authenticated/admin/clients.$id.tsx");
     const nutrition = tab.slice(tab.indexOf('<TabsContent value="nutrition"'), tab.indexOf('<TabsContent value="cardio"'));
-    const order = ["<NutritionRequestPanel", "<FoodNotesCard", "<NutritionQualityCard", "<NutritionTargetsPanel", "<NutritionProgressCard"].map((t) => nutrition.indexOf(t));
+    const order = ["<NutritionQualityCard", "<NutritionRequestPanel", "<FoodNotesCard", "<NutritionTargetsPanel", "<NutritionProgressCard"].map((t) => nutrition.indexOf(t));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(nutrition).toContain('<div className="min-w-0 space-y-4 md:col-span-1 md:self-start">');

@@ -34,6 +34,7 @@ import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { builderNav, type BuilderHere } from "@/lib/builder-nav";
 import { CleoMark } from "@/components/summer/cleo-mark";
 import { ChatPanel, HistoryPanel, RulesPanel } from "@/components/program-ai/edit-with-ai";
+import { OptimizeBrief, type OptimizeBriefData } from "@/components/plan-quality/plan-intelligence";
 import type { ProgramAiTarget } from "@/lib/program-ai/program-ai.functions";
 
 export type CleoScope = "day" | "week" | "block" | "program";
@@ -45,15 +46,43 @@ const MODE_KEY = "jf.cleo-dock.mode";
 export const DOCK_MIN = 340;
 export const DOCK_DEFAULT = 420;
 
-/** The builder's handle on its dock: open it (with words in the box), and whether it's open. */
+/** Words for the dock's box: shown to edit, or sent at once (`send`, Optimize's Draft). */
+export type CleoSeed = { text: string; nonce: number; send?: boolean };
+
+/**
+ * The page's handle on its dock: open it (with words in the box, or sent at once), whether it's
+ * open, and Optimize's brief (the ranked opportunities shown first, plan-intelligence.tsx).
+ */
 export function useCleoDock() {
   const [open, setOpen] = useState(false);
-  const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(null);
-  const ask = useCallback((text?: string) => {
-    if (text) setSeed({ text, nonce: Date.now() });
+  const [seed, setSeed] = useState<CleoSeed | null>(null);
+  const [brief, setBrief] = useState<OptimizeBriefData | null>(null);
+  const ask = useCallback((text?: string, opts?: { send?: boolean }) => {
+    if (text) setSeed({ text, nonce: Date.now(), send: !!opts?.send });
     setOpen(true);
   }, []);
-  return { open, setOpen, seed, ask, toggle: () => setOpen((v) => !v) };
+  const optimize = useCallback((b: Omit<OptimizeBriefData, "nonce">) => {
+    setBrief({ ...b, nonce: Date.now() });
+    setOpen(true);
+  }, []);
+  return { open, setOpen, seed, ask, brief, setBrief, optimize, toggle: () => setOpen((v) => !v) };
+}
+
+/** Optimize's brief at the top of a dock: Draft sends the ticked opportunities, Edit puts them in the box. */
+export function DockBrief({ dock, busy }: { dock: CleoDockHandle; busy?: boolean }) {
+  if (!dock.brief) return null;
+  return (
+    <OptimizeBrief
+      brief={dock.brief}
+      busy={busy}
+      onDraft={(text) => dock.ask(text, { send: true })}
+      onEdit={(text) => {
+        dock.ask(text);
+        dock.setBrief(null);
+      }}
+      onClose={() => dock.setBrief(null)}
+    />
+  );
 }
 export type CleoDockHandle = ReturnType<typeof useCleoDock>;
 
@@ -382,6 +411,7 @@ export function CleoDock({
   title,
   onApplied,
   beforeSend,
+  scopes = ["day", "week", "block", "program"],
 }: {
   dock: CleoDockHandle;
   target: ProgramAiTarget;
@@ -390,13 +420,16 @@ export function CleoDock({
   onApplied?: () => void | Promise<void>;
   /** Save what's on screen (run before every message). */
   beforeSend?: () => Promise<void> | void;
+  /** The scopes to offer (the client's Training tab, outside the builder, is the whole program). */
+  scopes?: CleoScope[];
 }) {
   const cleo = useCleoAccess();
   const here = useBuilderHere();
   const [tab, setTab] = useState<Tab>("chat");
   // the scope follows the view until the coach picks one
   const [picked, setPicked] = useState<CleoScope | null>(null);
-  const scope = picked ?? scopeForView(here?.view);
+  const followed = scopeForView(here?.view);
+  const scope = picked ?? (scopes.includes(followed) ? followed : scopes[scopes.length - 1]);
   const context = scopeWords(scope, here);
   const quick = useMemo(() => quickActionsFor(scope, target.kind), [scope, target.kind]);
   const name = cleo ? "Cleo" : "Adjust program";
@@ -404,8 +437,9 @@ export function CleoDock({
   const header = (
     <>
       <div className="mt-2 flex items-center gap-2">
-        <div role="radiogroup" aria-label="What it's about" className="grid flex-1 grid-cols-4 rounded-lg bg-muted p-0.5" data-cleo-scope>
-          {(["day", "week", "block", "program"] as CleoScope[]).map((s) => (
+        {scopes.length > 1 ? (
+        <div role="radiogroup" aria-label="What it's about" className="grid flex-1 rounded-lg bg-muted p-0.5" style={{ gridTemplateColumns: `repeat(${scopes.length}, minmax(0, 1fr))` }} data-cleo-scope>
+          {scopes.map((s) => (
             <button
               key={s}
               type="button"
@@ -421,6 +455,9 @@ export function CleoDock({
             </button>
           ))}
         </div>
+        ) : (
+          <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{scopes[0] === "program" ? "Their whole program" : SCOPE_LABEL[scopes[0]]}</p>
+        )}
         <div role="tablist" aria-label={name} className="flex shrink-0 items-center gap-0.5">
           {(["chat", "rules", "history"] as Tab[]).map((t) => (
             <button
@@ -439,7 +476,7 @@ export function CleoDock({
           ))}
         </div>
       </div>
-      {picked && picked !== scopeForView(here?.view) && (
+      {picked && scopes.length > 1 && picked !== followed && (
         <button type="button" onClick={() => setPicked(null)} className="mt-1.5 cursor-pointer text-[11px] font-medium text-muted-foreground underline-offset-2 hover:underline">
           Follow what's on screen
         </button>
@@ -450,6 +487,7 @@ export function CleoDock({
   return (
     <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header}>
       <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== "chat"}>
+        <DockBrief dock={dock} />
         <ChatPanel target={target} onApplied={onApplied} context={context} beforeSend={beforeSend} quickActions={quick} seed={dock.seed} />
       </div>
       {tab === "rules" && <RulesPanel clientId={target.kind === "client" ? target.clientId : null} />}

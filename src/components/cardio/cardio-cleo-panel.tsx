@@ -12,11 +12,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { askCardioCleoFn, decideCardioProposalFn } from "@/lib/cardio/cardio.functions";
 import type { CardioProposal, CardioProposalRow } from "@/lib/cardio/types";
-import type { CardioPlan } from "@/lib/cardio/plan";
+import { pickChanges, type CardioPlan } from "@/lib/cardio/plan";
 
 export const CARDIO_QUICK_ASKS = [
   "Review everything before I publish",
@@ -26,7 +27,7 @@ export const CARDIO_QUICK_ASKS = [
   "Keep nutrition unchanged but improve the cardio distribution",
 ];
 
-type Turn = { id: string; ask: string; status: "thinking" | "done" | "failed"; proposal?: CardioProposal; error?: string; decided?: "applied" | "dismissed" };
+type Turn = { id: string; ask: string; status: "thinking" | "done" | "failed"; proposal?: CardioProposal; error?: string; decided?: "applied" | "dismissed"; picked?: Set<string>; base?: CardioPlan };
 
 export function CardioCleoPanel({
   clientId,
@@ -36,6 +37,7 @@ export function CardioCleoPanel({
   onNutritionNote,
   seed,
   history,
+  scorePlan,
 }: {
   clientId: string;
   firstName: string;
@@ -43,8 +45,10 @@ export function CardioCleoPanel({
   /** Put a proposed plan on the draft (the builder keeps it undoable). */
   onApply: (plan: CardioPlan, proposalId: string | null) => void;
   onNutritionNote?: (note: string) => void;
-  seed?: { text: string; nonce: number } | null;
+  seed?: { text: string; nonce: number; send?: boolean } | null;
   history: CardioProposalRow[];
+  /** The design score of a plan (scoreCardioPlan with their context), for picked changes. */
+  scorePlan?: (plan: CardioPlan) => number | null;
 }) {
   const ask = useServerFn(askCardioCleoFn);
   const decide = useServerFn(decideCardioProposalFn);
@@ -56,8 +60,13 @@ export function CardioCleoPanel({
 
   useEffect(() => {
     if (!seed?.text) return;
+    if (seed.send) {
+      if (!turns.some((t) => t.status === "thinking")) void send(seed.text);
+      return;
+    }
     setText(seed.text);
     window.setTimeout(() => boxRef.current?.focus(), 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed?.nonce, seed?.text]);
 
   useEffect(() => {
@@ -71,21 +80,44 @@ export function CardioCleoPanel({
     setTurns((t) => [...t, { id, ask: q, status: "thinking" }]);
     setText("");
     try {
+      const base = draft;
       const proposal = await ask({ data: { clientId, instructions: q, draft: draft.sessions as any, scope: "the cardio draft on screen" } });
-      setTurns((t) => t.map((x) => (x.id === id ? { ...x, status: "done", proposal } : x)));
+      const picked = new Set((proposal.changes ?? []).map((c) => c.key));
+      setTurns((t) => t.map((x) => (x.id === id ? { ...x, status: "done", proposal, picked, base } : x)));
     } catch (e: any) {
       setTurns((t) => t.map((x) => (x.id === id ? { ...x, status: "failed", error: e?.message ?? "Cleo couldn't answer just now." } : x)));
     }
   };
 
+  /** The plan with only the ticked changes (all of them when the proposal can't be split). */
+  const chosen = (turn: Turn): CardioPlan | null => {
+    const p = turn.proposal;
+    if (!p?.plan) return null;
+    if (!p.changes?.length || !turn.picked || !turn.base) return p.plan;
+    return pickChanges(turn.base, p.plan, turn.picked);
+  };
+
   const apply = async (turn: Turn) => {
     const p = turn.proposal;
-    if (!p?.plan) return;
-    onApply(p.plan, p.id);
+    const plan = chosen(turn);
+    if (!p?.plan || !plan) return;
+    const some = !!p.changes?.length && !!turn.picked && turn.picked.size < p.changes.length;
+    onApply(plan, p.id);
     setTurns((t) => t.map((x) => (x.id === turn.id ? { ...x, decided: "applied" } : x)));
-    if (p.id) await decide({ data: { clientId, id: p.id, status: "applied", note: null } }).catch(() => {});
-    toast.success("On your draft. Review it, then publish when you're ready.");
+    if (p.id) await decide({ data: { clientId, id: p.id, status: "applied", note: some ? `Applied ${turn.picked!.size} of ${p.changes!.length} changes` : null } }).catch(() => {});
+    toast.success(some ? `${turn.picked!.size} of ${p.changes!.length} changes on your draft. Review, then publish.` : "On your draft. Review it, then publish when you're ready.");
   };
+
+  const togglePick = (turnId: string, key: string, on: boolean) =>
+    setTurns((t) =>
+      t.map((x) => {
+        if (x.id !== turnId) return x;
+        const n = new Set(x.picked ?? []);
+        if (on) n.add(key);
+        else n.delete(key);
+        return { ...x, picked: n };
+      }),
+    );
 
   const dismiss = async (turn: Turn) => {
     const p = turn.proposal;
@@ -131,28 +163,58 @@ export function CardioCleoPanel({
                 {t.proposal.plan && (
                   <>
                     <div>
-                      <p className="text-[12px] font-semibold">What changes on the draft</p>
-                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-muted-foreground">
-                        {t.proposal.changeLines.map((l, i) => (
-                          <li key={i}>{l}</li>
-                        ))}
-                      </ul>
+                      <p className="text-[12px] font-semibold">What changes on the draft{t.proposal.changes && t.proposal.changes.length > 1 ? " (untick any you'd keep as it is)" : ""}</p>
+                      {t.proposal.changes?.length ? (
+                        <ul className="mt-1 space-y-1" data-cardio-proposal-changes>
+                          {t.proposal.changes.map((c) => (
+                            <li key={c.key}>
+                              <label className={cn("flex cursor-pointer gap-2 rounded-lg px-1.5 py-1.5 hover:bg-muted/50", t.decided && "cursor-default hover:bg-transparent")}>
+                                <Checkbox
+                                  checked={t.picked?.has(c.key) ?? true}
+                                  disabled={!!t.decided}
+                                  onCheckedChange={(v) => togglePick(t.id, c.key, !!v)}
+                                  className="mt-0.5"
+                                  aria-label={c.lines[0]}
+                                />
+                                <span className="min-w-0 text-[12px] leading-snug">
+                                  {c.lines.map((l, i) => (
+                                    <span key={i} className={cn("block", i > 0 && "text-muted-foreground")}>
+                                      {l}
+                                    </span>
+                                  ))}
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-muted-foreground">
+                          {t.proposal.changeLines.map((l, i) => (
+                            <li key={i}>{l}</li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                     {t.proposal.reasons.length > 0 && (
-                      <details className="text-[12px]">
-                        <summary className="cursor-pointer font-medium text-muted-foreground">Why</summary>
-                        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+                      <div className="text-[12px]">
+                        <p className="font-semibold">Why</p>
+                        <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-muted-foreground">
                           {t.proposal.reasons.map((r, i) => (
                             <li key={i}>{r}</li>
                           ))}
-                        </ul>
-                      </details>
+                        </ol>
+                      </div>
                     )}
-                    {t.proposal.quality.before != null && t.proposal.quality.after != null && (
-                      <p className="text-[12px] text-muted-foreground" data-proposal-quality>
-                        Plan quality {t.proposal.quality.before} → {t.proposal.quality.after}
-                      </p>
-                    )}
+                    {t.proposal.quality.before != null && (() => {
+                      const plan = chosen(t);
+                      const after = plan && scorePlan ? scorePlan(plan) : t.proposal!.quality.after;
+                      return after != null ? (
+                        <p className="text-[12px] text-muted-foreground" data-proposal-quality>
+                          Plan quality {t.proposal!.quality.before} → <span className={cn("font-medium", after > t.proposal!.quality.before! ? "text-success" : "text-foreground")}>{after}</span>
+                          {t.proposal!.changes && t.picked && t.picked.size < t.proposal!.changes.length ? " with the changes you've ticked" : ""}
+                        </p>
+                      ) : null;
+                    })()}
                     {t.proposal.problems.length > 0 && (
                       <ul className="space-y-0.5 text-[12px]">
                         {t.proposal.problems.map((p, i) => (
@@ -179,8 +241,17 @@ export function CardioCleoPanel({
                 {t.proposal.plan && !t.decided && (
                   <div className="space-y-2 pt-1">
                     <div className="flex flex-wrap gap-2">
-                      <Button className="h-9" onClick={() => void apply(t)} disabled={t.proposal.problems.some((p) => p.level === "error")} data-proposal-apply>
-                        Apply to draft
+                      <Button
+                        className="h-9"
+                        onClick={() => void apply(t)}
+                        disabled={t.proposal.problems.some((p) => p.level === "error") || (!!t.proposal.changes?.length && !!t.picked && t.picked.size === 0)}
+                        data-proposal-apply
+                      >
+                        {t.proposal.changes && t.proposal.changes.length > 1 && t.picked
+                          ? t.picked.size === t.proposal.changes.length
+                            ? `Apply all ${t.picked.size} to draft`
+                            : `Apply ${t.picked.size} of ${t.proposal.changes.length} to draft`
+                          : "Apply to draft"}
                       </Button>
                       <Button variant="outline" className="h-9" onClick={() => void dismiss(t)} data-proposal-dismiss>
                         Not this

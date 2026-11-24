@@ -288,10 +288,18 @@ export const askPlanEditFn = createServerFn({ method: "POST" })
 /** Put the AI's change on the plan (in place, with Undo). */
 export const applyPlanEditFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ editId: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        editId: z.string().uuid(),
+        /** Only these days (by their place on the plan) take the change; the rest stay as they are. */
+        days: z.array(z.number().int().min(0).max(30)).max(31).optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     if (!(await canSeeEdit(context.supabase, context.userId, data.editId))) throw new Error("Coach access required");
-    return (await planEdits()).applyPlanEdit(await admin(), data.editId, context.userId);
+    return (await planEdits()).applyPlanEdit(await admin(), data.editId, context.userId, data.days);
   });
 
 /** Put the plan back as it was before the AI's change. */
