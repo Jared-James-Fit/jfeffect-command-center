@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -23,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Trash2, LineChart } from "lucide-react";
+import { Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Trash2, LineChart } from "lucide-react";
 import { isAtHomeBackupClient } from "@/lib/at-home-backup";
 import { AtHomeBackupAdminPanel } from "@/components/workouts/at-home-backup-admin-panel";
 import { toast } from "sonner";
@@ -76,20 +75,17 @@ function ClientProgramsPage() {
   return (
     <>
       <PageHeader
-        backTo="/admin/clients"
-        backLabel={client?.full_name ? `Back to ${client.full_name}` : "Back to Clients"}
+        backTo={`/admin/clients/${clientId}?tab=training`}
+        backLabel="Training"
         breadcrumbs={[
           { label: "Clients", to: "/admin/clients" },
           ...(client?.full_name ? [{ label: client.full_name, to: `/admin/clients/${clientId}` }] : []),
-          { label: "Training Program" },
+          { label: "All programs & blocks" },
         ]}
-        title="Training Program"
+        title="All programs & blocks"
         subtitle={client?.full_name ?? ""}
       />
       <div className="p-6 md:p-8 space-y-6">
-        <ClientNameLink clientId={clientId} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back to client
-        </ClientNameLink>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setPrepOpen(true)}><Target className="mr-2 h-4 w-4" /> New Prep / Phase</Button>

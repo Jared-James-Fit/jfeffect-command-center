@@ -33,7 +33,7 @@ export function ClientQuickLinks({ c, compact = false }: { c: { client_id: strin
       <ClientNameLink clientId={c.client_id}>
         <Button size="sm" variant="ghost" className="h-7 px-2"><UserCircle className="h-4 w-4" /></Button>
       </ClientNameLink>
-      <Link to="/admin/client-programs/$clientId" params={{ clientId: c.client_id }}>
+      <Link to="/admin/clients/$id" params={{ id: c.client_id }} search={{ tab: "training" } as any}>
         <Button size="sm" variant="ghost" className="h-7 px-2"><Dumbbell className="h-4 w-4" /></Button>
       </Link>
     </div>

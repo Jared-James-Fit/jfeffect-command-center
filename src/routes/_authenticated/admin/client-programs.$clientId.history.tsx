@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Search, AlertTriangle, CheckCircle2, MessageCircle, Star, Eye } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle2, MessageCircle, Star, Eye } from "lucide-react";
 import { getCompletedHistory } from "@/lib/pl-programs";
 import { ProgressComparison } from "@/components/progress-comparison";
 import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
@@ -69,11 +69,8 @@ function HistoryPage() {
 
   return (
     <>
-      <PageHeader title="Program History" subtitle={client?.full_name ?? ""} />
+      <PageHeader title="Program History" subtitle={client?.full_name ?? ""} backTo={`/admin/clients/${clientId}?tab=training`} backLabel="Training" />
       <div className="p-6 md:p-8 space-y-6">
-        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
-        </Link>
 
         <RecentRecordsCard clientId={clientId} unit={displayUnit} />
 

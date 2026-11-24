@@ -142,7 +142,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
           {mode === "admin" && (
             <div className="flex gap-2">
               <Link to="/admin/program-library"><Button size="sm" variant="outline"><Layers className="mr-1 h-4 w-4" /> Program Library</Button></Link>
-              <Link to="/admin/client-programs/$clientId" params={{ clientId }}><Button size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Open Programs</Button></Link>
+              <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "training" } as any}><Button size="sm"><Dumbbell className="mr-1 h-4 w-4" /> Open Programs</Button></Link>
             </div>
           )}
         </div>
@@ -176,7 +176,7 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
                 <Trash2 className="mr-1 h-4 w-4" /> Remove ({selectedCount})
               </Button>
             )}
-            <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
+            <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "training" } as any}>
               <Button size="sm" variant="outline"><Dumbbell className="mr-1 h-4 w-4" /> Manage Programs</Button>
             </Link>
           </div>
