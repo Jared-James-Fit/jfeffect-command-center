@@ -468,7 +468,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             <div className="grid h-full place-items-center px-8 text-center text-sm text-white/70">Couldn't load this workout. Close and try again.</div>
           ) : statsLoading || !base ? (
             <div className="grid h-full place-items-center">
-              <div className="aspect-[9/16] h-[70%] animate-pulse rounded-3xl bg-white/10" />
+              <div className="aspect-[9/16] h-[70%] jf-skeleton rounded-3xl bg-white/10" />
             </div>
           ) : (
             <div ref={railRef} onScroll={onScroll} className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

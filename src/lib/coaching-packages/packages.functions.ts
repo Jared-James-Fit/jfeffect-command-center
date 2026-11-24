@@ -156,7 +156,7 @@ export const listCoachingPackages = createServerFn({ method: "GET" })
 const PackageInput = z.object({
   id: z.string().uuid().optional().nullable(),
   slug: z.string().trim().toLowerCase().max(LIMITS.slug),
-  kind: z.enum(["free", "subscription", "one_time"]),
+  kind: z.enum(["free", "membership", "subscription", "one_time"]),
   name: z.string().trim().max(LIMITS.name),
   tagline: z.string().trim().max(LIMITS.tagline).nullable().optional(),
   description: z.string().trim().max(LIMITS.description).nullable().optional(),

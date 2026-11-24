@@ -221,7 +221,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
               <span className="truncate">{program?.title ?? "Training program"}</span>
             </div>
             {isLoading ? (
-              <div className="mt-2 h-6 w-48 animate-pulse rounded bg-muted" />
+              <div className="mt-2 h-6 w-48 jf-skeleton rounded bg-muted" />
             ) : empty ? (
               <div className="mt-1 text-lg font-bold">Nothing assigned yet</div>
             ) : (

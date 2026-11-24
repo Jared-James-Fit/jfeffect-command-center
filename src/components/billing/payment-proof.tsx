@@ -167,13 +167,30 @@ export function ProofPicker({ clientId, value, onChange, date, hideThumb }: { cl
 
 /** A proof file, read through a short-lived signed link (the bucket is private). */
 export function ProofImage({ path, className, full }: { path: string; className?: string; full?: boolean }) {
-  const { data: url } = useQuery({
+  const proof = useQuery({
     queryKey: ["payment-proof-url", path],
     staleTime: 4 * 60_000,
-    queryFn: async () => (await supabase.storage.from("payment-proofs").createSignedUrl(path, 600)).data?.signedUrl ?? null,
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 600);
+      if (error) throw error;
+      return data?.signedUrl ?? null;
+    },
   });
+  const url = proof.data;
   const pdf = path.toLowerCase().endsWith(".pdf");
-  if (!url) return <div className={cn("animate-pulse rounded-lg bg-muted", className)} aria-busy />;
+  if (!url && (proof.isError || proof.isSuccess)) {
+    // couldn't sign a link: say so with Try again, never a placeholder that pulses forever
+    return (
+      <button
+        type="button"
+        onClick={() => void proof.refetch()}
+        className={cn("grid place-items-center rounded-lg border border-dashed border-border p-2 text-center text-[12px] text-muted-foreground", className)}
+      >
+        {proof.isFetching ? "Loading…" : "Couldn't load the proof · Try again"}
+      </button>
+    );
+  }
+  if (!url) return <div className={cn("jf-skeleton rounded-lg bg-muted", className)} aria-busy />;
   if (pdf) {
     return (
       <a href={url} target="_blank" rel="noreferrer" className={cn("flex items-center justify-center gap-1.5 rounded-lg border border-border text-[13px]", className)}>

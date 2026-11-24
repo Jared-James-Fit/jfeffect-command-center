@@ -238,7 +238,7 @@ export function ProgramLibrary({
         {isLoading ? (
           <ul className="space-y-2" aria-hidden>
             {Array.from({ length: 4 }).map((_, i) => (
-              <li key={i} className="h-[76px] animate-pulse rounded-2xl bg-muted" />
+              <li key={i} className="h-[76px] jf-skeleton rounded-2xl bg-muted" />
             ))}
           </ul>
         ) : shown.length === 0 ? (

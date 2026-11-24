@@ -116,7 +116,7 @@ export function AvailabilityCard() {
       <p className="mt-2 text-[13px] text-muted-foreground">{settings ? MODE_COPY[settings.mode].line : " "}</p>
 
       {isLoading || !data ? (
-        <div className="mt-3 h-10 animate-pulse rounded-lg bg-muted" />
+        <div className="mt-3 h-10 jf-skeleton rounded-lg bg-muted" />
       ) : !confirmed ? (
         <div className="mt-3 rounded-xl bg-muted p-3 text-sm">
           <p className="font-medium">Set your boundaries first</p>

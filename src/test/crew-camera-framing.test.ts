@@ -209,8 +209,10 @@ describe("the recording button: Instagram's surface, minimal while it films, not
     expect(studio).toContain("<RecordingClock startedAt={recorder.startedAt} locked={recorder.locked} />");
     expect(studio).toContain('recorder.recording && "pointer-events-none opacity-0"');
     expect(studio).toContain('recorder.recording && "pointer-events-none invisible opacity-0"');
-    expect(studio).toContain('{recordable && hints.data && !hints.data.includes("hold_to_film") && (');
-    expect(carousel).toContain('active && "pointer-events-none invisible opacity-0"');
+    // the hint's line keeps its room while filming under the camera (main's holdHintRoom), and the chips step away in place
+    expect(studio).toContain("const holdHint = recordable && !recorder.recording && holdUnseen;");
+    expect(carousel).toContain("<GroupChips chips={chips} on={onGroup} hidden={filming}");
+    expect(carousel).toContain('active && "invisible opacity-0"');
     expect(studio).toContain("zoom={zoomCaps && recorder.recording ? <ZoomPill");
   });
   it("the app going to the background mid-clip ends it there, kept", () => {

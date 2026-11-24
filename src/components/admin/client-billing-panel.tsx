@@ -16,6 +16,7 @@
  * disagree. Amounts are in the dollars the client pays. Nothing here charges
  * anyone.
  */
+import { ClientPlanCard } from "@/components/plans/client-plan-card";
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -44,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { billingRange } from "@/lib/date-range";
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import { AutoPaySheet, PendingAutoPayRow, usePendingAutoPay } from "@/components/billing/auto-pay-sheet";
+import { OfflineState, SlowNote, useQueryView } from "@/components/loading";
 
 export { payDay };
 
@@ -51,7 +53,12 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
   const qc = useQueryClient();
   const { role } = useAuth();
   const isAdmin = role === "admin";
-  const { data, payments, isLoading, isError, refetch, isFetching } = useClientPayments(clientId);
+  const billingQ = useClientPayments(clientId);
+  const { data, payments, refetch, isFetching } = billingQ;
+  // Waiting, offline and failed are each said (an offline first read used to leave only the header)
+  const billingState = useQueryView(billingQ).kind;
+  const isLoading = billingState === "loading";
+  const isError = billingState === "error";
   const [recording, setRecording] = useState<string | null>(null);
   const [dating, setDating] = useState<string | null>(null);
   const [termOf, setTermOf] = useState<string | null>(null);
@@ -90,10 +97,12 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
       />
       {isLoading && (
         <div className="space-y-3" aria-busy="true">
-          <div className="h-32 animate-pulse rounded-xl bg-muted" />
-          <div className="h-24 animate-pulse rounded-xl bg-muted" />
+          <div className="h-32 jf-skeleton rounded-xl bg-muted" />
+          <div className="h-24 jf-skeleton rounded-xl bg-muted" />
+          <SlowNote active onRetry={() => refetch()} what="billing" />
         </div>
       )}
+      {billingState === "offline" && <OfflineState what="their billing" />}
       {isError && (
         <div className="space-y-2 rounded-xl border border-destructive/40 p-4 text-center">
           <p className="text-[14px] text-destructive">Billing couldn't be loaded.</p>
@@ -103,6 +112,7 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
       {payments && data && (
         <>
           {(payments.packages.length > 0 || payments.coaching.length > 0) && <ClientPackageSnapshot clientId={clientId} onOpenSessions={onOpenSessions} money={false} />}
+          <ClientPlanCard clientId={clientId} />
           <BillingOverview
             p={payments}
             ledger={data.ledger ?? []}
@@ -269,7 +279,8 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
                 text="Not overdue: nothing collects it and nothing says when it's due. Set up auto-pay, or set dates and record what they pay you."
                 action={isAdmin ? (
                   <div className="flex flex-wrap gap-2">
-                    {onAutoPay && !pending.data && (
+                    {/* never a second setup link while we can't tell whether one is already out */}
+                    {onAutoPay && !pending.data && pending.isSuccess && (
                       <Button size="sm" variant="outline" className="h-10" onClick={() => onAutoPay(b.saleId)}><Repeat className="mr-1.5 h-4 w-4" /> Set up auto-pay</Button>
                     )}
                     {b.canSetDates

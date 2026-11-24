@@ -319,8 +319,8 @@ function WorkoutPeekBody({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         {isPending ? (
           <div className="space-y-2">
-            <div className="h-5 w-40 animate-pulse rounded bg-muted" />
-            <div className="h-40 animate-pulse rounded-lg bg-muted/60" />
+            <div className="h-5 w-40 jf-skeleton rounded bg-muted" />
+            <div className="h-40 jf-skeleton rounded-lg bg-muted/60" />
           </div>
         ) : dayItems.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">

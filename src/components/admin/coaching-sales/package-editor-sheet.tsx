@@ -217,10 +217,11 @@ export function PackageEditorSheet({
             {!pkg && (
               <div>
                 <Label>Kind</Label>
-                <div className="mt-1.5 grid grid-cols-3 gap-2">
+                <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {(
                     [
-                      ["subscription", "Monthly plan"],
+                      ["subscription", "Monthly coaching"],
+                      ["membership", "Membership"],
                       ["one_time", "Single call"],
                       ["free", "Free"],
                     ] as const
@@ -320,7 +321,7 @@ export function PackageEditorSheet({
             <Field label="Description" hint="Optional, for the coaching page and cards">
               <Textarea rows={3} value={d.description} maxLength={LIMITS.description} onChange={(e) => set("description", e.target.value)} />
             </Field>
-            <Field label="Button" hint={d.kind === "free" ? "Default: Join free" : "Default: Apply for coaching"}>
+            <Field label="Button" hint={d.kind === "free" ? "Default: Join free" : d.kind === "membership" ? "Default: Join free, then upgrade (it's bought in the app)" : "Default: Apply for coaching"}>
               <Input value={d.cta_label} maxLength={LIMITS.cta} onChange={(e) => set("cta_label", e.target.value)} />
             </Field>
 

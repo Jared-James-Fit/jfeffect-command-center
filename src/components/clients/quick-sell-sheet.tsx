@@ -7,7 +7,8 @@
  * intents so retrying Quick Sell does not create duplicate sales.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ErrorState, OfflineState, ListSkeleton, useQueryView } from "@/components/loading";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { autoSendPaymentRequestMessage } from "@/lib/sms-links.functions";
@@ -65,11 +66,15 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedDiscountId, setSelectedDiscountId] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const productsQ = useQuery({
     queryKey: ["coaching-products"],
     queryFn: () => listFn(),
     staleTime: 5 * 60_000,
   });
+  const { data } = productsQ;
+  const productsView = useQueryView(productsQ);
+  // A link being made, held in a ref so a second tap before the re-render does nothing.
+  const sendingRef = useRef(false);
   const { data: discountData } = useQuery({
     queryKey: ["quick-sell-active-discounts"],
     enabled: open,
@@ -117,15 +122,19 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   };
 
   const sendCheckout = async (product: any, discountCodeId: string | null) => {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSendingCheckout(product.id);
     try {
       // A payment REQUEST is not a SALE: reuse an open, unpaid intent for the
       // same client + product instead of inserting a duplicate sale row.
-      const { data: existingRows } = await supabase
+      const { data: existingRows, error: existingError } = await supabase
         .from("purchase_records")
         .select("id, client_id, offer_id, payment_status, amount_paid, amount_paid_cents, stripe_subscription_id, stripe_payment_intent_id, stripe_checkout_session_id, created_at, archived_at")
         .eq("client_id", clientId)
         .eq("offer_id", product.id);
+      // Couldn't see their sales: never guess "none" and add a second one.
+      if (existingError) throw new Error(existingError.message);
       const reusable = findReusablePurchaseIntent(
         ((existingRows ?? []) as any[]).filter((r) => !r.archived_at),
         { clientId, offerId: product.id },
@@ -189,6 +198,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
     } catch (e: any) {
       toast.error(e?.message ?? "Could not create checkout link");
     } finally {
+      sendingRef.current = false;
       setSendingCheckout(null);
     }
   };
@@ -219,10 +229,12 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
           />
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading products…
-          </div>
+        {productsView.kind === "loading" ? (
+          <ListSkeleton rows={4} avatar={false} label="Loading products" />
+        ) : productsView.kind === "offline" ? (
+          <OfflineState what="your products" />
+        ) : productsView.kind === "error" ? (
+          <ErrorState error={productsQ.error} what="your products" onRetry={() => productsQ.refetch()} retrying={productsQ.isFetching} />
         ) : products.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             {search ? "No products match your search." : "No active products are available for checkout. Add products in Admin → Sales → Products & Payments."}
@@ -328,7 +340,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                               <Button
                                 size="sm"
                                 className="w-full justify-start"
-                                disabled={isSending}
+                                disabled={isSending || !!sendingCheckout}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   sendCheckout(p, selectedDiscountId === first50ForProduct(p.id)?.id ? selectedDiscountId : null);

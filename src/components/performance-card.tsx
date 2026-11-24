@@ -101,7 +101,7 @@ export function PerformanceCard({
 
   if (isLoading)
     return hideWhenEmpty ? null : (
-      <Card className="h-[176px] animate-pulse bg-muted/30" aria-hidden />
+      <Card className="h-[176px] jf-skeleton bg-muted/30" aria-hidden />
     );
   if (!read) {
     if (hideWhenEmpty) return null;
@@ -165,7 +165,7 @@ export function PerformanceCard({
             {read.main && read.lift?.now ? (
               <div data-performance-lift>
                 <div className="text-[12px] text-muted-foreground">
-                  {COMP_LIFT_LABEL[read.main]} estimate
+                  {COMP_LIFT_LABEL[read.main]} strength (est. max)
                 </div>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[24px] font-semibold leading-none tabular-nums tracking-tight">
@@ -180,7 +180,7 @@ export function PerformanceCard({
                         read.lift.trend.pct > 0 ? "text-success" : "text-muted-foreground",
                       )}
                     >
-                      {read.lift.trend.pct > 0 ? "+" : "−"}
+                      {read.lift.trend.pct > 0 ? "up " : "down "}
                       {Math.abs(read.lift.trend.pct)}%
                     </span>
                   )}
@@ -189,7 +189,7 @@ export function PerformanceCard({
             ) : (
               <div data-performance-days>
                 <div className="text-[12px] text-muted-foreground">
-                  Training days, {WEEKS} weeks
+                  Days trained, last {WEEKS} weeks
                 </div>
                 <div className="text-[24px] font-semibold leading-none tabular-nums tracking-tight">
                   {read.trained}
@@ -221,6 +221,7 @@ export function PerformanceCard({
             data-performance-record
           >
             <Trophy className="h-4 w-4 shrink-0 text-warning" aria-hidden />
+            <span className="shrink-0 text-muted-foreground">New record</span>
             <span className="min-w-0 truncate text-foreground">
               {read.latest.exercise} {w(read.latest.load)} {unit} × {read.latest.reps}
             </span>

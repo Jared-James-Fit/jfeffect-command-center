@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useSingleFlight } from "@/hooks/use-load-phase";
+import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -161,6 +163,12 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
     queryFn: async () => (await supabase.from("clients").select("id, full_name, email, agreement_status, agreement_signed, agreement_signed_date, agreement_version, agreement_link, timezone").eq("id", clientId).single()).data,
   });
 
+  // One run at a time, decided before the first await: a second tap while the
+  // sale, its Stripe checkout and the chat message are being made does nothing.
+  const sending = useSingleFlight(async () => {
+    await submit().catch(() => { /* runJob already said what failed, with Try again in the drawer */ });
+  });
+
   const submit = async () => {
     if (!offer || !clientId || !selectedClient) return;
     if (!incomingSchedule) {
@@ -170,7 +178,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       if (problem) return void toast.error(problem);
     }
 
-    runJob({
+    await runJob({
       title: MODE_COPY[mode].button,
       description: `${offer.name} → ${selectedClient.full_name}`,
       steps: ["Validate product", "Create assignment", "Create checkout session", "Save purchase record", "Send checkout link", "Finalize"],
@@ -207,13 +215,15 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       // otherwise every attempt leaves a permanent duplicate sale row (the
       // Marc Asugui duplicate-sales bug). Rows with real Stripe money attached
       // are never reused.
-      const { data: existingRows } = await supabase
+      const { data: existingRows, error: existingError } = await supabase
         .from("purchase_records")
         .select(
           "id, client_id, offer_id, payment_status, amount_paid, amount_paid_cents, stripe_subscription_id, stripe_payment_intent_id, stripe_checkout_session_id, archived_at, created_at",
         )
         .eq("client_id", clientId)
         .eq("offer_id", offer.id);
+      // Couldn't see their sales: never guess "none" and add a second one.
+      if (existingError) throw existingError;
       const reusable = findReusablePurchaseIntent((existingRows ?? []) as any[], {
         clientId,
         offerId: offer.id,
@@ -551,9 +561,14 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         )}
         <DialogFooter>
           <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
-          <ActionButton disabled={!clientId} onClick={submit} className="bg-primary font-semibold">
+          <Button
+            disabled={!clientId || !selectedClient}
+            loading={sending.pending}
+            onClick={() => void sending.run()}
+            className="bg-primary font-semibold"
+          >
             {MODE_COPY[mode].button}
-          </ActionButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

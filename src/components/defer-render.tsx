@@ -73,7 +73,7 @@ export function DeferRender({
   return (
     <div
       ref={ref}
-      className={`rounded-2xl border border-border bg-card/40 animate-pulse ${placeholderHeight}`}
+      className={`jf-skeleton jf-load-reveal rounded-2xl bg-muted ${placeholderHeight}`}
       aria-hidden
     />
   );

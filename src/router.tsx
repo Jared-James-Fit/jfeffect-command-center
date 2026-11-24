@@ -3,6 +3,7 @@ import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { RouterErrorFallback } from "./components/router-error-fallback";
 import { RoutePending } from "./components/route-pending";
+import { queryRetryDelay, shouldRetryQuery } from "./lib/loading/load-state";
 
 export const getRouter = () => {
   // Sensible defaults so the same data doesn't get refetched on every mount,
@@ -19,7 +20,12 @@ export const getRouter = () => {
         // desktop never appear until a hard reload.
         refetchOnWindowFocus: true,
         refetchOnReconnect: "always",
-        retry: 1,                    // a single retry instead of the default 3
+        // Retry only what can get better (lib/loading/load-state.ts): no access,
+        // gone or a bad request shows at once; a dropped connection, a timeout
+        // or a server hiccup gets two more tries with a 1 s / 2 s backoff (gym
+        // wifi); anything else one, as before.
+        retry: shouldRetryQuery,
+        retryDelay: (attempt) => queryRetryDelay(attempt),
       },
     },
   });

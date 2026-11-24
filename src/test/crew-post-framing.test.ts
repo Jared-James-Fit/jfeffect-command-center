@@ -132,7 +132,7 @@ describe("the studio frames every slide, and what's posted is what it showed", (
     expect(studio).toContain("onFraming={(f) => tray.setFraming(selItem.id, f)}");
     expect(read("src/components/community/photo-framer.tsx")).toContain("data-framed-clip");
     // the card stays painted underneath while another slide is framed
-    expect(studio).toContain('className={cn("pointer-events-none absolute", selItem && "invisible")}');
+    expect(studio).toContain('className={cn("pointer-events-none absolute", (!cardVisible || selItem) && "invisible")}');
   });
 
   it("Post frames each slide at the post's shape: a photo baked to it, a clip keeps its frame and gets a poster baked to it", () => {

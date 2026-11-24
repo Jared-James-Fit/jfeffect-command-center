@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ErrorState, OfflineState } from "@/components/loading";
 import { Link } from "@tanstack/react-router";
 import { Minus, Plus, Upload } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
@@ -20,7 +21,8 @@ import { ProgramWorkbench } from "./workbench/program-workbench";
  * and computers (ProgramWorkbench).
  */
 export function ProgramBuilder({ editId }: { editId: string | null }) {
-  const { data: existing, isLoading } = useProgram(editId);
+  const programQ = useProgram(editId);
+  const { data: existing, isLoading } = programQ;
   if (editId && isLoading) {
     return (
       <div className="mx-auto w-full max-w-2xl pb-28">
@@ -28,6 +30,21 @@ export function ProgramBuilder({ editId }: { editId: string | null }) {
         <div className="space-y-3 px-4 py-3 md:px-8" aria-hidden>
           <Skeleton className="h-12 w-full rounded-lg" />
           <Skeleton className="h-48 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+  // A program that couldn't load (offline, a dropped connection) is never "not yours"
+  if (editId && !existing && (programQ.isError || programQ.fetchStatus === "paused")) {
+    return (
+      <div className="mx-auto w-full max-w-2xl pb-28">
+        <PageHeader title="Edit program" backTo="/portal/programs" />
+        <div className="px-4 py-6 md:px-8">
+          {programQ.fetchStatus === "paused" ? (
+            <OfflineState what="this program" />
+          ) : (
+            <ErrorState error={programQ.error} what="this program" onRetry={() => programQ.refetch()} retrying={programQ.isFetching} />
+          )}
         </div>
       </div>
     );

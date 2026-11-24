@@ -100,7 +100,7 @@ export function ShareCards({ initialSlugs }: { initialSlugs: string[] | null }) 
     setPicked(slugs.includes(slug) ? slugs.filter((s) => s !== slug) : [...slugs, slug].slice(0, 4));
   };
 
-  if (q.isLoading) return <div className="h-60 animate-pulse rounded-2xl bg-muted" />;
+  if (q.isLoading) return <div className="h-60 jf-skeleton rounded-2xl bg-muted" />;
 
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_360px]" data-share-cards>

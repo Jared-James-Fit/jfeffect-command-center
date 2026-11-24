@@ -22,11 +22,11 @@ import { localDay } from "@/lib/analytics/lift-strength";
 
 export type CalendarMetric = "activity" | "strength" | "volume" | "intensity" | "prs";
 export const CALENDAR_METRICS: Array<{ key: CalendarMetric; label: string }> = [
-  { key: "activity", label: "Activity" },
+  { key: "activity", label: "Sets" },
   { key: "strength", label: "Strength" },
-  { key: "volume", label: "Volume" },
-  { key: "intensity", label: "Intensity" },
-  { key: "prs", label: "PRs" },
+  { key: "volume", label: "Weight lifted" },
+  { key: "intensity", label: "Effort" },
+  { key: "prs", label: "Records" },
 ];
 
 export type DayState =

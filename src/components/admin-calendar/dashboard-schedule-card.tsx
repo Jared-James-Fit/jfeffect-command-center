@@ -10,6 +10,8 @@ import { callLabel } from "@/lib/calendar-labels";
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, compactTimeRange, compareInstants, deviceTodayISO } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import {
   AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
@@ -168,7 +170,7 @@ export function DashboardScheduleCard() {
   };
   const showListWeek = () => setPrefs({ listScope: "week" });
 
-  const { data: sessions = [], isLoading } = useQuery<Session[]>({
+  const sessionsQ = useQuery<Session[]>({
     queryKey: ["dash-schedule-sessions", range.from, range.to],
     placeholderData: (prev) => prev,
     staleTime: 30_000,
@@ -185,18 +187,24 @@ export function DashboardScheduleCard() {
       return (data ?? []) as any;
     },
   });
+  const sessions = useMemo(() => sessionsQ.data ?? [], [sessionsQ.data]);
+  // A failed or offline first read is said above the calendar, never "Nothing booked today."
+  const sessionsState = queryView(sessionsQ as any).kind;
+  const isLoading = sessionsState === "loading";
+  const sessionsProblem = sessionsState === "error" || sessionsState === "offline";
 
   const { data: appts = [] } = useQuery<any[]>({
     queryKey: ["dash-schedule-appts", range.from, range.to],
     placeholderData: (prev) => prev,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("appointments")
         .select("id, title, appointment_type, starts_at, ends_at, location, meet_link, external_name, client:clients(full_name)")
         .eq("status", "Scheduled")
         .gte("starts_at", windowStart)
         .lt("starts_at", windowEnd);
+      if (error) throw error;
       return (data ?? []) as any[];
     },
   });
@@ -441,6 +449,11 @@ export function DashboardScheduleCard() {
         onStep={step}
         onToday={isCurrentPeriod(period, anchor, today) ? null : backToToday}
       />
+      {sessionsProblem && (
+        sessionsState === "offline"
+          ? <OfflineState what="the sessions" size="inline" />
+          : <ErrorState error={sessionsQ.error} what="the sessions" size="inline" onRetry={() => sessionsQ.refetch()} retrying={sessionsQ.isFetching} />
+      )}
 
       {view === "day" && (
         <>
@@ -504,7 +517,7 @@ export function DashboardScheduleCard() {
               today={today}
               nowMs={nowMs}
               loading={isLoading && !sessions.length}
-              emptyText={isCurrentPeriod("week", anchor, today) ? "Nothing booked this week." : "Nothing booked that week."}
+              emptyText={sessionsProblem ? "" : isCurrentPeriod("week", anchor, today) ? "Nothing booked this week." : "Nothing booked that week."}
               label={periodLabel("week", anchor, today)}
               wrap={(e, className, line) => (
                 <RowOpen row={rowByKey.get(e.key)!} onSession={setActing} className={className}>
@@ -517,7 +530,7 @@ export function DashboardScheduleCard() {
               <AgendaToday>
                 {isLoading && !sessions.length ? (
                   <AgendaLoading />
-                ) : dayList.length === 0 ? (
+                ) : dayList.length === 0 && sessionsProblem ? null : dayList.length === 0 ? (
                   <AgendaEmpty>{anchor === today ? "Nothing booked today." : "Nothing booked."}</AgendaEmpty>
                 ) : (
                   <ol aria-label={dayLabel} data-home-day-list>

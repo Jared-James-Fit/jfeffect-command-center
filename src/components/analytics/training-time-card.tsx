@@ -78,7 +78,8 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
   const { data: results = [] } = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,
-    staleTime: 30_000,
+    // the dashboard's own freshness: a shorter one here re-read the whole history on every mount
+    staleTime: 5 * 60_000,
     queryFn: () => getClientResults(clientId, {}),
   });
 
@@ -252,30 +253,30 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
             color={ANALYTICS_COLORS.blue}
             label="Typical start"
             value={summary.typicalStartMinutes != null ? formatClock(summary.typicalStartMinutes) : "—"}
-            sub={summary.timed.length >= 3 ? `${summary.nearTypicalCount} of ${summary.timed.length} within 1h` : "Needs 3+ timed sessions"}
+            sub={summary.timed.length >= 3 ? `${summary.nearTypicalCount} of ${summary.timed.length} within an hour of it` : "Needs 3 or more timed workouts"}
           />
           <Kpi
             icon={<Timer className="h-4 w-4" />}
             color={ANALYTICS_COLORS.purple}
-            label="Session length"
+            label="Workout length"
             value={formatMinutes(summary.medianDurationMin)}
             sub={
               summary.durationP25 != null && summary.durationP75 != null && summary.timed.length >= 4
                 ? `Most ${Math.round(summary.durationP25)}–${Math.round(summary.durationP75)} min`
-                : "Median"
+                : "Typical"
             }
           />
           <Kpi
             icon={<Gauge className="h-4 w-4" />}
             color={ANALYTICS_COLORS.amber}
-            label="Density"
-            value={summary.medianSetsPerHour != null ? `${Math.round(summary.medianSetsPerHour)} sets/hr` : "—"}
-            sub="Logged sets per hour"
+            label="Pace"
+            value={summary.medianSetsPerHour != null ? `${Math.round(summary.medianSetsPerHour)} sets an hour` : "—"}
+            sub="Sets logged per hour of training"
           />
           <Kpi
             icon={<Star className="h-4 w-4" />}
             color={ANALYTICS_COLORS.green}
-            label="Best window"
+            label="Best time of day"
             value={best ? best.label : summary.best ? "No clear winner" : "—"}
             sub={
               best
@@ -283,8 +284,8 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                   ? `+${best.delta.toFixed(1)}% strength`
                   : `+${best.delta.toFixed(1)}★ rating`
                 : summary.best
-                  ? "Similar at every time"
-                  : "Needs 3+ sessions in 2 windows"
+                  ? "About the same at every time"
+                  : "Needs 3 or more workouts at 2 different times"
             }
           />
         </div>
@@ -339,7 +340,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
               })}
           </ul>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Strength = top sets' RPE-adjusted e1RM as a % of your best on that lift over the prior 8 weeks. 100% = matched it.
+            Strength: your top sets' estimated max (allowing for how hard they felt) as a % of your best on that lift over the 8 weeks before. 100% means you matched it.
           </p>
         </div>
 
@@ -380,7 +381,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
 
         {/* Session log */}
         <div>
-          <SubHeading>Session log</SubHeading>
+          <SubHeading>Workout log</SubHeading>
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
             {visibleLog.map((s) => (
               <li key={s.id}>

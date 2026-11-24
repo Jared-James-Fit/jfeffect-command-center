@@ -103,7 +103,7 @@ export function CoachingFunnelCard() {
           ))}
         </div>
       </div>
-      {q.isLoading && <div className="h-64 animate-pulse rounded-2xl bg-muted" />}
+      {q.isLoading && <div className="h-64 jf-skeleton rounded-2xl bg-muted" />}
       {q.error && <p className="text-[14px] text-destructive">{(q.error as Error).message}</p>}
       {f && (
         <>

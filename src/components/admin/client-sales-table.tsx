@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useKeyedSingleFlight } from "@/hooks/use-load-phase";
+import { CardSkeleton, OfflineState, useQueryView } from "@/components/loading";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -71,7 +73,8 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     queryFn: async () => (await supabase.from("clients").select("full_name, phone").eq("id", clientId).maybeSingle()).data,
   });
 
-  const { data: records, isLoading, isError, refetch, isFetching } = useQuery({
+  const once = useKeyedSingleFlight();
+  const recordsQ = useQuery({
     queryKey: ["client-purchases", clientId],
     queryFn: async () => {
       const { data, error } = await supabase.from("purchase_records").select("*").eq("client_id", clientId).order("purchased_at", { ascending: false });
@@ -85,6 +88,10 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
       return waiting ? 45_000 : false;
     },
   });
+  const { data: records, isError, refetch, isFetching } = recordsQ;
+  const recordsView = useQueryView(recordsQ);
+  // Waiting with nothing to show: a first read, or offline with nothing saved (never "No products sold yet").
+  const isLoading = recordsView.kind === "loading" || recordsView.kind === "offline";
 
   // Payments per sale and when what's left gets paid: the same read as the Billing overview above.
   const { data: billing, payments: schedule } = useClientPayments(clientId);
@@ -93,7 +100,9 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const { data: sessionBalance = [] } = useQuery<any[]>({
     queryKey: ["pt-balance", clientId],
     queryFn: async () => {
-      const { data } = await (supabase as any).rpc("session_balance", { _client_id: clientId });
+      const { data, error } = await (supabase as any).rpc("session_balance", { _client_id: clientId });
+      // A failed read is an error, never "0 sessions used" on every package.
+      if (error) throw error;
       return (data ?? []) as any[];
     },
   });
@@ -127,14 +136,21 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const renew = async (row: Row) => {
     const { raw, money } = row;
     const total = formatMoney(withTax(Math.round(resolvePaymentDisplay(raw).contractTotal * 100), money.rate) / 100, money.currency);
+    if (once.isBusy(`renew:${raw.id}`)) return;
     if (!window.confirm(`Add the next ${raw.sessions_purchased} sessions of "${raw.offer_name ?? "this package"}" for ${total}? Nothing is charged now. Sessions trained or booked past what's paid for move onto it.`)) return;
-    try { await renewFn({ data: { purchase_id: raw.id } }); toast.success("Renewal added"); invalidate(); qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] }); }
-    catch (e: any) { toast.error(e?.message ?? "Could not add the renewal"); }
+    // one renewal per tap: a second Renew while the first runs would add a second owed package
+    await once.run(`renew:${raw.id}`, async () => {
+      const t = toast.loading("Adding the renewal…");
+      try { await renewFn({ data: { purchase_id: raw.id } }); toast.success("Renewal added", { id: t }); invalidate(); qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] }); }
+      catch (e: any) { toast.error(e?.message ?? "Could not add the renewal", { id: t }); }
+    });
   };
-  const emailLink = async (id: string) => {
-    try { const res: any = await sendFn({ data: { id } }); if (res?.sent) toast.success("Payment setup request emailed"); else toast.message(res?.reason ?? "Email skipped"); }
-    catch (e: any) { toast.error(e?.message ?? "Failed"); }
-  };
+  const emailLink = (id: string) =>
+    once.run(`email:${id}`, async () => {
+      const t = toast.loading("Emailing the payment request…");
+      try { const res: any = await sendFn({ data: { id } }); if (res?.sent) toast.success("Payment setup request emailed", { id: t }); else toast.message(res?.reason ?? "Email skipped", { id: t }); }
+      catch (e: any) { toast.error(e?.message ?? "Couldn't send the email", { id: t }); }
+    });
 
   const addSale = <Button size="sm" className="bg-primary font-semibold" onClick={() => setPicker(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add sale</Button>;
   const close = (o: boolean) => { if (!o) setDialog(null); };
@@ -160,7 +176,8 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
         </div>
       </div>
 
-      {open && isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading sales…</p>}
+      {open && recordsView.kind === "loading" && <CardSkeleton lines={3} label="Loading sales" />}
+      {recordsView.kind === "offline" && open && <OfflineState what="their sales" />}
       {isError && <div className="rounded-md border border-destructive/40 bg-destructive/5 p-6 text-center space-y-3"><p className="text-sm text-destructive">Sales could not be loaded.</p><Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Retry</Button></div>}
 
       {!isLoading && !isError && rows.length === 0 && (open || archiveFilter === "current") && (
@@ -250,14 +267,16 @@ function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessi
   const removeFn = useServerFn(removeUnpaidPurchaseRecord);
   const qc = useQueryClient();
   const live = !raw.archived_at;
+  // Stripe calls from the menu: one at a time per sale (a reopened menu can't start a second checkout or sync)
+  const once = useKeyedSingleFlight();
 
-  const syncWithStripe = async () => {
+  const syncWithStripe = () => once.run("sync", async () => {
     const t = toast.loading("Reading this sale from Stripe…");
     try { const res: any = await reconcileFn({ data: { purchaseId: raw.id } }); if (!res?.ok) return void toast.error(res?.error ?? "Could not reconcile", { id: t }); qc.invalidateQueries({ queryKey: ["client-purchases"] }); onChanged(); toast.success(`Synced — ${res.status}`, { id: t, description: res.ledgerAdded ? `${res.ledgerAdded} missing payment(s) recorded.` : "Already up to date." }); }
     catch (e: any) { toast.error(e?.message ?? "Could not reconcile", { id: t }); }
-  };
+  });
 
-  const copyLink = async (mode: "copy" | "share") => {
+  const copyLink = (mode: "copy" | "share") => once.run("link", async () => {
     const t = toast.loading(linkReady ? "Getting payment link…" : "Creating payment link…");
     try {
       const { url, kind } = await getShareablePaymentUrl(shareFn as any, checkoutFn as any, raw.id);
@@ -266,7 +285,7 @@ function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessi
       await navigator.clipboard.writeText(url);
       toast.success("Payment link copied", { id: t, description: shareKindLabel(kind as any) });
     } catch (e: any) { toast.error(e?.message ?? "Could not get a payment link", { id: t }); }
-  };
+  });
 
   const toggleReminders = async () => {
     const pause = !raw.payment_reminders_paused;

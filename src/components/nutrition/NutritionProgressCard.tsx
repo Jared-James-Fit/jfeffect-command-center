@@ -192,7 +192,7 @@ export function NutritionProgressCard({ clientId, className }: { clientId: strin
           data-chart="bodyweight"
         >
           {loadingBw ? (
-            <div className="h-[200px] animate-pulse rounded-xl bg-muted" />
+            <div className="h-[200px] jf-skeleton rounded-xl bg-muted" />
           ) : shown.length === 0 ? (
             <Empty>{all.length ? `No weigh-ins in the last ${PROGRESS_RANGES.find((r) => r.value === range)!.label}.` : "No weigh-ins yet. They show here once they log their weight."}</Empty>
           ) : (
@@ -257,7 +257,7 @@ export function NutritionProgressCard({ clientId, className }: { clientId: strin
           data-chart="consistency"
         >
           {loadingCheckins ? (
-            <div className="h-[140px] animate-pulse rounded-xl bg-muted" />
+            <div className="h-[140px] jf-skeleton rounded-xl bg-muted" />
           ) : consistency.points.length === 0 ? (
             <Empty>No weekly check-ins in this range. Their 1–5 nutrition rating shows here.</Empty>
           ) : (

@@ -1,5 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { EmptyState, ErrorState, OfflineState, PageSkeleton, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDragDropTouch } from "@/lib/drag-drop-touch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -663,10 +666,11 @@ export function TemplateEditor() {
   // Cleo docked beside the program (cleo-dock.tsx), Adjust program's engine
   const cleoDock = useCleoDock();
 
-  const { data: tpl, isLoading } = useQuery({
+  const tplQ = useQuery({
     queryKey: ["pl-template", templateId],
     queryFn: () => getTemplate(templateId),
   });
+  const { data: tpl, isLoading } = tplQ;
   const { data: exercises = [] } = useBuilderExerciseLibrary();
 
   // local working state
@@ -826,7 +830,17 @@ export function TemplateEditor() {
     dependencies: [search.block ?? null],
   });
 
-  const save = async () => {
+  // One save at a time: Save now tapped twice waits on the save that's running.
+  const saveInFlight = useRef<Promise<void> | null>(null);
+  const save = (): Promise<void> => {
+    if (saveInFlight.current) return saveInFlight.current;
+    const run = runSave().finally(() => {
+      saveInFlight.current = null;
+    });
+    saveInFlight.current = run;
+    return run;
+  };
+  const runSave = async () => {
     if (!meta || !payload) return;
     setSaving(true);
     try {
@@ -845,7 +859,32 @@ export function TemplateEditor() {
     } finally { setSaving(false); }
   };
 
-  if (isLoading || !tpl || !meta || !payload) return <div className="p-8 text-sm text-muted-foreground">Loading template…</div>;
+  if (isLoading || !tpl || !meta || !payload) {
+    // Never "Loading template…" forever: a template that's gone, or a read that failed, says so with a way back.
+    const tplState = queryView(tplQ as any).kind;
+    if (tplState === "empty" || tplState === "error" || tplState === "offline") {
+      return (
+        <div className="mx-auto max-w-md space-y-3 p-8">
+          {tplState === "empty" ? (
+            <EmptyState title="This program isn't in the library anymore" detail="It may have been deleted." />
+          ) : tplState === "offline" ? (
+            <OfflineState what="this program" />
+          ) : (
+            <ErrorState error={tplQ.error} what="this program" onRetry={() => tplQ.refetch()} retrying={tplQ.isFetching} />
+          )}
+          <div className="flex justify-center">
+            <Button variant="outline" className="h-10" asChild><Link to="/admin/program-library">Back to programs</Link></Button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="mx-auto w-full max-w-5xl p-4 md:p-8">
+        <PageSkeleton label="Loading program" />
+        <SlowNote active onRetry={() => tplQ.refetch()} what="this program" />
+      </div>
+    );
+  }
 
   const summary = summarizeTemplatePayload({ ...tpl, payload });
   const type = tpl.template_type;
@@ -1152,6 +1191,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   // sidebar (exercises go in with each day's + buttons), no zoom, no full
   // screen, and every card opens (compact rows only help on a wide screen).
   const phone = useIsMobileNow();
+  // the exercise library drags into a day by touch too (an iPad): the polyfill's listeners on this box only
+  const dragRoot = useRef<HTMLDivElement | null>(null);
+  useDragDropTouch(dragRoot, !phone);
   const zoom = phone ? 1 : zoomPref;
   const compact = phone ? false : compactPref;
   const [weekSlot, setWeekSlot] = useState<HTMLDivElement | null>(null);
@@ -1387,7 +1429,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     {maxesOpen && clientId && blockId && (
       <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
     )}
-    <div className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
+    <div ref={dragRoot} className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
       {!portalToolbar && (
         <div className="sticky top-0 z-20 border-b border-border bg-background">
           {toolbar}

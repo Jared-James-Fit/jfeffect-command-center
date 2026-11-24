@@ -1,4 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQuery } from "@tanstack/react-query";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
@@ -34,16 +36,30 @@ function WorkoutsPage() {
   // The client row (one small read, kept on the phone a day and warmed when the
   // app opens: useWarmClientPages) opens the program; until it's known the page
   // keeps its title and shows the schedule's own shape, never a spinner.
-  const { data: client, isLoading } = useQuery({
+  const clientQ = useQuery({
     ...portalWorkoutsClientQuery(portalUserId ?? ""),
     enabled: !!portalUserId,
   });
+  const client = clientQ.data;
+  const clientState = queryView(clientQ as any).kind;
 
-  if (isLoading || !client) {
+  if (!client) {
+    // waiting keeps the schedule's shape; failed, offline or no account each say so (never a skeleton forever)
     return (
       <>
         <PageHeader title="Workouts" />
-        <WorkoutsBodySkeleton />
+        {clientState === "error" ? (
+          <div className="px-4 py-6"><ErrorState error={clientQ.error} what="your workouts" onRetry={() => clientQ.refetch()} retrying={clientQ.isFetching} /></div>
+        ) : clientState === "offline" ? (
+          <div className="px-4 py-6"><OfflineState what="your workouts" /></div>
+        ) : clientState === "empty" ? (
+          <div className="px-4 py-6"><EmptyState title="No training account yet" detail="Your workouts show here once your account is set up." /></div>
+        ) : (
+          <>
+            <WorkoutsBodySkeleton />
+            <SlowNote active onRetry={() => clientQ.refetch()} what="your workouts" />
+          </>
+        )}
       </>
     );
   }

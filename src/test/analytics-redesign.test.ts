@@ -743,8 +743,56 @@ describe("Cleo's one observation", () => {
       setShifts: [{ lift: "squat", from: 10, to: 13, pct: 30 }],
       rpeShifts: [{ lift: "squat", from: 7.5, to: 7.6, pct: 1 }],
     })!;
-    expect(o.observation).toMatch(/squat volume is up 30%/);
+    expect(o.observation).toMatch(/30% more squat sets/);
+    expect(o.observation).not.toMatch(/volume/);
     expect(o.tip).toMatch(/following the plan/i);
+    expect(o.basis).toBe("measured");
+  });
+  it("a muscle's change is said as a change, never as weak or overdone, and reads the athlete's goal", () => {
+    const o = pickObservation({
+      ...base,
+      coached: false,
+      profile: "physique",
+      muscles: [
+        { muscle: "Chest", role: "prime", total: 42, before: 28, changePct: 50 },
+        { muscle: "Calves", role: "optional", total: 0, before: 12, changePct: -100 },
+      ],
+    })!;
+    expect(o.id).toBe("muscle:Chest");
+    expect(o.observation).toMatch(/trained your chest more in the last six weeks/);
+    expect(o.tip).toMatch(/suits your goal/);
+    expect(`${o.observation} ${o.tip}`).not.toMatch(/\b(weak|undertrained|overtrained|lagging)\b/i);
+    const down = pickObservation({
+      ...base,
+      coached: false,
+      profile: "physique",
+      muscles: [{ muscle: "Lats", role: "prime", total: 10, before: 20, changePct: -50 }],
+    })!;
+    expect(down.observation).toMatch(/50% fewer sets/);
+    expect(`${down.observation} ${down.tip}`).not.toMatch(/\b(weak|undertrained|lagging)\b/i);
+    // too little before it to compare: nothing said
+    expect(
+      pickObservation({
+        ...base,
+        muscles: [{ muscle: "Chest", role: "prime", total: 9, before: 3, changePct: 200 }],
+      }),
+    ).toBeNull();
+  });
+  it("an estimated max is said as an estimate", () => {
+    const o = pickObservation({
+      ...base,
+      mainLift: "squat",
+      liftTrends: {
+        squat: {
+          kind: "up",
+          pct: 6.4,
+          from: { day: "2026-10-01", value: 400, state: "measured", basis: "2026-10-01" },
+          to: { day: "2026-11-20", value: 425.6, state: "measured", basis: "2026-11-20" },
+        },
+      },
+    })!;
+    expect(o.observation).toMatch(/squat strength is up 6.4%/);
+    expect(o.basis).toBe("estimated");
   });
   it("a lighter phase reads lower volume as planned, never a regression", () => {
     const o = pickObservation({

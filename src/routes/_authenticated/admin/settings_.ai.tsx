@@ -44,6 +44,7 @@ const TASK_LABEL: Record<string, string> = {
   nutrition_import: "Import a meal plan: reading a PDF, photos or a file (members metered by credits; coaches in the plan editor)",
   pain_describe: "Pain reports: reading what an athlete described when the app's own reader can't (athletes, never metered)",
   recovery_write: "Coaching replies: pain reports, follow-ups, weekly check-ins, workout reviews, set videos, progress check-ins and missed sessions, drafted for approval or sent under your rules (videos and progress always wait for you)",
+  cardio_plan: "Cleo in the Cardio tab: builds and edits a client's cardio draft for you to review and publish",
 };
 
 /** Admin only: who has Cleo. The admin always; the finance login and coaches by switch. Clients and members have no Cleo. */

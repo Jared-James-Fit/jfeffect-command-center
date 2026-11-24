@@ -64,14 +64,14 @@ export function SbdDonut({
               setLift(null);
             }}
             className={cn(
-              "h-8 shrink-0 rounded-full border px-3 text-[12px] font-medium transition",
+              "h-9 shrink-0 rounded-full border px-3 text-[13px] font-medium transition",
               o.id === c.id
                 ? "border-foreground bg-foreground text-background"
                 : "border-border text-muted-foreground hover:text-foreground",
             )}
           >
             {o.kind === "estimate"
-              ? "Estimated now"
+              ? "Estimated today"
               : o === compositions.find((x) => x.kind === "meet")
                 ? `Last meet · ${fmtDay(o.day)}`
                 : fmtDay(o.day)}
@@ -176,12 +176,12 @@ export function SbdDonut({
 
       <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
         {c.kind === "estimate"
-          ? "Each lift's estimated strength from the last six weeks of training, not a tested total."
-          : `Lifted at ${c.label}${c.bodyweightLb ? ` at ${round(conv(c.bodyweightLb))} ${unit} bodyweight` : ""}.`}
+          ? "An estimate from your last six weeks of training, not a tested total."
+          : `Lifted at ${c.label}${c.bodyweightLb ? `, weighing ${round(conv(c.bodyweightLb))} ${unit}` : ""}.`}
         {missing.length > 0 && c.kind !== "estimate"
-          ? ` No estimated total right now: no recent ${missing.map((m) => COMP_LIFT_LABEL[m].toLowerCase()).join(" or ")} sets to read.`
+          ? ` No estimated total today: no recent hard ${missing.map((m) => COMP_LIFT_LABEL[m].toLowerCase()).join(" or ")} sets to go on.`
           : ""}{" "}
-        Shares describe the total; they don't mean a lift is weak.
+        A smaller share doesn't mean a lift is weak.
       </p>
     </div>
   );
@@ -205,9 +205,9 @@ function LiftDetail({
   maxes: MaxOnFile[];
 }) {
   const kind: Record<MaxOnFile["kind"], string> = {
-    tested: "Tested 1RM",
-    on_file: "1RM entered by your coach",
-    training_max: "Training max",
+    tested: "Tested max (1 rep)",
+    on_file: "Max (1 rep) entered by your coach",
+    training_max: "Training max (what your program's % use)",
   };
   return (
     <div
@@ -215,7 +215,7 @@ function LiftDetail({
       data-donut-detail={lift}
     >
       <p className="text-foreground/85">{words}</p>
-      {c.kind === "estimate" && <p>Read from your {fmtDay(c.lifts[lift].basisDay)} session.</p>}
+      {c.kind === "estimate" && <p>Worked out from your {fmtDay(c.lifts[lift].basisDay)} workout.</p>}
       {maxes.map((m) => (
         <p key={`${m.kind}-${m.lb}`} className="tabular-nums">
           {kind[m.kind]}: {round(conv(m.lb))} {unit}

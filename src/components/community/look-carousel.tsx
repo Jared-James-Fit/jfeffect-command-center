@@ -462,6 +462,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
   // a picker (no shutter): the ring shows what's on, the circle in it isn't a button to take a photo
   const pick = !onShoot;
   const active = !pick && h.active;
+  const filming = active;
   // the look in the ring as the row moves (ahead of React)
   const shown = useRef(at);
   // a scroll we started (a tap, or a swipe on the camera): it lands on `to`, the looks in between don't count
@@ -539,11 +540,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
   return (
     <div className="relative" data-look-carousel={pick ? "pick" : "shoot"}>
       {/* while it films the chips and the name keep their room (nothing above the shutter moves), just unseen */}
-      {chips.length > 1 && (
-        <div className={cn("transition-opacity duration-200", active && "pointer-events-none invisible opacity-0")}>
-          <GroupChips chips={chips} on={onGroup} onPick={(k) => bring(Math.max(0, looks.findIndex((l) => l.group === k)))} />
-        </div>
-      )}
+      {chips.length > 1 && <GroupChips chips={chips} on={onGroup} hidden={filming} onPick={(k) => bring(Math.max(0, looks.findIndex((l) => l.group === k)))} />}
       {/* what the ring holds, above it */}
       <div className={cn("pointer-events-none mb-1.5 flex justify-center transition-opacity duration-200", !showName && "sr-only", active && "invisible opacity-0")}>
         <span className="rounded-full bg-black/35 px-2.5 py-0.5 text-[12px] font-bold backdrop-blur-sm" data-look-name>
@@ -634,7 +631,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
  * tap glides the row to that group's first filter. Scrolls on a narrow
  * phone, keeping the lit one in view.
  */
-function GroupChips({ chips, on, onPick }: { chips: LookGroup[]; on: string | null; onPick: (key: string) => void }) {
+function GroupChips({ chips, on, onPick, hidden = false }: { chips: LookGroup[]; on: string | null; onPick: (key: string) => void; hidden?: boolean }) {
   const row = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = row.current;
@@ -646,7 +643,11 @@ function GroupChips({ chips, on, onPick }: { chips: LookGroup[]; on: string | nu
   return (
     <div
       ref={row}
-      className="mb-2 flex gap-1.5 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={cn(
+        "mb-2 flex gap-1.5 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        hidden && "invisible",
+      )}
+      aria-hidden={hidden || undefined}
       role="group"
       aria-label="Filter groups"
       data-filter-groups

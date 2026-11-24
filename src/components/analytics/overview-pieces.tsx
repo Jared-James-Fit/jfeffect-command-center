@@ -38,7 +38,9 @@ export function CleoObservationCard({
         <CleoMark size={15} className="text-foreground" />
         <span>Cleo</span>
         <span aria-hidden>·</span>
-        <span>From your training logs</span>
+        <span data-observation-basis={o.basis}>
+          {o.basis === "estimated" ? "Estimated from your workouts" : "Counted from your workouts"}
+        </span>
       </div>
       <p className="mt-2 text-[15px] font-medium leading-snug text-foreground" data-observation>
         {o.observation}
@@ -55,7 +57,7 @@ export function CleoObservationCard({
             aria-expanded={open}
             className="inline-flex min-h-10 items-center gap-1 text-[13px] font-medium text-foreground"
           >
-            The numbers behind it
+            Show the numbers
             <ChevronDown
               className={cn(
                 "h-4 w-4 text-muted-foreground transition-transform",
@@ -136,7 +138,7 @@ export function KpiStrip({ items }: { items: Kpi[] }) {
               </span>
             </div>
             {k.sub && (
-              <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+              <div className="mt-1 line-clamp-3 text-[11px] leading-snug text-muted-foreground">
                 {k.sub}
               </div>
             )}
@@ -216,7 +218,7 @@ export function RecoveryPatternList({ patterns }: { patterns: RecoveryPattern[] 
                   </div>
                 ))}
                 <div className="text-[11px] text-muted-foreground">
-                  {p.compare.unit} · number of sessions in brackets
+                  {p.compare.unit}. In brackets: how many workouts each is based on.
                 </div>
               </div>
             )}
@@ -230,12 +232,12 @@ export function RecoveryPatternList({ patterns }: { patterns: RecoveryPattern[] 
 /** Planned workouts done as a ring, and the weeks as small bars (done filled, planned outlined). */
 export function ConsistencyBlock({ c, loading }: { c: Consistency; loading?: boolean }) {
   if (loading)
-    return <div className="h-[120px] animate-pulse rounded-xl bg-muted/40" aria-hidden />;
+    return <div className="h-[120px] jf-skeleton rounded-xl bg-muted/40" aria-hidden />;
   if (!c.planned)
     return (
       <p className="text-[13px] text-muted-foreground" data-consistency-empty>
-        {c.logged ? `${c.logged} workout${c.logged === 1 ? "" : "s"} logged. ` : ""}No planned
-        workouts in this period to measure against.
+        {c.logged ? `${c.logged} workout${c.logged === 1 ? "" : "s"} logged. ` : ""}There's no
+        program plan for this period to compare with.
       </p>
     );
   const weeks = c.weeks.slice(-12);
@@ -253,12 +255,12 @@ export function ConsistencyBlock({ c, loading }: { c: Consistency; loading?: boo
       </ProgressRing>
       <div className="min-w-0 flex-1">
         <div className="text-[14px] font-medium text-foreground">
-          {c.done} of {c.planned} planned workouts
+          You did {c.done} of {c.planned} planned workouts
         </div>
-        <div className="text-[12px] text-muted-foreground">
-          {c.setsPct != null ? `${c.setsPct}% of written sets` : ""}
+        <div className="text-[12px] leading-snug text-muted-foreground">
+          {c.setsPct != null ? `${c.setsPct}% of the planned sets.` : ""}
           {c.recent && c.before
-            ? ` · last ${c.recent.weeks} weeks ${c.recent.pct}%, the ${c.before.weeks} before ${c.before.pct}%`
+            ? ` Last ${c.recent.weeks} weeks: ${c.recent.pct}% (${c.before.pct}% the ${c.before.weeks} weeks before).`
             : ""}
         </div>
         {weeks.length >= 2 && (
@@ -283,6 +285,11 @@ export function ConsistencyBlock({ c, loading }: { c: Consistency; loading?: boo
                 />
               </span>
             ))}
+          </div>
+        )}
+        {weeks.length >= 2 && (
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            One bar a week: filled is done, the outline is planned.
           </div>
         )}
       </div>

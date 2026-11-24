@@ -7,6 +7,7 @@
  * the one before it, archived with its dates, never deleted.
  */
 import { useEffect, useMemo, useState } from "react";
+import { CardSkeleton, ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -160,7 +161,31 @@ export function MemberPlanStudio({
     }
   };
 
-  if (planQ.isLoading || !days) return <div className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</div>;
+  if (!days && !planQ.data && (planQ.isError || planQ.fetchStatus === "paused")) {
+    // never "Loading…" forever: a plan that couldn't load says so, with Try again
+    return (
+      <div className="mx-auto w-full max-w-2xl">
+        <PageHeader title="Meal plan" backTo="/portal/nutrition-targets" />
+        <div className="px-4 py-6">
+          {planQ.fetchStatus === "paused"
+            ? <OfflineState what="your plan" />
+            : <ErrorState error={planQ.error} what="your plan" onRetry={() => planQ.refetch()} retrying={planQ.isFetching} />}
+        </div>
+      </div>
+    );
+  }
+  if (planQ.isLoading || !days) {
+    return (
+      <div className="mx-auto w-full max-w-2xl">
+        <PageHeader title="Meal plan" backTo="/portal/nutrition-targets" />
+        <div className="space-y-3 px-4 py-4">
+          <CardSkeleton lines={2} label="Loading your plan" />
+          <CardSkeleton lines={5} />
+          <SlowNote active onRetry={() => planQ.refetch()} what="your plan" />
+        </div>
+      </div>
+    );
+  }
   if (planQ.data && !planQ.data.selfServe) {
     return (
       <div className="mx-auto w-full max-w-2xl">

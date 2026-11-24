@@ -53,7 +53,7 @@ export const COACHING_ONLY_PATHS = [
   "/portal/appointments",
 ];
 /** Paths a member whose membership lapsed can still open (to fix billing or get help). */
-export const LAPSED_MEMBER_PATHS = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade"];
+export const LAPSED_MEMBER_PATHS = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade", "/portal/plan"];
 
 export function isCoachingOnlyPath(pathname: string): boolean {
   return COACHING_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`) || pathname.startsWith(`${p}.`));

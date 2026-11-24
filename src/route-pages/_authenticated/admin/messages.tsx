@@ -1,4 +1,6 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
+import { ErrorState, ListSkeleton, OfflineState } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
 import { RecoveryInboxRow } from "@/components/recovery/recovery-queue";
 import { MemberApplicationsInboxRow } from "@/components/applications/member-applications-entry";
@@ -248,7 +250,7 @@ export function MessagesInbox({
   useEffect(() => { if (selectedFromUrl) { setSelectedId(selectedFromUrl); setSupportId(null); } }, [selectedFromUrl]);
   useEffect(() => { if (initialSupport) { setSupportId(initialSupport); setSelectedId(null); } }, [initialSupport]);
 
-  const { data: clients = [] } = useQuery({
+  const clientsQ = useQuery({
     queryKey: ["clients-min"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -260,6 +262,10 @@ export function MessagesInbox({
     },
     refetchInterval: 60_000,
   });
+  const clients = useMemo(() => clientsQ.data ?? [], [clientsQ.data]);
+  // The list's own read: a cold open waits in the shape of rows, a failed or offline one says so
+  // (never "No conversations." over chats that didn't load).
+  const clientsState = queryView(clientsQ as any).kind;
 
   const { data: states = [] } = useQuery({
     queryKey: ["conversation-states"],
@@ -1051,7 +1057,13 @@ export function MessagesInbox({
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
           {/* Free membership applications waiting on a decision (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <MemberApplicationsInboxRow />}
-          {listRows.length === 0 ? (
+          {listRows.length === 0 && clientsState === "loading" ? (
+            <ListSkeleton rows={6} className="p-4" label="Loading conversations" />
+          ) : listRows.length === 0 && clientsState === "offline" ? (
+            <OfflineState what="your conversations" className="m-4" />
+          ) : listRows.length === 0 && clientsState === "error" ? (
+            <ErrorState error={clientsQ.error} what="your conversations" onRetry={() => clientsQ.refetch()} retrying={clientsQ.isFetching} className="m-4" />
+          ) : listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : listRows.map((row) => row.kind === "support" ? (
             <SupportChatRow

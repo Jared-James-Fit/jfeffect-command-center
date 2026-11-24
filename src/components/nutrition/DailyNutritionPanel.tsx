@@ -227,9 +227,9 @@ function IntakeCard({
   if (loading) {
     return (
       <Card className="space-y-3 p-4" aria-label="Loading">
-        <div className="h-5 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-2 w-full animate-pulse rounded-full bg-muted" />
-        <div className="h-16 w-full animate-pulse rounded bg-muted" />
+        <div className="h-5 w-32 jf-skeleton rounded bg-muted" />
+        <div className="h-2 w-full jf-skeleton rounded-full bg-muted" />
+        <div className="h-16 w-full jf-skeleton rounded bg-muted" />
       </Card>
     );
   }
@@ -336,7 +336,7 @@ function MealsCard({
         right={meals.length > 0 ? <span className="text-xs text-muted-foreground">{meals.length} logged</span> : null}
       />
       {loading ? (
-        <div className="h-12 animate-pulse rounded-lg bg-muted" />
+        <div className="h-12 jf-skeleton rounded-lg bg-muted" />
       ) : meals.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {isToday ? "Nothing logged yet. Tap Log food after you eat." : "Nothing logged on this day."}

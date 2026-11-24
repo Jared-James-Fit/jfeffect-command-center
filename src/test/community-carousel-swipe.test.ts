@@ -128,9 +128,11 @@ describe("carousel viewer", () => {
   it("snaps one at a time, shows where you are, loads only nearby slides", () => {
     expect(card).toMatch(/snap-x snap-mandatory overflow-x-auto/);
     // an automated post's painted card can lead the post's own slides, or follow them
-    expect(card).toMatch(/\{index \+ 1\}\/\{count\}/);
+    expect(card).toContain("{`${index + 1}/${count}`}");
     expect(card).toContain("const count = slides.length + off + (hasTrail ? 1 : 0);");
-    expect(card).toMatch(/const near = Math\.abs\(i - index\) <= 1 \|\| i < seen;/);
+    // two either side are mounted, so two quick swipes never land on an empty slide (Nov 23 2026)
+    expect(card).toMatch(/const near = Math\.abs\(i - index\) <= SLIDES_AHEAD \|\| i < seen;/);
+    expect(card).toMatch(/const SLIDES_AHEAD = 2;/);
     // no rubber-band at the ends, so a back swipe on slide 1 is clean
     expect(card).toMatch(/overscrollBehaviorX: "none"/);
   });

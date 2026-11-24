@@ -1,4 +1,6 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, Suspense, memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { feedPostMounted } from "@/lib/feed-window";
+import { useOpenedOnce } from "@/hooks/use-opened-once";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, ChartNoAxesColumn, Dumbbell, Menu, Search, SquarePlus, Trophy } from "lucide-react";
@@ -11,10 +13,9 @@ import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
 import { PostSheet, type PostSheetAt } from "@/components/community/post-sheet";
-import { ReelsViewer, type ReelStart } from "@/components/community/reels-viewer";
+import type { ReelStart } from "@/components/community/reels-viewer";
 import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
-import { PostDetailDialog } from "@/components/community/post-detail";
 import { MyTabPhoto, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { useSwipeToCreate } from "@/components/community/swipe-to-create";
@@ -23,20 +24,21 @@ import { StoryReplyHost } from "@/components/community/story-reply-host";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { DiscoverPage } from "@/components/community/discover";
 import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
-import { CrewActivity } from "@/components/community/crew-activity";
 import { ActivityHeart } from "@/components/community/activity-heart";
 import { OPEN_ACTIVITY_EVENT } from "@/lib/crew-activity";
 import { BarBack, BarButton, BarTitle, CrewBar, CrewFeedTabs, useBarHidden, type CrewFeedTab, type CrewTab } from "@/components/community/crew-header";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { bubbleFold, ease, FIRST_POST_RADIUS, FIRST_UNDER_MIN, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
-import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
+import { rankingsFromHash } from "@/lib/rankings-hash";
 import { manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { caughtUpAt, inFeed, inFollowingFeed, storiesNeedMore, uniquePosts, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { preloadWhenIdle } from "@/lib/idle";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
 import { CaughtUp, CaughtUpLine, FeedItem, NewPostsPill, useNewPosts } from "@/components/community/feed-motion";
 import { ActivitySpinner } from "@/components/activity-spinner";
@@ -123,6 +125,20 @@ export type CoachCrew = {
   manage: ReactNode;
 };
 
+/*
+ * Reached by a tap, never on a launch: loaded on their own and fetched in idle
+ * time once the feed is up (idle.ts), so Crew opens on less code and the first
+ * tap still finds them ready (lazyWithRetry renders a fetched chunk at once).
+ */
+const RankingsHub = lazyWithRetry(() => import("@/components/community/league-hub").then((m) => ({ default: m.RankingsHub })));
+const CrewActivity = lazyWithRetry(() => import("@/components/community/crew-activity").then((m) => ({ default: m.CrewActivity })));
+const ReelsViewer = lazyWithRetry(() => import("@/components/community/reels-viewer").then((m) => ({ default: m.ReelsViewer })));
+const PostDetailDialog = lazyWithRetry(() => import("@/components/community/post-detail").then((m) => ({ default: m.PostDetailDialog })));
+function preloadCrewViews() {
+  preloadWhenIdle("crew-views", () => Promise.all([RankingsHub.preload(), CrewActivity.preload(), PostDetailDialog.preload(), ReelsViewer.preload()]));
+}
+
+
 export function CommunityScreen({
   canShare = false, previewOnly = false, backTo, hideTabs = false, coach,
 }: {
@@ -172,8 +188,11 @@ export function CommunityScreen({
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   // a clip tapped in the feed: the feed's clips full screen, from that one
   const [reel, setReel] = useState<ReelStart | null>(null);
+  const reelUsed = useOpenedOnce(reel !== null);
   const openReel = useCallback((post: CommunityPost, path: string) => setReel({ postId: post.id, path }), []);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
+  const detailUsed = useOpenedOnce(detailId !== null);
+  useEffect(() => preloadCrewViews(), []);
   // where the post's page opens: on the workout itself from the feed's View workout, else at its top
   // (kept with the post it was for, and dropped whenever the page closes, however it closes)
   const [detailAt, setDetailAt] = useState<{ id: string; at: "workout" } | null>(null);
@@ -583,13 +602,17 @@ export function CommunityScreen({
     };
   }, [paging, hasFeedPosts]);
 
-  const openAuthor = (a: CommunityAuthor) => {
+  const openAuthorNow = (a: CommunityAuthor) => {
     rememberFeedPlace();
     setDetailId(null);
     if (a.user_id === user?.id || a.user_id === myId) setScope({ kind: "you" });
     else setScope({ kind: "author", author: a, from: tab });
     window.scrollTo({ top: 0 });
   };
+  // one function for the whole visit, so a post's memo holds (PostRow): it reads what's current when it's tapped
+  const openAuthorRef = useRef(openAuthorNow);
+  openAuthorRef.current = openAuthorNow;
+  const openAuthor = useCallback((a: CommunityAuthor) => openAuthorRef.current(a), []);
   const closeDetail = () => {
     setDetailId(null);
     if (window.location.hash.includes("post=")) history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -749,16 +772,20 @@ export function CommunityScreen({
       ) : scope.kind === "rankings" ? (
         // a tab, not a page: it eases in from the side the tab sits on
         <div className="animate-in fade-in-0 slide-in-from-right-3 duration-200 motion-reduce:animate-none" data-crew-tab-body="rankings">
-          <RankingsHub />
+          <Suspense fallback={<RankingsFallback />}>
+            <RankingsHub />
+          </Suspense>
         </div>
       ) : scope.kind === "activity" ? (
-        <CrewActivity
-          header={!ownBar}
-          onBack={() => goBack("feed")}
-          onOpenPost={(id) => setDetailId(id)}
-          onOpenPerson={openAuthor}
-          onFindPeople={() => openDiscover("activity", true)}
-        />
+        <Suspense fallback={<RankingsFallback />}>
+          <CrewActivity
+            header={!ownBar}
+            onBack={() => goBack("feed")}
+            onOpenPost={(id) => setDetailId(id)}
+            onOpenPerson={openAuthor}
+            onFindPeople={() => openDiscover("activity", true)}
+          />
+        </Suspense>
       ) : scope.kind === "members" ? (
         <DiscoverPage onBack={() => goBack(discoverBack)} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => go({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
       ) : scope.kind === "you" && user?.id ? (
@@ -951,12 +978,20 @@ export function CommunityScreen({
           )}
         </>
       )}
-      <ReelsViewer start={reel} posts={feedPosts} viewerIsStaff={viewerIsStaff} onClose={() => setReel(null)} onOpenComments={setCommentsFor} onOpenAuthor={openAuthor} />
+      {reelUsed && (
+        <Suspense fallback={null}>
+          <ReelsViewer start={reel} posts={feedPosts} viewerIsStaff={viewerIsStaff} onClose={() => setReel(null)} onOpenComments={setCommentsFor} onOpenAuthor={openAuthor} />
+        </Suspense>
+      )}
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
       {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} unit={unit} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
-      <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} at={detailAt?.id === detailId ? detailAt.at : undefined} />
+      {detailUsed && (
+        <Suspense fallback={null}>
+          <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} at={detailAt?.id === detailId ? detailAt.at : undefined} />
+        </Suspense>
+      )}
     </div>
     {/* outside the page that slides, so they stay put */}
     <SwipeBack enabled={canSwipeBack} target={rootRef} onBack={swipeBack} onUsed={onSwipeUsed} />
@@ -999,6 +1034,37 @@ function FeedPager({
   loadingMore: boolean;
   end: ReactNode;
 }) {
+  // Only the posts around the one on screen are on the page (feed-window.ts: the first always, FEED_BEHIND behind
+  // and FEED_AHEAD ahead); the rest are a black box of the same height, so the scroll, its snap points and every
+  // link to a post stay exactly where they were. The window moves as a post comes half on screen, in a
+  // transition React can interrupt, so mounting the post coming up never holds a finger up (Nov 23 2026:
+  // with every post loaded so far on the page, each new page of ten mounted at once, a frame of up to half a
+  // second on a throttled phone, and every frame re-layered all of them).
+  const pager = useRef<HTMLDivElement | null>(null);
+  const fold = useRef<HTMLDivElement | null>(null);
+  const postIndex = useMemo(() => {
+    let n = 0;
+    return pages.map((pg) => (pg.post ? n++ : -1));
+  }, [pages]);
+  const [around, setAround] = useState(0);
+  // which screens there are: the observer follows them as pages of posts arrive (or a moment comes and goes)
+  const pageKeys = useMemo(() => pages.map((pg) => pg.key).join("|"), [pages]);
+  useEffect(() => {
+    const root = pager.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting || e.intersectionRatio < 0.5) continue;
+          const k = Number((e.target as HTMLElement).dataset.pageIndex);
+          if (Number.isFinite(k)) startTransition(() => setAround(k));
+        }
+      },
+      { threshold: [0.5] },
+    );
+    root.querySelectorAll<HTMLElement>(":scope > .feed-page[data-page-index]").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [pageKeys]);
   const screen = (pg: { key: string; post?: CommunityPost; node: ReactNode }, i: number) =>
     pg.post ? (
       // a screen is simply there when you swipe to it (TikTok's, Reels'), never easing in: a screen fading or rising
@@ -1007,18 +1073,17 @@ function FeedPager({
       <div
         key={pg.key}
         data-post-id={pg.post.id}
+        data-page-index={postIndex[i]}
         data-feed-first-post={i === 0 ? "" : undefined}
         className={cn("feed-page transition-shadow duration-700", flash === pg.post.id && "ring-2 ring-inset ring-primary")}
       >
-        {pg.node}
+        {feedPostMounted(postIndex[i], around) ? pg.node : <div className="h-full w-full bg-black" aria-hidden data-feed-placeholder />}
       </div>
     ) : (
       <div key={pg.key} className="feed-page flex flex-col justify-center overflow-y-auto px-3" style={SCREEN_ROOM} data-feed-moment={pg.key}>
         {pg.node}
       </div>
     );
-  const pager = useRef<HTMLDivElement | null>(null);
-  const fold = useRef<HTMLDivElement | null>(null);
   const firstKey = pages[0]?.post ? pages[0].key : null;
   useStoriesSwipe(pager, firstScreen, firstKey);
   useStoriesMotion(pager, firstScreen, fold, firstKey);
@@ -1254,8 +1319,15 @@ function useStoriesMotion(
 /** A feed moment's screen (all caught up, people to follow…): clear of Crew's bar above and the tab bar below. */
 const SCREEN_ROOM = { paddingTop: "var(--feed-bar-room)", paddingBottom: "var(--bottom-nav-clearance)" } as const;
 
-/** One row owns its mutation so an optimistic reaction only re-renders that card. */
-function PostRow(props: {
+/**
+ * One row owns its mutation so an optimistic reaction only re-renders that card.
+ * Memoized with a stable onReact: the feed re-rendering (a page of posts
+ * arriving, a sheet opening) never re-renders every post on it, only the ones
+ * whose props changed (Nov 23 2026: an unmemoized row handed PostCard a new
+ * function each render, so 45 mounted posts re-rendered together, up to 550 ms
+ * on a throttled phone, while a finger was on the screen).
+ */
+const PostRow = memo(function PostRow(props: {
   post: CommunityPost;
   thumbUrl: string | null;
   unit: "kg" | "lb";
@@ -1275,14 +1347,13 @@ function PostRow(props: {
   pageFirst?: boolean;
   onOpenWorkout?: (p: CommunityPost) => void;
 }) {
-  const react = useReact(props.post, props.viewerIsStaff);
-  return (
-    <PostCard
-      {...props}
-      onReact={(_p: CommunityPost, next: ReactionKey | null) => react.mutate(next, { onError: () => toast.error("Couldn't save that reaction") })}
-    />
+  const { mutate } = useReact(props.post, props.viewerIsStaff);
+  const onReact = useCallback(
+    (_p: CommunityPost, next: ReactionKey | null) => mutate(next, { onError: () => toast.error("Couldn't save that reaction") }),
+    [mutate],
   );
-}
+  return <PostCard {...props} onReact={onReact} />;
+});
 
 /**
  * Following with nothing to show: following nobody, the way to people to follow;
@@ -1335,6 +1406,18 @@ function EmptyNote({ title, body, action }: { title: string; body: string; actio
       <div className="mt-3 text-sm font-bold">{title}</div>
       <p className="mx-auto mt-1 max-w-[32ch] text-[13px] leading-snug text-muted-foreground">{body}</p>
       {action ? <div className="mx-auto mt-5 max-w-[300px]">{action}</div> : null}
+    </div>
+  );
+}
+
+/** While a tab's body (Rankings, Activity) is still on its way: its first rows' shape. */
+function RankingsFallback() {
+  return (
+    <div className="space-y-3 px-4 pt-4" aria-hidden>
+      <Skeleton className="h-10 w-full rounded-xl" />
+      <Skeleton className="h-28 w-full rounded-2xl" />
+      <Skeleton className="h-16 w-full rounded-2xl" />
+      <Skeleton className="h-16 w-full rounded-2xl" />
     </div>
   );
 }

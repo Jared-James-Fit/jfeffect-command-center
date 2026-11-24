@@ -250,10 +250,10 @@ function FreeAccount() {
         <Card className="p-5">
           <div className="text-[16px] font-semibold">Want a coach?</div>
           <p className="mt-1 text-sm text-muted-foreground">
-            A JF Effect coach writes your program, reviews your lifts and adjusts as you go. Your history comes with you.
+            A JF Effect coach writes your program, reviews your lifts and adjusts as you go. Same account, and your history comes with you.
           </p>
           <Button asChild className="mt-4">
-            <a href="/coaching/apply">Apply for coaching</a>
+            <a href="/portal/plan">See plans</a>
           </Button>
         </Card>
       </div>

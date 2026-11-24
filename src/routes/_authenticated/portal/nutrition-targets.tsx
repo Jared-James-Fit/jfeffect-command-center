@@ -8,6 +8,7 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { useServiceTier } from "@/lib/service-tier";
 import { MemberNutritionPage } from "@/components/nutrition/member-nutrition-page";
 import { Suspense, useMemo, useRef, useState } from "react";
@@ -297,7 +298,12 @@ function PortalNutrition() {
 
         {/* 2. Meal Plan first: it's what the client opens Nutrition for. Its PDF
             is the Tools tile (one PDF button on the page, reachable on any day). */}
-        {planQ.isLoading && <MealPlanCardSkeleton />}
+        {planQ.isLoading && (
+          <>
+            <MealPlanCardSkeleton />
+            <SlowNote active onRetry={() => planQ.refetch()} what="your plan" />
+          </>
+        )}
         {plan && day && (
           <SectionErrorBoundary label="Meal plan">
             <Card className={cn("space-y-4 p-4 md:p-5", planArrived)}>
@@ -348,14 +354,18 @@ function PortalNutrition() {
         <SectionErrorBoundary label="Nutrition targets">
           {planQ.isLoading ? (
             <TargetsCardSkeleton />
-          ) : planQ.isError || !plan ? (
+          ) : planQ.fetchStatus === "paused" && !plan ? (
+            <OfflineState what="your plan" />
+          ) : planQ.isError && !plan ? (
+            <ErrorState error={planQ.error} what="your plan" onRetry={() => planQ.refetch()} retrying={planQ.isFetching} />
+          ) : !plan ? (
             <Card className="p-5">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div>
                   <div className="text-base font-semibold">Nutrition targets</div>
                   <div className="text-xs text-muted-foreground">
-                    {planQ.isError ? "We couldn't load your plan right now." : "No nutrition targets assigned yet."}
+                    No nutrition targets assigned yet.
                   </div>
                 </div>
               </div>

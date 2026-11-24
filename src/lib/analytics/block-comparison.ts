@@ -21,9 +21,9 @@ import { liftOf } from "@/lib/analytics/training-load";
 export type BlockMetric = "strength" | "volume" | "intensity" | "adherence";
 export const BLOCK_METRICS: Array<{ key: BlockMetric; label: string }> = [
   { key: "strength", label: "Strength" },
-  { key: "volume", label: "Volume" },
-  { key: "intensity", label: "Intensity" },
-  { key: "adherence", label: "Adherence" },
+  { key: "volume", label: "Sets" },
+  { key: "intensity", label: "Effort" },
+  { key: "adherence", label: "Done" },
 ];
 
 export type BlockRow = {

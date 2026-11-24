@@ -172,13 +172,16 @@ describe("the plan reads a day at a time: targets, then meals", () => {
     expect(review).toContain("const was = published ? null : now.get(dayKey(r.label)) ?? null;");
   });
 
-  it("the tab: the update, Food & diet beside the plan, how it's going, cardio", () => {
+  it("the tab: the update, Food & diet and plan quality beside the plan, how it's going; cardio is its own tab", () => {
     const tab = read("src/route-pages/_authenticated/admin/clients.$id.tsx");
-    const order = ["<NutritionRequestPanel", "<FoodNotesCard", "<NutritionTargetsPanel", "<NutritionProgressCard", "<CardioTargetsPanel"].map((t) => tab.indexOf(t));
+    const nutrition = tab.slice(tab.indexOf('<TabsContent value="nutrition"'), tab.indexOf('<TabsContent value="cardio"'));
+    const order = ["<NutritionRequestPanel", "<FoodNotesCard", "<NutritionQualityCard", "<NutritionTargetsPanel", "<NutritionProgressCard"].map((t) => nutrition.indexOf(t));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(tab).toContain('<FoodNotesCard clientId={id} className="md:col-span-1 md:self-start" />');
-    expect(tab).toContain('<NutritionTargetsPanel clientId={id} className="md:col-span-2" />');
+    expect(nutrition).toContain('<div className="min-w-0 space-y-4 md:col-span-1 md:self-start">');
+    expect(nutrition).toContain('<NutritionTargetsPanel clientId={id} className="md:col-span-2" />');
+    expect(nutrition).not.toContain("<CardioTargetsPanel");
+    expect(tab).toContain("<CardioWorkspace clientId={id} />");
   });
 });
 

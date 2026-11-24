@@ -259,7 +259,7 @@ function ListSkeleton() {
   return (
     <div className="space-y-2" aria-label="Loading recipes">
       {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-[60px] animate-pulse rounded-xl bg-muted" />
+        <div key={i} className="h-[60px] jf-skeleton rounded-xl bg-muted" />
       ))}
     </div>
   );

@@ -2,6 +2,12 @@ import { createContext, useContext } from "react";
 import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardSplash } from "@/components/dashboard-splash";
+import { SlowNote } from "@/components/loading/load-states";
+
+/** A page that's still on its way after 20 s: start it over (its code or data request hung). */
+const reloadPage = () => {
+  if (typeof window !== "undefined") window.location.reload();
+};
 
 /** True for whatever renders in the app shell's page area (AppShell's <main>). */
 export const ShellPageContext = createContext(false);
@@ -25,7 +31,10 @@ export function RoutePending() {
   if (signedIn) return <DashboardSplash />;
   return (
     <div className="grid min-h-[60dvh] place-items-center" role="status" aria-label="Loading">
-      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="jf-load-reveal h-6 w-6 animate-spin text-muted-foreground" />
+        <SlowNote active onRetry={reloadPage} />
+      </div>
     </div>
   );
 }
@@ -43,6 +52,7 @@ export function RoutePendingSkeleton() {
       <Skeleton className="h-36 w-full rounded-xl" />
       <Skeleton className="h-24 w-full rounded-xl" />
       <Skeleton className="h-24 w-full rounded-xl" />
+      <SlowNote active onRetry={reloadPage} />
     </div>
   );
 }

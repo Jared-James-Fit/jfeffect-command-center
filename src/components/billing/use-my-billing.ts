@@ -17,9 +17,21 @@ import { buildClientPayments, type ScheduleSale } from "@/lib/payment-schedule";
 import { myPurchases, type MyLedgerRow } from "@/lib/my-purchases";
 import { formatMoney } from "@/lib/payment-display";
 import { deviceTodayISO } from "@/lib/schedule-time";
+import { queryView, type QueryView } from "@/lib/loading/load-state";
 
-/** The client record the portal is showing: the previewed client's, else the signed-in person's own. */
-export function usePortalClientId(): { clientId: string | undefined; loading: boolean } {
+/**
+ * The client record the portal is showing: the previewed client's, else the
+ * signed-in person's own. A failed or offline read is said as such
+ * (`state`), never as "no purchases": a money screen must not read empty when
+ * it couldn't look.
+ */
+export function usePortalClientId(): {
+  clientId: string | undefined;
+  loading: boolean;
+  state: QueryView["kind"];
+  error: unknown;
+  retry: () => unknown;
+} {
   const { user } = useAuth();
   const { client } = useClientImpersonation();
   const own = useQuery({
@@ -27,10 +39,21 @@ export function usePortalClientId(): { clientId: string | undefined; loading: bo
     queryKey: ["my-client-id", user?.id],
     enabled: !client && !!user?.id,
     staleTime: 5 * 60_000,
-    queryFn: async () => (await supabase.from("clients").select("id").eq("user_id", user!.id).maybeSingle()).data,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("clients").select("id").eq("user_id", user!.id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
   });
-  if (client) return { clientId: client.id, loading: false };
-  return { clientId: own.data?.id ?? undefined, loading: own.isLoading };
+  if (client) return { clientId: client.id, loading: false, state: "ready", error: null, retry: () => undefined };
+  const view = queryView(own as any);
+  return {
+    clientId: own.data?.id ?? undefined,
+    loading: view.kind === "loading" && !!user?.id,
+    state: !user?.id ? "loading" : view.kind,
+    error: own.error,
+    retry: () => own.refetch(),
+  };
 }
 
 export type MyBillingView = {

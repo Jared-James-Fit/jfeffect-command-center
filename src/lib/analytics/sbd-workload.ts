@@ -39,12 +39,12 @@ export const WORKLOAD_METRICS: Array<{
   short: string;
   kind: "sum" | "avg";
 }> = [
-  { key: "sets", label: "Working sets", short: "Sets", kind: "sum" },
-  { key: "reps", label: "Total reps", short: "Reps", kind: "sum" },
-  { key: "tonnage", label: "Tonnage", short: "Tonnage", kind: "sum" },
-  { key: "avgLoad", label: "Average working weight", short: "Avg weight", kind: "avg" },
-  { key: "relIntensity", label: "% of estimated max", short: "% of max", kind: "avg" },
-  { key: "avgRpe", label: "Average RPE", short: "RPE", kind: "avg" },
+  { key: "sets", label: "Sets", short: "Sets", kind: "sum" },
+  { key: "reps", label: "Reps", short: "Reps", kind: "sum" },
+  { key: "tonnage", label: "Total weight lifted", short: "Weight lifted", kind: "sum" },
+  { key: "avgLoad", label: "Average weight", short: "Avg weight", kind: "avg" },
+  { key: "relIntensity", label: "How heavy (% of your max)", short: "% of max", kind: "avg" },
+  { key: "avgRpe", label: "How hard it felt (RPE)", short: "Effort (RPE)", kind: "avg" },
 ];
 
 export type WorkloadScope = "comp" | "variations" | "both";

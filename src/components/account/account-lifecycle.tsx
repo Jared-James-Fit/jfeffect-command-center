@@ -72,7 +72,7 @@ function ReviewSkeleton() {
   return (
     <div className="space-y-2 rounded-xl border border-border p-3" aria-busy>
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+        <div key={i} className="h-12 jf-skeleton rounded-lg bg-muted" />
       ))}
     </div>
   );

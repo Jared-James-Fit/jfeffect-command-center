@@ -15,6 +15,8 @@
  * Nothing here changes anything.
  */
 import { useMemo, type ReactNode } from "react";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { useClientPayments } from "@/components/billing/use-client-payments";
@@ -56,12 +58,20 @@ export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, o
   hideWhenEmpty?: boolean;
   className?: string;
 }) {
-  const { payments, today } = useClientPayments(clientId);
+  const billingQ = useClientPayments(clientId);
+  const { payments, today } = billingQ;
+  const billingState = queryView(billingQ as any).kind;
   // The Sessions tab's own read (one cache entry): the next session and the final one come from it.
   const { data: sessions } = useQuery(ptSessionsQuery(clientId));
   const fetchedNext = useMemo(() => (sessions ? nextBooked(sessions, today) : null), [sessions, today]);
   if (!payments) {
-    return hideWhenEmpty ? null : <div className={cn("h-40 animate-pulse rounded-2xl bg-muted", className)} aria-busy="true" />;
+    // failed or offline: said (with Try again), never a placeholder that pulses forever
+    if (billingState === "error" || billingState === "offline") {
+      return billingState === "offline"
+        ? <OfflineState what="their packages" size="inline" className={className} />
+        : <ErrorState error={billingQ.error} what="their packages" size="inline" onRetry={() => billingQ.refetch()} retrying={billingQ.isFetching} className={className} />;
+    }
+    return hideWhenEmpty ? null : <div className={cn("h-40 jf-skeleton rounded-2xl bg-muted", className)} aria-busy="true" />;
   }
   if (hideWhenEmpty && payments.packages.length === 0 && payments.coaching.length === 0) return null;
   return (

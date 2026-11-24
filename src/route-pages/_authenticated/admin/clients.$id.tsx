@@ -1,4 +1,6 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
+import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { loadErrorKind, queryView } from "@/lib/loading/load-state";
 import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
@@ -81,7 +83,9 @@ const FoodNotesCard = lazyDefault(() => import("@/components/nutrition/FoodNotes
 const NutritionProgressCard = lazyDefault(() => import("@/components/nutrition/NutritionProgressCard"), "NutritionProgressCard");
 const WeightManagementCard = lazyDefault(() => import("@/components/weight-management/WeightManagementCard"), "WeightManagementCard");
 const RoadmapCoachCard = lazyDefault(() => import("@/components/nutrition-roadmap/roadmap-coach"), "RoadmapCoachCard");
-const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
+const CardioWorkspace = lazyDefault(() => import("@/components/cardio/cardio-workspace"), "CardioWorkspace");
+const NutritionCleoDock = lazyDefault(() => import("@/components/nutrition/nutrition-cleo-dock"), "NutritionCleoDock");
+const NutritionQualityCard = lazyDefault(() => import("@/components/nutrition/NutritionQualityCard"), "NutritionQualityCard");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
@@ -100,8 +104,13 @@ const ClientPackageCard = lazyDefault(() => import("@/components/admin/coaching-
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const ClientTrainingTab = lazyDefault(() => import("@/components/clients/client-training-tab"), "ClientTrainingTab");
 
+/** A tab's code on its way: the shape of a card, never a bare "Loading…" line. */
 function TabFallback() {
-  return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
+  return (
+    <div className="md:col-span-3">
+      <CardSkeleton lines={4} label="Loading this tab" />
+    </div>
+  );
 }
 
 function SectionNav({ activeTab, onChange, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
@@ -214,7 +223,7 @@ export function ClientProfileWorkspace({
   const [reactivateOpen, setReactivateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const { data } = useQuery({
+  const clientQ = useQuery({
     queryKey: ["client", id],
     queryFn: async () => {
       const { data, error } = await supabase.from("clients").select("*").eq("id", id).single();
@@ -222,6 +231,7 @@ export function ClientProfileWorkspace({
       return data;
     },
   });
+  const { data } = clientQ;
 
   // Every server refetch (a setup link sent, a login linked, a card that saved
   // itself) moves the fields the coach hasn't touched; the coach's own edits stay.
@@ -248,21 +258,42 @@ export function ClientProfileWorkspace({
   };
 
   if (!form) {
+    // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
+    // never a skeleton forever.
+    const clientState = queryView(clientQ as any).kind;
+    if (clientState === "error" || clientState === "offline") {
+      const gone = clientState === "error" && loadErrorKind(clientQ.error) === "not_found";
+      return (
+        <div className="mx-auto max-w-md space-y-3 p-6">
+          {clientState === "offline" ? (
+            <OfflineState what="this client" />
+          ) : gone ? (
+            <EmptyState title="This client isn't here anymore" detail="They may have been deleted, or the link is out of date." />
+          ) : (
+            <ErrorState error={clientQ.error} what="this client" onRetry={() => clientQ.refetch()} retrying={clientQ.isFetching} />
+          )}
+          <div className="flex justify-center">
+            <Button variant="outline" className="h-10" asChild><Link to="/admin/clients">Back to clients</Link></Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-4 p-6" aria-busy="true" aria-label="Loading client profile">
+        <SlowNote active onRetry={() => clientQ.refetch()} what="this client" />
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 animate-pulse rounded-full bg-muted" />
+          <div className="h-12 w-12 jf-skeleton rounded-full bg-muted" />
           <div className="flex-1 space-y-2">
-            <div className="h-5 w-1/3 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
+            <div className="h-5 w-1/3 jf-skeleton rounded bg-muted" />
+            <div className="h-3 w-1/4 jf-skeleton rounded bg-muted" />
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
+            <div key={i} className="h-24 jf-skeleton rounded-lg bg-muted" />
           ))}
         </div>
-        <div className="h-64 animate-pulse rounded-lg bg-muted" />
+        <div className="h-64 jf-skeleton rounded-lg bg-muted" />
       </div>
     );
   }
@@ -780,18 +811,32 @@ export function ClientProfileWorkspace({
 
         {/*
           Nutrition: the AI update (one line unless it needs the coach), then what to
-          keep in mind (Food & diet: allergies, diet, notes) beside the plan (targets,
-          then meals), how it's going (bodyweight, check-ins, water) and cardio.
+          keep in mind (Food & diet: allergies, diet, notes) and the plan's quality beside
+          the plan (targets, then meals), how it's going (bodyweight, check-ins, water).
+          Cleo docks beside it (the page gives up its width). Cardio has its own tab.
         */}
-        <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS}>
+        <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS} data-builder-page>
           <Suspense fallback={<TabFallback />}>
             <NutritionRequestPanel clientId={id} />
-            <FoodNotesCard clientId={id} className="md:col-span-1 md:self-start" />
+            <div className="min-w-0 space-y-4 md:col-span-1 md:self-start">
+              <FoodNotesCard clientId={id} />
+              <NutritionQualityCard clientId={id} />
+            </div>
             <NutritionTargetsPanel clientId={id} className="md:col-span-2" />
             <RoadmapCoachCard clientId={id} className="md:col-span-3" />
             <WeightManagementCard clientId={id} className="md:col-span-3" />
             <NutritionProgressCard clientId={id} className="md:col-span-3" />
-            <CardioTargetsPanel clientId={id} />
+            <NutritionCleoDock clientId={id} />
+          </Suspense>
+        </TabsContent>
+
+        {/*
+          Cardio (Nov 23 2026): its own plan, builder, history and Cleo, read with the same
+          client picture as nutrition and training.
+        */}
+        <TabsContent value="cardio" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <CardioWorkspace clientId={id} />
           </Suspense>
         </TabsContent>
 

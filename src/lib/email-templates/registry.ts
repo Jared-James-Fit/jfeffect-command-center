@@ -5,6 +5,7 @@ import { template as agreementSigned } from './agreement-signed'
 import { template as agreementRequested } from './agreement-requested'
 import { approvedTemplate, codeTemplate, receivedTemplate } from './membership-emails'
 import { twoStepCodeTemplate } from './two-step-code'
+import { template as planChangeTemplate } from './plan-change'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -32,4 +33,5 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'membership-approved': approvedTemplate,
   'membership-code': codeTemplate,
   'two-step-code': twoStepCodeTemplate,
+  'plan-change': planChangeTemplate,
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Archive, ArchiveRestore, Download, Flag, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
@@ -16,12 +16,13 @@ import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 import { pictureKind } from "@/lib/post-pictures";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
-import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { InstagramShareSheet } from "@/components/community/lazy-sheets";
 import { ReportSheet } from "@/components/community/report-sheet";
 import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
 import { peekPostArt, postArtKey } from "@/lib/post-art";
 import { deckOf } from "@/lib/post-decks";
 import { useWeightUnit } from "@/lib/use-weight-unit";
+import { useOpenedOnce } from "@/hooks/use-opened-once";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
@@ -40,6 +41,10 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [sticker, setSticker] = useState(false);
+  // every post in the feed carries this menu: its dialogs mount the first time they open (then stay, for their exit)
+  const deleteMounted = useOpenedOnce(confirmDelete);
+  const editMounted = useOpenedOnce(editing);
+  const stickerMounted = useOpenedOnce(sticker);
   // mounted on first tap, like Instagram
   const [reporting, setReporting] = useState<boolean | null>(null);
   // mounted on first open (a feed of posts never runs it for nothing), kept for its closing slide
@@ -210,7 +215,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      {deleteMounted && <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{mine ? "Delete this post?" : "Remove this post?"}</AlertDialogTitle>
@@ -234,9 +239,9 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
 
-      {isNote ? (
+      {!editMounted ? null : isNote ? (
         <NoteEditor
           open={editing}
           title="Edit post"
@@ -260,8 +265,12 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
       ) : (
         <EditPostSheet post={editing ? post : null} onClose={() => setEditing(false)} />
       )}
-      {mine && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+      {mine && stickerMounted && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
+      {canInstagram && ig !== null && (
+        <Suspense fallback={null}>
+          <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />
+        </Suspense>
+      )}
       {canReport && reporting !== null && <ReportSheet kind="post" targetId={post.id} open={reporting} onOpenChange={setReporting} />}
     </>
   );
