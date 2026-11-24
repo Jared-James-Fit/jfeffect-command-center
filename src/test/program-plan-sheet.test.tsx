@@ -87,6 +87,26 @@ describe("the plan, one week at a time or one line a week", () => {
     expect(html.match(/data-plan-list-week=/g)).toHaveLength(4);
     expect(html).toContain('data-plan-list-week="4"');
   });
+  it("a week with no words yet is titled by its number, said once", () => {
+    const bare = planWeeks({ blocks: [blockOf("b9", null, null, [week("w9", 1, "current", null, null, "2026-11-23")])] } as unknown as ProgramRoadmap);
+    const html = renderToStaticMarkup(createElement(PlanFocus, { weeks: bare, at: 0, onAt: () => {}, total: 1, multi: false, blockCount: 1 }));
+    expect(html).toContain(">Week 1</h3>");
+    expect(html.match(/Week 1/g)).toHaveLength(2); // the title and the strip's label, never "Week 1 · … Week 1"
+    expect(html).toContain("data-plan-week-when");
+    expect(html).toContain("Nov 23");
+  });
+  it("List marks this week (it opens there) and each row says it opens", () => {
+    const html = renderToStaticMarkup(createElement(PlanList, { roadmap, weeks, onWeek: () => {} }));
+    expect(html.match(/data-plan-now="true"/g)).toHaveLength(1);
+    expect(html.match(/lucide-chevron-right/g)).toHaveLength(4);
+    const readOnly = renderToStaticMarkup(createElement(PlanList, { roadmap, weeks }));
+    expect(readOnly).not.toContain("lucide-chevron-right");
+  });
+  it("the sheet's header is the app's: the program on the left, Done on the right, no floating Back", () => {
+    const src = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
+    expect(src).toContain("hideCloseButton");
+    expect(src).toContain("data-plan-done");
+  });
   it("Focus is the default and the choice is remembered on the phone", () => {
     const src = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
     expect(src).toContain('=== "list" ? "list" : "focus"');
