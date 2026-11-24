@@ -3,6 +3,7 @@ import { ErrorState, ListSkeleton, OfflineState } from "@/components/loading";
 import { queryView } from "@/lib/loading/load-state";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
 import { RecoveryInboxRow } from "@/components/recovery/recovery-queue";
+import { CompetitionsInboxRow } from "@/components/competition/competitions-card";
 import { MemberApplicationsInboxRow } from "@/components/applications/member-applications-entry";
 import { OpenIpfInboxRow } from "@/components/openipf/openipf-review";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
@@ -1054,6 +1055,7 @@ export function MessagesInbox({
           )}
           {/* Replies and follow-ups to pain reports waiting for approval (whoever has automation; it hides itself otherwise). */}
           {!search && filter === "Inbox" && <RecoveryInboxRow />}
+          {!search && filter === "Inbox" && <CompetitionsInboxRow />}
           {/* New coaching applications, with the AI's read and a text to send (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
           {/* Free membership applications waiting on a decision (admin). */}

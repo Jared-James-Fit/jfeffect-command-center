@@ -65,6 +65,8 @@ const FEATURE_NAMES: Record<string, string> = {
   checkin_recap: "Check-in recaps",
   recovery_write: "Coaching queue replies",
   cardio_plan: "Cleo · cardio plans",
+  competition: "Cleo · competition assessments",
+  competition_extract: "Cleo · competition rosters and captions",
   "recovery_write:pain": "Coaching queue · pain replies and follow-ups",
   "recovery_write:workout": "Coaching queue · workout replies",
   "recovery_write:checkin": "Coaching queue · check-in replies",

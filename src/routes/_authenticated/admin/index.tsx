@@ -27,6 +27,7 @@ import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 import { NewLeadsCard } from "@/components/leads/new-leads-card";
 import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
 import { MeetReadinessCard } from "@/components/forms/meet-readiness-card";
+import { CompetitionsCard } from "@/components/competition/competitions-card";
 import { PainWatchCard } from "@/components/pain/pain-watch-card";
 import { RoadmapBoardCard } from "@/components/nutrition-roadmap/roadmap-board-card";
 import { CheckinsToReviewCard, useReviewQueue } from "@/components/forms/checkins-to-review-card";
@@ -296,6 +297,11 @@ function AdminDashboard() {
         <SectionErrorBoundary label="Leads">
           <NewApplicationsCard />
           <NewLeadsCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- COMPETITIONS: what Cleo prepared and what needs you (hidden when nobody's preparing) ---------------- */}
+        <SectionErrorBoundary label="Competitions">
+          <CompetitionsCard />
         </SectionErrorBoundary>
 
         {/* ---------------- MEETS: athletes with a meet checklist out (hidden when none) ---------------- */}

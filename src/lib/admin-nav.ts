@@ -27,6 +27,8 @@ export const clientNav: NavItem[] = [
   { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","appointments","sessions","events","booking","reschedule","cancel"] },
   { to: "/portal/programs", label: "Programs", icon: BookOpen, keywords: ["programs","build","builder","share","copy","crew programs","templates","routines"] },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
+  // Their meet: the game plan their coach approved and every preparation update (Nov 24 2026)
+  { to: "/portal/competition", label: "Competition", icon: Trophy, keywords: ["competition","meet","game plan","attempts","openers","warm-ups","powerlifting meet","weigh-in"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
   { to: "/challenges", label: "Challenges", icon: Trophy, keywords: ["challenge","competition","event","bench 225","leaderboard","compete","prize","winnipeg 225"] },
