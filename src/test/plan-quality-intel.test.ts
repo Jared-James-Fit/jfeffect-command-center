@@ -20,7 +20,9 @@ describe("one quality model: design apart from how it's followed", () => {
     const v = verdictOf(90, good, { adherence: { pct: 45, label: "9 of 20" }, outcome: null });
     expect(v.kind).toBe("follow_through");
     expect(v.action).toBe("review");
-    expect(v.headline).toMatch(/struggling to follow \(45%\)/);
+    expect(v.headline).toMatch(/struggling to follow \(only 45%\)/);
+    // the next step is a conversation: a message to send them, never a prescription change
+    expect(v.ask).toMatch(/What's been getting in the way/);
   });
 
   it("low adherence with a weak spot in the plan is practicality, and names the weak spot", () => {
@@ -33,7 +35,7 @@ describe("one quality model: design apart from how it's followed", () => {
   it("low adherence never blames a part of the plan that isn't about keeping it up", () => {
     const v = verdictOf(70, weakElsewhere, { adherence: { pct: 50, label: "" }, outcome: null });
     expect(v.kind).toBe("follow_through");
-    expect(v.headline).toMatch(/talk through what's getting in the way\. Separately, recovery could be better/);
+    expect(v.headline).toMatch(/^About 50% followed, though the plan looks easy enough to keep: find out what's getting in the way first\. Separately, recovery could be better/);
   });
 
   it("followed well but not working needs changing even when it looks right on paper", () => {
@@ -459,10 +461,10 @@ describe("intervention never rests on the overall score alone", () => {
     expect(kinds).toContain("fatigue:significant:recovery");
     expect(kinds).toContain("selection:urgent:safety");
     expect(q.concerns[0]).toMatchObject({ category: "selection", severity: "urgent" });
-    expect(q.concerns[0].text).toMatch(/Shoulder pain is getting worse and the program still loads it/);
+    expect(q.concerns[0].text).toMatch(/Shoulder: pain getting worse, and the program still loads it/);
     expect(q.verdict.kind).toBe("concern");
     expect(q.verdict.action).toBe("act");
-    expect(q.verdict.headline).toMatch(/^Shoulder pain is getting worse and the program still loads it\. The rest of the plan reads well \(\d+\), but this comes first\./);
+    expect(q.verdict.headline).toMatch(/^Shoulder: pain getting worse, and the program still loads it\. The rest of the plan reads well \(\d+\), but this comes first\./);
   });
 });
 
@@ -547,9 +549,9 @@ describe("no inflation after a change, and a thin read says so", () => {
     expect(q.provisional).toBe(true);
     expect(q.confidence).not.toBe("high");
     expect(q.verdict.kind).toBe("settling");
-    expect(q.verdict.headline).toBe("Changed 10 days ago: give it about 3 more weeks to show in their results before changing it again.");
+    expect(q.verdict.headline).toBe("Changed 10 days ago. Give it about 3 more weeks before judging it or changing it again.");
     expect(q.execution.outcome!.label).toMatch(/\(mostly before the change\)$/);
-    expect(q.optimize).toMatch(/don't undo a recent change before it's had time to work/);
+    expect(q.optimize).toMatch(/don't undo it before it's had time to work/);
   });
 
   it("cardio: on-track results don't flatter a new plan, and behind results don't count against it", () => {
