@@ -21,6 +21,8 @@ import { clearDraft, loadDraft, saveDraft } from "@/lib/post-draft";
 import { feedback } from "@/lib/feedback";
 import { tagSummary, uniqueTags, withTags } from "@/lib/crew-tags";
 import { useSlideTray, type TrayItem } from "@/components/community/slide-tray";
+import { CameraRoll } from "@/components/community/camera-roll";
+import { hasNativePhotos } from "@/lib/native-photos";
 import { PhotoFramer } from "@/components/community/photo-framer";
 import { StickerLayer, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach } from "@/components/community/post-attach";
@@ -162,6 +164,9 @@ export function PostComposer({
   const tray = useSlideTray({ open, initial: null, resetKey: draftKey, coverCount: 0, videoContext });
   const att = usePostAttach({ initial: null, key: draftKey, open });
   const [focus, setFocus] = useState<string | null>(null);
+  // the iPhone app shows the camera roll itself (native-photos.ts): one at a time, or several with Select
+  const [roll] = useState(() => hasNativePhotos());
+  const [multi, setMulti] = useState(false);
   // a post starts at 9:16, filling its screen in the Crew feed (startAspect)
   const [aspect, setAspect] = useState<PostAspect>("full");
   const aspectPicked = useRef(false);
@@ -198,6 +203,7 @@ export function PostComposer({
     setClosing(false);
     setConfirm(null);
     setFocus(null);
+    setMulti(false);
     setAspect("full");
     aspectPicked.current = false;
     setCaption("");
@@ -242,6 +248,12 @@ export function PostComposer({
     if (!tray.items.length && incoming.live) setCoverLive(true);
     const room = MAX_SLIDES - tray.items.length;
     if (room <= 0) return void toast.message(`A post holds ${MAX_SLIDES}`, { description: "Remove one to add another." });
+    if (roll) {
+      // the camera roll's one-at-a-time: a shot from the camera (or one pick from Apple's picker) takes the
+      // place of the one showing; several at once switch Select on
+      if (multi || incoming.files.length > 1) setMulti(true);
+      else for (const it of tray.items) tray.remove(it.id);
+    }
     void tray.add(incoming.files);
     setWriting(false);
     if (step === "details" && writing) setStep("select");
@@ -526,6 +538,9 @@ export function PostComposer({
                 onAspect={cycleAspect}
                 gridFlash={gridFlash}
                 onPick={onPick}
+                roll={roll}
+                multi={multi}
+                onMulti={setMulti}
                 onWrite={
                   allowWrite
                     ? () => {
@@ -574,7 +589,12 @@ export function PostComposer({
                   design={design}
                   onAspect={cycleAspect}
                   onCover={(id) => setCoverFor(id)}
-                  onAdd={() => onPick("library")}
+                  // the app's camera roll: back to the grid with Select on; else Apple's picker
+                  onAdd={() => {
+                    if (!roll) return onPick("library");
+                    setMulti(true);
+                    go("select");
+                  }}
                   onTag={() => setTagging(true)}
                   tags={tags.length}
                   hideLoadsOn={!!post?.showHideLoads && hideLoads && !!card && !card.paint}
@@ -797,6 +817,9 @@ function SelectStep({
   gridFlash,
   onPick,
   onWrite,
+  roll = false,
+  multi = false,
+  onMulti,
 }: {
   tray: ReturnType<typeof useSlideTray>;
   list: TrayItem[];
@@ -807,20 +830,73 @@ function SelectStep({
   gridFlash: number;
   onPick: (how: ComposerPickHow) => void;
   onWrite?: () => void;
+  /** The iPhone app's camera roll under the preview (native-photos.ts) instead of the picks and Apple's picker. */
+  roll?: boolean;
+  multi?: boolean;
+  onMulti?: (on: boolean) => void;
 }) {
   const shape = POST_ASPECTS[aspect];
   const [vh, setVh] = useState(800);
   useEffect(() => setVh(window.innerHeight), []);
   // the gallery swipes up over the preview (more picks in view) and back down, Instagram's way
   const [expanded, setExpanded] = useState(false);
-  const stageH = Math.round(vh * (expanded && list.length ? 0.3 : 0.5));
+  // a camera-roll tile tapped and still loading: its thumbnail holds the preview
+  const [staged, setStaged] = useState<string | null>(null);
+  const [rollSeeing, setRollSeeing] = useState(true);
+  // with no photos to show yet (access to ask for), the preview steps back so the ask fits above Post · Story
+  const small = (expanded && (list.length || roll)) || (roll && !rollSeeing && !list.length);
+  const stageH = Math.round(vh * (small ? 0.3 : 0.5));
   const stage = useStage(shape, stageH);
   const swipeY = useRef<number | null>(null);
   const framable = focused && focused.w && focused.h && (focused.kind === "image" ? focused.preview : focused.video);
+  // the gallery head's swipe: a tap or a swipe up / down (never on its buttons)
+  const grip: React.HTMLAttributes<HTMLDivElement> = {
+    onPointerDown: (e) => {
+      if ((e.target as Element).closest("[data-composer-source]")) return;
+      swipeY.current = e.clientY;
+      // the finger's lift lands here wherever it went (a swipe up ends over the preview)
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* fine */
+      }
+    },
+    onPointerUp: (e) => {
+      const y0 = swipeY.current;
+      swipeY.current = null;
+      if (y0 == null || (!list.length && !roll)) return;
+      const dy = e.clientY - y0;
+      if (Math.abs(dy) < 8) setExpanded((x) => !x);
+      else if (dy < -24) setExpanded(true);
+      else if (dy > 24) setExpanded(false);
+    },
+    onPointerCancel: () => {
+      swipeY.current = null;
+    },
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={stage.ref} className="relative flex shrink-0 items-center justify-center bg-zinc-950 transition-[height] duration-300 ease-out motion-reduce:transition-none" style={{ height: stageH }} data-composer-stage>
-        {!focused ? (
+        {staged ? (
+          <div className="relative overflow-hidden bg-black" style={{ width: stage.box.w, height: stage.box.h }} data-composer-staged>
+            <img src={staged} alt="" className="h-full w-full object-cover" />
+            <span className="absolute inset-0 grid place-items-center">
+              <Loader2 className="h-7 w-7 animate-spin text-white/80 drop-shadow" />
+            </span>
+          </div>
+        ) : !focused && roll ? (
+          <div className="flex flex-col items-center gap-3 px-8 text-center animate-in fade-in-0 duration-300" data-composer-roll-empty>
+            <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-white/80">
+              <Images className="h-7 w-7" />
+            </div>
+            <div className="text-[17px] font-semibold">{rollSeeing ? "Tap a photo or video below" : "Share a photo or video"}</div>
+            {onWrite && (
+              <button type="button" onClick={onWrite} className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-white/80 active:opacity-60" data-composer-write>
+                <PenLine className="h-4 w-4" /> Write a post instead
+              </button>
+            )}
+          </div>
+        ) : !focused ? (
           <div className="flex flex-col items-center gap-4 px-8 text-center animate-in fade-in-0 duration-300">
             <div className="grid h-20 w-20 place-items-center rounded-full border-2 border-white/80">
               <Images className="h-9 w-9" />
@@ -869,31 +945,23 @@ function SelectStep({
           </div>
         )}
       </div>
+      {roll ? (
+        <CameraRoll
+          tray={tray}
+          list={list}
+          showing={focused?.id ?? null}
+          onShow={onFocus}
+          multi={multi}
+          onMulti={(on) => onMulti?.(on)}
+          onPick={onPick}
+          onStage={setStaged}
+          onSeeing={setRollSeeing}
+          head={{ ...grip, expanded }}
+        />
+      ) : (
+        <>
       {/* the gallery's head: a grip (tap, or swipe up / down), what's picked, and the phone's picker by kind */}
-      <div
-        className="touch-none select-none"
-        onPointerDown={(e) => {
-          if ((e.target as Element).closest("[data-composer-source]")) return;
-          swipeY.current = e.clientY;
-          // the finger's lift lands here wherever it went (a swipe up ends over the preview)
-          try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-          } catch {
-            /* fine */
-          }
-        }}
-        onPointerUp={(e) => {
-          const y0 = swipeY.current;
-          swipeY.current = null;
-          if (y0 == null || !list.length) return;
-          const dy = e.clientY - y0;
-          if (Math.abs(dy) < 8) setExpanded((x) => !x);
-          else if (dy < -24) setExpanded(true);
-          else if (dy > 24) setExpanded(false);
-        }}
-        onPointerCancel={() => (swipeY.current = null)}
-        data-composer-gallery-head={expanded ? "expanded" : "collapsed"}
-      >
+      <div className="touch-none select-none" {...grip} data-composer-gallery-head={expanded ? "expanded" : "collapsed"}>
         {list.length > 0 && <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-white/30" aria-hidden />}
         <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2">
           <span className="min-w-0 text-[17px] font-semibold">
@@ -921,6 +989,8 @@ function SelectStep({
         </div>
       </div>
       <PickGrid tray={tray} list={list} focused={focused?.id ?? null} onFocus={onFocus} onPick={onPick} />
+        </>
+      )}
     </div>
   );
 }
