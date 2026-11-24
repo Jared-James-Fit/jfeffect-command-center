@@ -92,38 +92,47 @@ export function StrengthTrendChart({
     ].map(conv);
     const now = envelopeAt(ls.envelope, end);
     const trend = envelopeTrend(ls.envelope, start, end);
+    const liftWord = COMP_LIFT_LABEL[view].toLowerCase();
+    const r = (lb: number) => Math.round(conv(lb));
     headline = (
-      <div className="flex items-end justify-between gap-3" data-strength-headline>
-        <div>
-          <div className="text-[12px] text-muted-foreground">
-            Estimated {COMP_LIFT_LABEL[view].toLowerCase()} now
-          </div>
-          <div className="text-[28px] font-semibold leading-tight tabular-nums tracking-tight">
-            {now ? Math.round(conv(now.value)) : "—"}
-            <span className="ml-1 text-[13px] font-medium text-muted-foreground">{unit}</span>
-            {now && (
-              <span className="ml-2 text-[12px] font-normal text-muted-foreground">
-                {unit === "kg"
-                  ? `${Math.round(now.value)} lb`
-                  : `${Math.round((now.value / LB_PER_KG) * 2) / 2} kg`}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="text-right text-[12px] leading-snug text-muted-foreground">
-          {trend.kind === "unclear" ? (
-            trend.reason === "held" ? (
-              <span>No hard set since {now ? fmtDay(now.basis) : "—"}</span>
-            ) : (
-              <span>Too few sessions to call</span>
-            )
-          ) : (
-            <>
-              <Change pct={trend.pct} className="text-[15px] font-semibold" />
-              <div>since {fmtDay(trend.from.day)}</div>
-            </>
+      <div data-strength-headline>
+        <div className="text-[12px] text-muted-foreground">Your estimated {liftWord} max</div>
+        <div className="text-[28px] font-semibold leading-tight tabular-nums tracking-tight">
+          {now ? r(now.value) : "—"}
+          <span className="ml-1 text-[13px] font-medium text-muted-foreground">{unit}</span>
+          {now && (
+            <span className="ml-2 text-[12px] font-normal text-muted-foreground">
+              {unit === "kg"
+                ? `${Math.round(now.value)} lb`
+                : `${Math.round((now.value / LB_PER_KG) * 2) / 2} kg`}
+            </span>
           )}
         </div>
+        <p className="mt-1 text-[14px] leading-snug text-foreground/85" data-strength-sentence>
+          {trend.kind === "unclear" ? (
+            trend.reason === "held" ? (
+              <>
+                No hard {liftWord} sets since {now ? fmtDay(now.basis) : "then"}, so this is your last
+                known estimate.
+              </>
+            ) : (
+              <>Not enough {liftWord} workouts in this period to show a change yet.</>
+            )
+          ) : trend.kind === "steady" ? (
+            <>
+              Your {liftWord} has held steady since {fmtDay(trend.from.day)} (about{" "}
+              {r(trend.to.value)} {unit}).
+            </>
+          ) : (
+            <>
+              Your {liftWord} went{" "}
+              <span className={cn("font-semibold", trend.kind === "up" && "text-success")}>
+                {trend.kind} {Math.abs(Math.round(trend.pct * 10) / 10)}%
+              </span>{" "}
+              since {fmtDay(trend.from.day)} ({r(trend.from.value)} → {r(trend.to.value)} {unit}).
+            </>
+          )}
+        </p>
       </div>
     );
     if (!vals.length) {
@@ -417,15 +426,15 @@ export function StrengthTrendChart({
 
   const hoverText =
     hover?.kind === "session"
-      ? `${fmtDay(hover.s.day, "EEE, MMM d")} · ${Math.round(conv(hover.s.set.load) * 2) / 2} ${unit} × ${hover.s.set.reps}${hover.s.set.effort ? ` @ RPE ${hover.s.set.effort}` : " (no RPE)"} → est. ${Math.round(conv(hover.s.e1rm))} ${unit}${
+      ? `${fmtDay(hover.s.day, "EEE, MMM d")} · best set ${Math.round(conv(hover.s.set.load) * 2) / 2} ${unit} × ${hover.s.set.reps}${hover.s.set.effort ? ` at RPE ${hover.s.set.effort}` : " (no effort rating)"} → estimated max ${Math.round(conv(hover.s.e1rm))} ${unit}${
           hover.s.outlier
-            ? " · far off the rest, left out of the line"
+            ? ". Far from your other workouts, so it's left out of the line."
             : hover.s.confidence === "high"
               ? ""
-              : " · a lower bound"
+              : ". From an easier set, so your real max may be higher."
         }`
       : hover?.kind === "meet"
-        ? `${fmtDay(hover.day, "MMM d, yyyy")} · ${hover.name ?? "Meet"}: ${Math.round(conv(hover.lb) * 2) / 2} ${unit} lifted`
+        ? `${fmtDay(hover.day, "MMM d, yyyy")} · ${hover.name ?? "Meet"}: ${Math.round(conv(hover.lb) * 2) / 2} ${unit} lifted on the platform`
         : null;
 
   return (
@@ -454,7 +463,7 @@ export function StrengthTrendChart({
       >
         {hoverText ??
           (view === "compare" ? (
-            "Each lift's estimated strength as % change from the start of the period."
+            "How much each lift's estimated max has changed since the start of the period, in %. Tap the chart for a day's numbers."
           ) : (
             <StrengthKey lift={view} />
           ))}
@@ -474,21 +483,21 @@ function StrengthKey({ lift }: { lift: CompLift }) {
           className="h-2 w-2 rounded-full opacity-40"
           style={{ background: LIFT_SERIES[lift] }}
         />{" "}
-        Lighter set
+        Easier set
       </span>
       <span className="inline-flex items-center gap-1">
         <span
           className="h-2 w-2 rounded-full border-[1.5px]"
           style={{ borderColor: LIFT_SERIES[lift] }}
         />{" "}
-        No RPE
+        No effort rating
       </span>
       <span className="inline-flex items-center gap-1">
-        <span className="h-2 w-2 rotate-45 border-2 border-foreground" /> Meet
+        <span className="h-2 w-2 rotate-45 border-2 border-foreground" /> Meet lift
       </span>
       <span className="inline-flex items-center gap-1">
         <span className="w-3 border-t-2 border-dashed" style={{ borderColor: LIFT_SERIES[lift] }} />{" "}
-        Held (no hard set)
+        No hard set lately
       </span>
     </span>
   );

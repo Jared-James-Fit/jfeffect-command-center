@@ -92,7 +92,7 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
           <div className="text-sm font-bold text-foreground">No bodyweight entries in this range.</div>
           <p className="mt-1 text-xs text-muted-foreground">
             {totalLogs > 0
-              ? "Try a wider range — entries exist outside this window."
+              ? "Try a longer period: you have weigh-ins outside this one."
               : "Bodyweight logged on the home dashboard will appear here."}
           </p>
         </Card>
@@ -140,7 +140,7 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
       ? "Needs two weeks of weigh-ins to compare."
       : Math.abs(rangeChange) < 0.3
         ? `Holding steady: the last week's average is within 0.3 ${displayUnit} of the first week's.`
-        : `${rangeChange < 0 ? "Down" : "Up"} ${fmt1(Math.abs(rangeChange))} ${displayUnit}, first week's average to the last week's.`;
+        : `Your bodyweight went ${rangeChange < 0 ? "down" : "up"} ${fmt1(Math.abs(rangeChange))} ${displayUnit}, comparing the first week's average with the last week's.`;
 
   return (
     <section aria-label="Bodyweight">
@@ -152,14 +152,14 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
             label="Change"
             value={rangeChange == null ? "—" : signed(rangeChange).replace(` ${displayUnit}`, "")}
             unit={rangeChange == null ? undefined : displayUnit}
-            sub={rangeChange == null ? "Needs 2+ weeks" : `since ${format(firstDate, "MMM d")}`}
+            sub={rangeChange == null ? "Needs 2 or more weeks" : `since ${format(firstDate, "MMM d")}`}
             valueClass={changeTone}
           />
           <Stat
-            label="A week"
+            label="Per week"
             value={weeklyChange == null ? "—" : signed(weeklyChange).replace(` ${displayUnit}`, "")}
             unit={weeklyChange == null ? undefined : displayUnit}
-            sub={weeklyChange == null ? "Needs 2+ weeks" : "on average"}
+            sub={weeklyChange == null ? "Needs 2 or more weeks" : "on average"}
           />
         </div>
 

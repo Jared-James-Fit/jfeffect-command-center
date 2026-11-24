@@ -158,9 +158,9 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
           <div className={`grid grid-cols-2 gap-3 ${point.velocity_mps != null ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
             <StatCard label="Weight" value={`${fmtNum(displayLoad)} ${displayUnit}`} />
             <StatCard label="Reps" value={String(point.reps)} />
-            <StatCard label="Volume" value={`${fmtNum(volume)} ${displayUnit}`} />
-            <StatCard label="Est 1RM" value={`${fmtNum(point.est_1rm)} ${displayUnit}`} highlight />
-            {point.velocity_mps != null && <StatCard label="Mean velocity" value={`${Number(point.velocity_mps).toFixed(2)} m/s`} />}
+            <StatCard label="Weight × reps" value={`${fmtNum(volume)} ${displayUnit}`} />
+            <StatCard label="Estimated max" value={`${fmtNum(point.est_1rm)} ${displayUnit}`} highlight />
+            {point.velocity_mps != null && <StatCard label="Bar speed" value={`${Number(point.velocity_mps).toFixed(2)} m/s`} />}
           </div>
 
           {/* ── RPE / RIR ── */}
@@ -178,7 +178,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
                 <Dumbbell className="h-3 w-3" /> RIR
               </div>
               <div className={`text-sm font-bold ${point.rir ? "text-foreground" : "text-muted-foreground"}`}>
-                {point.rir ? `${point.rir} RIR` : "RIR not logged"}
+                {point.rir ? `${point.rir} reps left in the tank (RIR)` : "Reps left not logged"}
               </div>
             </div>
           </div>
@@ -194,7 +194,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
           {/* ── Exercise note ── */}
           <div ref={notesRef} className="rounded-lg border border-border bg-muted/30 p-3">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 flex items-center gap-1">
-              <FileText className="h-3 w-3" /> Exercise Note
+              <FileText className="h-3 w-3" /> Exercise note
             </div>
             {noteContent ? (
               <p className="text-sm text-foreground whitespace-pre-wrap">{noteContent}</p>
@@ -207,7 +207,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
           {review ? (
             <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
-                <Star className="h-3 w-3" /> Workout Review
+                <Star className="h-3 w-3" /> Workout review
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 <RatingStars rating={review.overall_rating} />
@@ -221,7 +221,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
                   <ReviewBadge label="Fatigue" value={review.fatigue_feel} />
                 )}
                 {review.hit_target && (
-                  <ReviewBadge label="Hit Target" value={review.hit_target} />
+                  <ReviewBadge label="Hit target" value={review.hit_target} />
                 )}
               </div>
               {review.client_note && (
@@ -231,7 +231,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
           ) : (
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 flex items-center gap-1">
-                <Star className="h-3 w-3" /> Workout Review
+                <Star className="h-3 w-3" /> Workout review
               </div>
               <p className="text-sm text-muted-foreground">No review submitted</p>
             </div>
@@ -275,19 +275,19 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
           <div className="flex flex-col gap-2 pt-2 border-t border-border">
             {noteContent && (
               <Button variant="outline" className="w-full" size="lg" onClick={scrollToNotes}>
-                <FileText className="mr-2 h-4 w-4" /> View Notes
+                <FileText className="mr-2 h-4 w-4" /> View notes
               </Button>
             )}
             {canOpenLog && clientId && point.day_id ? (
               <Button asChild className="w-full" size="lg">
                 <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
-                  <ExternalLink className="mr-2 h-4 w-4" /> View Workout
+                  <ExternalLink className="mr-2 h-4 w-4" /> View workout
                 </Link>
               </Button>
             ) : point.day_id ? (
               <Button asChild className="w-full" size="lg">
                 <Link to="/portal/workouts/$dayId" params={{ dayId: point.day_id }}>
-                  <ExternalLink className="mr-2 h-4 w-4" /> View Workout
+                  <ExternalLink className="mr-2 h-4 w-4" /> View workout
                 </Link>
               </Button>
             ) : null}

@@ -13,6 +13,12 @@
  *  - Supports the coach: a coached athlete's tip never changes prescribed
  *    training; at most it's something to mention at their check-in.
  *  - A pattern is said as a pattern, never a cause.
+ *  - Plain words: "strength", "sets", "effort (RPE)", never "volume" or
+ *    "e1RM"; and it says whether it's counted from the logs (measured) or
+ *    worked out from them (an estimate).
+ *  - Goal-aware: a muscle is never weak, undertrained or overtrained for
+ *    having fewer or more sets than another; a change in a muscle's sets is
+ *    said as a change, read against what the athlete's goal asks of it.
  */
 import type { CompLift } from "@/lib/analytics/competition-strength";
 import { COMP_LIFT_LABEL } from "@/lib/analytics/competition-strength";
@@ -26,6 +32,17 @@ export type Observation = {
   tip: string;
   evidence: Array<{ label: string; value: string }>;
   tone: "good" | "watch" | "info";
+  /** counted straight from the logs, or worked out from them (an estimated max, a pattern) */
+  basis: "measured" | "estimated";
+};
+
+/** A muscle's sets in the last six weeks against the six before (muscle-read.ts `muscleWindowChanges`). */
+export type MuscleChange = {
+  muscle: string;
+  role: "prime" | "support" | "optional";
+  total: number;
+  before: number;
+  changePct: number;
 };
 
 export type ObservationInput = {
@@ -46,6 +63,10 @@ export type ObservationInput = {
   consistency: { recentPct: number | null; beforePct: number | null; planned: number };
   /** the main lift the athlete trains most */
   mainLift: CompLift | null;
+  /** what the athlete trains for (analytics-profile.ts): decides which kind of finding leads */
+  profile?: "powerlifting" | "physique" | "general";
+  /** each muscle's sets in the last six weeks against the six before */
+  muscles?: MuscleChange[];
   /** the training-load read's top insight for the athlete (training-load.ts), so Cleo and the coach's analytics agree */
   insight?: {
     id: string;
@@ -53,6 +74,7 @@ export type ObservationInput = {
     action: string;
     evidence: string[];
     tone: "good" | "info" | "watch";
+    athlete?: { observation: string; action: string };
   } | null;
 };
 
@@ -73,18 +95,19 @@ export function pickObservation(i: ObservationInput): Observation | null {
     const harder = drift.tone === "watch";
     cands.push({
       id: "drift",
-      observation: drift.words.replace(/ Often fatigue.*$| A sign the work.*$/, ""),
+      observation: drift.words.replace(/ Often tiredness.*$| A sign your body.*$/, ""),
       tip: harder
         ? light
-          ? "This is a lighter phase, which usually brings effort back down. Keep an eye on how the next sessions feel."
+          ? "You're in a lighter phase, which usually brings effort back down. See how the next workouts feel."
           : i.coached
-            ? "Keep to the plan, note how the next sessions feel, and mention it at your check-in if it continues."
-            : "Watch the next couple of sessions. If it keeps climbing, a lighter week or more sleep is the usual fix."
-        : "The work is being absorbed. Keep progressing the way you are.",
+            ? "Keep to the plan, note how the next workouts feel, and mention it at your check-in if it carries on."
+            : "Watch the next couple of workouts. If it keeps climbing, a lighter week or more sleep usually helps."
+        : "Your body is adapting to the training. Keep going the way you are.",
       evidence: [
-        { label: "Compared", value: "same weights and reps, last 3 weeks vs the 3 before" },
+        { label: "Compared", value: "the same weights and reps, last 3 weeks against the 3 before" },
       ],
       tone: harder ? "watch" : "good",
+      basis: "measured",
       score: harder ? 90 : 55,
     });
   }
@@ -95,27 +118,29 @@ export function pickObservation(i: ObservationInput): Observation | null {
     if (s.pct != null && s.pct >= 15 && r && Math.abs(r.to - r.from) < 0.5) {
       cands.push({
         id: `tolerated:${s.lift}`,
-        observation: `Your ${lift(s.lift)} volume is up ${s.pct}% over the last three weeks while average RPE has stayed around ${r.to}.`,
+        observation: `You're doing ${s.pct}% more ${lift(s.lift)} sets than three weeks ago, and they feel just as hard (RPE about ${r.to} out of 10).`,
         tip: i.coached
-          ? "The workload looks well tolerated. Keep following the plan and watch performance and recovery as the block builds."
-          : "The extra work looks well tolerated. Keep monitoring how sessions and recovery feel as it builds.",
+          ? "You're handling the extra work well. Keep following the plan and notice how you recover as it builds."
+          : "You're handling the extra work well. Keep an eye on how workouts and recovery feel as it builds.",
         evidence: [
           { label: `${COMP_LIFT_LABEL[s.lift]} sets a week`, value: `${s.from} → ${s.to}` },
-          { label: "Average RPE", value: `${r.from} → ${r.to}` },
+          { label: "Effort (RPE, out of 10)", value: `${r.from} → ${r.to}` },
         ],
         tone: "good",
+        basis: "measured",
         score: 70,
       });
     }
     if (s.pct != null && s.pct <= -25 && light) {
       cands.push({
         id: `light:${s.lift}`,
-        observation: `Your ${lift(s.lift)} volume is down ${Math.abs(s.pct)}%, which matches the lighter phase you're in.`,
-        tip: "Lower workload here is planned. Strength often looks flat during it and shows up after.",
+        observation: `You're doing ${Math.abs(s.pct)}% fewer ${lift(s.lift)} sets, which matches the lighter phase you're in.`,
+        tip: "Doing less here is planned. Strength often looks flat during a lighter phase and shows up after it.",
         evidence: [
           { label: `${COMP_LIFT_LABEL[s.lift]} sets a week`, value: `${s.from} → ${s.to}` },
         ],
         tone: "info",
+        basis: "measured",
         score: 60,
       });
     }
@@ -127,43 +152,46 @@ export function pickObservation(i: ObservationInput): Observation | null {
     if (t && t.kind === "up" && t.pct >= 2) {
       cands.push({
         id: "strength-up",
-        observation: `Your ${lift(i.mainLift)} estimate is up ${t.pct}% over the last six weeks, from ${fmt(t.from.value)} to ${fmt(t.to.value)}.`,
+        observation: `Your ${lift(i.mainLift)} strength is up ${t.pct}% over the last six weeks (estimated max ${fmt(t.from.value)} → ${fmt(t.to.value)}).`,
         tip: i.coached
-          ? "Progress is on track. Keep doing what's written."
-          : "What you're doing is working. Keep progressing gradually.",
+          ? "You're on track. Keep doing what's in your program."
+          : "What you're doing is working. Keep adding weight gradually.",
         evidence: [
-          { label: "Estimated strength", value: `${fmt(t.from.value)} → ${fmt(t.to.value)}` },
-          { label: "Read from", value: "hard sets, with lighter sets as lower bounds" },
+          { label: "Estimated max", value: `${fmt(t.from.value)} → ${fmt(t.to.value)}` },
+          { label: "Worked out from", value: "your hard sets (easier sets count as a minimum)" },
         ],
         tone: "good",
+        basis: "estimated",
         score: 65 + Math.min(10, t.pct),
       });
     } else if (t && t.kind === "down" && !light) {
       cands.push({
         id: "strength-down",
-        observation: `Your ${lift(i.mainLift)} estimate has come down ${Math.abs(t.pct)}% over six weeks of hard sets.`,
+        observation: `Your ${lift(i.mainLift)} strength has come down ${Math.abs(t.pct)}% over the last six weeks (estimated max ${fmt(t.from.value)} → ${fmt(t.to.value)}).`,
         tip: i.coached
-          ? "Worth raising at your check-in, along with how sleep and recovery have been."
-          : "Before changing the program, check sleep, recovery and whether loads have been creeping too fast.",
+          ? "Worth raising at your check-in, along with how your sleep and recovery have been."
+          : "Before changing your program, look at your sleep, recovery and whether the weights went up too fast.",
         evidence: [
-          { label: "Estimated strength", value: `${fmt(t.from.value)} → ${fmt(t.to.value)}` },
+          { label: "Estimated max", value: `${fmt(t.from.value)} → ${fmt(t.to.value)}` },
         ],
         tone: "watch",
+        basis: "estimated",
         score: 80,
       });
     } else if (t && t.kind === "steady") {
       cands.push({
         id: "strength-steady",
-        observation: `Your ${lift(i.mainLift)} estimate has held around ${fmt(t.to.value)} for six weeks.`,
+        observation: `Your ${lift(i.mainLift)} strength has held steady for six weeks (estimated max about ${fmt(t.to.value)}).`,
         tip: light
           ? "Holding steady is the goal in a lighter phase."
           : i.coached
-            ? "Steady is normal mid-block. Your coach reads these alongside the plan."
-            : "Steady is normal mid-block. If it lasts another block, it's worth changing a variable.",
+            ? "Steady is normal in the middle of a block. Your coach reads this alongside your plan."
+            : "Steady is normal in the middle of a block. If it lasts another block, try changing one thing, like reps or sets.",
         evidence: [
-          { label: "Estimated strength", value: `${fmt(t.from.value)} → ${fmt(t.to.value)}` },
+          { label: "Estimated max", value: `${fmt(t.from.value)} → ${fmt(t.to.value)}` },
         ],
         tone: "info",
+        basis: "estimated",
         score: 35,
       });
     }
@@ -178,11 +206,12 @@ export function pickObservation(i: ObservationInput): Observation | null {
         i.recentRecords.length === 1
           ? `New record on ${r.exercise}: ${fmt(r.load)} × ${r.reps}.`
           : `${i.recentRecords.length} new records in the last two weeks, led by ${r.exercise} at ${fmt(r.load)} × ${r.reps}.`,
-      tip: "Records like these are what consistent work looks like. Nothing to change.",
+      tip: "This is what steady work looks like. Nothing to change.",
       evidence: i.recentRecords
         .slice(0, 3)
         .map((x) => ({ label: x.exercise, value: `${fmt(x.load)} × ${x.reps}` })),
       tone: "good",
+      basis: "measured",
       score: 58 + i.recentRecords.length * 2,
     });
   }
@@ -203,6 +232,7 @@ export function pickObservation(i: ObservationInput): Observation | null {
         : "If your week has changed, fewer training days you can keep beats more you can't.",
       evidence: [{ label: "Planned workouts done", value: `${c.beforePct}% → ${c.recentPct}%` }],
       tone: "watch",
+      basis: "measured",
       score: 75,
     });
   }
@@ -213,17 +243,17 @@ export function pickObservation(i: ObservationInput): Observation | null {
     cands.push({
       id: `pattern:${p.id}`,
       observation: p.words.replace(
-        / A pattern in your logs, not proof\.| Normal after hard work;.*$/,
+        / A pattern in your logs, not proof\.| That's normal after hard work.*$/,
         "",
       ),
       tip:
         p.id === "sleep"
-          ? "Sleep is the cheapest performance tool you have. Protect it before your heavy days."
+          ? "Sleep is the cheapest way to train better. Protect it before your heavy days."
           : p.id === "demanding"
             ? i.coached
-              ? "That's expected. Keep the day after your big sessions as written."
-              : "Expected after hard work. Keep the day after your biggest sessions lighter."
-            : "Lighter weeks are doing their job.",
+              ? "That's expected. Keep the day after your biggest workouts as written."
+              : "That's expected after hard work. Keep the day after your biggest workouts lighter."
+            : "Your lighter weeks are doing their job.",
       evidence: p.compare
         ? [
             { label: p.compare.a.label, value: `${p.compare.a.value} ${p.compare.unit}` },
@@ -231,6 +261,7 @@ export function pickObservation(i: ObservationInput): Observation | null {
           ]
         : [],
       tone: p.tone,
+      basis: "estimated",
       score: 50,
     });
   }
@@ -239,13 +270,48 @@ export function pickObservation(i: ObservationInput): Observation | null {
   if (i.insight) {
     cands.push({
       id: `load:${i.insight.id}`,
-      observation: i.insight.observation,
+      observation: i.insight.athlete?.observation ?? i.insight.observation,
       tip: i.coached
-        ? `${i.insight.action} Your coach plans around this; mention it at your check-in.`
-        : i.insight.action,
+        ? `${i.insight.athlete?.action ?? i.insight.action} Mention it at your check-in so your coach can plan around it.`
+        : (i.insight.athlete?.action ?? i.insight.action),
       evidence: i.insight.evidence.slice(0, 3).map((e) => ({ label: "", value: e })),
       tone: i.insight.tone,
+      basis: "measured",
       score: i.insight.tone === "watch" ? 72 : 52,
+    });
+  }
+
+  // 8 · a big change in where the sets go, said as a change, never as weak or overdone
+  const muscleMove = (i.muscles ?? [])
+    .filter((m) => m.role !== "optional" && m.before >= 6 && Math.abs(m.changePct) >= 30)
+    .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))[0];
+  if (muscleMove) {
+    const more = muscleMove.changePct > 0;
+    const name = muscleMove.muscle.toLowerCase();
+    const main = muscleMove.role === "prime";
+    cands.push({
+      id: `muscle:${muscleMove.muscle}`,
+      observation: more
+        ? `You've trained your ${name} more in the last six weeks: ${Math.round(muscleMove.total)} sets, up ${muscleMove.changePct}% from the six weeks before.`
+        : `Your ${name} got ${Math.abs(muscleMove.changePct)}% fewer sets in the last six weeks than the six before (${Math.round(muscleMove.before)} → ${Math.round(muscleMove.total)}).`,
+      tip: more
+        ? main
+          ? `That suits your goal, which leans on your ${name}. Notice how it recovers between workouts.`
+          : "Fine if it's on purpose. Notice how it recovers between workouts."
+        : light
+          ? "That fits the lighter phase you're in."
+          : i.coached
+            ? "Often planned between blocks. Ask your coach if you're not sure why."
+            : main
+              ? `If that wasn't on purpose, a couple more sets a week would bring your ${name} back to where it was.`
+              : "Fewer sets doesn't make a muscle weak. Fine if it's on purpose.",
+      evidence: [
+        { label: `${muscleMove.muscle} sets`, value: `${Math.round(muscleMove.before)} → ${Math.round(muscleMove.total)}` },
+        { label: "Compared", value: "the last six weeks against the six before" },
+      ],
+      tone: "info",
+      basis: "measured",
+      score: (i.profile === "physique" ? 62 : 44) + (main ? 4 : 0),
     });
   }
 

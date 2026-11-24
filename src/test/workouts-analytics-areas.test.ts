@@ -429,8 +429,8 @@ describe("the screens", () => {
   it("the total is an estimate or a meet, never mixed, with no 'typical range' read", () => {
     const d = read("src/components/analytics/sbd-donut.tsx");
     expect(d).not.toContain("typical");
-    expect(d).toContain("Shares describe the total; they don't mean a lift is weak.");
-    expect(d).toContain('Tested 1RM');
+    expect(d).toContain("A smaller share doesn't mean a lift is weak.");
+    expect(d).toContain("Tested max (1 rep)");
     expect(d).toContain("Training max");
   });
   it("the cardio card never says 'Done at any one'", () => {

@@ -45,6 +45,12 @@ const GRAIN_WORD: Record<WorkloadGrain, string> = {
   month: "By month",
   block: "By block",
 };
+const GRAIN_UNIT: Record<WorkloadGrain, string> = {
+  day: "days",
+  week: "weeks",
+  month: "months",
+  block: "blocks",
+};
 const SCOPE_WORD: Record<WorkloadScope, string> = {
   comp: "Competition lifts",
   variations: "Barbell variations",
@@ -406,6 +412,9 @@ export function SbdWorkloadChart({
 
       {shifts.some((s) => s.pct != null) && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px]" data-workload-shifts>
+          <span className="w-full text-[12px] text-muted-foreground">
+            Change from the first {GRAIN_UNIT[grain]} to the last:
+          </span>
           {shifts
             .filter((s) => s.pct != null)
             .map((s) => (
@@ -418,8 +427,8 @@ export function SbdWorkloadChart({
                 <span className="text-muted-foreground">{COMP_LIFT_LABEL[s.lift]}</span>
                 <span className="font-semibold tabular-nums text-foreground">
                   {Math.abs(s.pct!) < 5
-                    ? "steady"
-                    : `${s.pct! > 0 ? "↑" : "↓"} ${Math.abs(s.pct!)}%`}
+                    ? "about the same"
+                    : `${s.pct! > 0 ? "up" : "down"} ${Math.abs(s.pct!)}%`}
                 </span>
               </span>
             ))}
@@ -446,27 +455,27 @@ export function SbdWorkloadChart({
               )
               .join(" · ")}
             {sel.prescribed && metric === "sets"
-              ? ` · ${lifts.reduce((a, l) => a + sel.prescribed![l], 0)} written`
+              ? ` · ${lifts.reduce((a, l) => a + sel.prescribed![l], 0)} planned`
               : ""}
-            {sel.current ? " · still going" : ""}
+            {sel.current ? " · not over yet" : ""}
           </span>
         ) : (
           <span>
             {metric === "sets"
-              ? `Working sets ${GRAIN_WORD[grain].toLowerCase()}, never warm-ups.${plan?.length ? " The dashed outline is what was written." : ""}`
+              ? `Sets ${GRAIN_WORD[grain].toLowerCase()}, not counting warm-ups.${plan?.length ? " The dashed outline is what your program planned." : ""}`
               : null}
-            {metric === "reps" ? "Reps in working sets, never warm-ups." : null}
+            {metric === "reps" ? "Reps in your sets, not counting warm-ups." : null}
             {metric === "tonnage"
-              ? `Weight on the bar × reps (${unit}): total weight moved, not a measure of fatigue.`
+              ? `Each set's weight × its reps, added up (${unit}). It shows how much work you did, not how tired it made you.`
               : null}
             {metric === "avgLoad"
-              ? `Average working weight (${unit}), each lift on its own.`
+              ? `The average weight on the bar in your sets (${unit}), each lift on its own.`
               : null}
             {metric === "relIntensity"
-              ? "Each set's weight as a % of that lift's estimated strength at the time, not a tested max or training max."
+              ? "How heavy your sets were compared with your estimated max at the time. 80% means 80% of the most you could likely lift once."
               : null}
             {metric === "avgRpe"
-              ? "Average RPE of rated working sets; unrated sets are left out."
+              ? "How hard your sets felt, out of 10 (RPE). 10 means you couldn't do another rep. Sets without a rating are left out."
               : null}{" "}
             Tap a bar for its numbers.
           </span>
@@ -497,7 +506,7 @@ function PillMenu<T extends string>({
         <button
           type="button"
           aria-label={`${label}: ${cur?.label}`}
-          className="inline-flex h-8 items-center gap-1 rounded-full border border-border px-3 text-[12px] font-medium text-foreground transition hover:bg-muted/50"
+          className="inline-flex h-9 items-center gap-1 rounded-full border border-border px-3 text-[13px] font-medium text-foreground transition hover:bg-muted/50"
           data-workload-menu={data}
         >
           {cur?.label}

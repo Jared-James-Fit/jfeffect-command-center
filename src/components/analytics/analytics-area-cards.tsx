@@ -103,8 +103,8 @@ export function LiftsMovingCard({
   if (!data.tracked) {
     return (
       <Card className="p-4 text-sm text-muted-foreground" data-lifts-moving-empty>
-        No lift has enough hard sets in this period to read a trend yet. It needs 4 or more sessions
-        over 3+ weeks with sets at RPE 7 or harder.
+        Not enough hard sets in this period to show a trend yet. It needs 4 or more workouts over 3
+        or more weeks with sets at RPE 7 or harder (about 3 reps or fewer left in the tank).
       </Card>
     );
   }
@@ -119,7 +119,7 @@ export function LiftsMovingCard({
             <div className="min-w-0 flex-1">
               <div className="truncate font-medium text-foreground">{name}</div>
               <div className="truncate text-[12px] text-muted-foreground">
-                Est. max {Math.round(conv(trend.last))} {unit} · {trend.sessions} hard sessions
+                Estimated max {Math.round(conv(trend.last))} {unit} · {trend.sessions} hard workouts
               </div>
             </div>
             <div className="shrink-0 text-right">
@@ -130,7 +130,7 @@ export function LiftsMovingCard({
                 )}
               >
                 {trend.kind === "steady"
-                  ? "Same"
+                  ? "About the same"
                   : `${diff > 0 ? "+" : "−"}${Math.abs(diff)} ${unit}`}
               </div>
               <div className="text-[11px] text-muted-foreground">

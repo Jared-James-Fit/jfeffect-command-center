@@ -60,7 +60,7 @@ describe("the screens read strength the same way", () => {
     const card = read("src/components/analytics/lift-progress-card.tsx");
     expect(card).toContain("comparable ? s.strength");
     expect(card).toContain("strengthTrend(");
-    expect(card).toContain("Estimated from every set, so read it as a floor.");
+    expect(card).toContain("Estimated from every set, so read it as a floor");
     expect(card).toContain('{ key: "est", label: "Est. max" }');
     expect(card).toContain("Heaviest");
     expect(card).not.toContain("e1rmTrendPerWeek");

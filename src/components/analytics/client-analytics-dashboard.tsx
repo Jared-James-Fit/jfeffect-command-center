@@ -68,7 +68,7 @@ import {
 } from "@/lib/analytics/records";
 import { buildWorkload, splitShift } from "@/lib/analytics/sbd-workload";
 import { estimatedComposition, meetCompositions } from "@/lib/analytics/sbd-composition";
-import { buildMuscleRead, musclesNamed } from "@/lib/analytics/muscle-read";
+import { buildMuscleRead, muscleWindowChanges, musclesNamed } from "@/lib/analytics/muscle-read";
 import { recoveryPatterns } from "@/lib/analytics/recovery-intel";
 import { pickObservation } from "@/lib/analytics/performance-observation";
 import { blockRows } from "@/lib/analytics/block-comparison";
@@ -81,7 +81,7 @@ import { StrengthTrendChart } from "@/components/analytics/strength-trend-chart"
 import { SbdWorkloadChart } from "@/components/analytics/sbd-workload-chart";
 import { BlockComparisonCard } from "@/components/analytics/block-comparison-card";
 import { RecordsView } from "@/components/analytics/records-view";
-import { MuscleMap } from "@/components/analytics/muscle-map";
+import { MuscleMap, useSupportCredit } from "@/components/analytics/muscle-map";
 import {
   CleoObservationCard,
   ConsistencyBlock,
@@ -454,6 +454,7 @@ export function ClientAnalyticsDashboard({
     () => musclesNamed(`${goals?.goal_target ?? ""} ${goals?.main_goal_other ?? ""}`),
     [goals],
   );
+  const [supportCredit, setSupportCredit] = useSupportCredit();
   const muscleRead = useMemo(
     () =>
       buildMuscleRead({
@@ -467,7 +468,9 @@ export function ClientAnalyticsDashboard({
         liftTrends: liftTrendsPeriod,
         start: startDay,
         end: endDay,
+        today,
         coached,
+        supportCredit,
       }),
     [
       trainingLoad.load,
@@ -478,7 +481,9 @@ export function ClientAnalyticsDashboard({
       liftTrendsPeriod,
       startDay,
       endDay,
+      today,
       coached,
+      supportCredit,
     ],
   );
   const blocksForCompare = useMemo(
@@ -622,8 +627,20 @@ export function ClientAnalyticsDashboard({
       mainLift: mainLift(strength, sixAgo, today),
       insight:
         trainingLoad.load.insights.find((i) => i.audience === "both" && i.actionNeeded) ?? null,
+      profile,
+      muscles: muscleWindowChanges({
+        sets: allLoadSets,
+        start: sixAgo,
+        end: today,
+        profile,
+        named,
+        supportCredit,
+      }),
     });
   }, [
+    profile,
+    named,
+    supportCredit,
     allLoadSets,
     strength,
     today,
@@ -704,20 +721,33 @@ export function ClientAnalyticsDashboard({
   const kpis: Kpi[] = [];
   if (profile === "powerlifting" && main) {
     const n = liftNow(strength[main], startDay, endDay);
+    const t = n.trend;
     kpis.push({
       key: "lift",
-      label: `${COMP_LIFT_LABEL[main]} estimate`,
-      value: n.now ? `${Math.round(conv(n.now.value))}` : "—",
+      label: `${COMP_LIFT_LABEL[main]} strength`,
+      value: n.now ? (
+        <>
+          {Math.round(conv(n.now.value))}
+          <span className="ml-0.5 text-[13px] font-medium text-muted-foreground">{displayUnit}</span>
+        </>
+      ) : (
+        "—"
+      ),
       sub:
-        n.trend.kind === "unclear" ? (
-          n.trend.reason === "held" ? (
-            "no hard set lately"
+        t.kind === "unclear" ? (
+          t.reason === "held" ? (
+            "Estimated max · no hard sets lately"
           ) : (
-            `${displayUnit} · too early to call`
+            "Estimated max · too early to tell"
           )
         ) : (
           <>
-            <Change pct={n.trend.pct} /> since {fmtDay(n.trend.from.day)}
+            Estimated max,{" "}
+            <span className={t.kind === "up" ? "text-success" : undefined}>
+              {t.kind === "up" ? "up" : t.kind === "down" ? "down" : "steady"}
+              {t.kind !== "steady" ? ` ${Math.abs(Math.round(t.pct * 10) / 10)}%` : ""}
+            </span>{" "}
+            since {fmtDay(t.from.day)}
           </>
         ),
       onOpen: () => changeView("strength"),
@@ -725,20 +755,20 @@ export function ClientAnalyticsDashboard({
   } else if (liftsMoving.tracked) {
     kpis.push({
       key: "moving",
-      label: "Lifts getting stronger",
+      label: "Lifts improving",
       value: `${liftsMoving.up} of ${liftsMoving.tracked}`,
-      sub: "estimated max from hard sets",
+      sub: "Based on your hardest sets",
       onOpen: () => changeView("strength"),
     });
   }
   kpis.push({
     key: "consistency",
-    label: "Planned workouts",
+    label: consistency.planned ? "Workouts done" : "Workouts",
     value: consistency.planned ? `${consistency.pct}%` : String(consistency.logged),
     ring: consistency.planned ? consistency.pct : undefined,
     sub: consistency.planned
-      ? `${consistency.done} of ${consistency.planned} done`
-      : `workout${consistency.logged === 1 ? "" : "s"} logged`,
+      ? `${consistency.done} of ${consistency.planned} planned`
+      : "logged this period",
     onOpen: () => changeView("training"),
   });
   if (profile === "physique" && kpis.length < 3) {
@@ -747,17 +777,21 @@ export function ClientAnalyticsDashboard({
       key: "sets",
       label: trainingLoad.load.perWeekBasis.partial ? "Sets this week" : "Sets a week",
       value: String(t.setsPerWeek),
-      sub: "working sets",
+      sub: "Work sets, not warm-ups",
       onOpen: () => changeView("training"),
     });
   }
   kpis.push({
     key: "records",
-    label: "Records",
+    label: "New records",
     value: String(recordsInPeriod.length),
     sub: (() => {
       const main = recordsInPeriod.filter(isHeadlineRecord).length;
-      return recordsInPeriod.length ? (main ? `${main} on the main lifts` : "on accessories") : "none in this period";
+      return recordsInPeriod.length
+        ? main
+          ? `${main} on squat, bench or deadlift`
+          : "On other exercises"
+        : "None this period";
     })(),
     onOpen: () => changeView("records"),
   });
@@ -922,7 +956,23 @@ export function ClientAnalyticsDashboard({
                     <Card className="p-4" data-overview-total>
                       <SectionTitle
                         title="Your total"
-                        sub={est.composition ? "What it's made of" : "Meet results"}
+                        sub={
+                          est.composition
+                            ? "How much each lift adds to your squat + bench + deadlift"
+                            : "Your meet totals, lift by lift"
+                        }
+                        info={
+                          <>
+                            <p>
+                              Your total is your best squat, bench and deadlift added together, the
+                              number powerlifting meets rank you by.
+                            </p>
+                            <p>
+                              The ring shows how much of it each lift makes up. Tap a lift for its
+                              numbers. Every lifter's split is different, so it isn't a score.
+                            </p>
+                          </>
+                        }
                       />
                       <SectionErrorBoundary label="Total">
                         <SbdDonut
@@ -935,7 +985,10 @@ export function ClientAnalyticsDashboard({
                     </Card>
                   )}
                   <Card className="p-4" data-overview-calendar>
-                    <SectionTitle title="Training calendar" />
+                    <SectionTitle
+                      title="Training calendar"
+                      sub="Every day you trained. Tap a day to see it."
+                    />
                     <SectionErrorBoundary label="Calendar">
                       <PerformanceCalendar
                         days={calendarDays}
@@ -950,17 +1003,17 @@ export function ClientAnalyticsDashboard({
                   </Card>
                 </div>
                 {profile === "physique" && muscleRead.rows.some((r) => r.perWeek > 0) && (
-                  <section aria-label="Where your sets go">
+                  <section aria-label="Your most trained muscles">
                     <SectionTitle
-                      title="Where your sets go"
-                      sub="Working sets a week by muscle"
+                      title="Your most trained muscles"
+                      sub="Sets a week for each muscle"
                       right={
                         <button
                           type="button"
                           onClick={() => changeView("training")}
                           className="min-h-10 text-[13px] font-medium text-foreground"
                         >
-                          Muscle map
+                          See all muscles
                         </button>
                       }
                     />
@@ -968,17 +1021,17 @@ export function ClientAnalyticsDashboard({
                       {[...muscleRead.rows]
                         .sort((a, b) => b.perWeek - a.perWeek)
                         .slice(0, 5)
-                        .map((r) => (
-                          <li key={r.muscle} className="flex items-center gap-3 text-[13px]">
+                        .map((r, _i, top) => (
+                          <li key={r.muscle} className="flex items-center gap-3 text-[14px]">
                             <span className="w-24 shrink-0 truncate">{r.muscle}</span>
                             <span className="relative h-2 flex-1 rounded-full bg-muted/60">
                               <span
                                 className="absolute inset-y-0 left-0 rounded-full bg-[var(--chart-4)]"
-                                style={{ width: `${r.share * 100}%` }}
+                                style={{ width: `${(r.perWeek / Math.max(0.1, top[0].perWeek)) * 100}%` }}
                               />
                             </span>
-                            <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
-                              {r.perWeek}/wk
+                            <span className="w-20 shrink-0 text-right text-[13px] tabular-nums text-muted-foreground">
+                              {r.perWeek} a week
                             </span>
                           </li>
                         ))}
@@ -993,8 +1046,21 @@ export function ClientAnalyticsDashboard({
                 {hasPowerlifting && (
                   <Card className="p-4" data-strength-section>
                     <SectionTitle
-                      title="Competition lifts"
-                      sub="Every session, with the estimated-strength line"
+                      title="Squat, bench and deadlift strength"
+                      sub="Your estimated max for each lift over time"
+                      info={
+                        <>
+                          <p>
+                            Your estimated max is the most you could likely lift for one rep,
+                            worked out from your sets: the weight, the reps and how hard they felt
+                            (RPE).
+                          </p>
+                          <p>
+                            Each dot is one workout. The line follows your hardest recent sets, so a
+                            light day doesn't pull it down. Diamonds are meet lifts.
+                          </p>
+                        </>
+                      }
                     />
                     <SectionErrorBoundary label="Competition lifts">
                       <StrengthTrendChart
@@ -1011,7 +1077,14 @@ export function ClientAnalyticsDashboard({
                   <section aria-label="Your lifts">
                     <SectionTitle
                       title="Your lifts"
-                      sub="Estimated max from hard sets, start of the period to the end"
+                      sub="How your estimated max changed this period"
+                      info={
+                        <p>
+                          Your estimated max is the most you could likely lift for one rep, worked
+                          out from your hardest sets (the weight, the reps and how hard they felt).
+                          It compares the start of the period with the end.
+                        </p>
+                      }
                     />
                     <LiftsMovingCard data={liftsMoving} unit={displayUnit} conv={conv} />
                   </section>
@@ -1019,7 +1092,7 @@ export function ClientAnalyticsDashboard({
                 <Card className="p-4">
                   <SectionTitle
                     title={hasPowerlifting ? "Other exercises" : "Any exercise"}
-                    sub="One point per session: its best set"
+                    sub="Pick an exercise to see its progress. Each dot is your best set that day."
                   />
                   <SectionErrorBoundary label="Exercise progress">
                     <LiftProgressCard
@@ -1034,8 +1107,15 @@ export function ClientAnalyticsDashboard({
                 {blocks.length >= 2 && (
                   <Card className="p-4">
                     <SectionTitle
-                      title="Blocks compared"
-                      sub="Like with like: a peak against a peak"
+                      title="Compare your training blocks"
+                      sub="See how each block went, side by side"
+                      info={
+                        <p>
+                          A training block is a few weeks of training with one aim, like building
+                          muscle or peaking for a meet. Compare blocks of the same kind: a lighter
+                          block is meant to be lighter.
+                        </p>
+                      }
                     />
                     <SectionErrorBoundary label="Blocks">
                       <BlockComparisonCard rows={blocks} powerlifter={hasPowerlifting} />
@@ -1043,7 +1123,7 @@ export function ClientAnalyticsDashboard({
                   </Card>
                 )}
                 {coach && (
-                  <MoreDetail label="Programming detail">
+                  <MoreDetail label="Programming detail (coach)">
                     <SectionErrorBoundary label="Powerlifting exposure">
                       <PowerliftingExposureSection
                         clientId={clientId}
@@ -1070,7 +1150,21 @@ export function ClientAnalyticsDashboard({
               <div className="space-y-6" data-analytics-view="training">
                 {hasSbdInPeriod && (
                   <Card className="p-4" data-training-workload>
-                    <SectionTitle title="Squat, bench & deadlift workload" />
+                    <SectionTitle
+                      title="Squat, bench and deadlift training"
+                      sub="How much you did of each lift, week by week"
+                      info={
+                        <>
+                          <p>
+                            Sets, reps and total weight lifted (weight × reps, added up) for your
+                            three main lifts.
+                          </p>
+                          <p>
+                            The outline is what your program planned, when there's a plan on file.
+                          </p>
+                        </>
+                      }
+                    />
                     <SectionErrorBoundary label="Workload">
                       <SbdWorkloadChart
                         sets={periodLoadSets}
@@ -1095,23 +1189,38 @@ export function ClientAnalyticsDashboard({
                   </Card>
                 )}
                 <Card className="p-4" data-training-muscles>
-                  <SectionTitle title="Muscle map" />
-                  <SectionErrorBoundary label="Muscle map">
-                    <MuscleMap read={muscleRead} coached={coached} />
+                  <SectionTitle
+                    title="Muscle training map"
+                    sub="See which muscles you've trained the most."
+                  />
+                  <SectionErrorBoundary label="Muscle training map">
+                    <MuscleMap
+                      read={muscleRead}
+                      coached={coached}
+                      credit={supportCredit}
+                      onCredit={setSupportCredit}
+                    />
                   </SectionErrorBoundary>
                 </Card>
                 <section aria-label="Consistency">
                   <SectionTitle
-                    title="Consistency"
-                    sub="Workouts written for days that have passed"
+                    title="How often you train"
+                    sub="Planned workouts you did, for days that have passed"
                   />
                   <ConsistencyBlock c={consistency} loading={trainingLoad.planLoading} />
                 </section>
                 {patterns.length > 0 && (
                   <section aria-label="Recovery patterns">
                     <SectionTitle
-                      title="Recovery patterns"
-                      sub="From your own check-outs and sessions"
+                      title="What helps your training"
+                      sub="Patterns in your sleep, effort and recovery"
+                      info={
+                        <p>
+                          Found by comparing your own workouts and the check-ins after them. A
+                          pattern shows up only when there's enough data, and it shows what tends to
+                          go together, not what causes what.
+                        </p>
+                      }
                     />
                     <RecoveryPatternList patterns={patterns} />
                   </section>
@@ -1124,11 +1233,11 @@ export function ClientAnalyticsDashboard({
                     rangeLabel={filter.short}
                   />
                 </SectionErrorBoundary>
-                <MoreDetail label="Workouts, recovery and conditioning">
+                <MoreDetail label="More: workouts, sleep, bodyweight and cardio">
                   <section aria-label="Recent workouts">
                     <SectionTitle
                       title="Recent workouts"
-                      sub="Set by set against what was written"
+                      sub="What you did, set by set, next to what was planned"
                     />
                     <PlannedVsActualCard
                       clientId={clientId}
@@ -1142,7 +1251,7 @@ export function ClientAnalyticsDashboard({
                   <section aria-label="What you logged" id="recovery">
                     <SectionTitle
                       title="Sleep, recovery and pain"
-                      sub="What you logged at check-out"
+                      sub="What you told us after each workout"
                     />
                     <SectionErrorBoundary label="Recovery">
                       <RecoveryTrendsCard
@@ -1193,8 +1302,8 @@ export function ClientAnalyticsDashboard({
                         hideInsights={false}
                         header={
                           <SectionTitle
-                            title="Programming detail"
-                            sub="Patterns, intensity spread and coach-only insights"
+                            title="Programming detail (coach)"
+                            sub="Movement patterns, how heavy, and coach-only notes"
                           />
                         }
                       />
@@ -1287,8 +1396,8 @@ function AnalyticsEmptyPreview() {
         Your analytics start with your first workout
       </h2>
       <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
-        Log your sets and this fills in by itself: a calendar of your training, strength over time,
-        where your sets go by muscle, and your records.
+        Log a workout and this page fills in by itself: when you trained, how your strength is
+        changing, which muscles you're training and your records.
       </p>
     </Card>
   );

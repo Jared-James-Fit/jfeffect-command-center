@@ -39,7 +39,7 @@ describe("one analytics experience for the coach and the athlete", () => {
     expect(dash).not.toContain("weeklyMuscleVolume");
     // squat · bench · deadlift sections only for someone who trains them; programming detail only for the coach
     expect(dash).toContain("{hasPowerlifting && (");
-    expect(dash).toMatch(/\{coach && \(\s*<MoreDetail label="Programming detail">\s*<SectionErrorBoundary label="Powerlifting exposure">/);
+    expect(dash).toMatch(/\{coach && \(\s*<MoreDetail label="Programming detail \(coach\)">\s*<SectionErrorBoundary label="Powerlifting exposure">/);
   });
 
   it("a weekly number says what it divides by (this week so far, or a week's average)", () => {
