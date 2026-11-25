@@ -34,6 +34,7 @@ import { buildPresenterScript } from "@/lib/coaching-sessions/script";
 import type { Agenda, PrepItem } from "@/lib/coaching-sessions/prepare";
 import { draftGamePlan, gamePlanMessage, type GamePlan } from "@/lib/coaching-sessions/presentation";
 import { meetingsKey, sessionKey } from "./keys";
+import { isCoachConsentMessage } from "@/lib/ai-consent/consent";
 
 const SOURCE_WORDS: Record<PrepItem["source"], string> = {
   record: "On file",
@@ -488,6 +489,10 @@ function CleoBrief({ data, onChange }: { data: any; onChange: () => void }) {
               <Skeleton className="h-4 w-11/12" />
               <Skeleton className="h-4 w-3/4" />
             </div>
+          ) : s.write_up_status === "failed" && isCoachConsentMessage(b?.error) ? (
+            <p className="text-[14px] text-muted-foreground" data-ai-consent-refused>
+              {b.error}
+            </p>
           ) : s.write_up_status === "failed" ? (
             <p className="text-[14px] text-muted-foreground">
               Cleo couldn't write it this time.{" "}

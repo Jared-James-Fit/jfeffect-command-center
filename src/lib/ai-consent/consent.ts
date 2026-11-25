@@ -71,6 +71,11 @@ export function coachConsentMessage(name: string | null | undefined): string {
   return `${who} hasn't allowed their data to be sent to AI services (${AI_PROVIDER_NAMES}), so this can't be drafted for them. Do it by hand, or ask them to allow it in Account → Privacy & data.`;
 }
 
+/** True for the coach's refusal above: asking again can't help until the client allows it. */
+export function isCoachConsentMessage(text: string | null | undefined): boolean {
+  return !!text && text.includes("hasn't allowed their data to be sent to AI services");
+}
+
 function messageOf(e: unknown): string {
   if (typeof e === "string") return e;
   if (e && typeof e === "object" && "message" in e) return String((e as { message?: unknown }).message ?? "");

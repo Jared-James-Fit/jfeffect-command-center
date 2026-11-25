@@ -70,7 +70,11 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
     if (!consent.ok) {
       const { coachConsentMessage } = await import("@/lib/ai-consent/consent");
       const words = coachConsentMessage(consent.name);
-      await sb.from("coaching_sessions").update({ [col]: "failed", locked_at: null, ...(job === "analysis" ? { analysis_error: words } : {}) }).eq("id", s.id);
+      // the coach reads why (the brief keeps it on write_up, which is only read as a brief once it's ready)
+      await sb
+        .from("coaching_sessions")
+        .update({ [col]: "failed", locked_at: null, ...(job === "analysis" ? { analysis_error: words } : { write_up: { ...(s.write_up ?? {}), error: words } }) })
+        .eq("id", s.id);
       await log(sb, s, job === "analysis" ? "analysis_failed" : "brief_failed", { error: words, reason: "no_ai_consent" });
       return "no_consent";
     }

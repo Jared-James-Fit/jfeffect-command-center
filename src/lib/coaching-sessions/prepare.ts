@@ -15,6 +15,7 @@
  */
 import type { PrepInput } from "@/lib/coaching-packages/call-prep";
 import type { SessionEvent } from "./events";
+import { routeAnswers } from "./questionnaire";
 
 export type Source = "record" | "coach" | "athlete" | "read" | "history";
 export type PrepItem = { text: string; source: Source; ref?: string };
@@ -49,7 +50,7 @@ export type SessionPrepInput = PrepInput & {
   intelligence: string[];
   coachNotes: string | null;
   coachPriorities: string[];
-  /** what the athlete answered on the pre-call questionnaire, by question */
+  /** what the athlete answered on the pre-call questions, by session key (routeAnswers places each) */
   answers: Record<string, string>;
 };
 
@@ -142,7 +143,26 @@ export function buildSessionPrep(x: SessionPrepInput): SessionPrep {
 
   // nutrition
   if (!x.nutrition?.phase && !x.nutrition?.kcalLow) missing.push({ text: "A current nutrition plan", source: "record" });
-  if (x.weightRead) improve.push({ text: x.weightRead, source: "read" });
+  // the bodyweight engine: a hold is part of the plan, a change is something to improve, too little data is missing
+  if (x.weightRead) {
+    if (x.weightVerdict === "maintain") milestones.push({ text: `Bodyweight: ${x.weightRead}`, source: "read" });
+    else if (x.weightVerdict === "need_data") missing.push({ text: x.weightRead, source: "read" });
+    else improve.push({ text: x.weightRead, source: "read" });
+  }
+
+  // records: all-time PRs in finished workouts, the ones worth naming first
+  const rec = x.records;
+  if (rec?.top.length) {
+    const unit = x.bodyweight?.unit ?? "lb";
+    const load = (kg: number) => `${Math.round((unit === "kg" ? kg : kg * 2.20462) * 2) / 2} ${unit}`;
+    // records lead: they're the wins the athlete remembers (the shared screen shows five lines at most)
+    const prs: PrepItem[] = rec.top
+      .slice(0, 2)
+      .map((r) => ({ text: `All-time PR: ${r.exercise} ${load(r.loadKg)} × ${r.reps} (${day(r.date)})`, source: "record" as const }));
+    const more = rec.total - Math.min(2, rec.top.length);
+    if (more > 0) prs.push({ text: `${more} more all-time record${more === 1 ? "" : "s"} in the last 4 weeks`, source: "record" });
+    goingWell.unshift(...prs);
+  }
 
   // the event
   const e = x.event;
@@ -177,8 +197,12 @@ export function buildSessionPrep(x: SessionPrepInput): SessionPrep {
 
   // the athlete's own words and the coach's own priorities
   for (const t of x.topics ? [x.topics] : []) athleteNeeds.unshift({ text: t, source: "athlete", ref: "Their topics for this call" });
-  for (const [q, a] of Object.entries(x.answers))
-    if (a.trim()) athleteNeeds.push({ text: `${q}: ${a.trim()}`, source: "athlete", ref: "Pre-call questions" });
+  const routed = routeAnswers(x.answers);
+  const said = (text: string): PrepItem => ({ text, source: "athlete", ref: "Pre-call questions" });
+  goingWell.push(...routed.goingWell.map(said));
+  athleteNeeds.push(...routed.theirs.map(said));
+  coachNeeds.push(...routed.coach.map(said));
+  milestones.push(...routed.plan.map(said));
   for (const p of x.coachPriorities) decisions.unshift({ text: p, source: "coach" });
   if (x.coachNotes?.trim()) coachNeeds.unshift({ text: x.coachNotes.trim(), source: "coach" });
 
@@ -356,7 +380,7 @@ export function recommendIntervention(x: InterventionInput): Intervention {
   if (x.athleteAsked) reasons.push("They asked to talk");
   if (decisions >= 2) reasons.push(`${decisions} decisions to make together`);
   if (daysOut != null && daysOut > 7 && daysOut <= 56 && decisions >= 1)
-    reasons.push("Strategic meet preparation is worth doing now, well before meet week");
+    reasons.push(daysOut > 21 ? "Strategic meet preparation is worth doing now, well before meet week" : "Settle the strategy now, before meet week");
 
   const lastCallDays = x.lastCallOn ? daysBetween(x.lastCallOn, x.today) : null;
   const callWorthy = x.athleteAsked || x.seriousConcern || decisions >= 2 || (daysOut != null && daysOut > 7 && daysOut <= 56 && decisions >= 1);
