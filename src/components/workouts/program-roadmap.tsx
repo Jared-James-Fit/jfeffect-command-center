@@ -140,7 +140,13 @@ export function ProgramRoadmapCard({
   onSelectProgram,
   onManage,
   nextProgramTo,
+  onOpenPlan,
 }: {
+  /**
+   * Opens the full-screen Training Plan (the Workouts page, Nov 25 2026): the
+   * card is then only the summary, and no plan sheet is drawn.
+   */
+  onOpenPlan?: () => void;
   /** Today's program: what the card always shows. */
   roadmap: ProgramRoadmap | null;
   /** The program picked inside the plan sheet (another program, read-only); null = today's. */
@@ -229,11 +235,12 @@ export function ProgramRoadmapCard({
       ) : (
         <button
           type="button"
-          onClick={() => open(current?.id ?? null)}
+          onClick={() => (onOpenPlan ? onOpenPlan() : open(current?.id ?? null))}
           className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5 text-[13px] font-medium transition hover:bg-secondary/40"
           data-roadmap-toggle
+          data-open-training-plan={onOpenPlan ? "" : undefined}
         >
-          <span>Full plan</span>
+          {onOpenPlan ? <span>Training plan</span> : <span>Full plan</span>}
           <span className="inline-flex items-center gap-1 text-muted-foreground tabular-nums">
             {weeksLabel(roadmap.totalWeeks || blocks.reduce((a, b) => a + b.weekCount, 0))}
             <ChevronRight className="h-4 w-4" />
@@ -241,6 +248,7 @@ export function ProgramRoadmapCard({
         </button>
       )}
 
+      {!onOpenPlan && (
       <ProgramPlanSheet
         open={sheetOpen}
         onOpenChange={(o) => {
@@ -263,6 +271,7 @@ export function ProgramRoadmapCard({
         }
         coach={coach}
       />
+      )}
     </Card>
   );
 }
@@ -752,7 +761,7 @@ function blockTitle(b: RoadmapBlockView): string {
  * to and including this week, in one neutral ink. One indicator, not a bar
  * plus week pills, and no red or green: it's progress, not a status.
  */
-function ProgramBar({ blocks }: { blocks: RoadmapBlockView[] }) {
+export function ProgramBar({ blocks }: { blocks: RoadmapBlockView[] }) {
   return (
     <div className="mt-3 flex gap-1" aria-hidden data-roadmap-bar>
       {blocks.map((b) => {
