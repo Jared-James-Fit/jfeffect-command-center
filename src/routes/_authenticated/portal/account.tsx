@@ -713,7 +713,7 @@ function AccountPage() {
               />
             )}
 
-            {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited) ── */}
+            {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited); in the iPhone app a member's free ones only (option B, the server decides) ── */}
             {aiCredits.data && !aiCredits.data.unlimited && (
               <SettingsSection
                 id="ai-credits"

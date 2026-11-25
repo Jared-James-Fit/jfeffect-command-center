@@ -6,9 +6,9 @@ App Review **rejected** JF Effect 1.0 (build 35, reviewed June 23 2026 on an iPa
 | --- | --- | --- | --- |
 | 1 | 2.3.8 | "the app icons appear to be placeholder icons" | **Fixed in code.** Every build wipes Capacitor's template icon and launch image and rebuilds both from `AppIcon-1024.png` (`native/ios-app/app_art.py`). The build fails if any icon or launch image still looks like Capacitor's, and it checks the icon in the finished app as well. |
 | 2 | 3.1.1 | "subscription purchase link-out to Safari via account registration" | **Fixed in code.** The route Apple found was sign-in, then "Apply to join free" (/join), then the public header or footer ("Online coaching", "Pricing", "About"), then /coaching, then the Stripe checkout opening in Safari. `src/lib/native-purchases.ts` now blocks every sales, pricing, checkout and billing page in the app, stops taps and `window.open` calls to them, and hides the links. Details below. |
-| 3 | 3.1.1 | "the app accesses digital content purchased outside the app, such as subscription, but that content isn't available to purchase using In-App Purchase" | **Not fixed. This needs your decision (A or B below).** Until you decide, someone who bought a digital tier on the web still gets it in the iPhone app, which is exactly what Apple flagged. Resubmitting without A or B will most likely be rejected again. |
+| 3 | 3.1.1 | "the app accesses digital content purchased outside the app, such as subscription, but that content isn't available to purchase using In-App Purchase" | **Fixed in code: Jared chose option B (Nov 25 2026).** In the iPhone app a self-serve member gets the free experience whatever they bought on the web. Coaching clients and staff keep everything. See section 5. |
 
-Nothing in App Store Connect, Stripe or the database was changed. No in-app purchase code exists.
+Nothing in App Store Connect, Stripe or the database was changed. No in-app purchase code exists. **Option B is implemented** (section 5).
 
 ---
 
@@ -21,10 +21,10 @@ Nothing in App Store Connect, Stripe or the database was changed. No in-app purc
 | 1 | **1:1 online coaching**: monthly `coaching_packages` with `kind = 'subscription'`. A named coach, a program written for one person, check-ins, chat and calls. | `coaching_packages`, `plan-engine.ts` (`family: "coaching"`), `clients.service_tier = 'coaching'`, `member_access 'coaching_access'` | Stripe on the web (`/coaching/apply`, plan checkout, payment links in chat) | **P2P, 3.1.3(d)** | Clients sign in and use everything. Nothing is sold, priced or linked (fixed in this branch). |
 | 2 | **Coaching extras**: one-time calls (General Call, Discovery Call), `kind = 'one_time'` packages, a coaching client's monthly AI credit allowance (300 by default) | `coaching-packages`, booking, `ai_credit_tier` | Stripe on the web / included with coaching | **P2P, 3.1.3(d)** | Booking a call your coach set up works. No prices are shown. |
 | 3 | **In-person personal training session packages** (Selkirk): `purchase_records` session packages, auto-pay, payment plans | `session-sale.ts`, `billing.functions.ts`, `auto-pay.ts` | Stripe links sent in chat, or recorded by the coach | **P2P, 3.1.3(e)** (IAP not allowed) | Chat payment and auto-pay cards show the client no amount and no pay button (fixed in this branch). |
-| 4 | **JF Membership, paid self-serve (retired)**: `app_members.subscription_status` of `Trialing`, `Active`, `Active (Cancels at period end)`, `Past Due`, `Past Due (Access Restricted)`, `Payment Failed`, `Hold Plan` (the $9 hold price), `Paused`, `Cancelled`, `Expired`, plus the `member_access` levels it bundled (`jf_membership`, `app_membership`, `program_library`, `powerlifting_plans`, `bodybuilding_plans`, `fat_loss_plans`, `resource_library`, `nutrition_tools`, `community`, `premium_member`) | `jf-lifecycle.server.ts`, `memberAccess.ts`, `jf-billing.functions.ts` | Was Stripe on the web ($29, retired). The free-platform migration notes say one member ever paid and cancelled in June. **Check Stripe for anyone still active.** | **Digital** | No longer sold anywhere. A member with one of these statuses still gets the paid access in the app. |
-| 5 | **Paid self-serve membership plan**: `coaching_packages.kind = 'membership'` | `plan-engine.ts` (`family: "membership"`) | Built (Your plan, Stripe Checkout) but **none sold yet** | **Digital** | Your plan is now blocked in the app. A holder would still get the access. |
-| 6 | **JF Effect Premium**: `member_access 'jf_premium'`, `premium_active()`. Build with Cleo and the Cleo inbox. | `premium/*`, `20270527108200_premium_groundwork.sql` | **Not sold.** Only complimentary grants by the admin. No price exists. | **Digital** (once sold) | Holders use it. A complimentary grant isn't "purchased outside the app", so it's fine today. It becomes a 3.1.1 problem the day it's sold on the web. |
-| 7 | **AI credit packs**: 100 / C$2.99, 300 / C$6.99, 1,000 / C$14.99 before tax. They become `ai_credit_wallets.extra` and never expire. | `ai-credits/packs.ts`, `ai_credits_record_purchase` | Stripe Checkout on the web only | **Digital (consumable)** | Bought credits are spent in the app (AI food log). Nothing about buying is shown (fixed in this branch). |
+| 4 | **JF Membership, paid self-serve (retired)**: `app_members.subscription_status` of `Trialing`, `Active`, `Active (Cancels at period end)`, `Past Due`, `Past Due (Access Restricted)`, `Payment Failed`, `Hold Plan` (the $9 hold price), `Paused`, `Cancelled`, `Expired`, plus the `member_access` levels it bundled (`jf_membership`, `app_membership`, `program_library`, `powerlifting_plans`, `bodybuilding_plans`, `fat_loss_plans`, `resource_library`, `nutrition_tools`, `community`, `premium_member`) | `jf-lifecycle.server.ts`, `memberAccess.ts`, `jf-billing.functions.ts` | Was Stripe on the web ($29, retired). The free-platform migration notes say one member ever paid and cancelled in June. **Check Stripe for anyone still active.** | **Digital** | No longer sold anywhere. In the app (option B) a member with one of these statuses gets the free experience: only the free account's access keys. |
+| 5 | **Paid self-serve membership plan**: `coaching_packages.kind = 'membership'` | `plan-engine.ts` (`family: "membership"`) | Built (Your plan, Stripe Checkout) but **none sold yet** | **Digital** | Your plan is blocked in the app. A holder gets the free experience there (option B). |
+| 6 | **JF Effect Premium**: `member_access 'jf_premium'`, `premium_active()`. Build with Cleo and the Cleo inbox. | `premium/*`, `20270527108200_premium_groundwork.sql` | **Not sold.** Only complimentary grants by the admin. No price exists. | **Digital** (once sold) | Off for every self-serve member in the app (option B), complimentary grants included, so nothing changes in the app the day it's sold on the web. Coaching clients and staff who hold it keep it. |
+| 7 | **AI credit packs**: 100 / C$2.99, 300 / C$6.99, 1,000 / C$14.99 before tax. They become `ai_credit_wallets.extra` and never expire. | `ai-credits/packs.ts`, `ai_credits_record_purchase` | Stripe Checkout on the web only | **Digital (consumable)** | In the app (option B) a self-serve member spends and sees only the month's free credits. Bought credits stay on the account for the web. Nothing about buying is shown. |
 | 8 | **Free account**: `subscription_status 'Free'`, the member's monthly AI allowance (30 by default) | `free_platform` migration | Free | n/a | Everything works. |
 | 9 | **Coach platform subscription** (independent coaches) | decided, not built (`docs/COACHING_PLATFORM.md`) | n/a | B2B. Not a clean fit for 3.1.3(c). | Not in the app. |
 
@@ -73,6 +73,8 @@ Rough effort: about **2 to 3 weeks** of focused work, plus App Store Connect set
 
 **Recommendation:** ship **B now** to get 1.0 approved, then add **A** when Premium or a paid membership is actually being sold and iPhone buyers matter. A can replace B later without touching the coaching side.
 
+**Decision (Jared, Nov 25 2026): B.** Implemented as described in section 5.
+
 ---
 
 ## 3. iPad
@@ -103,3 +105,27 @@ Build 35 supported iPad (`TARGETED_DEVICE_FAMILY = "1,2"` from Capacitor's templ
   - "Purchases aren't available in the app" and the "Upgrade" wording are gone.
   - Tests: `src/test/native-shell-routes.test.ts` walks every route in `routeTree.gen.ts` and every client-facing link. `native-purchases.test.ts` covers the earlier rules.
 - **Not verifiable here:** the actual iOS build (macOS only, so it runs in GitHub Actions), how the icon looks on a device, and a tap-through on a physical iPhone or iPad. Before resubmitting, walk this path in TestFlight as a signed-out new user and as a free member: sign-in, Apply to join free, every link on /join, Account, chat. Nothing should open Safari or show a price.
+
+---
+
+## 5. Option B, as implemented (Nov 25 2026)
+
+**The rule.** `digitalPaidAllowed` in `src/lib/native-purchases.ts`. On the web it is always on. In the iPhone app it is on only for staff (admin, coach, media, finance) and coaching clients (`clients.service_tier = 'coaching'`). Coaching is 1:1 and in person (3.1.3(d)/(e)), so a client's program, check-ins, chat, calls and bookings are part of the service. For a self-serve member, free or paying on the web, the app is the free app. The same goes for anyone whose tier isn't known yet, so a paid row never flashes on screen.
+
+**Where it applies.**
+- **Screens:** `useDigitalPaidAllowed()` (service-tier.ts). `usePremium()` is false, so Build with Cleo (program start options) and Cleo's inbox (Messages) aren't there at all.
+- **Server:** `digitalPaidAllowedFor(userId)` (`src/lib/native-purchases.server.ts`). It recognises the app by the build's user-agent stamp `JFEffectApp/<build>`, or by the `x-jf-native-app` header. `nativeAppMark` in `src/start.ts` adds that header to every server call made in the app, including builds from before the stamp. A reviewer calling the server directly from the app gets the same answers:
+  - `getMyPremium` and `listMyCleoInbox` say no Premium.
+  - `getCurrentMember` returns only the free account's access keys (`FREE_ACCESS_KEYS`, the `member_access_defaults` for a JF member).
+  - The program library (`listMembershipLibrary` and the plan gate) uses only those keys, and `startLibraryPlan` refuses a plan that needs another key (`planOpenToFree`).
+  - AI credits are the month's free ones only. `spendAiCredits` (meter.server.ts) is now the one way any credit is taken. It refuses what the free credits don't cover, and it gives back a use that dipped into bought credits (for example, two taps on the last free credit). `getAiCredits` and every reply's credit state show no bought credits and no purchase history (`creditStateForShell`).
+- **Unchanged:** the web, staff, coaching clients, billing records, Stripe and the database. Bought credits and Premium stay on the account and work on the web.
+
+**What a paying member sees in the iPhone app:** the free app, exactly as a free member sees it. There's no Build with Cleo and no Cleo inbox. Library plans that came with a paid bundle are neither listed nor startable. Credits show the month's free ones ("4 of 30 free this month"), and when those run out the app says when they come back. Nothing is shown locked. Nothing mentions an upgrade, a price, the web or a purchase.
+
+**No "available on the web" line.** Guideline 3.1.1(a) bars "buttons, external links, or other calls to action that direct customers to purchasing mechanisms other than in-app purchase" outside the US storefront. The 3.1.3 intro says apps "cannot, within the app, encourage users to use a purchasing method other than in-app purchase". A line like "some membership features are available on the web" isn't a purchase link, but App Review has flagged such lines before, and it would also tell the reviewer that paid content exists elsewhere. It was left out. Paying members already know the web app.
+
+**Known edges:**
+- Cleo's Monday recap push is sent per account, not per device, so a Premium member could get it on an iPhone. It opens Messages, where Cleo isn't shown in the app.
+- A member whose paid status lapsed (Hold Plan, Paused, Expired) is still locked out as before, on Account.
+- Tests: `src/test/native-option-b.test.ts` covers web and app, coaching, a paid self-serve member and a free member.

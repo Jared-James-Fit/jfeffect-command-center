@@ -398,7 +398,7 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
         .eq("member_id", (member as any).id)
         .eq("active", true),
     ]);
-    const keys = new Set<string>((access ?? []).map((a: any) => a.access_level_key as string));
+    const keys = await keysHere(userId, access);
     const visible = (plans ?? []).filter((p: any) =>
       canAccessPlan(member, keys, p.required_access_level, p.audience_mode),
     );
@@ -408,6 +408,18 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     );
     return { plans: visible };
   });
+
+/**
+ * A member's access keys for this request: in the iPhone app a self-serve
+ * member's are the free account's (option B, native-purchases.ts), so a plan
+ * that came with something paid is neither listed nor opened there.
+ */
+async function keysHere(userId: string, access: any[] | null | undefined): Promise<Set<string>> {
+  const { accessForShell } = await import("@/lib/native-purchases");
+  const { digitalPaidAllowedFor } = await import("@/lib/native-purchases.server");
+  const rows = accessForShell((access ?? []) as Array<{ access_level_key: string }>, await digitalPaidAllowedFor(userId));
+  return new Set<string>(rows.map((a) => a.access_level_key));
+}
 
 async function memberAccessGate(supabase: any, userId: string, planId: string) {
   const [{ data: member }, { data: plan }] = await Promise.all([
@@ -423,7 +435,7 @@ async function memberAccessGate(supabase: any, userId: string, planId: string) {
   if (plan.status !== "Published") throw new Error("Plan not available");
   const { data: access } = await supabase
     .from("member_access").select("access_level_key").eq("member_id", member.id).eq("active", true);
-  const keys = new Set<string>((access ?? []).map((a: any) => a.access_level_key as string));
+  const keys = await keysHere(userId, access);
   if (!canAccessPlan(member, keys, plan.required_access_level, plan.audience_mode)) {
     throw new Error("You don't have access to this plan");
   }

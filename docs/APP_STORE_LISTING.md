@@ -148,10 +148,18 @@ I have the rights" only with those licences in hand.
 >
 > Business model: JF Effect sells 1:1 personal coaching (a named coach writes each client's
 > program and talks with them by chat and video call) and in-person personal training sessions.
-> These are person-to-person and in-person services paid outside the app (guideline 3.1.3(d) and
-> (e)); the app is where clients log their training and talk to their coach. Free members use the
-> training log, the program library, nutrition tools and the community. Optional extra "credits"
-> for a few automated features are not sold in the app. [Update this paragraph if Jared adds IAP.]
+> These are real-time person-to-person and in-person services between a client and their coach,
+> paid outside the app (guideline 3.1.3(d) and (e)). The app is where clients log their training
+> and talk to their coach, so a coaching client's program, check-ins, chat and bookings are part
+> of that service.
+>
+> No digital content is sold in the app, and nothing bought outside the app unlocks digital content
+> or features in it. Every member who isn't a coaching client gets the same free app in iOS:
+> the training log, the free program library, nutrition tools, the community and a monthly
+> allowance of free credits for a few automated features. Any digital extras a member may have
+> bought on our website (credits, a membership tier) are not available or usable in the iOS app,
+> and the app has no price, purchase button, link or wording about buying anything.
+> [Update this paragraph if Jared adds IAP.]
 >
 > AI and data: some features send the person's data to OpenAI (and voice memos to Google Gemini):
 > meal estimates, reading imported programs and meal plans, reading a pain description, and drafts

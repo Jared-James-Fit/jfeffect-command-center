@@ -109,7 +109,7 @@ export const startProgramImport = createServerFn({ method: "POST" })
     // AI: taken now, settled when the read finishes (given back if it fails)
     // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
     await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
-    const { data: use, error: useError } = await sb.rpc("ai_credits_use", { _user: userId, _feature: "program_import", _ref: null });
+    const { data: use, error: useError } = await (await import("@/lib/ai-credits/meter.server")).spendAiCredits(userId, "program_import", null);
     if (useError) throw new Error(`Couldn't check your credits: ${useError.message}`);
     if (!use?.ok) return { ok: false, reason: "out_of_credits", credits: (use?.state ?? null) as CreditState | null, partial: !!parsed && parsed.exercises > 0 };
     const { data: ins, error } = await sb
@@ -149,7 +149,7 @@ export const retryProgramImport = createServerFn({ method: "POST" })
     if (imp.files_deleted_at) return { ok: false as const, message: "Its file was deleted. Start a new import." };
     // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
     await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
-    const { data: use, error } = await sb.rpc("ai_credits_use", { _user: userId, _feature: "program_import", _ref: `program_import:${imp.id}` });
+    const { data: use, error } = await (await import("@/lib/ai-credits/meter.server")).spendAiCredits(userId, "program_import", `program_import:${imp.id}`);
     if (error) throw new Error(`Couldn't check your credits: ${error.message}`);
     if (!use?.ok)
       return { ok: false as const, outOfCredits: true, credits: (use?.state ?? null) as CreditState | null, message: "You're out of credits for this month." };
@@ -172,7 +172,7 @@ export const rereadProgramImport = createServerFn({ method: "POST" })
     if (imp.status !== "ready" || imp.method !== "parsed") return { ok: false as const, message: "This import can't be read again." };
     // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
     await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
-    const { data: use, error } = await sb.rpc("ai_credits_use", { _user: userId, _feature: "program_import", _ref: `program_import:${imp.id}` });
+    const { data: use, error } = await (await import("@/lib/ai-credits/meter.server")).spendAiCredits(userId, "program_import", `program_import:${imp.id}`);
     if (error) throw new Error(`Couldn't check your credits: ${error.message}`);
     if (!use?.ok)
       return { ok: false as const, outOfCredits: true, credits: (use?.state ?? null) as CreditState | null, message: "You're out of credits for this month." };

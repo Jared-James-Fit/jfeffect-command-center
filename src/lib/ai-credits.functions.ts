@@ -36,7 +36,10 @@ export const getAiCredits = createServerFn({ method: "POST" })
       ? await (supabase as any).rpc("ai_credits_for_user", { _user: other })
       : await (supabase as any).rpc("ai_credits_mine");
     if (error) throw new Error(error.message);
-    return out as CreditDetail;
+    // the iPhone app shows a self-serve member only the month's free credits (option B, native-purchases.ts)
+    const { creditStateForShell } = await import("@/lib/native-purchases");
+    const { digitalPaidAllowedFor } = await import("@/lib/native-purchases.server");
+    return creditStateForShell(out as CreditDetail, await digitalPaidAllowedFor(userId));
   });
 
 /** Start buying a pack: a Stripe Checkout link. Credits are added when it's paid. */

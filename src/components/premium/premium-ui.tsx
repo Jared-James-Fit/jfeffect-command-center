@@ -3,7 +3,8 @@
  * it, Build with Cleo (a program drafted from their profile into the builder,
  * unsaved, everything editable) and the Cleo inbox (welcome, weekly recaps).
  * Each is nothing for someone without Premium, which today is everyone
- * but a complimentary grant.
+ * but a complimentary grant, and nothing for a self-serve member in the
+ * iPhone app (option B, native-purchases.ts: hidden, never shown locked).
  */
 import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -15,6 +16,7 @@ import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import type { PinnedChat } from "@/components/group-chats-pane";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { useDigitalPaidAllowed } from "@/lib/service-tier";
 import { GOALS, LEVELS, type ProgramGoal, type ProgramLevel } from "@/lib/athlete-programs";
 import { draftBackupKey, type DraftBackup } from "@/lib/athlete-program-draft";
 import { useBuilderExerciseLibrary } from "@/lib/builder-exercise-library";
@@ -25,14 +27,15 @@ import { briefFromProfile, buildCleoDraft, type CleoBrief } from "@/lib/premium/
 
 export function usePremium(): boolean {
   const { user } = useAuth();
+  const allowed = useDigitalPaidAllowed();
   const fn = useServerFn(getMyPremium);
   const q = useQuery({
     queryKey: ["my-premium", user?.id ?? null],
     queryFn: () => fn(),
-    enabled: !!user?.id,
+    enabled: !!user?.id && allowed,
     staleTime: 10 * 60_000,
   });
-  return q.data?.premium === true;
+  return allowed && q.data?.premium === true;
 }
 
 /* ───────────────────────── Build with Cleo ───────────────────────── */

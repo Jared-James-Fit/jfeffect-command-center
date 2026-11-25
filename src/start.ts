@@ -4,6 +4,8 @@ import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 import { getTeamPreview, isPreviewSafeFn, PREVIEW_HEADER, PREVIEW_MESSAGE } from "@/lib/team-preview";
 import { mfaExemptFn } from "@/lib/mfa-rules";
+import { NATIVE_APP_HEADER } from "@/lib/native-purchases";
+import { isNative } from "@/platform";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -50,7 +52,17 @@ const staffMfaGuard = createMiddleware({ type: "function" }).server(async ({ nex
   return next();
 });
 
+/**
+ * Every server call made inside the iPhone app says so (native-purchases.ts,
+ * option B), on top of the build's user-agent stamp, so the server keeps paid
+ * digital features to the web for self-serve members. The mark only takes
+ * rights away.
+ */
+const nativeAppMark = createMiddleware({ type: "function" }).client(async ({ next }) =>
+  next({ headers: isNative() ? { [NATIVE_APP_HEADER]: "1" } : {} }),
+);
+
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard],
+  functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, nativeAppMark],
   requestMiddleware: [errorMiddleware],
 }));
