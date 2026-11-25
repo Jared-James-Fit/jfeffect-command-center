@@ -165,7 +165,7 @@ const fmtLongDay = (iso: string | null) => {
 };
 
 /** Only our own sites get a checkout's way back (never someone else's page). */
-function safeOrigin(raw: string | undefined | null): string {
+export function safeOrigin(raw: string | undefined | null): string {
   try {
     const u = new URL(String(raw ?? ""));
     const host = u.hostname.toLowerCase();

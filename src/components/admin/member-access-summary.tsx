@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { applyDefaultMemberAccess } from "@/lib/members.functions";
+import { setComplimentaryPremium } from "@/lib/premium/premium.functions";
+import { PREMIUM_KEY, PREMIUM_NAME } from "@/lib/premium/premium";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/action-button";
@@ -17,6 +19,16 @@ export function MemberAccessSummary({
     mutationFn: () => applyFn({ data: { memberId: member.id } }),
     onSuccess: (r) => {
       toast.success(`Applied defaults (${r.inserted} added)`);
+      qc.invalidateQueries({ queryKey: ["admin-member", member.id] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const premiumFn = useServerFn(setComplimentaryPremium);
+  const premium = useMutation({
+    mutationFn: (on: boolean) => premiumFn({ data: { memberId: member.id, on } }),
+    onSuccess: (r) => {
+      toast.success(r.premium ? `${PREMIUM_NAME} on (complimentary)` : `${PREMIUM_NAME} off`);
       qc.invalidateQueries({ queryKey: ["admin-member", member.id] });
     },
     onError: (e: any) => toast.error(e.message),
@@ -73,6 +85,19 @@ export function MemberAccessSummary({
             </div>
           );
         })}
+      </div>
+
+      {/* Premium has no purchase path yet: the owner grants it as complimentary, and only here. */}
+      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/40 px-3 py-2" data-premium-grant>
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{PREMIUM_NAME}</div>
+          <div className="text-xs text-muted-foreground">
+            {activeKeys.has(PREMIUM_KEY) ? "On, complimentary. Build with Cleo and the Cleo inbox." : "Not for sale yet. Grant it free to try Build with Cleo and the Cleo inbox."}
+          </div>
+        </div>
+        <ActionButton size="sm" variant="outline" onClick={() => premium.mutate(!activeKeys.has(PREMIUM_KEY))} jobLabel="Updating Premium">
+          {activeKeys.has(PREMIUM_KEY) ? "Remove" : "Grant free"}
+        </ActionButton>
       </div>
 
       <div className="pt-3 border-t border-border">

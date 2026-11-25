@@ -83,6 +83,8 @@ const PrefsInput = z.object({
   quiet_start: z.number().int().min(0).max(23).optional(),
   quiet_end: z.number().int().min(0).max(23).optional(),
   timezone: z.string().max(64).optional(),
+  /** Call and session reminders (session-reminders.ts): day / hour / soon, missing = on. */
+  session_reminders: z.object({ day: z.boolean().optional(), hour: z.boolean().optional(), soon: z.boolean().optional() }).optional(),
 });
 
 export const updateNotificationPreferences = createServerFn({ method: "POST" })

@@ -41,6 +41,8 @@ export type CoachingPackage = {
   admin_note: string | null;
   published_at: string | null;
   updated_at: string;
+  /** Sold straight from the site (Ready to start), no call or approval needed. */
+  direct_checkout?: boolean;
 };
 
 /** What anyone may see about a package (coaching_packages_public()). Never the admin note or product. */
@@ -62,6 +64,8 @@ export type PublicPackage = {
   sortOrder: number;
   /** Listed on the public pages (an active package can be unlisted: a custom offer reached by its link). */
   listed: boolean;
+  /** "Ready to start" may be offered (the server still checks Stripe before any checkout). */
+  directCheckout?: boolean;
 };
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -256,6 +260,7 @@ export function toPublic(p: CoachingPackage): PublicPackage {
     callMinutes: p.call_minutes ?? 30,
     sortOrder: p.sort_order ?? 0,
     listed: p.status === "active" && p.is_public,
+    directCheckout: p.kind === "subscription" && !!p.direct_checkout,
   };
 }
 
@@ -279,6 +284,7 @@ export function fromPublicRow(r: Record<string, unknown>): PublicPackage {
     callMinutes: Number(r.call_minutes ?? 30) || 30,
     sortOrder: Number(r.sort_order ?? 0) || 0,
     listed: !!r.listed,
+    directCheckout: kind === "subscription" && r.direct_checkout === true,
   };
 }
 

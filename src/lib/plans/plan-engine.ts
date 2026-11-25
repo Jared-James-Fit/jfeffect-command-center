@@ -59,6 +59,8 @@ export type CatalogPackage = {
   included_calls?: number | null;
   call_minutes?: number | null;
   product_id?: string | null;
+  /** Sold straight from the site without the coach's approval (coaching_packages.direct_checkout). */
+  direct_checkout?: boolean | null;
 };
 
 /** The coaching_products row a package is sold with. */
@@ -97,6 +99,8 @@ export type PlanOption = {
   productId: string | null;
   /** Why it can't be bought yet (a configuration problem for the admin), else null. */
   problem: string | null;
+  /** The coach sells it without an approval (a coaching package with direct_checkout on). */
+  directCheckout: boolean;
 };
 
 const FAMILY_BASE: Record<PlanFamily, number> = { free: 0, membership: 1, coaching: 2 };
@@ -186,6 +190,7 @@ export function buildCatalog(packages: readonly CatalogPackage[], products: read
       stripePriceId: family === "free" ? null : product?.stripe_price_id ?? null,
       productId: pkg.product_id ?? null,
       problem: configProblem(pkg, product),
+      directCheckout: family === "coaching" && !!pkg.direct_checkout,
     });
   }
   return out.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
@@ -444,9 +449,12 @@ export function transitionFor(
   }
 
   if (target.family !== "free" && target.problem) return block(tr, "Not available yet", target.problem);
-  // coaching is sold by approval: anyone who isn't a coaching client yet applies or asks to come back
+  // coaching is sold by approval: anyone who isn't a coaching client yet applies or asks to come back,
+  // except a package the coach sells straight (direct checkout), which someone never coached may buy
+  // (a former client still asks to come back)
   if (target.family === "coaching" && current.family !== "coaching" && current.family !== "custom") {
-    const access = ctx.coaching ?? { state: "apply" };
+    const asked = ctx.coaching ?? { state: "apply" };
+    const access: CoachingAccess = target.directCheckout && (asked.state === "apply" || asked.state === "applied") ? { state: "client" } : asked;
     if (access.state === "apply") return t("apply", "apply", null);
     if (access.state === "applied") return block(t("apply", "apply", null), "Your application is with your coach");
     if (access.state === "comeback") return t("comeback", "comeback", null);

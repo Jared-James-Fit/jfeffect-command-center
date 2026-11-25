@@ -29,9 +29,12 @@ import {
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import { ANSWER_WORDS } from "@/lib/coaching-sessions/questionnaire";
 import { SessionAfter } from "./session-after";
+import { PresenterScript } from "./presenter-script";
+import { buildPresenterScript } from "@/lib/coaching-sessions/script";
 import type { Agenda, PrepItem } from "@/lib/coaching-sessions/prepare";
 import { draftGamePlan, gamePlanMessage, type GamePlan } from "@/lib/coaching-sessions/presentation";
 import { meetingsKey, sessionKey } from "./keys";
+import { isCoachConsentMessage } from "@/lib/ai-consent/consent";
 
 const SOURCE_WORDS: Record<PrepItem["source"], string> = {
   record: "On file",
@@ -136,6 +139,20 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
   });
 
+  const scriptSlides = useMemo(
+    () =>
+      buildPresenterScript({
+        agenda,
+        brief: s.write_up ?? null,
+        firstName: data.firstName ?? (data.clientName ? String(data.clientName).split(" ")[0] : null),
+        eventTitle: s.event?.title ?? null,
+        daysOut: s.event?.daysOut ?? null,
+        phase: s.event?.phase ?? null,
+        missing: s.prep?.missing ?? [],
+      }),
+    [agenda, s.write_up, s.event, s.prep, data.firstName, data.clientName],
+  );
+
   const present = () => {
     const url = `/admin/meetings/${s.id}/present`;
     // a window of its own (to share that one screen); with "noopener" window.open
@@ -194,6 +211,8 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
           </div>
         ) : null}
       </SheetHeader>
+
+      {step === "during" && !retro && agenda ? <PresenterScript sessionId={s.id} slides={scriptSlides} /> : null}
 
       {step === "before" && !retro ? (
         <>
@@ -470,6 +489,10 @@ function CleoBrief({ data, onChange }: { data: any; onChange: () => void }) {
               <Skeleton className="h-4 w-11/12" />
               <Skeleton className="h-4 w-3/4" />
             </div>
+          ) : s.write_up_status === "failed" && isCoachConsentMessage(b?.error) ? (
+            <p className="text-[14px] text-muted-foreground" data-ai-consent-refused>
+              {b.error}
+            </p>
           ) : s.write_up_status === "failed" ? (
             <p className="text-[14px] text-muted-foreground">
               Cleo couldn't write it this time.{" "}

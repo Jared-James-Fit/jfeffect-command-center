@@ -142,7 +142,7 @@ describe("the lowest effective intervention", () => {
     expect(["none", "message"]).toContain(recommendIntervention(input()).level);
   });
 
-  it("two decisions ten days out earn a call now, well before meet week", () => {
+  it("two decisions ten days out earn a call now, before meet week", () => {
     const prep = buildSessionPrep({ ...base, event: ev, coachPriorities: ["Settle the openers", "Agree the taper"] });
     const r = recommendIntervention(input({ prep }));
     expect(r.level).toBe("call");
@@ -205,5 +205,75 @@ describe("the shared screen never shows the coach's private side", () => {
     expect(msg).toMatch(/Open the squat at 102.5/);
     expect(msg).toMatch(/Your part\n• Film the second squat/);
     expect(msg).not.toMatch(/PRIVATE/);
+  });
+});
+
+describe("the prep opens with real wins and keeps a hold out of improve", () => {
+  it("names all-time PRs as going well, in the athlete's unit", () => {
+    const prep = buildSessionPrep({
+      ...base,
+      records: {
+        top: [
+          { exercise: "Competition Squat", reps: 3, loadKg: 110, date: "2026-11-21" },
+          { exercise: "Competition Bench", reps: 5, loadKg: 62.5, date: "2026-11-18" },
+        ],
+        total: 5,
+      },
+    });
+    const going = prep.goingWell.map((i) => i.text);
+    expect(going).toContain("All-time PR: Competition Squat 110 kg × 3 (Nov 21)");
+    expect(going).toContain("All-time PR: Competition Bench 62.5 kg × 5 (Nov 18)");
+    expect(going).toContain("3 more all-time records in the last 4 weeks");
+    const lb = buildSessionPrep({ ...base, bodyweight: { ...base.bodyweight!, unit: "lb" }, records: { top: [{ exercise: "Competition Deadlift", reps: 4, loadKg: 224.53, date: "2026-11-13" }], total: 1 } });
+    expect(lb.goingWell.map((i) => i.text)).toContain("All-time PR: Competition Deadlift 495 lb × 4 (Nov 13)");
+  });
+
+  it("a bodyweight hold goes in the game plan, a change in improve, too little data in missing", () => {
+    const hold = buildSessionPrep({ ...base, weightRead: "Hold the plan: it's still settling in", weightVerdict: "maintain" });
+    expect(hold.improve.some((i) => /Hold the plan/.test(i.text))).toBe(false);
+    expect(hold.milestones.map((i) => i.text)).toContain("Bodyweight: Hold the plan: it's still settling in");
+    const change = buildSessionPrep({ ...base, weightRead: "Take 150 kcal off rest days", weightVerdict: "adjust" });
+    expect(change.improve.map((i) => i.text)).toContain("Take 150 kcal off rest days");
+    const data = buildSessionPrep({ ...base, weightRead: "Not enough weigh-ins to read a trend", weightVerdict: "need_data" });
+    expect(data.missing.map((i) => i.text)).toContain("Not enough weigh-ins to read a trend");
+    // a hold never counts as a decision to make on a call
+    expect(hold.decisions).toHaveLength(0);
+  });
+});
+
+describe("pre-call answers land where they belong", () => {
+  it("routine answers are never concerns; worries are theirs; not registered is the coach's", () => {
+    const prep = buildSessionPrep({
+      ...base,
+      answers: {
+        training_feel: "Good",
+        recovery: "Mostly fine",
+        pain: "Something minor",
+        pain_details: "Left knee achy after high-bar days",
+        life: "Exams Monday and Wednesday",
+        meet_registered: "Not yet",
+        meet_confidence: "Nervous",
+        meet_success: "Go 9 for 9",
+      },
+    });
+    const going = prep.goingWell.map((i) => i.text);
+    const theirs = prep.athleteNeeds.map((i) => i.text);
+    expect(going).toContain("Training feels good (their answer)");
+    expect(theirs).toEqual([
+      "Physically: something minor (Left knee achy after high-bar days)",
+      "Coming up: Exams Monday and Wednesday",
+      "Feeling about the meet: nervous",
+      "A successful meet looks like: Go 9 for 9",
+    ]);
+    expect(theirs.some((t) => /recovery|Mostly fine/i.test(t))).toBe(false);
+    expect(prep.coachNeeds.map((i) => i.text)).toContain("Registered for the meet: not yet (their answer)");
+    // every line is the athlete's own, so the shared screen can show it
+    expect(prep.athleteNeeds.every((i) => i.source === "athlete")).toBe(true);
+  });
+
+  it("nothing to report says nothing", () => {
+    const prep = buildSessionPrep({ ...base, answers: { pain: "Nothing", life: "Nope", meet_registered: "Yes" } });
+    expect(prep.athleteNeeds).toHaveLength(0);
+    expect(prep.coachNeeds).toHaveLength(0);
   });
 });

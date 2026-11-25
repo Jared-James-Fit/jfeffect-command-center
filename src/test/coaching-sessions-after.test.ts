@@ -173,3 +173,13 @@ describe("transcript files read as plain text", () => {
     expect(plainTranscript("call.vtt", "WEBVTT\n\n00:01.000 --> 00:03.000\nHi there")).toBe("Hi there");
   });
 });
+
+describe("a consent refusal says why and offers no retry", () => {
+  it("recognises the coach's refusal words, never another failure", async () => {
+    const { coachConsentMessage, isCoachConsentMessage } = await import("@/lib/ai-consent/consent");
+    expect(isCoachConsentMessage(coachConsentMessage("Jared"))).toBe(true);
+    expect(isCoachConsentMessage(coachConsentMessage(null))).toBe(true);
+    expect(isCoachConsentMessage("Waiting for AI: OpenAI is out of credits")).toBe(false);
+    expect(isCoachConsentMessage(null)).toBe(false);
+  });
+});

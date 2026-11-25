@@ -485,7 +485,8 @@ export async function decideRecommendation(c: Caller, data: any) {
     actorId: userId,
     actor: "coach",
     action: `recommendation_${data.status}`,
-    detail: { id: data.id, area: (r as any).area, routed },
+    // an edit keeps what Cleo proposed, so the record shows what the coach changed
+    detail: { id: data.id, area: (r as any).area, routed, ...(data.status === "edited" ? { original: (r as any).proposed_text ?? null, approved: proposed } : {}) },
   });
   const ask = going
     ? [`From our call: ${(r as any).title}.`, proposed ? `Change: ${proposed}` : null, (r as any).reason ? `Why: ${(r as any).reason}` : null].filter(Boolean).join(" ")

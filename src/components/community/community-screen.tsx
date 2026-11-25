@@ -1,4 +1,5 @@
 import { Fragment, Suspense, memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CrewPromoScreen, useCrewPromos } from "@/components/community/crew-promo";
 import { feedPostMounted } from "@/lib/feed-window";
 import { useOpenedOnce } from "@/hooks/use-opened-once";
 import { useQueryClient } from "@tanstack/react-query";
@@ -237,6 +238,8 @@ export function CommunityScreen({
   // the one being scrolled: its pages, its "more", its loading
   const activeFeed = following ? followingFeed : ranked;
   const feedPosts = useMemo(() => (!following ? ownPosts : followsNobody ? [] : followingPosts), [following, ownPosts, followsNobody, followingPosts]);
+  // JF Effect's own promos on the Crew tab (crew-ads/placement.ts): never for staff, a preview or a coach's page
+  const promos = useCrewPromos(feedPosts.length, !viewerIsStaff && !previewOnly && !coach && !following && !hideTabs);
   // the stories on the Following tab: the people you follow and yours, like its posts
   const railPosts = useMemo(() => (following ? posts.filter((p) => inFollowingFeed(p, followingIds)) : posts), [following, posts, followingIds]);
   // "You're all caught up" goes before the first post you'd already seen, when new ones came first
@@ -889,6 +892,19 @@ export function CommunityScreen({
               out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
             if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
               out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });
+            const promo = promos.at(i);
+            if (promo)
+              out.push({
+                key: `promo-${promo.slot}-${promo.promo.id}`,
+                node: (
+                  <CrewPromoScreen
+                    promo={promo.promo}
+                    onSeen={() => promos.send(promo.promo.id, "impression")}
+                    onTap={() => promos.send(promo.promo.id, "click")}
+                    onDismiss={() => promos.dismiss(promo.promo.id)}
+                  />
+                ),
+              });
             return out;
           })}
           flash={flash}

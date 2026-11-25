@@ -5,12 +5,13 @@
  * in this window at all. ← → (or the dots) move between sections; the coach's
  * own workspace stays in the other window.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { getPresentationFn } from "@/lib/coaching-sessions/sessions.functions";
 import { cn } from "@/lib/utils";
+import { presentChannel, type PresentMessage } from "@/lib/coaching-sessions/script";
 
 export function PresentationScreen({ sessionId }: { sessionId: string }) {
   const read = useServerFn(getPresentationFn);
@@ -29,6 +30,28 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [total]);
+
+  // The coach's private script (their other window) follows this slide, and
+  // its ‹ › move this screen. Only the index crosses the channel.
+  const chan = useRef<BroadcastChannel | null>(null);
+  const iRef = useRef(i);
+  iRef.current = i;
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const c = new BroadcastChannel(presentChannel(sessionId));
+    chan.current = c;
+    c.onmessage = (e: MessageEvent<PresentMessage>) => {
+      if (e.data?.type === "go") setI(Math.max(0, e.data.index));
+      if (e.data?.type === "hello") c.postMessage({ type: "slide", index: iRef.current } satisfies PresentMessage);
+    };
+    return () => {
+      c.close();
+      chan.current = null;
+    };
+  }, [sessionId]);
+  useEffect(() => {
+    chan.current?.postMessage({ type: "slide", index: i } satisfies PresentMessage);
+  }, [i]);
 
   if (q.isLoading || !q.data)
     return <div className="fixed inset-0 z-50 bg-background" data-presentation-loading />;

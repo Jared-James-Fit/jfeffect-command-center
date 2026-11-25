@@ -29,6 +29,7 @@ import { plainTranscript, type AnalysisItem, type MeetingAnalysis } from "@/lib/
 import { handOffToCleo } from "@/lib/cleo-handoff";
 import { queueComposerInsert } from "@/lib/composer-insert";
 import { meetingsKey, sessionKey } from "./keys";
+import { isCoachConsentMessage } from "@/lib/ai-consent/consent";
 
 const AREA_WORDS: Record<string, string> = {
   training: "Training",
@@ -95,7 +96,9 @@ export function SessionAfter({
       ) : (
         <Import data={data} refresh={refresh} />
       )}
-      {s.analysis_status === "failed" ? (
+      {s.analysis_status === "failed" && isCoachConsentMessage(s.analysis_error) ? (
+        <p className="text-[13px] text-muted-foreground" data-ai-consent-refused>{s.analysis_error}</p>
+      ) : s.analysis_status === "failed" ? (
         <p className="text-[13px] text-destructive">Cleo couldn't read it{s.analysis_error ? `: ${s.analysis_error}` : ""}. Try again below.</p>
       ) : s.analysis_error?.startsWith("Waiting for AI") ? (
         <p className="text-[13px] text-muted-foreground">{s.analysis_error}. It'll carry on by itself.</p>

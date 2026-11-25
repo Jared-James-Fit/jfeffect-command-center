@@ -8,7 +8,7 @@
  * be read is null, never guessed.
  */
 import { actionTexts } from "./packages";
-import type { PrepInput, PrepReview } from "./call-prep";
+import type { PrepInput, PrepRecords, PrepReview } from "./call-prep";
 
 function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -38,7 +38,7 @@ export async function loadClientPrepRecords(supabase: any, clientId: string, tod
       return null;
     }
   };
-  const [wm, dated, pain, reviews, plan] = await Promise.all([
+  const [wm, dated, pain, reviews, plan, recent] = await Promise.all([
     safe(async () => {
       const { loadWeightManagement } = await import("@/lib/weight-management/load.server");
       return loadWeightManagement(supabase, clientId, { today });
@@ -72,6 +72,12 @@ export async function loadClientPrepRecords(supabase: any, clientId: string, tod
         .limit(1)
         .maybeSingle();
       return t as any;
+    }),
+    // all-time records in the last 4 weeks (finished workouts only), read as the caller
+    safe(async () => {
+      const { data, error } = await supabase.rpc("client_recent_records", { _client_id: clientId, _since: `${from}T00:00:00Z` });
+      if (error) throw new Error(error.message);
+      return data as any;
     }),
   ]);
 
@@ -136,6 +142,8 @@ export async function loadClientPrepRecords(supabase: any, clientId: string, tod
       reasons: (a.reasons ?? []).map((r: string) => (REASON_WORDS as Record<string, string>)[r] ?? r),
     })),
     weightRead: wm?.assessment.recommendation.headline ?? null,
+    weightVerdict: wm?.assessment.recommendation.verdict ?? null,
+    records: recent ? await prepRecords(recent) : null,
     reviews: ((reviews ?? []) as any[])
       .filter((r) => r.pt_sessions?.session_date)
       .map((r) => ({
@@ -148,6 +156,31 @@ export async function loadClientPrepRecords(supabase: any, clientId: string, tod
       }))
       .sort((a, b) => b.date.localeCompare(a.date)),
   };
+}
+
+/**
+ * The all-time records worth naming in a prep: rep records at 10 reps or
+ * fewer (the headline rule's limit), the barbell squat, bench and deadlift
+ * first, then the heaviest; one per exercise. Block and program bests are
+ * never called records here.
+ */
+export async function prepRecords(raw: any): Promise<PrepRecords> {
+  const { isBarbellBigThree } = await import("@/lib/community");
+  const reps = ((raw?.records ?? []) as any[]).filter((r) => r.atpr);
+  const loads = ((raw?.load_records ?? []) as any[]).filter((r) => r.atpr);
+  const best = new Map<string, { exercise: string; reps: number; loadKg: number; date: string }>();
+  for (const r of reps) {
+    const n = Number(r.reps);
+    const kg = Number(r.load_kg);
+    if (!r.exercise_name || !Number.isFinite(kg) || kg <= 0 || !(n >= 1 && n <= 10)) continue;
+    const key = String(r.exercise_id ?? r.exercise_name);
+    const prev = best.get(key);
+    if (!prev || kg > prev.loadKg) best.set(key, { exercise: String(r.exercise_name), reps: n, loadKg: kg, date: String(r.at).slice(0, 10) });
+  }
+  const top = [...best.values()]
+    .sort((a, b) => Number(isBarbellBigThree(b.exercise)) - Number(isBarbellBigThree(a.exercise)) || b.loadKg - a.loadKg)
+    .slice(0, 3);
+  return { top, total: reps.length + loads.length };
 }
 
 /** The last call before a date, for its follow-ups. */

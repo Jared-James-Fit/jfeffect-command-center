@@ -140,3 +140,62 @@ export function answersByKey(questions: Array<Q & { label: string }>, textOf: (q
   }
   return out;
 }
+
+/**
+ * Where each answer belongs in the prep, in the form's order: a routine
+ * answer ("Good", "Yes", "Nothing") is never a concern to raise on the call.
+ * A good answer is a win in their words, a worry is theirs to talk about,
+ * not being registered is the coach's to chase, and anything the seeded
+ * options don't cover (a coach's own edit of the form) is kept as said.
+ */
+export type RoutedAnswers = { goingWell: string[]; theirs: string[]; coach: string[]; plan: string[] };
+
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+const saidNothing = (s: string) => /^(no|none|nope|nothing|n\/a|na|not really|all good)\.?$/i.test(s.trim());
+
+export function routeAnswers(answers: Record<string, string>): RoutedAnswers {
+  const out: RoutedAnswers = { goingWell: [], theirs: [], coach: [], plan: [] };
+  const a = (k: SessionKey) => answers[k]?.trim() ?? "";
+  for (const k of SESSION_KEYS) {
+    const v = a(k);
+    if (!v || k === "topics" || k === "pain_details") continue;
+    switch (k) {
+      case "training_feel":
+        if (v === "Great" || v === "Good") out.goingWell.push(`Training feels ${lower(v)} (their answer)`);
+        else out.theirs.push(`Training feels: ${lower(v)}`);
+        break;
+      case "recovery":
+        if (v === "Sleeping and recovering well") out.goingWell.push("Sleeping and recovering well (their answer)");
+        else if (v !== "Mostly fine") out.theirs.push(`Sleep and recovery: ${lower(v)}`);
+        break;
+      case "pain": {
+        if (v === "Nothing") break;
+        const where = a("pain_details");
+        out.theirs.push(`Physically: ${lower(v)}${where ? ` (${where})` : ""}`);
+        break;
+      }
+      case "bodyweight":
+        out.plan.push(`Morning bodyweight: ${v} (their answer)`);
+        break;
+      case "life":
+        if (!saidNothing(v)) out.theirs.push(`Coming up: ${v}`);
+        break;
+      case "meet_registered":
+        if (v !== "Yes") out.coach.push(`Registered for the meet: ${lower(v)} (their answer)`);
+        break;
+      case "meet_confidence":
+        if (v === "Confident" || v === "Good") out.goingWell.push(`Feeling ${lower(v)} about the meet (their answer)`);
+        else out.theirs.push(`Feeling about the meet: ${lower(v)}`);
+        break;
+      case "meet_success":
+        out.theirs.push(`A successful meet looks like: ${v}`);
+        break;
+    }
+  }
+  // a pain detail with no pain answer (an older form) still reaches the coach
+  if (!a("pain") && a("pain_details")) out.theirs.push(`Physically: ${a("pain_details")}`);
+  // anything this form didn't seed, as they said it
+  for (const [k, v] of Object.entries(answers))
+    if (!(SESSION_KEYS as readonly string[]).includes(k) && v?.trim()) out.theirs.push(`${k}: ${v.trim()}`);
+  return out;
+}

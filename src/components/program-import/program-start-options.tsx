@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { BookOpen, ChevronRight, Hammer, Upload, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BuildWithCleoRow } from "@/components/premium/premium-ui";
 
 export type StartWay = "follow" | "build" | "import" | "crew";
 
@@ -31,6 +32,8 @@ export function ProgramStartOptions({
 }) {
   return (
     <div className={cn("overflow-hidden rounded-2xl border border-border bg-card text-left", className)} data-program-start-options>
+      {/* Premium only (nobody until it's granted): Cleo drafts one from their profile, into the builder unsaved */}
+      {ways.includes("build") && <BuildWithCleoRow />}
       {ways.map((w) => {
         const Icon = ICON[w];
         const body = (
