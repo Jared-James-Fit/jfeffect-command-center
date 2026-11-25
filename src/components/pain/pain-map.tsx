@@ -31,6 +31,7 @@ import { followUpFor, shortDay, type PainEntry } from "@/lib/pain/history";
 import { addPick, answerFollowUp, applyDescribed, mirrorOf, pickScore, recentSites, scorePatch, setSideChoice, sideChoiceOf, unrated, updatePaired, type PainPick, type SideChoice } from "@/lib/pain/picks";
 import { chooseSide, describePain, describedGroups, describedLine, type DescribeResult, type DescribedPlace } from "@/lib/pain/describe";
 import { readPainDescriptionFn, transcribePainVoiceFn } from "@/lib/pain/describe.functions";
+import { AiConsentInline, useMyAiConsent } from "@/components/ai-consent/ai-consent";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
 import { VoiceMicButton, VoiceStatusLine } from "@/components/voice/voice-recorder";
 import { CLIENT_SAFETY_NOTICE, needsSafetyNotice, URGENT_SIGNS } from "@/lib/pain/safety";
@@ -660,6 +661,9 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
       void read(next);
     },
   });
+  // speech goes to OpenAI or Google: someone who hasn't allowed that is asked in place first
+  const aiConsent = useMyAiConsent();
+  const [askVoice, setAskVoice] = useState(false);
   const canMic = voice.supported;
   const recording = voice.state === "recording";
   const hearing = voice.state === "requesting" || voice.state === "processing" || voice.state === "transcribing";
@@ -702,7 +706,7 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
             {canMic && (
               <VoiceMicButton
                 state={voice.state}
-                onClick={voice.toggle}
+                onClick={() => (aiConsent.needsYes && !recording ? setAskVoice((a) => !a) : voice.toggle())}
                 disabled={reading}
                 label="Say it instead"
                 className={cn("absolute bottom-2.5 right-2.5 h-10 w-10", !recording && "bg-white/[0.1] hover:bg-white/[0.16]")}
@@ -714,6 +718,9 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
             className="text-[13px]"
             idle={<p className="text-[12px] text-muted-foreground">Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept.</p>}
           />
+          {askVoice && aiConsent.needsYes && (
+            <AiConsentInline use="turns what you say into words" via="OpenAI (or Google if OpenAI can't)" onAllowed={() => setAskVoice(false)} onDismiss={() => setAskVoice(false)} />
+          )}
           {!result && (
             <button
               type="button"

@@ -5,7 +5,7 @@
  * "no draft" answer says so at once, kindly, before anything is sent (the
  * server screens it again with their record).
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -71,12 +71,15 @@ export function CleoQuestions({
   error,
   outOfCredits,
   onSubmit,
+  consent = null,
 }: {
   targets: ShownTargets;
   targetsLoading: boolean;
   busy: boolean;
   error: string | null;
   outOfCredits: boolean;
+  /** The inline AI-processing request, shown here when the server asked for it. */
+  consent?: ReactNode;
   onSubmit: (a: CreateAnswers) => void;
 }) {
   const credits = useAiCredits();
@@ -270,6 +273,8 @@ export function CleoQuestions({
           </p>
         )}
       </Question>
+
+      {consent}
 
       {error && (
         <p className="rounded-xl bg-destructive/10 px-4 py-3 text-[14px] text-destructive" role="alert">
