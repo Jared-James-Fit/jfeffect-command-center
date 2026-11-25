@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ensureNextOccurrence } from "@/lib/action-centre.functions";
 import { casualize } from "@/lib/coach-voice";
+import { fitReply, replyKindFor, replyLengthRule } from "@/lib/autopilot/reply";
 import { voicePromptForClient } from "@/lib/coach-voice.functions";
 import { PROGRAM_CONTEXT_RULES, programContextText, publicProgramContext } from "@/lib/program-context";
 
@@ -693,7 +694,8 @@ async function generateAnalysis(
   programText = "",
   weightText = "",
   painText = "",
-): Promise<{ analysis: MessengerCheckinAnalysis; failure: RecapFailure | null; model: string | null }> {
+  autopilotText = "",
+): Promise<{ analysis: MessengerCheckinAnalysis; failure: RecapFailure | null; model: string | null; usage?: { input: number | null; output: number | null } }> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   const { classifyAiError, aiFailureWords } = await import("@/lib/ai/ai-errors");
   try {
@@ -715,7 +717,9 @@ async function generateAnalysis(
       "Be concise and practical. Do not diagnose medical conditions.",
       "A red flag means something the coach should notice or ask about, not a medical diagnosis.",
       "Pain/injury, unusually poor recovery, very low sleep/energy, major adherence problems, or a direct request for help should be surfaced clearly.",
-      "The suggested response acknowledges a real win, names the main focus, gives 1-3 concrete goals for the new week, and addresses any red flag or request for help.",
+      "The suggested response names one real win, the main focus and 1-2 concrete goals for the new week, and addresses any red flag or request for help.",
+      replyLengthRule(taskType === "weekly_checkin" ? "weekly" : "quick"),
+      autopilotText ? "AUTOPILOT ASSESSMENT is the coach's decision for this week, made from the same records: the reply agrees with it, never promises a change it doesn't make, and says a proposed change is with the coach." : "",
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
       programText ? PROGRAM_CONTEXT_RULES : "",
@@ -745,14 +749,24 @@ async function generateAnalysis(
       ...(programText ? ["PROGRAM CONTEXT:", programText, ""] : []),
       ...(weightText ? [weightText, ""] : []),
       ...(painText ? [painText, ""] : []),
+      ...(autopilotText ? [autopilotText, ""] : []),
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
     // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
     const result = await askRoute("coach_write", { system, prompt, timeoutMs: 45_000, tag: "checkin_recap" }, { sb });
     const read = readRecapAnswer(result.text ?? "");
-    if ("failure" in read) return { analysis: fallback, failure: { kind: "answer", words: aiFailureWords("answer") }, model: result.model };
-    return { analysis: read.analysis, failure: null, model: result.model };
+    const usage = { input: result.usage?.input ?? null, output: result.usage?.output ?? null };
+    if ("failure" in read) return { analysis: fallback, failure: { kind: "answer", words: aiFailureWords("answer") }, model: result.model, usage };
+    // the reply's length and openers, by the same rules as Re-create (autopilot/reply.ts)
+    const kind = replyKindFor({
+      taskType,
+      redFlags: read.analysis.red_flags.length,
+      protectedDecision: /PROTECTED|INTERVENE/.test(autopilotText),
+      helpAsked: !!String((answers as any).help ?? "").trim(),
+    });
+    const analysis = { ...read.analysis, suggested_response: fitReply(read.analysis.suggested_response, kind) };
+    return { analysis, failure: null, model: result.model, usage };
   } catch (e) {
     const kind = classifyAiError(e);
     return { analysis: fallback, failure: { kind, words: aiFailureWords(kind) }, model: null };
@@ -980,10 +994,12 @@ export async function recapCheckin(sb: any, row: any): Promise<{ status: "ready"
   // digestion, recorded once for the coach (weight_management_reviews, pushed only
   // when it needs them) and handed to the recap so it never contradicts the numbers.
   let weightText = "";
+  let autopilotLoaded: any = null;
   if (taskType === "weekly_checkin") {
     const { recordCheckinReview } = await import("@/lib/weight-management/reviews.server");
     const { assessmentText } = await import("@/lib/weight-management/assessment");
     const loaded = await recordCheckinReview(sb, row.client_id, row.id);
+    autopilotLoaded = loaded ?? null;
     if (loaded) weightText = assessmentText(loaded.assessment);
     // one coordinated recommendation for the coach (weight management + cardio's recovery read),
     // private to them on this check-in's card; never sent or applied by itself
@@ -1026,7 +1042,23 @@ export async function recapCheckin(sb: any, row: any): Promise<{ status: "ready"
       console.error("[checkin] pain history unavailable", e?.message);
     }
   }
-  const { analysis, failure } = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText, painText);
+  // Cleo Autopilot: the week's one assessment (deterministic), recorded before the reply so the
+  // reply is written from the same decision; its drafts are written after the recap (never slowing it)
+  let autopilot: { decisionId: string; text: string } | null = null;
+  if (taskType === "weekly_checkin") {
+    try {
+      const { runAssessment } = await import("@/lib/autopilot/run.server");
+      const { assessmentForReply } = await import("@/lib/autopilot/assess");
+      const r = await runAssessment(sb, row.client_id, { trigger: "checkin", checkinId: row.id, loaded: autopilotLoaded, draft: false });
+      if (r) {
+        const guard = r.assessment.protections.length ? `\nPROTECTED: ${r.assessment.protections.map((p) => p.text).join("; ")}` : "";
+        autopilot = { decisionId: r.decisionId, text: assessmentForReply(r.assessment) + guard };
+      }
+    } catch (err: any) {
+      console.error("[checkin] autopilot assessment unavailable", err?.message);
+    }
+  }
+  const { analysis, failure, model, usage } = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText, painText, autopilot?.text ?? "");
   const had = row.ai_analysis && !isStandInRecap(row.ai_analysis) ? row.ai_analysis : null;
   if (failure && had) {
     // a Redo that failed never replaces a real recap with the stand-in
@@ -1047,6 +1079,20 @@ export async function recapCheckin(sb: any, row: any): Promise<{ status: "ready"
     await sb
       .from("conversation_state")
       .upsert({ client_id: row.client_id, priority: "Important" }, { onConflict: "client_id" });
+  }
+  if (taskType === "weekly_checkin") {
+    try {
+      const { recordReplyVersion } = await import("@/lib/autopilot/reply.server");
+      if (!failure && analysis.suggested_response) {
+        await recordReplyVersion(sb, { clientId: row.client_id, checkinId: row.id, decisionId: autopilot?.decisionId ?? null, body: analysis.suggested_response, style: "initial", model, usage: usage ?? null, userId: null });
+      }
+      if (autopilot) {
+        const { createDrafts } = await import("@/lib/autopilot/run.server");
+        await createDrafts(sb, autopilot.decisionId);
+      }
+    } catch (err: any) {
+      console.error("[checkin] autopilot drafts unavailable", err?.message);
+    }
   }
   return failure ? { status: "failed", failure } : { status: "ready", failure: null };
 }
