@@ -98,7 +98,7 @@ export type DailySetting =
   | "meet_platform"
   | "meet_warm_up";
 /** How it's drawn (concept.rendering): the house look in one of four 2D treatments, anime key art most days. */
-export type DailyRendering = "anime" | "soft_anime" | "graphic" | "manga_colour";
+export type DailyRendering = "photo" | "technical" | "graphic" | "anime" | "soft_anime" | "manga_colour";
 /** Who's in it (concept.cast): real, varied people (or nobody), never the same kind of person post after post. */
 export type DailyCast = "newer_lifter" | "everyday" | "powerlifter" | "physique" | "masters" | "coach_athlete" | "crew" | "hands" | "no_people";
 /** The colours (concept.palette): a different palette post to post, every one bright and true. */
@@ -430,20 +430,38 @@ export const relevanceOf = (o: { pillar?: string | null; topic?: string | null }
  * marks which days are in this look (concept.look); `anime_v1` was the
  * look before it, `photo_v1` the one before that.
  */
-export const FILM_LOOK_VERSION = "anime_v2";
+export const FILM_LOOK_VERSION = "athletic_v3";
 
+/**
+ * Nov 25 2026 (athletic_v3): JF Effect's visual identity is premium athletic,
+ * in the spirit of the best training brands, not one drawing style. Most
+ * pictures are campaign photography of real training or a precise technical
+ * illustration of the point; anime is one rare treatment among several
+ * (DAILY_RENDERINGS, pickChoices), so the profile reads as a training brand,
+ * never an anime feed.
+ */
 export const FILM_LOOK =
-  "JF Effect's illustrated house style: a clean, bright, hand-drawn 2D illustration in the tradition of modern Japanese sports anime, grounded and made for adults. Clean, confident line art with varied line weight; flat cel colour with soft, simple shading; backgrounds drawn with care but kept uncluttered so they support the subject instead of competing with it. The frame is bright and evenly exposed: natural daylight or clean, even indoor light, a neutral white balance (whites read white, steel reads grey, skin reads as skin), soft open shadows that keep their detail, and clear, true colour with no colour grade over it. One small touch of JF Effect red somewhere in the frame. People are adults (20s to 60s) with realistic adult proportions: a normal head-to-body ratio, adult faces and adult builds, never childlike, chibi or big-headed, from any angle. Made for a phone screen: one clear subject that reads at a glance, strong separation between the subject and the background, nothing important near the edges.";
+  "JF Effect's visual identity: premium athletic imagery in the spirit of the best training brands, serious about strength and made for adults. Clean, bright and uncluttered, a restrained palette of black, off-white, graphite and steel grey with true colour on people and plates, and one small touch of JF Effect red somewhere in the frame. The frame is bright and evenly exposed: natural daylight or clean, even indoor light, a neutral white balance (whites read white, steel reads grey, skin reads as skin), shadows that keep their detail, no colour grade over it. People are adults (20s to 60s) with realistic adult proportions and their own faces, never childlike, from any angle. Made for a phone screen: one clear subject that reads at a glance, strong separation between the subject and the background, generous clean space, nothing important near the edges.";
 
 /** The house look in four treatments, one shared identity (clean line art, bright true colour, no words, a JF red accent). */
 export const DAILY_RENDERINGS: Record<DailyRendering, { name: string; look: string; use: string }> = {
+  photo: {
+    name: "Athletic photography",
+    look: "Shot as premium athletic campaign photography: a real strength gym or platform, a real lifter mid-session, natural or clean daylight, true colour, crisp detail in the chalk, knurling and steel, a shallow depth of field that keeps the subject sharp. Editorial and honest, caught mid-moment: never stock, never glossy fitness-model posing, never oiled skin or a showroom gym.",
+    use: "most posts: the lifts, coaching moments, training habits, the platform, recovery",
+  },
+  technical: {
+    name: "Technical illustration",
+    look: "Drawn as a precise technical illustration from a premium coaching manual: clean black linework on an off-white ground, graphite tones for form, and JF Effect red only for the one thing that matters (a bar path, a joint angle, a force line, the position that changes). Side-on or three-quarter so the position reads, nothing decorative, no words or numbers.",
+    use: "a technical breakdown: bar path, positions, a cue, a comparison, how something works",
+  },
   anime: {
-    name: "Anime key art",
+    name: "Anime key art (rare)",
     look: "Drawn as crisp anime key art: clean cel shading, expressive but grounded faces, a well-animated sports series on a bright day.",
-    use: "most posts: the lifts, coaching moments, the platform",
+    use: "now and then for a character moment, never two posts running",
   },
   soft_anime: {
-    name: "Soft anime",
+    name: "Soft anime (rare)",
     look: "Drawn in the airy, softly painted daylight look of a slice-of-life anime: light, fresh colour, gentle painted gradients in the background, the people still in clean line art.",
     use: "recovery, sleep, food, patience, a calm or reflective post",
   },
@@ -575,6 +593,12 @@ export const DAILY_KIND_KEYS = Object.keys(DAILY_KINDS) as DailyKind[];
 /** What it must never look like: a photo, a render, a dark or orange frame, exaggerated bodies, a childish look, a lifestyle scene. */
 export const FILM_AVOID =
   "Avoid: an orange, amber, golden, sepia or yellow colour cast over the frame; dark or moody lighting, large black areas, heavy shadows, a spotlight in darkness, hanging lamps over a dim room, bloom, haze, smoke or a dramatic cinematic grade; photorealism or anything that reads as a photograph; 3D render, CGI, Pixar-like or video-game looks; a generic AI-art sheen (over-smoothed skin, everything glowing, random particles, melted details); exaggerated muscles, oversized arms or shoulders, visible vein maps, bodybuilder size on an everyday lifter, or every person in a black t-shirt; a woman drawn with a man's frame or a bodybuilder's upper body (broad or bulky shoulders, big traps, defined delts, biceps or back, visible abs) or a hard, masculine face; muscle mapped out muscle by muscle; chibi, cutesy, moe, kids' cartoon or western-cartoon proportions, giant eyes or exaggerated comedic faces; anyone who looks under 20, school uniforms, fanservice or sexualized poses; a muddy brown or grey palette or washed-out colour; a busy frame where the subject gets lost at phone size; a motivational-poster composition or a character posing for the viewer; lifestyle scenes with no training in them (beaches, brunch, parties, a stroll in the park); equipment where it couldn't be (a rack or barbell in a kitchen or a living room that isn't set up for training); stock-photo staging; brand names, logos, readable text, subtitles, speech bubbles or watermarks.";
+
+/** The avoid list for a treatment: a photograph must not look drawn or rendered, everything else must not look like a photograph. */
+export function filmAvoid(rendering: string | null | undefined): string {
+  if (rendering !== "photo") return FILM_AVOID;
+  return FILM_AVOID.replace("photorealism or anything that reads as a photograph; ", "a cartoon, illustration, painting or anything that reads as drawn; glossy stock-fitness gloss, oiled skin, posed models or a showroom gym; ");
+}
 
 export const DAILY_STYLES: Record<DailyStyle, { name: string; look: string }> = {
   wide_moment: { name: "Establishing shot", look: "a wide establishing shot of the place, the athlete part of the whole scene, the background doing some of the storytelling but never crowding the subject." },
@@ -882,7 +906,7 @@ export type Choices = {
   casts?: DailyCast[];
   /** The palettes not used in the last three pictures, shuffled. */
   palettes?: DailyPalette[];
-  /** The treatments: anime key art always, another one only if it wasn't in the last three. */
+  /** The treatments: photography and the technical drawing always, another only if it wasn't in the last three (never anime twice running). */
   renderings?: DailyRendering[];
 };
 
@@ -929,9 +953,12 @@ export function pickChoices(
   const usedPalettes = new Set(lastPictures(o.recent, o.day, 3).map((r) => r.palette).filter(Boolean) as string[]);
   const palTurn = Math.floor(rand() * DAILY_PALETTE_KEYS.length);
   const palettes = DAILY_PALETTE_KEYS.map((_, i, a) => a[(i + palTurn) % a.length]).filter((k) => !usedPalettes.has(k));
-  // anime key art is the house look; another treatment only when none of the last three used it
+  // photography and the technical drawing are the identity; an illustrated or anime treatment only when none of the last three used it,
+  // and no two anime-family pictures in a row (Nov 25 2026: the feed read as an anime feed)
   const usedRenderings = new Set(lastPictures(o.recent, o.day, 3).map((r) => r.rendering).filter(Boolean) as string[]);
-  const renderings = DAILY_RENDERING_KEYS.filter((k) => k === "anime" || !usedRenderings.has(k));
+  const ANIME = new Set<string>(["anime", "soft_anime", "manga_colour"]);
+  const lastWasAnime = lastPictures(o.recent, o.day, 1).some((r) => !r.rendering || ANIME.has(r.rendering));
+  const renderings = DAILY_RENDERING_KEYS.filter((k) => k === "photo" || k === "technical" || (!usedRenderings.has(k) && !(ANIME.has(k) && lastWasAnime)));
   return {
     pillar,
     topics,
@@ -1127,7 +1154,7 @@ WORK IT OUT IN THIS ORDER
 5. Three different captions, three takes on the point, each labelled with its form, and different in how they're written too (one a quick one-paragraph thought, another a few short lines; their length and capitals vary, and at least one is typed the casual way of his first example: lowercase starts, a run-on, nothing tidied). Pick the one that sounds most like him and is most useful first, not the most dramatic or the most polished.
 
 THE PICTURE
-- JF Effect's illustrated house style: a clean, bright 2D frame in the tradition of modern Japanese sports anime (the identity is fixed; you choose the treatment, the direction, the shot, the light, the palette, the place and who's in it). It teaches the post's point: an athlete who only saw the picture should be able to guess what the post is about.
+- JF Effect's visual identity: premium athletic imagery, clean, bright and uncluttered, black, off-white, graphite and one touch of red (the identity is fixed; you choose the treatment, the direction, the shot, the light, the palette, the place and who's in it). Athletic photography for most posts, a technical illustration when the post explains a position or a path, an illustrated or anime treatment only now and then. It teaches the post's point: an athlete who only saw the picture should be able to guess what the post is about.
 - Bright and clear, made for a phone: daylight or clean, even indoor light, a neutral white balance, open shadows, true colour. Never dark, moody, orange, amber or golden, never a dim gym under hanging lamps, never a spotlight in darkness. One clear subject that reads at a glance.
 - Start from the angle's own picture brief (given with each angle) and make it specific to the point. For example: fatigue management, an athlete resting between heavy squat sets; deadlift technique, a clean side-on view of the setup; small jumps, a pair of hands sliding small plates on; eating to train, the meal containers by the gym bag. Don't reach for the same props every time: a training log or a phone only when the post is about logging or video.
 - Real places to train, drawn accurately and not always the same kind: a bright club, a commercial gym, a garage, a university room, a performance gym, a community gym, a home setup, an open-air yard, a recovery corner, the meet. Equipment drawn accurately: power racks, monolifts, competition benches, deadlift platforms, calibrated plates (red 25, blue 20, yellow 15, green 10) or bumper plates, belts, knee sleeves, lifting shoes. Equipment and technique correct: one straight barbell, the same plates on both sides with collars, the grip, stance and bar position that lift really uses.
@@ -1249,7 +1276,7 @@ export function conceptPrompt(o: {
     `WHO'S IN IT, as "cast" (pick who the post is about, the first ones not in the last two pictures; "no_people" or "hands" whenever the read says people aren't needed): ${(o.choices.casts ?? DAILY_CAST_KEYS).map((k) => `${k} = ${DAILY_CASTS[k].look}`).join("; ")}`,
     o.lead ? `THE PERSON THE POST IS ABOUT IS A ${o.lead.toUpperCase()}: write them as one in "visual".` : null,
     womenLine(o.choices.casts ?? DAILY_CAST_KEYS, o.day),
-    `TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it): ${(o.choices.renderings ?? DAILY_RENDERING_KEYS).map((k) => `${k} = ${DAILY_RENDERINGS[k].name}, for ${DAILY_RENDERINGS[k].use}`).join("; ")}`,
+    `TREATMENT, as "rendering" (athletic photography for most posts, technical illustration for a breakdown; another only when the read calls for it): ${(o.choices.renderings ?? DAILY_RENDERING_KEYS).map((k) => `${k} = ${DAILY_RENDERINGS[k].name}, for ${DAILY_RENDERINGS[k].use}`).join("; ")}`,
     o.art
       ? `DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
       : `DIRECTION, as "art" (pick the one that shows the point best): ${DAILY_ART_KEYS.map((k) => `${k} = ${ART_STYLES[k].name}, for ${ART_STYLES[k].use}`).join("; ")}`,
@@ -1358,7 +1385,7 @@ export function parseConcept(
       // any real place goes (a meet angle can go back to the meet), else the first one offered
       setting: isKey(DAILY_SETTING_KEYS, j.setting) ? j.setting : (allowed.settings?.[0] ?? DAILY_SETTING_KEYS[0]),
       art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForPillar(pillar)),
-      rendering: isKey(DAILY_RENDERING_KEYS, j.rendering) ? j.rendering : (allowed.renderings?.[0] ?? "anime"),
+      rendering: isKey(DAILY_RENDERING_KEYS, j.rendering) && (!allowed.renderings || allowed.renderings.includes(j.rendering)) ? j.rendering : (allowed.renderings?.[0] ?? "photo"),
       palette: isKey(DAILY_PALETTE_KEYS, j.palette) ? j.palette : (allowed.palettes?.[0] ?? DAILY_PALETTE_KEYS[0]),
       read: parseRead(j.read),
       cast: castFor(j.cast, parseRead(j.read), allowed.casts ?? DAILY_CAST_KEYS),
@@ -2003,12 +2030,19 @@ const MOOD_LOOK: Record<DailyMood, string> = {
   curious: "engaged, a little 'aha' over the detail",
 };
 
+/** How bodies are shown in each family of treatment. */
+const BODY_RENDER = {
+  anime: "Bodies are drawn the polished anime way: smooth, simple forms and clean cel shading, muscle suggested with a few confident lines, never mapped out muscle by muscle (no striations, no vein maps, no every-muscle outlines).",
+  line: "Bodies are drawn with simple, accurate forms and clean outlines, muscle suggested by the silhouette, never mapped out muscle by muscle.",
+  photo: "Real, natural skin and bodies in natural light: no oil, no extreme vascularity, no airbrushed or plastic skin, no body that looks enhanced.",
+} as const;
+
 /** The people line: who they are decides how they're built, never one heavily muscled type, and a woman always a woman's build. */
-export function peopleLine(cast: DailyCast | string | null | undefined, womanBuild?: WomanBuild | string | null): string {
+export function peopleLine(cast: DailyCast | string | null | undefined, womanBuild?: WomanBuild | string | null, rendering?: string | null): string {
   if (cast === "no_people") return "No people in the frame: the objects and the place tell it.";
   const who = cast && cast in DAILY_CASTS ? `Who's in it: ${DAILY_CASTS[cast as DailyCast].look}. ` : "";
   const build = womanBuild && womanBuild in WOMAN_BUILDS ? `A woman in it is ${WOMAN_BUILDS[womanBuild as WomanBuild]}. ` : "";
-  return `${who}${build}People look like real lifters: realistic, natural human proportions that fit who they are, natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle. ${WOMEN_LOOK} ${MEN_LOOK} Bodies are drawn the polished anime way: smooth, simple forms and clean cel shading, muscle suggested with a few confident lines, never mapped out muscle by muscle (no striations, no vein maps, no every-muscle outlines). Adults drawn with correct joints and proportions, five fingers on each hand, their own faces, hair and skin tones, training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person), natural expressions, caught mid-moment, never posing for the viewer.`;
+  return `${who}${build}People look like real lifters: realistic, natural human proportions that fit who they are, natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle. ${WOMEN_LOOK} ${MEN_LOOK} ${BODY_RENDER[rendering === "photo" ? "photo" : rendering === "technical" || rendering === "graphic" ? "line" : "anime"]} Adults drawn with correct joints and proportions, five fingers on each hand, their own faces, hair and skin tones, training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person), natural expressions, caught mid-moment, never posing for the viewer.`;
 }
 
 /** The image model's prompt: the house style and its treatment, the direction, the read, the shot, the light, the palette, the place, the moment and who's in it, the words in it (exactly) or none, and what it must never look like. */
@@ -2029,6 +2063,7 @@ export function picturePrompt(
   const shot = DAILY_STYLES[c.style as DailyStyle] ?? DAILY_STYLES.medium_candid;
   const light = DAILY_LIGHTS[(c.light && c.light in DAILY_LIGHTS ? c.light : "big_windows") as DailyLight];
   const art = ART_STYLES[(c.art && c.art in ART_STYLES ? c.art : "key_frame") as DailyArt];
+  // a concept made before the treatments (Nov 2026) was anime; anything new names its own
   const rendering = DAILY_RENDERINGS[(c.rendering && c.rendering in DAILY_RENDERINGS ? c.rendering : "anime") as DailyRendering];
   const palette = c.palette && c.palette in DAILY_PALETTES ? DAILY_PALETTES[c.palette as DailyPalette] : null;
   const place = c.setting && c.setting in DAILY_SETTINGS ? DAILY_SETTINGS[c.setting as DailySetting] : null;
@@ -2051,7 +2086,7 @@ export function picturePrompt(
     `What happens in the frame: ${c.visual}`,
     `The feeling: ${c.message}${mood ? ` (${mood})` : ""}`,
     // a concept from before the builds (Nov 20 2026) takes its cast's most fitting one
-    peopleLine(c.cast ?? null, c.womanBuild ?? (c.cast && c.cast in CAST_WOMAN_BUILDS ? (CAST_WOMAN_BUILDS[c.cast as DailyCast][0] ?? null) : null)),
+    peopleLine(c.cast ?? null, c.womanBuild ?? (c.cast && c.cast in CAST_WOMAN_BUILDS ? (CAST_WOMAN_BUILDS[c.cast as DailyCast][0] ?? null) : null), c.rendering ?? null),
     lifting
       ? "Equipment and technique are correct: one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on, calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10), a real power rack, monolift, competition bench or deadlift platform; the grip width, stance and bar position that lift actually uses (the bar on the upper back for a squat, feet planted and shoulder blades set on the bench, the bar over the midfoot on a deadlift); chalk, belts and knee sleeves where they belong. Keep the load simple to draw right: one to three plates a side in one or two colours, the same on both ends. A machine is drawn as that real machine and used the way it's used (a hack squat: standing on its angled platform with the shoulders under the pads; a leg press: seated, pushing the sled away)."
       : null,
@@ -2060,7 +2095,7 @@ export function picturePrompt(
       ? `The only readable words are exactly these: ${words}. No other text, brand names or logos anywhere.`
       : "No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere: a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes, any screen is blank or turned away, plate markings small and unreadable.",
     "Vertical portrait. One clear focal point that reads at a glance on a phone; keep it well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
-    FILM_AVOID,
+    filmAvoid(c.rendering),
     o.fix ? `Fix from the last try: ${o.fix}` : null,
   ]
     .filter(Boolean)
@@ -2071,7 +2106,7 @@ export function picturePrompt(
 /*  The review                                                         */
 /* ------------------------------------------------------------------ */
 
-export const REVIEW_PROMPT = `You review one Athlete Insight for a powerlifting coach's community feed before it goes out: a picture and its caption, made together for one training idea. The feed is for people serious about getting stronger, not a fitness motivation page. Every picture is meant to be in JF Effect's illustrated house style: a clean, bright, hand-drawn 2D frame in the tradition of modern Japanese sports anime (most are anime key art; some are a softer anime, a flat graphic illustration or manga colour), with bright, even light, a neutral white balance, real people built like who they are, and one clear subject that reads on a phone. Be an honest art director and a powerlifting coach checking the technique. Look closely at the picture.
+export const REVIEW_PROMPT = `You review one Athlete Insight for a powerlifting coach's community feed before it goes out: a picture and its caption, made together for one training idea. The feed is for people serious about getting stronger, not a fitness motivation page. Every picture is meant to be in JF Effect's visual identity: premium athletic imagery, clean, bright and uncluttered (most are athletic campaign photography or a precise technical illustration; now and then a flat graphic illustration, anime or manga colour), with bright, even light, a neutral white balance, real people built like who they are, and one clear subject that reads on a phone. Be an honest art director and a powerlifting coach checking the technique. Look closely at the picture.
 
 Answer with JSON only:
 {
@@ -2081,7 +2116,7 @@ Answer with JSON only:
  "colour": "bright (well exposed and clear: a neutral white balance where whites read white, open shadows with detail, true colour), dark (underexposed or moody: large areas of deep shadow or black, a dim room, a spotlight in darkness), tinted (an orange, amber, golden, sepia, yellow or other single colour cast over the whole frame) or flat (washed-out, muddy, grey, lifeless)",
  "physique": "realistic (every body fits who the person is: ordinary, athletic or strong, natural proportions), exaggerated (oversized arms or shoulders, bodybuilder size on an everyday lifter, veins mapped across the skin, impossible muscle) or none (no people, or only hands)",
  "women": "natural (every woman in it looks like a woman who trains: a feminine face with soft features, a natural female frame, slim to lightly toned arms and shoulders, her strength in her legs and hips; a lean, toned physique athlete is natural too), overbuilt (any woman drawn with a man's frame or a bodybuilder's upper body: broad or bulky shoulders, big traps, defined delts, biceps or back, visible abs or veins, or a hard, masculine face) or none (no women in it). Look at every woman, the ones in the background included",
- "clarity": "clean (confident linework, faces and hands well drawn, details crisp) or messy (smeared or broken lines, mushy faces or hands, AI artefacts, melted details)",
+ "clarity": "clean (sharp focus or confident linework, faces and hands right, details crisp) or messy (smeared or broken lines, mushy faces or hands, AI artefacts, melted details)",
  "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
  "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
  "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5, "uplift": 1-5, "on_topic": 1-5, "teaches": 1-5, "technique": 1-5, "readable": 1-5},
@@ -2237,7 +2272,7 @@ export const REVIEW_BARS: Review["scores"] = { relatable: 3, original: 3, writin
 const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match", "uplift", "on_topic", "teaches", "technique", "readable"]);
 
 /** Treatments drawn outside anime key art, where a clean drawn illustration is the right answer. */
-const ILLUSTRATED = new Set<string>(["graphic", "manga_colour"]);
+const ILLUSTRATED = new Set<string>(["graphic", "manga_colour", "technical"]);
 
 /**
  * Pass or fail, on concrete checks first: the words read off the picture are
@@ -2263,8 +2298,10 @@ export function reviewVerdict(r: Review, typography: string, scene = "", o: { re
   if (want && !seen.includes(want)) image.push(`the words in the picture read "${r.text_seen || "nothing"}", not "${typography}"`);
   else if (stray.length) image.push(`${want ? "extra words" : "words that shouldn't be there"} in the picture: "${r.text_seen}"`);
   // the house style: an anime frame, or a clean drawn illustration when that treatment was asked for; never a photo, a render or a painting
-  const drawnOk = r.medium === "anime" || (r.medium === "illustration" && ILLUSTRATED.has(o.rendering ?? ""));
-  if (!drawnOk) image.push(`it reads as ${(r.medium || "something else").replace(/_/g, " ")}, not ${ILLUSTRATED.has(o.rendering ?? "") ? "a clean 2D illustration" : "an anime frame"}`);
+  // the treatment asked for: a photograph is a photograph, a drawing a drawing; an older concept with no treatment is anime
+  const asked = o.rendering === "photo" ? "photo" : ILLUSTRATED.has(o.rendering ?? "") ? "illustration" : "anime";
+  const drawnOk = r.medium === asked || (asked === "illustration" && r.medium === "anime" && o.rendering === "manga_colour");
+  if (!drawnOk) image.push(`it reads as ${(r.medium || "something else").replace(/_/g, " ")}, not ${asked === "photo" ? "a photograph" : asked === "illustration" ? "a clean 2D illustration" : "an anime frame"}`);
   // serious and adult, never chibi, cutesy, teenage or fanservice
   if (r.maturity !== "mature") image.push(`it reads as ${r.maturity || "unclear"}, not a mature sports story`);
   // bright, true colour and clean linework, never dark, orange, muddy or smeared

@@ -297,6 +297,7 @@ import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/a
 import { Route as ApiPublicHooksPlanChangesTickRouteImport } from './routes/api/public/hooks/plan-changes-tick'
 import { Route as ApiPublicHooksPlanLifecycleCheckRouteImport } from './routes/api/public/hooks/plan-lifecycle-check'
 import { Route as ApiPublicHooksPostDecksTickRouteImport } from './routes/api/public/hooks/post-decks-tick'
+import { Route as ApiPublicHooksPostHeadlinesTickRouteImport } from './routes/api/public/hooks/post-headlines-tick'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
 import { Route as ApiPublicHooksProgramGapsTickRouteImport } from './routes/api/public/hooks/program-gaps-tick'
@@ -1990,6 +1991,12 @@ const ApiPublicHooksPostDecksTickRoute =
     path: '/api/public/hooks/post-decks-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksPostHeadlinesTickRoute =
+  ApiPublicHooksPostHeadlinesTickRouteImport.update({
+    id: '/api/public/hooks/post-headlines-tick',
+    path: '/api/public/hooks/post-headlines-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksPostPicturesTickRoute =
   ApiPublicHooksPostPicturesTickRouteImport.update({
     id: '/api/public/hooks/post-pictures-tick',
@@ -2487,6 +2494,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
   '/api/public/hooks/plan-lifecycle-check': typeof ApiPublicHooksPlanLifecycleCheckRoute
   '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
+  '/api/public/hooks/post-headlines-tick': typeof ApiPublicHooksPostHeadlinesTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
@@ -2810,6 +2818,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
   '/api/public/hooks/plan-lifecycle-check': typeof ApiPublicHooksPlanLifecycleCheckRoute
   '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
+  '/api/public/hooks/post-headlines-tick': typeof ApiPublicHooksPostHeadlinesTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
@@ -3139,6 +3148,7 @@ export interface FileRoutesById {
   '/api/public/hooks/plan-changes-tick': typeof ApiPublicHooksPlanChangesTickRoute
   '/api/public/hooks/plan-lifecycle-check': typeof ApiPublicHooksPlanLifecycleCheckRoute
   '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
+  '/api/public/hooks/post-headlines-tick': typeof ApiPublicHooksPostHeadlinesTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
@@ -3468,6 +3478,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/plan-changes-tick'
     | '/api/public/hooks/plan-lifecycle-check'
     | '/api/public/hooks/post-decks-tick'
+    | '/api/public/hooks/post-headlines-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
@@ -3791,6 +3802,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/plan-changes-tick'
     | '/api/public/hooks/plan-lifecycle-check'
     | '/api/public/hooks/post-decks-tick'
+    | '/api/public/hooks/post-headlines-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
@@ -4119,6 +4131,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/plan-changes-tick'
     | '/api/public/hooks/plan-lifecycle-check'
     | '/api/public/hooks/post-decks-tick'
+    | '/api/public/hooks/post-headlines-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
@@ -4267,6 +4280,7 @@ export interface RootRouteChildren {
   ApiPublicHooksPlanChangesTickRoute: typeof ApiPublicHooksPlanChangesTickRoute
   ApiPublicHooksPlanLifecycleCheckRoute: typeof ApiPublicHooksPlanLifecycleCheckRoute
   ApiPublicHooksPostDecksTickRoute: typeof ApiPublicHooksPostDecksTickRoute
+  ApiPublicHooksPostHeadlinesTickRoute: typeof ApiPublicHooksPostHeadlinesTickRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
   ApiPublicHooksProgramGapsTickRoute: typeof ApiPublicHooksProgramGapsTickRoute
@@ -6312,6 +6326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPostDecksTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/post-headlines-tick': {
+      id: '/api/public/hooks/post-headlines-tick'
+      path: '/api/public/hooks/post-headlines-tick'
+      fullPath: '/api/public/hooks/post-headlines-tick'
+      preLoaderRoute: typeof ApiPublicHooksPostHeadlinesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/post-pictures-tick': {
       id: '/api/public/hooks/post-pictures-tick'
       path: '/api/public/hooks/post-pictures-tick'
@@ -7356,6 +7377,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksPlanChangesTickRoute: ApiPublicHooksPlanChangesTickRoute,
   ApiPublicHooksPlanLifecycleCheckRoute: ApiPublicHooksPlanLifecycleCheckRoute,
   ApiPublicHooksPostDecksTickRoute: ApiPublicHooksPostDecksTickRoute,
+  ApiPublicHooksPostHeadlinesTickRoute: ApiPublicHooksPostHeadlinesTickRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,
   ApiPublicHooksProgramGapsTickRoute: ApiPublicHooksProgramGapsTickRoute,
@@ -7390,6 +7412,7 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
 
 import type { getRouter } from './router.tsx'
 import type { startInstance } from './start.ts'

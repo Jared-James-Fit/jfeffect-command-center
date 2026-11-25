@@ -21,9 +21,10 @@ import { SERIES_LABEL, extraBirthday, extraFeature, extraHoliday } from "@/lib/c
 import { extraLesson } from "@/lib/lessons";
 import type { IgCard } from "@/lib/instagram-export";
 import { deckOf, deckSlideAlt } from "@/lib/post-decks";
+import { CAROUSEL_CARDS } from "@/lib/post-design";
 
 /** Bump when a card's look changes: every phone paints its pictures again. */
-export const POST_ART_VERSION = 5;
+export const POST_ART_VERSION = 6;
 
 export type PostArt = { key: string; url: string; file: File };
 
@@ -62,7 +63,7 @@ export function postArtKey(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
     post.series_extra ?? null,
     (post.mentions ?? []).map((m) => [m.user_id, m.name]),
   ]);
-  return `v${POST_ART_VERSION}.${post.id}.${card}${card === "deck" ? `.s${slide}` : ""}${UNIT_CARDS.has(card) ? `.${unit}` : ""}.${hashText(content)}`;
+  return `v${POST_ART_VERSION}.${post.id}.${card}${CAROUSEL_CARDS.has(card) ? `.s${slide}` : ""}${UNIT_CARDS.has(card) ? `.${unit}` : ""}.${hashText(content)}`;
 }
 
 /** A words card's headline: the quote, else the caption's first line. */
@@ -83,9 +84,9 @@ export function postArtAlt(post: CommunityPost, card: IgCard, slide = 0): string
     case "lesson":
       return extraLesson(post)?.title ?? wordsHead(post);
     case "wins":
-      return "Wednesday Wins: the crew's week in numbers";
+      return ["Wednesday Wins: what the crew lifted together", "Wednesday Wins: the week in numbers", "Wednesday Wins: workouts each week and this week's goal"][slide] ?? "Wednesday Wins";
     case "recap":
-      return "Sunday Recap: the crew's week";
+      return ["Sunday Recap: how much of the plan got done", "Sunday Recap: the week in numbers", "Sunday Recap: workouts by day", "Sunday Recap: the week's biggest moments"][slide] ?? "Sunday Recap";
     case "feature":
       return extraFeature(post.series_extra)?.title ?? SERIES_LABEL.try_it_thursday.name;
     case "birthday": {
@@ -227,6 +228,33 @@ function keepStored(key: string, blob: Blob) {
   void store()
     .then((cache) => cache?.put(cacheUrl(key), new Response(blob, { headers: { "content-type": blob.type || "image/jpeg" } })))
     .catch(() => undefined);
+}
+
+/**
+ * Forget the pictures painted for these posts (every card, slide and unit),
+ * in memory and on the phone, so they're painted again: the admin's Repaint
+ * (Crew → Posts → Manage → Post design). Null: every post's.
+ */
+export async function forgetPostArt(postIds: readonly string[] | null): Promise<number> {
+  const match = (key: string) => !postIds || postIds.some((id) => key.includes(`.${id}.`));
+  let n = 0;
+  for (const [key, art] of [...memory]) {
+    if (!match(key)) continue;
+    URL.revokeObjectURL(art.url);
+    memory.delete(key);
+    decoded.delete(key);
+    n++;
+  }
+  try {
+    const cache = await store();
+    if (cache) {
+      const reqs = await cache.keys();
+      await Promise.all(reqs.filter((r) => match(decodeURIComponent(r.url))).map((r) => cache.delete(r)));
+    }
+  } catch {
+    /* memory only */
+  }
+  return n;
 }
 
 /* ------------------------------------------------------------------ */

@@ -24,7 +24,7 @@ import { readRouteOverride } from "@/lib/ai/route-call.server";
 import { resolveRoute } from "@/lib/ai/routing";
 import { LESSON_TRACK, extraLesson, isLessonVisual, type LessonExtra } from "@/lib/lessons";
 import { TIP_KIND_LABEL } from "@/lib/community";
-import { DECK_LIMITS, DECK_VERSION, deckHeadline, isDeckTheme, parseDeck, pickDeckTheme, type DeckTheme, type PostDeck } from "@/lib/post-decks";
+import { DECK_LIMITS, DECK_VERSION, deckHeadline, isDeckTheme, parseDeck, pickDeckTheme, themesFor, type DeckTheme, type PostDeck } from "@/lib/post-decks";
 import { deckProblems } from "@/lib/post-deck-checks";
 
 type Admin = any;
@@ -48,7 +48,7 @@ FIND THE TAKE
 - Expert, not academic: say it the way a coach who competes would explain it to a lifter between sets.
 
 THE SLIDES
-- Cover (slide 1): the hook. A claim, never a question. Concrete, at most ${L.coverTitle.words} words, sentence case. It makes a lifter think "wait, what?" or "that's me". Put *asterisks* around the one to three words that carry it (they're painted in the accent colour). Never a template opener ("did you know", "here's", "5 tips", "the secret", "stop doing this"). Examples of the shape only, never to copy: "You need *less* protein than the internet says", "Your sticking point starts *lower* than you think".
+- Cover (slide 1): the hook. A claim, never a question. Concrete, at most ${L.coverTitle.words} words (4 to 7 is best: it's painted big in capitals and has to read on a phone's three-across profile grid), sentence case. It makes a lifter think "wait, what?" or "that's me". Put *asterisks* around the one to three words that carry it (they're painted in the accent colour). Never a template opener ("did you know", "here's", "5 tips", "the secret", "stop doing this"). Examples of the shape only, never to copy: "You need *less* protein than the internet says", "Your sticking point starts *lower* than you think".
 - A kicker over the hook, at most ${L.kicker.words} words, saying what it is the way he would: "Bench fix", "Hypertrophy", "Meet prep", "Recovery", "Uncomfortable truth", "Programming".
 - The slides after it each do one job and earn the next swipe: the mechanism, the evidence with its limits, how to tell which case you're in, what to do. One idea a slide, few words, big. A slide is read in about two seconds.
 - Pick the kind of slide that fits what it says, and mix them (a carousel of one kind reads as a template):
@@ -452,7 +452,7 @@ export async function runDeckJob(admin: Admin, jobId: string | null = null, o: {
     const src = deckSource(series, body, post?.series_data ?? item?.data);
     const near = await neighbours(admin, post?.created_at ?? null);
     const themes = post ? near.themes : await lastItemThemes(admin);
-    const theme = pickDeckTheme(`${job.post_id ?? job.item_id}`, themes);
+    const theme = pickDeckTheme(`${job.post_id ?? job.item_id}`, themes, themesFor(series, (post?.series_data ?? item?.data)?.track ?? null));
     const made = await writeDeck(src, { ask, theme, recentCovers: near.covers, recentCaptions: near.captions });
     const trail = made.attempts.map((a) => ({ problems: a.problems, editor: a.editor, model: a.model }));
     if (!made.ok) {

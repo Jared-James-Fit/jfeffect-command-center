@@ -10,6 +10,7 @@
  * Pure: the writer (post-decks.server.ts) runs them on every draft, and the
  * editor's notes ride on top.
  */
+import { designProblems } from "@/lib/post-design";
 import { AI_TELLS, GENERIC_PHRASES, SCRIPTED_PHRASES } from "@/lib/daily-visuals";
 import { voiceProblems } from "@/lib/plain-words";
 import { DECK_LIMITS, deckText, slideTexts, stripEmphasis, type DeckSlide, type PostDeck } from "@/lib/post-decks";
@@ -227,6 +228,9 @@ export function deckProblems(deck: PostDeck, ctx: DeckContext): string[] {
     if (wordCount(hook) < 3) out.push("the hook is too short to say anything");
     for (const c of ctx.recentCovers ?? []) if (likeness(hook, c) >= 0.7) out.push(`the hook is too close to a recent post ("${c}")`);
   }
+
+  // the design: the cover's headline has to read in the three-across profile grid (post-design.ts)
+  out.push(...designProblems(slides));
 
   // fit and density
   slides.forEach((s, i) => out.push(...slideFit(s, i)));

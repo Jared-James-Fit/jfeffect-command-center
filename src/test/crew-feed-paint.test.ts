@@ -138,7 +138,7 @@ describe("an automated post appears all at once (Nov 20 2026)", () => {
     expect(art).not.toContain("media-fade");
     expect(art).not.toContain("animate-pulse");
     // the paper is only under a card that's there (or the words fallback)
-    expect(art).toContain('shown || failed ? "bg-[#f6f3ee]" : page ? "bg-transparent" : "bg-muted"');
+    expect(art).toContain('shown || failed ? "bg-[#f3f1ec]" : page ? "bg-transparent" : "bg-muted"');
   });
 
   it("on a post's screen its words and buttons wait for the card it opens on, never longer than the hold", () => {

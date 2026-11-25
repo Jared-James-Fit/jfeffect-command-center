@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BarChart3, BookOpen, Cake, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Lightbulb, PartyPopper, Trophy } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, Cake, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Lightbulb, PartyPopper, Trophy, Type } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
@@ -23,12 +23,16 @@ import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
 import { BirthdayPostSheet, BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { LessonStoryPlayer } from "@/components/community/lesson-story-player";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+
+/** The automated posts' design preview (painting code loads only when it's opened). */
+const PostDesignCard = lazyWithRetry(() => import("@/components/community/post-design-card").then((m) => ({ default: m.PostDesignCard })));
 
 const db = supabase as any;
 
 /** The four places a coach post is set up: its own settings, library and history. */
-export type ManageKey = "lessons" | "insights" | "series" | "birthdays";
-const MANAGE_KEYS: ManageKey[] = ["lessons", "insights", "series", "birthdays"];
+export type ManageKey = "lessons" | "insights" | "series" | "birthdays" | "design";
+const MANAGE_KEYS: ManageKey[] = ["lessons", "insights", "series", "birthdays", "design"];
 
 /** Which settings page a link asks for (`#tab=posts&manage=lessons`); old birthday links open Birthdays. */
 export function manageFromHash(h: string): { manage: ManageKey | null; open: string | null } {
@@ -277,6 +281,13 @@ function PostsOverview({ onManage }: { onManage: (m: ManageKey, item?: string) =
             onClick={() => onManage("birthdays")}
             data-manage="birthdays"
           />
+          <ManageRow
+            icon={<Type className="h-4 w-4" />}
+            title="Post design"
+            sub="How every automated post looks in the grid · checks, repaint, headlines"
+            onClick={() => onManage("design")}
+            data-manage="design"
+          />
         </ul>
       </section>
 
@@ -378,6 +389,7 @@ const MANAGE_TITLE: Record<ManageKey, string> = {
   insights: "Athlete Insights",
   series: "Daily series & holidays",
   birthdays: "Birthdays",
+  design: "Post design",
 };
 
 /** One kind's own page: its settings, library and history (the card that used to sit on the long Posts page). */
@@ -390,6 +402,7 @@ function ManagePage({ which, open, onBack }: { which: ManageKey; open: string | 
       {which === "lessons" && <CoachLessons />}
       {which === "insights" && <DailyPicturesCard />}
       {which === "series" && <CoachWeeklyPosts focus={open} />}
+      {which === "design" && <PostDesignCard />}
       {which === "birthdays" && (
         <div className="space-y-3">
           <BirthdayPostsCard />
