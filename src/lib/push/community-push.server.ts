@@ -2,7 +2,7 @@
 // replies, comment likes, reposts). The rows are written by database triggers; this
 // claims the ones the signed-in person just caused (each pushes once) and
 // sends them, grouped and rate limited so a busy post is one alert, not ten:
-//   - reactions: one per post an hour ("Vicky and 3 others reacted…")
+//   - reactions: one per post an hour ("Vicky and 3 others liked…")
 //   - comments / replies: one per post / comment every 5 minutes
 //   - comment likes: one per comment every 3 hours
 //   - reposts: one per post an hour ("Vicky and 2 others reposted…")
@@ -14,7 +14,6 @@ import { safeDisplayName } from "@/lib/push/notification-payload";
 
 export const COMMUNITY_DAILY_CAP = 5;
 
-const EMOJI: Record<string, string> = { heart: "❤️", thumbs: "👍", bang: "‼️", fire: "🔥", laugh: "😂" };
 const THING: Record<string, string> = { workout: "workout", lockin: "lock-in", post: "post" };
 const RATE_MINUTES: Record<string, number> = { reaction: 60, comment: 5, reply: 5, comment_like: 180, repost: 60 };
 
@@ -41,11 +40,8 @@ export function communityPushCopy(n: ClaimedPush): { title: string; body: string
   const crowd = n.others > 0 ? `${name} and ${n.others} ${n.others === 1 ? "other" : "others"}` : name;
   switch (n.kind) {
     case "reaction": {
-      // a PR or milestone says what it was for; a plain heart is a like
-      const heart = (n.emoji ?? "heart") === "heart";
-      if (n.win) return { title: `${crowd} celebrated your ${n.win} ${n.others > 0 || heart ? "❤️" : EMOJI[n.emoji ?? ""] ?? "❤️"}`, body: "Tap to see who." };
-      if (n.others > 0) return { title: `${crowd} ${heart ? "liked" : "reacted to"} your ${thing}`, body: "Tap to see who." };
-      return { title: heart ? `${name} liked your ${thing}` : `${name} reacted ${EMOJI[n.emoji ?? ""] ?? "❤️"} to your ${thing}`, body: "Tap to see it." };
+      // every reaction is a like; a PR or milestone says what it was for
+      return { title: `${crowd} liked your ${n.win ?? thing}`, body: n.others > 0 ? "Tap to see who." : "Tap to see it." };
     }
     case "comment":
       return {

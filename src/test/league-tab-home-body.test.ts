@@ -62,7 +62,7 @@ describe("Rankings", () => {
     expect(hub).toContain('["monthly", "Monthly League"],\n  ["strength", "Hall of Strength"],');
     expect(hub).toContain("{BOARD_TABS.map(([k, label]) => (");
     expect(hub).toContain('board === "strength" ? (');
-    expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />");
+    expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} audience={audience} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id}");
   });
   it("one Live mark, beside the days left on the month's board (not in the tabs); scoring rules folded under the board", () => {

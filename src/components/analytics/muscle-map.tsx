@@ -129,7 +129,7 @@ export function useSupportCredit(): [SupportCredit, (c: SupportCredit) => void] 
   return [credit, set];
 }
 
-function useDark() {
+export function useDark() {
   const [dark, setDark] = useState(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
   );
@@ -496,18 +496,31 @@ function ModeLegend({ mode, dark }: { mode: MuscleMode; dark: boolean }) {
 type ViewSnap = "front" | "side" | "back";
 const SNAP_YAW: Record<ViewSnap, number> = { front: 0.22, side: Math.PI / 2, back: Math.PI };
 
-function BodyView({
+/**
+ * The 3D body (2D where WebGL2 isn't there), coloured by `colorOf`. Shared by
+ * the muscle training map and the Workouts page's recovery (`preview`: a
+ * small still body on the dashboard, no controls and no gestures, its tap the
+ * caller's; the full-screen recovery page uses the interactive one).
+ */
+export function BodyView({
   colorOf,
   picked,
   onPick,
   dark,
   onList,
+  preview = false,
+  heightClass,
+  ariaLabel = "Body coloured by the selected mode. Drag to turn, pinch to zoom, tap a muscle for details.",
 }: {
   colorOf: (m: FineMuscle) => string | null;
   picked: FineMuscle | null;
   onPick: (m: FineMuscle | null) => void;
   dark: boolean;
-  onList: () => void;
+  /** the List button (the muscle map's table view); none when not given */
+  onList?: () => void;
+  preview?: boolean;
+  heightClass?: string;
+  ariaLabel?: string;
 }) {
   const [mode3d, setMode3d] = useState<"loading" | "3d" | "2d">("loading");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -534,7 +547,7 @@ function BodyView({
           const mesh = bodyMesh();
           if (cancelled || !canvasRef.current) return;
           const r = new BodyRenderer(canvasRef.current, mesh);
-          r.cam = { yaw: reduced ? SNAP_YAW.front : -0.7, pitch: 0.04, zoom: 1, panY: 0 };
+          r.cam = { yaw: reduced || preview ? SNAP_YAW.front : -0.7, pitch: 0.04, zoom: 1, panY: 0 };
           rendRef.current = r;
           setMode3d("3d");
         } catch {
@@ -620,8 +633,8 @@ function BodyView({
     [draw, reduced],
   );
   useEffect(() => {
-    if (mode3d === "3d") animateTo({ yaw: SNAP_YAW.front }, 1100);
-  }, [mode3d, animateTo]);
+    if (mode3d === "3d" && !preview) animateTo({ yaw: SNAP_YAW.front }, 1100);
+  }, [mode3d, animateTo, preview]);
   useEffect(() => {
     const box = boxRef.current;
     if (!box || typeof ResizeObserver === "undefined") return;
@@ -724,28 +737,31 @@ function BodyView({
   const reset = () => animateTo({ yaw: SNAP_YAW[snap], zoom: 1, panY: 0, pitch: 0.04 });
 
   if (mode3d === "2d")
-    return <Body2D colorOf={colorOf} picked={picked} onPick={onPick} dark={dark} />;
+    return <Body2D colorOf={colorOf} picked={picked} onPick={onPick} dark={dark} still={preview} />;
   return (
-    <div className="relative" data-body3d={mode3d}>
+    <div className="relative" data-body3d={mode3d} data-body-preview={preview ? "" : undefined}>
       <div
         ref={boxRef}
         className={cn(
-          "relative h-[420px] w-full touch-none select-none overflow-hidden rounded-2xl md:h-[480px]",
+          "relative w-full select-none overflow-hidden rounded-2xl",
+          heightClass ?? "h-[420px] md:h-[480px]",
+          preview ? "pointer-events-none" : "touch-none",
           "bg-[radial-gradient(ellipse_at_50%_40%,var(--muted)_0%,transparent_70%)]",
         )}
-        onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
-        onDoubleClick={reset}
+        onPointerDown={preview ? undefined : onDown}
+        onPointerMove={preview ? undefined : onMove}
+        onPointerUp={preview ? undefined : onUp}
+        onPointerCancel={preview ? undefined : onUp}
+        onDoubleClick={preview ? undefined : reset}
         role="img"
-        aria-label="Body coloured by the selected mode. Drag to turn, pinch to zoom, tap a muscle for details."
+        aria-label={ariaLabel}
       >
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
         {mode3d === "loading" && (
           <div className="absolute inset-0 jf-skeleton rounded-2xl bg-muted/40" aria-hidden />
         )}
       </div>
+      {!preview && (
       <div className="mt-2 flex items-center gap-2">
         <Segmented
           value={snap}
@@ -770,15 +786,18 @@ function BodyView({
         >
           <RotateCcw className="h-4 w-4" />
         </button>
-        <button
-          type="button"
-          onClick={onList}
-          className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
-          data-muscle-show-list
-        >
-          List
-        </button>
+        {onList && (
+          <button
+            type="button"
+            onClick={onList}
+            className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+            data-muscle-show-list
+          >
+            List
+          </button>
+        )}
       </div>
+      )}
     </div>
   );
 }
@@ -789,22 +808,25 @@ function Body2D({
   picked,
   onPick,
   dark,
+  still = false,
 }: {
   colorOf: (m: FineMuscle) => string | null;
   picked: FineMuscle | null;
   onPick: (m: FineMuscle | null) => void;
   dark: boolean;
+  /** a small preview: no taps of its own, as tall as its box */
+  still?: boolean;
 }) {
   const th = BODY_THEME[dark ? "dark" : "light"];
   return (
-    <div className="grid grid-cols-2 gap-2" data-body2d>
+    <div className={cn("grid grid-cols-2 gap-2", still && "pointer-events-none")} data-body2d>
       {(["front", "back"] as const).map((k) => {
         const v = atlasView(k, "R");
         return (
           <figure key={k} className="min-w-0">
             <svg
               viewBox="0 0 400 920"
-              className="h-[340px] w-full"
+              className={still ? "h-[150px] w-full" : "h-[340px] w-full"}
               role="img"
               aria-label={`${k === "front" ? "Front" : "Back"} of the body`}
             >

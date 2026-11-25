@@ -337,12 +337,12 @@ describe("the screens: one Programs page, every program says where it's from, an
       'const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;',
     );
     expect(workouts).toContain('{mode === "self" && !noProgram && (');
-    // a coaching client's past blocks sit in the page's own flow, never after its tab-bar
-    // padding; a member's past programs are Program history (in the ⋯), never listed twice
+    // a coaching client's past blocks are the Training plan's Training history (apart from
+    // today's program); a member's past programs are Program history (in the ⋯), never listed twice
     const page = readFileSync("src/routes/_authenticated/portal/workouts.index.tsx", "utf8");
-    expect(page).toContain("footer={<PastPrograms clientId={client.id} />}");
+    expect(page).toContain("history={<PastPrograms clientId={client.id} />}");
     expect(page).toContain("if (loading || isSelfServe) return null;");
-    expect(workouts).toContain("        {footer}\n      </div>");
+    expect(workouts).toContain("history={historySlot}");
   });
 
   it("Manage: edit (own programs), see the plan (JF Effect), switch, pause, then end set apart", () => {
@@ -462,24 +462,18 @@ describe("the membership screens stay calm and never dead-end", () => {
 
 describe("Workouts reads today first, and every page under it has a way back", () => {
   const workouts = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
-  it("the schedule's Week · Month · Block is one control in the athlete's header, a row only on a coach's view", () => {
-    expect(workouts).toContain(
-      '{mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}',
-    );
-    expect(workouts).toContain(
-      '{mode === "coach" && <ScheduleViewSwitch view={view} onChange={setView} />}',
-    );
-    expect(workouts.match(/aria-label="Schedule view"/g)?.length).toBe(1);
+  it("no Week · Month · Block switch: the page is the week, the month a full-screen page behind the calendar icon", () => {
+    expect(workouts).not.toContain("ScheduleViewSwitch");
+    expect(workouts).not.toContain('aria-label="Schedule view"');
+    expect(workouts).toContain('onClick={() => openLayer("month")}');
+    expect(workouts).toContain('<FullScreenPage open={layer === "month"}');
   });
 
-  it("no empty readiness or month card before there's anything in them", () => {
-    // readiness only when it's news (a workout still to do today), never an empty card
-    expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty onlyWhenNews/);
-    expect(workouts).toMatch(/<PerformanceCard[\s\S]{0,240}hideWhenEmpty/);
-    const ready = readFileSync("src/components/analytics/recovery-preview-card.tsx", "utf8");
-    expect(ready.match(/if \(hideWhenEmpty\) return null;/g)?.length).toBe(2);
-    const snap = readFileSync("src/components/performance-card.tsx", "utf8");
-    expect(snap).toContain("if (hideWhenEmpty) return null;");
+  it("no empty Recovery & Performance before there's anything in it", () => {
+    // the section only with a program, and it says nothing until something's logged or flagged
+    expect(workouts).toMatch(/mode === "self" && !noProgram && !isLoading && dayItems.length > 0 && \(\s*<DeferRender/);
+    const section = readFileSync("src/components/workouts/recovery-performance.tsx", "utf8");
+    expect(section).toContain("if (!everLogged && !recovery.pain.length) return null;");
   });
 
   it("Programs and Move workouts have Back like the program, plan, builder and analytics pages", () => {

@@ -14,6 +14,8 @@ import type { SpotlightSlide, StrengthView } from "@/lib/rankings-spotlight";
 import { feedback } from "@/lib/feedback";
 import { rankingsFromHash, type RankingsBoard } from "@/lib/rankings-hash";
 import { RankingsMusicButton, useRankingsMusic } from "@/components/community/rankings-music";
+import { AUDIENCE_OPTIONS, type RankingsAudience } from "@/lib/rankings-audience";
+import { useRankingsAudience } from "@/lib/use-rankings-audience";
 
 // Which board a link asks for lives in rankings-hash.ts, so Crew reads it without loading this tab.
 export { rankingsFromHash, type RankingsBoard };
@@ -37,12 +39,40 @@ export const BOARD_TABS: readonly (readonly [RankingsBoard, string])[] = [
 ];
 
 /**
+ * Who a board is of, a compact second switch under the board switch: JF Effect Athletes (the
+ * coach's active coaching clients, the default) or Community (everyone eligible). Remembered per
+ * person (`useRankingsAudience`); the database ranks among whoever is on it.
+ */
+export function AudienceSwitch({ audience, onChange }: { audience: RankingsAudience; onChange: (a: RankingsAudience) => void }) {
+  return (
+    <div className="flex items-center" role="tablist" aria-label="Who's on the board" data-audience-switch>
+      <div className="inline-flex rounded-full bg-muted/50 p-0.5 text-[12px] font-semibold">
+        {AUDIENCE_OPTIONS.map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={audience === k}
+            onClick={() => onChange(k)}
+            className={cn("min-h-8 whitespace-nowrap rounded-full px-3 transition-colors", audience === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+            data-audience-tab={k}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Crew → Rankings (the third tab in Crew's bar): one board at a time, picked
  * with the switch at the top. Monthly League (points this month, you first,
  * then the Top 10 with how far each moved since Monday) and Hall of Strength
  * (all-time bests). The other boards' podiums flip under the board, a tap
  * from opening theirs. Every card opens its full view. A coach sees the
- * crew's board without a "you".
+ * crew's board without a "you". Under the board switch, who it's of:
+ * JF Effect Athletes (default) or Community.
  */
 export function RankingsHub() {
   // the person whose portal this is (the client in coach "View as")
@@ -59,6 +89,13 @@ export function RankingsHub() {
       return data;
     },
   });
+  const { audience, setAudience } = useRankingsAudience();
+  const changeAudience = (next: RankingsAudience) => {
+    if (next === audience) return;
+    feedback("toggle");
+    setAudience(next);
+    setOpened((o) => ({ ...o, view: null, previous: false }));
+  };
   const [board, setBoardState] = useState<RankingsBoard>(() => rankingsFromHash() ?? "monthly");
   // a podium tapped in the spotlight: which view of the board to open on (a new `n` remounts it there)
   const [opened, setOpened] = useState<{ n: number; view: StrengthView | null; previous: boolean }>({ n: 0, view: null, previous: false });
@@ -131,11 +168,12 @@ export function RankingsHub() {
       </div>
       <RankingsMusicButton theme={board === "strength" ? "hall" : "league"} on={music.on} playing={music.playing} onToggle={music.toggle} />
       </div>
+      <AudienceSwitch audience={audience} onChange={changeAudience} />
       {/* last month's recap: up here in recap week (news); the rest of the month it's a row under the Monthly board */}
       {inRecapWindow() && !spectator && <LeagueRecapButton />}
       <div
         ref={boardRef}
-        key={`${board}:${opened.n}`}
+        key={`${board}:${opened.n}:${audience}`}
         data-rankings-board={board}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
@@ -149,12 +187,12 @@ export function RankingsHub() {
       >
       {board === "strength" ? (
         <section data-standing="strength" className="overflow-hidden rounded-2xl border bg-card">
-          <StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />
+          <StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} audience={audience} />
         </section>
       ) : client?.id ? (
-        <AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />
+        <AthleteLevelCard clientId={client.id} openPrevious={opened.previous} audience={audience} onShowCommunity={() => changeAudience("community")} />
       ) : spectator ? (
-        <AthleteLevelCard clientId={null} openPrevious={opened.previous} />
+        <AthleteLevelCard clientId={null} openPrevious={opened.previous} audience={audience} />
       ) : isPending && userId ? (
         <Skeleton className="h-64 w-full rounded-2xl" />
       ) : (
@@ -162,7 +200,7 @@ export function RankingsHub() {
       )}
       </div>
       {/* the other boards' podiums, flipping (pause-able), under the board you're on: a tap opens that board */}
-      <RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} />
+      <RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} audience={audience} />
     </div>
   );
 }

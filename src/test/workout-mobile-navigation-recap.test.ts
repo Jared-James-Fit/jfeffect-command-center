@@ -27,14 +27,12 @@ describe("workout mobile navigation and recap UX", () => {
   it("keeps the workout recap compact and scannable on mobile", () => {
     // one bounded sheet (the redesign of Sep 25-27 2026 replaced the 88svh card)
     expect(recap).toContain('style={{ height: "min(96dvh, 820px)", maxHeight: "96dvh" }}');
-    // the score up top, then one two-column grid of the stats that have data
-    expect(recap).toContain('<span className="text-5xl font-bold leading-none text-primary">{displayScore}</span>');
-    expect(recap).toMatch(/data-score-help>\s*Workout score\s/);
-    expect(recap).toContain('<div className="grid grid-cols-2 divide-x divide-y divide-border/70">');
-    expect(recap).toContain('label="Sets"');
-    expect(recap).toContain('label="Duration"');
-    expect(recap).toContain('label="Avg RPE"');
-    expect(recap).toContain("<TonnageStat records={records} unit={displayUnit} />");
+    // the score ring up top (tap for how it's scored), then one compact row of the stats this workout has (Nov 25 2026)
+    expect(recap).toContain('<span className="text-[34px] font-bold leading-none text-foreground">{displayScore}</span>');
+    expect(recap).toContain("data-score-help");
+    expect(recap).toContain("explainWorkoutScore(summary, { pain, ownRating: sessionRating, stars: false })");
+    expect(recap).toContain("data-recap-stats=");
+    expect(recap).toContain("completionStats({");
     // one score on the recap: no second recovery estimate beside it (Nov 14 2026, AGENTS.md)
     expect(recap).not.toContain('label="Est. recovery"');
     expect(recap).not.toContain('label="Recovery"');

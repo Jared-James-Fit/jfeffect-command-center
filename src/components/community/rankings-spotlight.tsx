@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import { previousLeagueMonth } from "@/lib/league-recap";
 import { usePerformanceLeague } from "@/lib/use-performance-league";
+import type { RankingsAudience } from "@/lib/rankings-audience";
 import { defaultDivision, useStrengthBoard } from "@/components/portal/strength-board";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import {
@@ -61,16 +62,18 @@ function useReducedMotion() {
  * device, swipe or tap the dots to move yourself. The progress line is the
  * clock: its fill finishing is what moves it on, so pausing pauses exactly.
  */
-export function RankingsSpotlight({ onOpen, under, underView }: {
+export function RankingsSpotlight({ onOpen, under, underView, audience = "community" }: {
   onOpen: (slide: SpotlightSlide) => void;
   /** The board open right under it: its podium isn't repeated up here. */
   under: "monthly" | "strength";
   /** The Strength board's view when a podium opened it (else it opens on your division, pound for pound). */
   underView?: StrengthView | null;
+  /** Whose podiums: the audience the boards are showing (Rankings' switch). */
+  audience?: RankingsAudience;
 }) {
-  const { data: monthly = [] } = usePerformanceLeague("current");
-  const { data: previous = [] } = usePerformanceLeague("previous");
-  const { data: strength = [] } = useStrengthBoard();
+  const { data: monthly = [] } = usePerformanceLeague("current", audience);
+  const { data: previous = [] } = usePerformanceLeague("previous", audience);
+  const { data: strength = [] } = useStrengthBoard(audience);
   const { unit } = useWeightUnit();
   const division = defaultDivision(strength);
   const shownBelow = under === "monthly" ? "monthly" : underView ? strengthSlideKey(underView) : division !== "all" ? strengthSlideKey({ mode: "p4p", division }) : null;

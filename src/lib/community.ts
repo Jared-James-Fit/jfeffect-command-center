@@ -302,6 +302,18 @@ export function storyTarget(p: Pick<CommunityPost, "id" | "shared_post">): strin
   return p.shared_post?.id ?? p.id;
 }
 
+/**
+ * The one link a story keeps to a page (Nov 25 2026): "View workout" on a workout's win, "View Marc's post" /
+ * "View post" on a story that shares a post. Any other story is the whole thing, with its likes, comments, replies and
+ * share right in the viewer, so it has no link (null) and never opens a page of its own.
+ */
+export function storyLinkLabel(p: Pick<CommunityPost, "series" | "stats" | "auto" | "media_type" | "gif_url" | "author" | "shared_post">): string | null {
+  if (storyFrameKind(p) === "win") return "View workout";
+  const shared = p.shared_post;
+  if (!shared) return null;
+  return shared.author.user_id !== p.author.user_id ? `View ${shared.author.name.split(" ")[0]}'s post` : "View post";
+}
+
 /** Someone on a post's Activity: what they did with it (only what they did shows). */
 export type ActivityPerson = CommunityAuthor & {
   viewed_at?: string;
@@ -310,6 +322,8 @@ export type ActivityPerson = CommunityAuthor & {
   shared_at?: string;
   share_id?: string;
   reposted_at?: string;
+  /** It's you: shown only for your own like on your own post. */
+  is_me?: boolean;
 };
 /** A post's (or story's) Activity, for the person who posted it (community_post_activity). */
 export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[] };
@@ -323,8 +337,9 @@ export function activityPeople(people: readonly ActivityPerson[], f: ActivityFil
   return [...people];
 }
 
-/** The line under someone's name, only when it says more than their photo's badge: they shared it or reposted it. */
+/** The line under someone's name, only when it says more than their photo's badge: it's you, they shared it or reposted it. */
 export function activityNote(p: ActivityPerson): string | null {
+  if (p.is_me) return p.username ? `@${p.username} · You` : "You";
   if (p.shared_at) return "Shared to their story";
   if (p.reposted_at) return "Reposted";
   return null;

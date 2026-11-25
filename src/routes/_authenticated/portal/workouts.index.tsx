@@ -6,7 +6,7 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import { portalWorkoutsClientQuery } from "@/lib/portal-page-queries";
 import { WorkoutsBodySkeleton } from "@/components/workouts/workouts-skeleton";
-import { WorkoutsExperience } from "@/components/workouts/WorkoutsExperience";
+import { WORKOUTS_LAYERS, WorkoutsExperience, type WorkoutsLayer } from "@/components/workouts/WorkoutsExperience";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 import { EquipmentIntroGate } from "@/components/equipment/setup-tips";
 import { useServiceTier } from "@/lib/service-tier";
@@ -23,9 +23,11 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
   },
   // ?open=<yyyy-mm-dd>: open that day's workout (a coach jumping in from a session).
   // ?days=1: open the training days editor (a program's workouts a week changed).
-  validateSearch: (s: Record<string, unknown>): { open?: string; days?: 1 } => ({
+  // ?layer=month|plan|recovery: the full-screen page up over Workouts (`useFullScreenLayer`), so Back closes it.
+  validateSearch: (s: Record<string, unknown>): { open?: string; days?: 1; layer?: WorkoutsLayer } => ({
     ...(typeof s.open === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.open) ? { open: s.open } : {}),
     ...(s.days === 1 || s.days === "1" ? { days: 1 as const } : {}),
+    ...(typeof s.layer === "string" && (WORKOUTS_LAYERS as readonly string[]).includes(s.layer) ? { layer: s.layer as WorkoutsLayer } : {}),
   }),
   component: WorkoutsPage,
 });
@@ -71,7 +73,7 @@ function WorkoutsPage() {
         mode="self"
         openDate={open ?? null}
         openDays={days === 1}
-        footer={<PastPrograms clientId={client.id} />}
+        history={<PastPrograms clientId={client.id} />}
       />
       {/* Equipment & setups' one-time walkthrough: here, never inside a workout. */}
       <EquipmentIntroGate clientId={client.id} unit={(client as any).preferred_weight_unit === "kg" ? "kg" : "lb"} />
@@ -79,8 +81,8 @@ function WorkoutsPage() {
   );
 }
 /**
- * A coaching client's past blocks stay listed at the bottom (their coach
- * manages them). A JF member's past programs are Program history instead,
+ * A coaching client's past blocks are the Training plan's Training history
+ * (their coach manages them), apart from today's program. A JF member's past programs are Program history instead,
  * in the ⋯ (resume, start over, remove), so nothing is listed twice.
  */
 function PastPrograms({ clientId }: { clientId: string }) {

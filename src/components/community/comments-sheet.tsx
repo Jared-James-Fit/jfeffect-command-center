@@ -48,26 +48,47 @@ const REPLIES_SHOWN = 2;
  * Light chatter on a post. Coaching conversations stay in Messages — this is
  * the "nice work" and the banter.
  */
-export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
+export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor, story = false, open }: {
   post: CommunityPost | null;
   viewerIsStaff: boolean;
   onClose: () => void;
   /** A commenter's photo or name opens their profile (the sheet closes first). */
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  /**
+   * Opened over a story (the story viewer's 💬): a shorter sheet over a light dim, so the story stays
+   * in view above it, and a line saying these comments are public, unlike a message to the poster.
+   */
+  story?: boolean;
+  /** Open or not, with the post kept so it slides away with its comments still in it (default: open while there's a post). */
+  open?: boolean;
 }) {
   return (
-    <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" swipeToClose hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
+    <Sheet open={open ?? !!post} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="bottom"
+        swipeToClose
+        hideCloseButton
+        overlayClassName={story ? "bg-black/25" : undefined}
+        className={cn("flex max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]", story ? "h-[64dvh]" : "h-[78dvh]")}
+        data-story-comments={story ? "" : undefined}
+      >
         {post && (
           <>
             <SheetHeader className="relative shrink-0 space-y-0 pb-2 pt-2 text-center">
               <span aria-hidden className="mx-auto block h-1 w-10 rounded-full bg-muted-foreground/35" />
               <SheetTitle className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</SheetTitle>
-              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s post`}</SheetDescription>
+              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s ${story ? "story" : "post"}`}</SheetDescription>
               <SheetClose className="absolute right-2 top-[14px] grid h-10 w-10 place-items-center rounded-full text-foreground active:scale-95" aria-label="Close comments">
                 <X className="h-[22px] w-[22px]" strokeWidth={1.75} />
               </SheetClose>
             </SheetHeader>
+            {story && (
+              <p className="shrink-0 border-b border-border/60 px-5 pb-2.5 text-center text-[12px] leading-snug text-muted-foreground" data-story-comments-note>
+                {post.is_mine
+                  ? "Comments show to everyone who can see your story."
+                  : `Comments show to everyone who can see this story. To tell ${post.author.name.split(" ")[0]} privately, send a message instead.`}
+              </p>
+            )}
             <CommentThread
               key={post.id}
               post={post}
@@ -427,7 +448,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
             }}
           />
           {recorder.recording ? (
-            <RecordingBar elapsed={recorder.elapsed} levels={recorder.levels} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
+            <RecordingBar meter={recorder.meter} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
           ) : (
             <>
               <UserAvatar src={me.avatar_url} name={me.name} size={32} expandable={false} className="mb-1.5" />

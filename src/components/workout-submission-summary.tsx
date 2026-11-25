@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Medal, Share2, Download, Info, Pencil } from "lucide-react";
+import { Trophy, CheckCircle2, ChevronDown, ChevronLeft, Heart, X, CircleX, Medal, Share2, Download, Info, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import { StudioShell } from "@/components/community/studio-chunks";
 import { explainWorkoutScore, type WorkoutSummary } from "@/lib/workout-summary";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -21,11 +22,12 @@ import { WorkoutPointsCard } from "@/components/records/workout-points-card";
 import { dualTotal, recordedLoad } from "@/lib/dual-weight";
 import { SCOPE_LABEL, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
-import { NewRecordsSection, TonnageStat } from "@/components/records/training-records";
+import { NewRecordsSection } from "@/components/records/training-records";
 import { headlineFromRecords } from "@/lib/community";
-import { RecapPostFooter } from "@/components/community/recap-post";
-import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
-import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
+import { RecapFilmLine, RecapShare, RecapShareStatus, useRecapShare } from "@/components/community/recap-post";
+import { SaveVideosInline, useEligibleSetVideoSaves } from "@/components/workout-day/set-video-phone-copy";
+import { useWorkoutFilm, type WorkoutFilm } from "@/lib/workout-film-client";
+import { completionMessage, completionStats, recordsLine, recordsText, ringDash, type RecordsLine } from "@/lib/workouts/completion-screen";
 import { useCompletionPreview, usePublicSessionTitle } from "@/lib/community.queries";
 import { SoundToggleButton } from "@/components/sound-toggle";
 import { feedback } from "@/lib/feedback";
@@ -178,17 +180,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : summary.score >= 50 ? "Solid effort"
     : "Logged — keep going";
   const takeaways = buildWorkoutTakeaways(summary, prList, cardio ?? null);
-  // The star rating on the celebration screen represents session quality.
-  // Historically it only showed the client's self-reported `overall_rating`,
-  // which caused confusing screens like "100/100" alongside "3/5 stars" when
-  // the client left the rating at its default. Derive stars from the
-  // computed workout score and, when a self-rating exists, take whichever
-  // is higher so an intentionally high self-rating still wins.
-  const scoreStars = Math.max(0, Math.min(5, Math.round(summary.score / 20)));
-  const selfStars = sessionRating != null
-    ? Math.max(0, Math.min(5, Math.round(sessionRating)))
-    : 0;
-  const ratingStars = Math.max(scoreStars, selfStars);
+  // No stars here (Nov 25 2026): the ring is the score, and stars beside it said the same thing twice.
   const dateLabel = (() => {
     if (!workoutDate) return null;
     try { return format(new Date(workoutDate), "EEE, MMM d, yyyy"); } catch { return null; }
@@ -273,6 +265,39 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
 
+  // ---- the screen's words and numbers (completion-screen.ts): achievement, then performance ----
+  const film = useWorkoutFilm(completionId ?? null, dayId ?? null);
+  const message = completionMessage({
+    headlinePr: bigMoment,
+    completedSets: summary.completedSets,
+    prescribedSets: summary.prescribedSets,
+    score: summary.score,
+    planLines: summary.plan?.lines ?? null,
+    pain,
+  });
+  const recLine: RecordsLine | null = usesRecords
+    ? recordsLine(records, lead?.exercise_name ?? null)
+    : prList.length > 0
+      ? { count: prList.length, names: [...new Set(prList.map((p) => p.exerciseName))], allTime: true }
+      : null;
+  const volume = records && records.tonnage_kg > 0 ? dualTotal(records.tonnage_kg, displayUnit).primary : summary.totalLifted > 0 ? summary.totalLiftedFmt : null;
+  const stats = completionStats({
+    durationMin,
+    completedSets: summary.completedSets,
+    prescribedSets: summary.prescribedSets,
+    filmed: completionId ? film.clips + film.uploading : 0,
+    volume,
+    prs: recLine?.count ?? 0,
+    leaguePoints: points?.league.total ?? 0,
+  });
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const ring = ringDash(displayScore, 42);
+  const close = () => { onOpenChange(false); onClose?.(); };
+  const filmRetry = async () => {
+    const res = await film.postNow();
+    if (res?.status === "posted") toast.success("Your film is in the feed");
+  };
+
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
@@ -280,228 +305,177 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
         style={{ height: "min(96dvh, 820px)", maxHeight: "96dvh" }}
       >
-        <header className="relative shrink-0 overflow-hidden border-b border-border/70 bg-background px-4 pb-4 pt-3 sm:px-5">
-          <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
+        {/* the only scroll on the screen: everything but Done (no box scrolls inside it) */}
+        <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden" data-recap-body>
+          <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full text-muted-foreground"
-            onClick={() => { onOpenChange(false); onClose?.(); }}
+            onClick={close}
             aria-label="Close workout summary"
           >
             <X className="h-4 w-4" />
           </Button>
           <SoundToggleButton className="absolute left-3 top-3 z-10" onMute={() => stopStingRef.current()} />
 
-          <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
-            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${bigMoment ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`} data-recap-moment={bigMoment ? "pr" : "done"}>
-              {bigMoment ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
+          {/* 1. Achievement: done, the workout, the score, one honest line */}
+          <header className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`} data-recap-header>
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground" data-recap-moment={bigMoment ? "pr" : "done"}>
+              {bigMoment ? <Trophy className="h-4 w-4 text-amber-500 animate-in zoom-in duration-500" aria-hidden /> : <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />}
+              Workout complete
             </div>
-            <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-primary">Workout complete</div>
             <DialogHeader className="mx-auto mt-1 flex min-h-0 w-full flex-col items-center space-y-0 !pl-0 text-center sm:text-center">
-              <DialogTitle className="block w-full text-center text-2xl font-bold leading-tight tracking-tight">{headline}</DialogTitle>
-              <DialogDescription className="mt-1 text-[11px]">
-                {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
-              </DialogDescription>
+              <DialogTitle className="block w-full text-center text-xl font-bold leading-tight tracking-tight">{workoutTitle ?? "Workout"}</DialogTitle>
+              {dateLabel && <DialogDescription className="mt-0.5 text-[12px]">{dateLabel}</DialogDescription>}
             </DialogHeader>
+          </header>
 
-            <div className="mt-3 grid w-full place-items-center tabular-nums">
-              <div className="relative inline-flex items-baseline justify-center">
-                <span className="text-5xl font-bold leading-none text-primary">{displayScore}</span>
-                <span className="absolute left-full ml-1 whitespace-nowrap text-xs font-bold text-muted-foreground">/100</span>
-              </div>
-            </div>
-            {/* what the number and the stars mean, one tap away (the formula is unchanged);
-                beside it, a number to fix is one tap from the workout */}
-            <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+          <div className={`mt-3 flex flex-col items-center transition-all duration-500 ${revealStage >= 1 ? "opacity-100" : "opacity-0"}`}>
+            {/* the score: one tap on it for how it's scored; the formula is unchanged */}
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted" data-score-help>
-                  Workout score
-                  {ratingStars > 0 && revealStage >= 2 && (
-                    <span className="ml-1 inline-flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500" aria-label={`${ratingStars} of 5 stars`}>
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <Star key={i} className={`h-3 w-3 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
-                      ))}
+                <button type="button" className="flex flex-col items-center rounded-2xl px-2 pt-0.5 active:bg-muted/60" aria-label={`Workout score ${summary.score} out of 100. How it's scored`} data-score-help>
+                  <span className="relative grid h-[104px] w-[104px] place-items-center">
+                    <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden>
+                      <circle cx="50" cy="50" r="42" fill="none" strokeWidth="6" className="stroke-muted" />
+                      <circle cx="50" cy="50" r="42" fill="none" strokeWidth="6" strokeLinecap="round" className={bigMoment ? "stroke-amber-500" : "stroke-primary"} strokeDasharray={ring.dash} />
+                    </svg>
+                    <span className="flex flex-col items-center leading-none tabular-nums">
+                      <span className="text-[34px] font-bold leading-none text-foreground">{displayScore}</span>
+                      <span className="mt-1 text-[10px] font-semibold text-muted-foreground">/100</span>
                     </span>
-                  )}
-                  <Info className="ml-0.5 h-3.5 w-3.5" aria-label="How it's scored" />
+                  </span>
+                  <span className="mt-1 inline-flex min-h-6 items-center gap-1 text-[12px] font-medium text-muted-foreground">
+                    Workout score <Info className="h-3.5 w-3.5" aria-hidden />
+                  </span>
                 </button>
               </PopoverTrigger>
               <PopoverContent side="bottom" className="w-[min(300px,calc(100vw-32px))] space-y-1.5 p-3 text-left text-[13px] leading-snug" data-score-help-text>
                 <div className="font-semibold">How it's scored</div>
-                {explainWorkoutScore(summary, { pain, ownRating: sessionRating }).map((l) => (
+                {explainWorkoutScore(summary, { pain, ownRating: sessionRating, stars: false }).map((l) => (
                   <p key={l} className="text-muted-foreground">{l}</p>
                 ))}
               </PopoverContent>
             </Popover>
-            {onEdit && (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted"
-                data-recap-edit
-              >
-                <Pencil className="h-3.5 w-3.5" aria-hidden />
-                Edit workout
-              </button>
-            )}
+            <p className="mt-1.5 text-[15px] font-semibold text-foreground" data-recap-message>{message}</p>
+            <div className="flex flex-wrap items-center justify-center gap-1">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted"
+                  data-recap-edit
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  Edit workout
+                </button>
+              )}
             </div>
           </div>
-        </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
-          <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
+          {/* 2. Performance: the numbers this workout has, records, then anything worth a look */}
+          <div className={`mt-3 space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
+            {stats.length > 0 && (
+              <section className="flex divide-x divide-border/70 rounded-2xl border border-border/80 bg-card py-2.5" data-recap-stats={stats.map((x) => x.key).join(" ")}>
+                {stats.map((x) => (
+                  <div key={x.key} className="flex min-w-0 flex-1 flex-col items-center px-1 text-center" data-recap-stat={x.key}>
+                    <span className="w-full truncate text-[16px] font-bold leading-tight tabular-nums text-foreground">{x.value}</span>
+                    <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">{x.label}</span>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {recLine && (
+              <section className={cn("overflow-hidden rounded-2xl border", bigMoment ? "border-amber-500/40 bg-amber-500/[0.07]" : "border-border/80 bg-card")} data-recap-records={bigMoment ? "headline" : "quiet"}>
+                <button type="button" onClick={() => setRecordsOpen((v) => !v)} className="flex min-h-12 w-full items-center gap-2.5 px-3 text-left" aria-expanded={recordsOpen}>
+                  <Medal className={cn("h-4 w-4 shrink-0", bigMoment ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} aria-hidden />
+                  <span className={cn("min-w-0 flex-1 text-[13px] font-semibold leading-snug", bigMoment ? "text-amber-800 dark:text-amber-200" : "text-foreground")}>{recordsText(recLine)}</span>
+                  <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", recordsOpen && "rotate-180")} aria-hidden />
+                </button>
+                {recordsOpen && (
+                  <div className="space-y-2 px-2 pb-2">
+                    {records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} highlight={!!lead} />}
+                    {prList.length > 0 && (
+                      <ul className="space-y-1 px-1.5 pb-1">
+                        {prList.map((pr) => (
+                          <li key={`${pr.exerciseName}-${pr.reps}`} className="text-[13px] font-semibold leading-snug text-foreground">{formatPR(pr)}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {points && <WorkoutPointsCard points={points} />}
+                  </div>
+                )}
+              </section>
+            )}
+
             <NewAchievementReveal open={open} />
-            {records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} highlight={!!lead} />}
-            {points && <WorkoutPointsCard points={points} />}
-            {prList.length > 0 && (
-              <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 duration-700">
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="grid h-9 w-9 place-items-center rounded-full bg-amber-500 text-white shadow-md">
-                    <Medal className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Achievement unlocked</div>
-                    <div className="text-base font-bold leading-tight text-foreground">{prList.length === 1 ? "New all-time record" : `${prList.length} all-time records`}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
-                  <Trophy className="h-3.5 w-3.5" />
-                  All-time PR breakdown
-                </div>
-                <div className="mt-1.5 space-y-1">
-                  {prList.slice(0, 3).map((pr) => (
-                    <div key={`${pr.exerciseName}-${pr.reps}`} className="text-[13px] font-bold leading-snug text-foreground">
-                      {formatPR(pr)}
-                    </div>
-                  ))}
-                  {prList.length > 3 && (
-                    <div className="text-[11px] font-semibold text-muted-foreground">
-                      +{prList.length - 3} more PR{prList.length - 3 === 1 ? "" : "s"}
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
 
-            {/* The workout against its plan (sets, reps, effort): facts, not cheering. */}
+            {/* how it went against the plan, only when it strayed (the line above says when it didn't) */}
             {summary.plan && summary.plan.setsPlanned > 0 ? (
-              <PlanSection plan={summary.plan} />
+              !summary.plan.asPlanned && (summary.plan.lines.length > 0 || summary.plan.next) && <PlanSection plan={summary.plan} />
             ) : displayTakeaways.length > 0 && (
-              <section className="rounded-2xl border border-border/80 bg-card/70 p-3">
-                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                  Today's takeaways
-                </div>
-                <div className="mt-1.5 space-y-1">
-                  {displayTakeaways.slice(0, 2).map((t) => (
-                    <div key={t} className="text-[12px] leading-[1.35] text-foreground">
-                      {t}
-                    </div>
-                  ))}
-                </div>
+              <section className="rounded-2xl border border-border/80 bg-card/70 px-3 py-2.5">
+                {displayTakeaways.slice(0, 2).map((t) => (
+                  <div key={t} className="text-[12px] leading-[1.35] text-foreground">{t}</div>
+                ))}
               </section>
-            )}
-
-            <section className="overflow-hidden rounded-2xl border border-border/80 bg-card">
-              <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
-                <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
-                {summary.totalReps > 0 && (
-                  <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
-                )}
-                {durationMin != null && durationMin > 0 && (
-                  <CompactStat icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={`${durationMin}m`} />
-                )}
-                {summary.avgRpe != null && (
-                  <CompactStat icon={<Flame className="h-3.5 w-3.5" />} label="Avg RPE" value={`${summary.avgRpe}`} />
-                )}
-              </div>
-              {records && records.tonnage_kg > 0 ? (
-                <TonnageStat records={records} unit={displayUnit} />
-              ) : summary.totalLifted > 0 && (
-                <div className="flex items-center gap-3 border-t border-border/70 px-3.5 py-3">
-                  <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
-                    <div className="mt-0.5 truncate text-xl font-bold leading-tight text-foreground">{summary.totalLiftedFmt}</div>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {prList.length === 0 && recordCount === 0 && displayTakeaways.length === 0 && (
-              <section className="rounded-2xl border border-primary/20 bg-primary/[0.05] p-3 text-center">
-                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">Baseline logged</div>
-                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Your trends and achievements will build as you log more sessions.
-                </div>
-              </section>
-            )}
-
-            {cardio && (
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
-                <Heart className="h-4 w-4 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1">
-                  <div className="font-bold">Cardio</div>
-                  <div className="truncate text-[11px] text-muted-foreground">
-                    {cardio.status === "logged"
-                      ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
-                      : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
-                  </div>
-                </div>
-              </div>
             )}
 
             {summary.missedExercises.length > 0 && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-xs">
                 <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
                 <div className="min-w-0">
-                  <div className="font-bold text-amber-700 dark:text-amber-300">
-                    {summary.missedExercises.length} missed / not logged
-                  </div>
-                  <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-                    {summary.missedExercises.slice(0, 4).join(", ")}
-                    {summary.missedExercises.length > 4 ? "…" : ""}
-                  </div>
+                  <span className="font-bold text-amber-700 dark:text-amber-300">{summary.missedExercises.length} not logged</span>
+                  <span className="text-muted-foreground"> · {summary.missedExercises.slice(0, 3).join(", ")}{summary.missedExercises.length > 3 ? "…" : ""}</span>
                 </div>
+              </div>
+            )}
+
+            {cardio && (
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                <Heart className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="font-semibold">Cardio</span>
+                <span className="truncate text-muted-foreground">
+                  {cardio.status === "logged"
+                    ? cardio.minutes && cardio.minutes > 0 ? `Logged · ${cardio.minutes} min` : "Logged"
+                    : cardio.status === "skipped" ? "Skipped" : "Not logged yet"}
+                </span>
+              </div>
+            )}
+
+            {/* 3. Sharing, optional: the film, where it already is, one Share workout */}
+            {completionId ? (
+              <ClientShareSection
+                completionId={completionId}
+                completedAt={workoutDate ?? null}
+                unit={displayUnit}
+                workoutTitle={workoutTitle}
+                athleteName={athleteName}
+                dayId={dayId ?? null}
+                film={film}
+                onFilmRetry={() => void filmRetry()}
+                onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
+              />
+            ) : (
+              <div className="grid w-full grid-cols-2 gap-2 pt-1">
+                <Button type="button" variant="outline" className="h-11 rounded-xl text-[13px] font-semibold" disabled={sharing} onClick={()=>void shareWorkout()}><Share2 className="mr-1.5 h-4 w-4"/>Share</Button>
+                <Button type="button" variant="outline" className="h-11 rounded-xl text-[13px] font-semibold" onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
               </div>
             )}
           </div>
         </div>
 
+        {/* 4. Done: one full-width button, clear of the home indicator */}
         <DialogFooter
-          className="shrink-0 border-t border-border/70 bg-background/95 px-3 pt-2 backdrop-blur sm:px-5"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
+          className="shrink-0 border-t border-border/70 bg-background px-4 pt-2.5 sm:px-5"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
         >
-          {completionId ? (
-            // Right after training is when they're proudest: posting is one tap
-            // (with what it earns); the camera opens the full studio. Their
-            // film (set videos) sits above it: posting by itself, or one tap.
-            <div className="w-full">
-            <PhoneCopyReminder dayId={dayId ?? null} className="mb-2.5 rounded-2xl border-border/80 px-3 py-2.5" />
-            <WorkoutFilmRow completionId={completionId} dayId={dayId ?? null} className="mb-2.5 rounded-2xl border border-border/80 bg-card px-3 py-2.5" />
-            <RecapPostFooter
-              completionId={completionId}
-              completedAt={workoutDate ?? null}
-              unit={displayUnit}
-              workoutTitle={workoutTitle}
-              athleteName={athleteName}
-              onDone={() => { onOpenChange(false); onClose?.(); }}
-              onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
-            />
-            </div>
-          ) : (
-            <>
-              <div className="grid w-full grid-cols-2 gap-2">
-                <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" disabled={sharing} onClick={()=>void shareWorkout()}><Share2 className="mr-1.5 h-4 w-4"/>Share</Button>
-                <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
-              </div>
-              <Button className="mt-2 h-10 w-full rounded-xl text-sm font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
-                <ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout
-              </Button>
-            </>
-          )}
+          <Button className="h-12 w-full rounded-xl text-[15px] font-semibold" onClick={close} data-recap-done>
+            {completionId ? "Done" : <><ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout</>}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -522,22 +496,57 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   );
 }
 
-function CompactStat({
-  icon,
-  label,
-  value,
+/**
+ * The recap's sharing for a client workout: the film's line, where it already
+ * is (said once), one Share workout, and the one-time "Save N videos to
+ * device". Its own component so its hooks run only where sharing exists.
+ */
+function ClientShareSection({
+  completionId,
+  completedAt,
+  unit,
+  workoutTitle,
+  athleteName,
+  dayId,
+  film,
+  onFilmRetry,
+  onStudio,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
+  completionId: string;
+  completedAt: string | Date | null;
+  unit: "kg" | "lb";
+  workoutTitle?: string | null;
+  athleteName?: string | null;
+  dayId: string | null;
+  film: WorkoutFilm;
+  onFilmRetry: () => void;
+  onStudio: (caption: string) => void;
 }) {
+  const share = useRecapShare({ completionId, completedAt, unit, workoutTitle, athleteName });
+  const videos = useEligibleSetVideoSaves(dayId);
+  const postFilm = async () => {
+    const res = await film.postNow();
+    if (res?.status === "posted") toast.success("Your film is in the feed");
+    else if (res?.status === "up_to_date") toast.success("It's already in the feed");
+    else if (res?.status === "no_crew") toast.error("Crew isn't on for your account.");
+    else if (res?.status === "no_clips") toast.error("No clips fit a Crew post yet (90 seconds a clip).");
+  };
   return (
-    <div className="flex min-w-0 flex-col items-center justify-center px-2.5 py-3 text-center">
-      <div className="flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-        <span className="shrink-0">{icon}</span>
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="mt-1 w-full truncate text-center text-[1rem] font-bold leading-tight tabular-nums text-foreground">{value}</div>
+    <div className="space-y-2 pt-1" data-recap-sharing>
+      {film.clips + film.uploading > 0 && (
+        <RecapFilmLine film={film} onRetry={onFilmRetry} className="rounded-2xl border border-border/80 bg-card px-3 py-1.5" />
+      )}
+      <RecapShareStatus share={share} film={film} />
+      <RecapShare
+        share={share}
+        film={film}
+        onFilmPost={postFilm}
+        videos={videos.targets}
+        onWarmVideos={() => videos.warm(videos.targets)}
+        onSaveVideos={() => videos.save(videos.targets)}
+        onStudio={onStudio}
+      />
+      <SaveVideosInline dayId={dayId} workoutKey={completionId} />
     </div>
   );
 }

@@ -37,11 +37,12 @@ describe("Calendar = appointments and the way in to today's workout; Workouts = 
     expect(page.indexOf("<TodayWorkoutLink")).toBeLessThan(page.indexOf("<CalendarBoard"));
   });
 
-  it("Workouts reads as the training schedule: one Week · Month · Block control, dates on the strip, Monday said once", () => {
+  it("Workouts reads as the training schedule: the week, the month behind the calendar icon, dates on the strip, Monday said once", () => {
     const exp = read("src/components/workouts/WorkoutsExperience.tsx");
-    expect(exp).toContain('{(["week", "month", "block"] as const).map((v) => (');
-    expect(exp).toContain('aria-label="Schedule view"');
-    expect(exp).toContain('const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });');
+    expect(exp).toContain('aria-label="Training calendar"');
+    expect(exp).toContain('title="Training calendar"');
+    // the workout's one title (workout-title.ts), never a weekday or RPE
+    expect(exp).toContain("const title = dayDisplayTitle(item);");
     expect(exp).toContain('case "upcoming": return "Upcoming";');
     expect(exp).toContain('<div className="line-clamp-2 text-lg font-semibold leading-snug">{title}</div>');
     // the strip is a calendar: it says the week's dates; block and week are the Program card's

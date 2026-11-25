@@ -14,6 +14,11 @@ export const InstagramShareSheet = lazyWithRetry(() =>
   import("@/components/community/instagram-share-sheet").then((m) => ({ default: m.InstagramShareSheet })),
 );
 
+/** The comments over a story (💬 in the story viewer), loaded on the first tap. */
+export const CommentsSheet = lazyWithRetry(() =>
+  import("@/components/community/comments-sheet").then((m) => ({ default: m.CommentsSheet })),
+);
+
 export function preloadShareSheets(instagram: boolean): void {
   preloadWhenIdle("post-share-sheet", () => PostShareSheet.preload(), 5000);
   if (instagram) preloadWhenIdle("instagram-share-sheet", () => InstagramShareSheet.preload(), 6000);

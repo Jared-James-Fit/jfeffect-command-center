@@ -60,7 +60,8 @@ export const DECK_LIMITS = {
   minSlides: 3,
   maxSlides: 7,
   kicker: { words: 4, chars: 28 },
-  coverTitle: { words: 10, chars: 64 },
+  /** The grid line: painted in capitals at a size the three-across profile grid reads (post-design.ts hookFit). */
+  coverTitle: { words: 8, chars: 48 },
   coverSub: { words: 16, chars: 100 },
   pointTitle: { words: 9, chars: 60 },
   pointBody: { words: 28, chars: 175 },
@@ -77,7 +78,7 @@ export const DECK_LIMITS = {
   quoteBy: { words: 5, chars: 40 },
   diagramTitle: { words: 10, chars: 64 },
   diagramNote: { words: 16, chars: 100 },
-  takeawayTitle: { words: 12, chars: 80 },
+  takeawayTitle: { words: 10, chars: 64 },
   takeawayBody: { words: 22, chars: 140 },
   /** Every slide's words together, the cover's aside: more than this is a lesson to read, not swipe. */
   totalWords: 130,
@@ -241,11 +242,33 @@ function hash(s: string): number {
  * first, three at most), else the seed's pick, so a run of posts never looks
  * the same twice in a row.
  */
-export function pickDeckTheme(seed: string, recent: readonly (DeckTheme | null | undefined)[] = []): DeckTheme {
+export function pickDeckTheme(seed: string, recent: readonly (DeckTheme | null | undefined)[] = [], prefer: readonly DeckTheme[] = []): DeckTheme {
   const avoid = new Set(recent.slice(0, 3).filter(Boolean));
   const open = DECK_THEMES.filter((t) => !avoid.has(t));
-  const pool = open.length ? open : [...DECK_THEMES];
+  let pool = open.length ? open : [...DECK_THEMES];
+  // the grid alternates: after a dark cover a light one, after a light one a dark one (when there's a choice)
+  const last = recent.find(Boolean);
+  if (last) {
+    const flip = pool.filter((t) => DARK_COVERS.has(t) !== DARK_COVERS.has(last));
+    if (flip.length) pool = flip;
+  }
+  // then what suits the content, when one of those is still open
+  const liked = prefer.filter((t) => pool.includes(t));
+  if (liked.length) pool = liked;
   return pool[hash(seed) % pool.length];
+}
+
+/** Themes whose cover is a dark or bold surface (deck-cards.ts THEME): black, graphite, red. */
+export const DARK_COVERS: ReadonlySet<DeckTheme> = new Set<DeckTheme>(["slate", "blush", "red"]);
+
+/** The looks that suit a post's content, best first: a myth goes bold, technique goes black, a quieter idea on paper. */
+export function themesFor(series: string, track: string | null | undefined): DeckTheme[] {
+  if (track === "truth") return ["red", "slate"];
+  if (track === "fix" || track === "strength") return ["slate", "paper", "bone"];
+  if (track === "hypertrophy" || track === "methods") return ["blush", "bone", "slate"];
+  if (track === "mind" || track === "reset") return ["paper", "bone", "blush"];
+  if (series === "tuesday_tips") return ["bone", "slate", "paper"];
+  return [];
 }
 
 /** Whether a deck is a carousel (several slides) or one slide. */

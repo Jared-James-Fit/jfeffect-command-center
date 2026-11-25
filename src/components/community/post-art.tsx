@@ -234,7 +234,7 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
   return (
     <div
       ref={box}
-      className={cn("relative w-full overflow-hidden", shown || failed ? "bg-[#f6f3ee]" : page ? "bg-transparent" : "bg-muted", fill && "h-full", className)}
+      className={cn("relative w-full overflow-hidden", shown || failed ? "bg-[#f3f1ec]" : page ? "bg-transparent" : "bg-muted", fill && "h-full", className)}
       style={fill ? undefined : { aspectRatio: "4 / 5" }}
       data-post-art={card}
       data-deck-slide={card === "deck" ? slide : undefined}
@@ -248,7 +248,7 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
         </div>
       ) : failed ? (
         // couldn't paint it on this phone: its words, on the same paper card
-        <div className="absolute inset-0 flex items-center px-[9%] text-[#141417]">
+        <div className="absolute inset-0 flex items-center px-[9%] text-[#111113]">
           <p className="line-clamp-6 text-balance text-[22px] font-bold leading-tight">{alt}</p>
         </div>
       ) : (
@@ -272,5 +272,5 @@ function ArtImg({ src, alt }: { src: string; alt: string }) {
  */
 export function AutoPostTile({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const card = postArtCard(post);
-  return card ? <PostArtImage post={post} card={card} unit={unit} fill zoom={false} /> : <div className="h-full w-full bg-[#f6f3ee]" />;
+  return card ? <PostArtImage post={post} card={card} unit={unit} fill zoom={false} /> : <div className="h-full w-full bg-[#f3f1ec]" />;
 }

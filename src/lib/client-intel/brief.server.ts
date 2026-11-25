@@ -28,6 +28,9 @@ import { sessionLine, daysWords, TIMING_SHORT, type CardioPlan, type PlanContext
 import { outcomesText, type VersionOutcome } from "@/lib/cardio/history";
 import type { CardioRead } from "@/lib/cardio/insights";
 import type { SpeedUnit } from "@/lib/weight-management/units";
+import { durationKindOf, durationOfCompletion, sessionLengthFacts } from "@/lib/workouts/session-duration";
+import { sessionLimit } from "@/lib/program-intel/session-limit";
+import { bookedSessionLength } from "@/lib/program-intel/context";
 
 export type IntelFocus = "cardio" | "nutrition" | "training";
 
@@ -62,7 +65,8 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
   const { loaded, clientId } = x;
   const { input, assessment } = loaded;
   const today = assessment.today;
-  const [rules, notes, nutritionPlan, wmReviews, planEdits, proposals, recs, health, program] = await Promise.all([
+  const since = new Date(Date.parse(`${today}T00:00:00Z`) - 56 * 86_400_000).toISOString();
+  const [rules, notes, nutritionPlan, wmReviews, planEdits, proposals, recs, health, program, sessions, goalsSetup, ptSessions] = await Promise.all([
     safe<any[]>(() => sb.from("program_rules").select("kind, rule, client_id, expires_on, active").or(`client_id.eq.${clientId},client_id.is.null`).eq("active", true).limit(40), []),
     safe<any[]>(
       () =>
@@ -94,6 +98,10 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     safe<any[]>(() => sb.from("client_coaching_recommendations").select("created_at, headline, status, coach_note").eq("client_id", clientId).order("created_at", { ascending: false }).limit(3), []),
     loadHealthRecords(sb, clientId, { forms: false, today }).catch(() => null),
     focus !== "training" ? import("@/lib/program-context.server").then((m) => m.loadProgramContext(sb, clientId, today)).catch(() => null) : Promise.resolve(null),
+    // How long their sessions really take (session-duration.ts), against the session limit.
+    safe<any[]>(() => sb.from("pl_day_completions").select("*").eq("client_id", clientId).gte("completed_at", since).not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(12), []),
+    safe<any>(() => sb.from("client_goals_setup").select("workout_length_minutes").eq("client_id", clientId).maybeSingle(), null),
+    safe<any[]>(() => sb.from("pt_sessions").select("starts_at, ends_at, status").eq("client_id", clientId).gte("starts_at", since).limit(200), []),
   ]);
 
   // what the coach confirmed from conversations, and decisions taken in meetings (coaching sessions)
@@ -195,6 +203,20 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
       `CARDIO READ (signals are measured or reported; the recommendation is an interpretation):\n${r.signals.map((s) => `- ${s.label} (${s.source}): ${s.value}`).join("\n")}\n- Recommendation: ${r.primary.title}. ${r.primary.observation} ${r.primary.reason} (confidence ${r.primary.confidence}${r.primary.relation === "pattern" ? "; a pattern, not a confirmed cause" : ""})${r.gaps.length ? `\n- Missing: ${r.gaps.join("; ")}` : ""}`,
     );
     out.push(`CARDIO PLANS SO FAR AND HOW THEY WENT:\n${outcomesText(x.cardio.outcomes)}`);
+  }
+
+  // Session length against the limit: measured or reconstructed sessions only, each kind said.
+  try {
+    const limit = sessionLimit({ goalsMinutes: goalsSetup?.workout_length_minutes ?? null, ptMinutes: bookedSessionLength(ptSessions).minutes });
+    const reads = sessions
+      .map((c) => durationOfCompletion(c, { estimatedMin: c.estimated_duration_min ?? null }))
+      .filter((d): d is NonNullable<typeof d> => !!d)
+      .map((d) => ({ minutes: d.minutes, kind: durationKindOf(d) }));
+    const planned = sessions.map((c) => Number(c.estimated_duration_min)).filter((n) => n > 0).sort((a, b) => a - b);
+    const lines = sessionLengthFacts(reads, limit, planned.length ? planned[planned.length >> 1] : null);
+    out.push(`SESSION LENGTH (measured = a confirmed time or the session clock; reconstructed = from logged set times; estimates are never counted):\n${lines.join("\n")}`);
+  } catch {
+    /* optional */
   }
 
   // Decision history

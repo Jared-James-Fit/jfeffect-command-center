@@ -13,7 +13,12 @@ import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Activity, Download,
   RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive, BarChart3, ListChecks,
+  CalendarDays, LayoutGrid, Rows3,
 } from "lucide-react";
+import { FullScreenPage, useFullScreenLayer } from "@/components/full-screen-page";
+import { DeferRender } from "@/components/defer-render";
+import { TrainingPlanPage } from "@/components/workouts/training-plan-page";
+import type { PlanEntry } from "@/lib/workouts/training-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -27,7 +32,7 @@ import { clientWorkoutsQuery, PAGE_CACHE_MS } from "@/lib/client-workouts-query"
 import { useArrivalClass } from "@/hooks/use-arrival";
 import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/components/workouts/workouts-skeleton";
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
-import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
+import { dayDisplayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, parseLocalDate, toLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
@@ -56,14 +61,18 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-// Lazy: the card reads every logged set to draw itself; the Workouts view
-// paints first and the card fills in after.
-const PerformanceCard = lazyWithRetry(() =>
-  import("@/components/performance-card").then((m) => ({
-    default: m.PerformanceCard,
+// Lazy: Recovery & Performance reads every logged set and draws the 3D body;
+// the Workouts view paints and Start works first, the section fills in after.
+const RecoveryPerformanceSection = lazyWithRetry(() =>
+  import("@/components/workouts/recovery-performance").then((m) => ({
+    default: m.RecoveryPerformanceSection,
   })),
 );
-import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
+const RecoveryDetail = lazyWithRetry(() =>
+  import("@/components/workouts/recovery-performance").then((m) => ({
+    default: m.RecoveryDetail,
+  })),
+);
 import { AtHomeBackupCard } from "@/components/workouts/at-home-backup-card";
 import {
   cancelAtHomeBackupSession,
@@ -81,7 +90,9 @@ import {
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { SessionDot, WeekStrip } from "@/components/workouts/week-strip";
-import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
+import { WeekSplitView, readWeekView, saveWeekView, type WeekView } from "@/components/workouts/week-split-view";
+import { useWeekSplit } from "@/components/workouts/use-week-split";
+import { KIND_META, placeLabel, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
@@ -98,6 +109,13 @@ import { pausedProgram, programProgressLine } from "@/lib/my-program";
 
 type Mode = "self" | "coach";
 
+/**
+ * The full-screen pages over Workouts (`useFullScreenLayer`, `?layer=`): the
+ * month (history and adherence), the Training plan, and recovery.
+ */
+export const WORKOUTS_LAYERS = ["month", "plan", "recovery"] as const;
+export type WorkoutsLayer = (typeof WORKOUTS_LAYERS)[number];
+
 /** ?open=<date> values already acted on in this page load (see WorkoutsExperience). */
 const handledOpenDates = new Set<string>();
 
@@ -107,7 +125,7 @@ export function WorkoutsExperience({
   clientName,
   openDate,
   openDays = false,
-  footer,
+  history: historySlot,
 }: {
   clientId: string;
   mode?: Mode;
@@ -116,8 +134,8 @@ export function WorkoutsExperience({
   openDate?: string | null;
   /** open the training days editor once the client is known */
   openDays?: boolean;
-  /** last in the page's own flow (Past programs), above the tab bar's room, never after it */
-  footer?: React.ReactNode;
+  /** past programs that live elsewhere (a coaching client's archive): the Training plan's Training history */
+  history?: React.ReactNode;
 }) {
   const { data: client, isFetched: clientFetched } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
@@ -188,29 +206,33 @@ export function WorkoutsExperience({
   // from another block than the current one (a week ahead or behind) names
   // its own block on its card.
   const currentBlockId = todayItem?.block?.id ?? pickCurrentBlock(allBlocks, today)?.id ?? null;
-  // This calendar month's program workouts that are due (today included) and how
-  // many are done: the progress snapshot's "4 of 5 planned so far in November".
-  // Optional sessions and at-home backups never count as planned.
-  const monthProgress = useMemo(() => {
-    const from = toLocalISO(new Date(today.getFullYear(), today.getMonth(), 1));
-    const to = toLocalISO(today);
+  // This week's program workouts (Monday to Sunday) and how many are done:
+  // Recovery & Performance's "2 of 4 workouts". Optional sessions and at-home
+  // backups never count as planned.
+  const weekProgress = useMemo(() => {
+    const start = startOfWeek(today, { weekStartsOn: 1 });
+    const from = toLocalISO(start);
+    const to = toLocalISO(addDays(start, 6));
     let planned = 0;
     let done = 0;
     for (const [iso, list] of byDate) {
       if (iso < from || iso > to) continue;
       for (const it of list) {
         if (isAtHomeBackupSessionBlock(it.block) || it.day?.is_optional) continue;
-        const mk = workoutMark(it);
-        if (iso === to && mk?.kind !== "done") continue; // today's still to do, not missed
         planned++;
-        if (mk?.kind === "done") done++;
+        if (workoutMark(it)?.kind === "done") done++;
       }
     }
-    return { label: format(today, "MMMM"), planned, done };
+    return { planned, done };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byDate, toLocalISO(today)]);
-  // Readiness speaks on the dashboard only when it's news for a workout still to do today.
-  const todayOpen = !!todayItem && workoutMark(todayItem)?.kind !== "done";
+  // What today's recovery is read for: every workout on today (backups aside).
+  const todayDayIds = useMemo(
+    () => todayPrimaryItems.map((it) => it.day?.id).filter((id): id is string => !!id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [todayPrimaryItems.map((it) => it.day?.id).join(",")],
+  );
+  const todayTitle = todayItem ? dayDisplayTitle(todayItem) : null;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
   // ?days=1 (after a program's workouts a week changed): the days editor, once
@@ -248,10 +270,29 @@ export function WorkoutsExperience({
   const history = useProgramHistory(mode === "self" && isSelfServe);
   const paused = noProgram ? pausedProgram(history.data, false) : null;
 
-  // One control for the three ways to look at the schedule: this week, the
-  // month, or the block's workouts in order.
-  const [view, setView] = useState<"week" | "month" | "block">("week");
+  // The page is the week; the month, the Training plan and recovery are
+  // full-screen pages over it (`?layer=`), so Back closes them and the day
+  // picked, the scroll and what's open underneath stay as they were.
+  const { layer, open: openLayer, close: closeLayer } = useFullScreenLayer(WORKOUTS_LAYERS);
+  // Inside the Training plan: a block's every exercise (Block View), in place.
   const [blockViewId, setBlockViewId] = useState<string | null>(null);
+  useEffect(() => {
+    if (layer !== "plan") setBlockViewId(null);
+  }, [layer]);
+  // The Training plan's timeline, from the same workouts and dates as the strip.
+  const planEntries = useMemo(() => planEntriesFrom(byDate, primaryDayItems), [byDate, primaryDayItems]);
+  const planRoadmap = roadmapProgramId ? browseRoadmap : roadmap;
+  const openPlanWorkout = (e: PlanEntry) => {
+    const d = parseLocalDate(e.iso);
+    if (d) {
+      // the day on the page, the way back already there
+      setSelectedDate(d);
+      setRoadmapProgramId(null);
+      closeLayer();
+      return;
+    }
+    if (mode === "self") navigate({ to: "/portal/workouts/$dayId", params: { dayId: e.dayId } });
+  };
 
   // ---- Drag & drop rescheduling (pointer + touch) ------------------------
   // dnd-kit PointerSensor (mouse/iPad pointer) + TouchSensor (press-and-hold,
@@ -303,6 +344,31 @@ export function WorkoutsExperience({
   const [reportOpen, setReportOpen] = useState(false);
   const navigate = useNavigate();
 
+  // The week as a split (Mon–Sun rows, the default) or the strip with the day picked: one
+  // choice, remembered on the phone; either way the picked day's card is under it.
+  const [weekView, setWeekView] = useState<WeekView>("split");
+  useEffect(() => setWeekView(readWeekView()), []);
+  const changeWeekView = (v: WeekView) => {
+    setWeekView(v);
+    saveWeekView(v);
+  };
+  const split = useWeekSplit({
+    clientId,
+    self: mode === "self",
+    items: dayItems,
+    byDate,
+    selectedDate,
+    sessionsByDate,
+  });
+  const startItem = (item: WorkoutItem) => {
+    const cta = primaryCtaFor(item, getWorkoutStatus(item).status);
+    navigate({
+      to: "/portal/workouts/$dayId",
+      params: { dayId: item.day.id },
+      search: { ...(cta.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any,
+    });
+  };
+
   // Arriving with ?open=<date> (a coach tapping "Open … workout" on a session):
   // once the dates are resolved, show that day and, when it holds exactly one
   // workout, open it the way its card's main button would. Once per page load,
@@ -341,10 +407,19 @@ export function WorkoutsExperience({
         actionsInline={mode === "self"}
         actions={
           <div className="flex items-center gap-1">
-            {/* The schedule's three views sit in the header, beside ⋯: a page
-                control, not the first thing on the page (the calendar and
-                today's workout are). */}
-            {mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}
+            {/* The month (history and adherence) is a full-screen page; the page itself is the week. */}
+            {!noProgram && (
+              <button
+                type="button"
+                onClick={() => openLayer("month")}
+                aria-label="Training calendar"
+                title="Training calendar"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground transition hover:bg-muted active:scale-[0.96]"
+                data-open-month
+              >
+                <CalendarDays className="h-5 w-5" aria-hidden />
+              </button>
+            )}
             {/* Training analytics, one tap from the top of Workouts (also the progress card's first row). */}
             {mode === "self" && !noProgram && (
               <Link
@@ -369,6 +444,12 @@ export function WorkoutsExperience({
               {mode === "self" && (
                 <CardMenuItem onSelect={() => navigate({ to: "/portal/workouts/analytics" as any })}>
                   <Activity className="mr-2 h-4 w-4" /> Training analytics
+                </CardMenuItem>
+              )}
+              {/* Programs (explore, build, import, crew, my programs): a secondary place, also at the Training plan's end. */}
+              {mode === "self" && (
+                <CardMenuItem onSelect={() => navigate({ to: "/portal/programs" as any })} data-menu-programs>
+                  <LayoutGrid className="mr-2 h-4 w-4" /> Programs
                 </CardMenuItem>
               )}
               {/* A member's paused, ended and switched programs: resume, start over or remove. */}
@@ -397,6 +478,10 @@ export function WorkoutsExperience({
                   <span className="ml-auto pl-3 text-xs text-muted-foreground">{daysState.label}</span>
                 </CardMenuItem>
               )}
+              {/* The week as rows (Split, the default) or the strip and one day: remembered on this phone. */}
+              <CardMenuItem onSelect={() => changeWeekView(weekView === "split" ? "day" : "split")} data-menu-week-view>
+                <Rows3 className="mr-2 h-4 w-4" /> {weekView === "split" ? "Week strip view" : "Split view"}
+              </CardMenuItem>
               <CardMenuItem
                 onSelect={() =>
                   navigate({
@@ -422,16 +507,11 @@ export function WorkoutsExperience({
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
 
-        {/* One control for the schedule: this week, the month, or the block's workouts in order.
-            (The Calendar page is for appointments; this is the training schedule.) */}
-        {/* A coach's view of a client keeps the switch on its own row (the header holds the client's name). */}
-        {mode === "coach" && <ScheduleViewSwitch view={view} onChange={setView} />}
-
         {/* Training days: only while they still have to be set (or read-only for a coach); the athlete's are in ⋯. */}
         {showDaysChip && !noProgram && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}
 
-        {view !== "block" ? (
-          <div className="space-y-4">
+        {/* What today is, how recovered, where in the program, progressing: the week, the day, Recovery & Performance, the program. */}
+        <div className="space-y-4">
             {isLoading ? (
               <ScheduleSkeleton />
             ) : workoutsFailed && !rawItems ? (
@@ -448,8 +528,17 @@ export function WorkoutsExperience({
               )
             ) : (
               <div className={cn("space-y-4", arrived)}>
-                <CalendarDndProvider dnd={dnd}>
-                  {view === "week" ? (
+                {weekView === "split" ? (
+                  <WeekSplitView
+                    week={split.week}
+                    weekStart={split.weekStart}
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    onStart={mode === "self" ? startItem : undefined}
+                    timeActions={canReschedule ? split.timeActions : undefined}
+                  />
+                ) : (
+                  <CalendarDndProvider dnd={dnd}>
                     <WeekStrip
                       selectedDate={selectedDate}
                       onSelectDate={setSelectedDate}
@@ -458,16 +547,8 @@ export function WorkoutsExperience({
                       sessionDays={sessionDays}
                       flat
                     />
-                  ) : (
-                    <MonthGrid
-                      selectedDate={selectedDate}
-                      onSelectDate={setSelectedDate}
-                      byDate={byDate}
-                      dnd={dnd}
-                      sessionDays={sessionDays}
-                    />
-                  )}
-                </CalendarDndProvider>
+                  </CalendarDndProvider>
+                )}
                 {dropAsk && (
                   <MoveWorkoutSheet
                     dayId={dropAsk.target.dayId}
@@ -481,10 +562,6 @@ export function WorkoutsExperience({
                 )}
                 {/* No legend under the strip: the dot, ring and check say it, and a day with a
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
-                {/* readiness only when it's news, for a workout still to do today */}
-                {mode === "self" && todayOpen && isSameDay(selectedDate, today) && (
-                  <RecoveryPreviewCard clientId={clientId} analyticsTo="/portal/workouts/analytics" hideWhenEmpty onlyWhenNews />
-                )}
                 <SelectedDayList
                   next={nextWorkoutAfter(byDate, selectedDate)}
                   onSelectDate={setSelectedDate}
@@ -499,66 +576,114 @@ export function WorkoutsExperience({
                 />
               </div>
             )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {isLoading ? (
-              <div className="space-y-3" role="status" aria-label="Loading your program">
-                <WorkoutCardSkeleton />
-                <WorkoutCardSkeleton />
-              </div>
-            ) : (
-              <BlockViewTab
-                items={primaryDayItems}
+        </div>
+
+        {/* How recovered for today's workout, and am I progressing: one section (it replaced the
+            readiness row and the Performance card), loaded once it's near the screen. */}
+        {mode === "self" && !noProgram && !isLoading && dayItems.length > 0 && (
+          <DeferRender placeholderHeight="h-[208px]">
+            <Suspense fallback={<div className="h-[208px] rounded-2xl bg-muted/30 jf-skeleton" aria-hidden />}>
+              <RecoveryPerformanceSection
                 clientId={clientId}
-                mode={mode}
-                roadmap={roadmap}
-                selectedBlockId={blockViewId}
-                onSelectBlock={setBlockViewId}
+                accountUnit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
+                dayIds={todayDayIds}
+                week={weekProgress}
+                onOpenRecovery={() => openLayer("recovery")}
               />
-            )}
-          </div>
+            </Suspense>
+          </DeferRender>
         )}
 
-        {/* The calendar says what to do today; the Program card says where you are and where it's going. */}
+        {/* Where you are in the program: the summary; the whole plan is the full-screen Training plan. */}
         {isLoading ? (
           <ProgramCardSkeleton />
         ) : (
           <div className={arrived}>
           <ProgramRoadmapCard
             roadmap={roadmap}
-            browseRoadmap={roadmapProgramId ? browseRoadmap : null}
-            selectedBlockId={view === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
-            onSelectBlock={(id) => {
-              setBlockViewId(id);
-              setView("block");
-              if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
             coach={mode === "coach"}
-            onSelectProgram={setRoadmapProgramId}
+            onOpenPlan={() => openLayer("plan")}
             onManage={canManageProgram ? () => setManageOpen(true) : undefined}
             nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}
           />
           </div>
         )}
-
-        {/* Programs: explore, build, import or copy one, and My programs, always one tap from Workouts
-            (a member with no program has the same ways in the empty state above). */}
-        {mode === "self" && !noProgram && !isLoading && <ProgramsCard isSelfServe={isSelfServe} />}
-
-        {/* Am I making progress? The last 12 weeks, the month and one headline, one tap into analytics. */}
-        {mode === "self" && !noProgram && (
-          <Suspense fallback={null}>
-            <PerformanceCard
-              clientId={clientId}
-              unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
-              month={monthProgress}
-              hideWhenEmpty
-            />
-          </Suspense>
-        )}
-        {footer}
       </div>
+
+      {/* The month: history and adherence, a day tapped shows under it; dragging works as on the strip. */}
+      <FullScreenPage open={layer === "month"} id="workouts-month" title="Training calendar" onBack={closeLayer}>
+        <div className="space-y-4">
+          <CalendarDndProvider dnd={dnd}>
+            <MonthGrid
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              byDate={byDate}
+              dnd={dnd}
+              sessionDays={sessionDays}
+            />
+          </CalendarDndProvider>
+          <SelectedDayList
+            next={nextWorkoutAfter(byDate, selectedDate)}
+            onSelectDate={setSelectedDate}
+            items={byDate.get(toLocalISO(selectedDate)) ?? []}
+            pageBlockId={currentBlockId}
+            sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}
+            date={selectedDate}
+            readonly={mode === "coach"}
+            clientId={clientId}
+            mode={mode}
+            backupEnabled={isAtHomeBackupClient(clientId)}
+          />
+        </div>
+      </FullScreenPage>
+
+      {/* The Training plan: Program → Block → Week → Workout; a block's every exercise opens in place. */}
+      <FullScreenPage
+        open={layer === "plan"}
+        id={blockViewId ? "workouts-plan-block" : "workouts-plan"}
+        title={blockViewId ? "Every exercise" : "Training plan"}
+        backLabel={blockViewId ? "Plan" : "Back"}
+        onBack={() => {
+          if (blockViewId) setBlockViewId(null);
+          else {
+            setRoadmapProgramId(null);
+            closeLayer();
+          }
+        }}
+      >
+        {blockViewId ? (
+          <BlockViewTab
+            items={primaryDayItems}
+            clientId={clientId}
+            mode={mode}
+            roadmap={roadmap}
+            selectedBlockId={blockViewId}
+            onSelectBlock={setBlockViewId}
+          />
+        ) : planRoadmap && planRoadmap.blocks.length ? (
+          <TrainingPlanPage
+            roadmap={planRoadmap}
+            browsing={!!roadmapProgramId}
+            entries={planEntries}
+            onOpenWorkout={openPlanWorkout}
+            onOpenBlock={setBlockViewId}
+            onSelectProgram={setRoadmapProgramId}
+            history={historySlot}
+            programs={mode === "self" ? <ProgramsCard isSelfServe={isSelfServe} /> : null}
+          />
+        ) : (
+          <p className="py-8 text-center text-sm text-muted-foreground">No program on your plan yet.</p>
+        )}
+      </FullScreenPage>
+
+      {/* Recovery: the body to turn, a muscle's read, the factors and what kind each is. */}
+      {mode === "self" && (
+        <FullScreenPage open={layer === "recovery"} id="workouts-recovery" title="Recovery" subtitle={todayTitle ? `For today: ${todayTitle}` : undefined} onBack={closeLayer}>
+          <Suspense fallback={<div className="h-[520px] rounded-2xl bg-muted/30 jf-skeleton" aria-hidden />}>
+            <RecoveryDetail clientId={clientId} dayIds={todayDayIds} workoutTitle={todayTitle} />
+          </Suspense>
+        </FullScreenPage>
+      )}
 
       <ScheduleHistoryDrawer
         clientId={clientId}
@@ -668,7 +793,7 @@ function MonthGrid({
           // mark, and the day picked shows its workout under the calendar.
           const title = item
             ? formatCompactWorkoutLabel(item.day as any, item.week as any)
-              ?? cleanDayTitle(item.day?.title, item.day?.day_index)
+              ?? dayDisplayTitle(item)
             : null;
           return (
             <CalendarDayCell key={iso} iso={iso} item={item} label={title ?? format(d, "MMM d")}>
@@ -748,44 +873,45 @@ function MonthTally({ days, byDate }: { days: Date[]; byDate: Map<string, Workou
 /* ---------------------------------------------------------------------- */
 
 /**
- * One control for the schedule: this week, the month, or the block's workouts
- * in order (the Calendar page is for appointments). Compact in the athlete's
- * header; a full-width row on a coach's view of a client.
+ * The Training plan's workouts, from the same dates as the strip (`byDate`)
+ * plus any of the program's workouts with no date yet. Backups aren't the
+ * program's.
  */
-function ScheduleViewSwitch({
-  view,
-  onChange,
-  compact = false,
-}: {
-  view: "week" | "month" | "block";
-  onChange: (v: "week" | "month" | "block") => void;
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={cn(compact ? "inline-flex rounded-lg bg-muted p-0.5" : "grid grid-cols-3 rounded-xl bg-muted p-1")}
-      role="group"
-      aria-label="Schedule view"
-      data-testid="workouts-view"
-    >
-      {(["week", "month", "block"] as const).map((v) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onChange(v)}
-          aria-pressed={view === v}
-          className={cn(
-            "font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            // a 320pt phone keeps "Workouts" whole beside it
-            compact ? "h-9 rounded-md px-2.5 text-[13px] max-[399px]:px-2 max-[359px]:px-1.5 max-[359px]:text-[12px]" : "h-9 rounded-lg text-sm",
-            view === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {v === "week" ? "Week" : v === "month" ? "Month" : "Block"}
-        </button>
-      ))}
-    </div>
-  );
+function planEntriesFrom(byDate: Map<string, WorkoutItem[]>, primary: WorkoutItem[]): PlanEntry[] {
+  const out: PlanEntry[] = [];
+  const seen = new Set<string>();
+  const entry = (it: WorkoutItem, iso: string | null): PlanEntry => {
+    const mk = workoutMark(it);
+    return {
+      key: `${it.scheduledWorkoutId ?? "d"}:${it.day.id}`,
+      dayId: it.day.id,
+      weekId: (it.week as any)?.id ?? null,
+      blockId: it.block?.id ?? null,
+      iso,
+      title: dayDisplayTitle(it),
+      kind: mk?.kind ?? null,
+      pct: mk?.kind === "progress" ? mk.pct : undefined,
+      optional: !!it.day?.is_optional,
+      dayIndex: Number(it.day?.day_index) || 0,
+    };
+  };
+  for (const [iso, list] of byDate) {
+    for (const it of list) {
+      if (!it.day?.id || isAtHomeBackupSessionBlock(it.block)) continue;
+      const e = entry(it, iso);
+      if (seen.has(e.key)) continue;
+      seen.add(e.key);
+      out.push(e);
+    }
+  }
+  for (const it of primary) {
+    if (!it.day?.id) continue;
+    const e = entry(it, null);
+    if (seen.has(e.key)) continue;
+    seen.add(e.key);
+    out.push(e);
+  }
+  return out;
 }
 
 type NextWorkout = { date: Date; title: string };
@@ -801,7 +927,7 @@ function nextWorkoutAfter(byDate: Map<string, WorkoutItem[]>, date: Date): NextW
   }
   if (!best) return null;
   const [y, m, d] = best.iso.split("-").map(Number);
-  const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(best.item.day?.title, best.item.day?.day_index) });
+  const title = dayDisplayTitle(best.item);
   return { date: new Date(y, m - 1, d), title };
 }
 
@@ -1194,7 +1320,7 @@ function SelectedDayCard({
     : status;
   // The day is already picked on the strip above and in the line under the
   // title, so the title drops its "Monday — " and the badge its weekday.
-  const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });
+  const title = dayDisplayTitle(item);
   const badgeLabel = dayCardStatusLabel(visibleStatus.status, visibleStatus.label);
   // Its status only when it's news (done, missed, in progress, review), said in the
   // day line in words: "Today" / "Upcoming" just repeat the day.
@@ -1667,7 +1793,7 @@ function DayPreviewSheet({
   item: WorkoutItem;
   date: Date;
 }) {
-  const title = cleanDayTitle(item.day?.title, item.day?.day_index);
+  const title = dayDisplayTitle(item);
   const status = getWorkoutStatus(item);
   const cta = primaryCtaFor(item, status.status);
 

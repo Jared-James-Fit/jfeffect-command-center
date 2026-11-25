@@ -49,7 +49,7 @@ import {
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
-import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
+import { computeTodayState, dayDisplayTitle } from "@/lib/workout-today";
 import { cachedCommunityUrls, communityAvatarFiles, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 import { feedAnchor } from "@/lib/feed-anchor";
@@ -324,6 +324,8 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       // loaded page of every feed after each tap cost a page's worth of posts per like.
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
       qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
+      // your own post's Activity lists your own like too
+      qc.invalidateQueries({ queryKey: ["community-post-activity", post.id] });
     },
   });
 }
@@ -1462,7 +1464,7 @@ export function useTodaySession(enabled: boolean) {
       if (computeTodayState(items, client as any).kind === "rest_day") return null;
       const it = pickLockInSession(items);
       if (!it) return null;
-      return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: cleanDayTitle(it.day.title, it.day.day_index), completionId: it.completion?.id ?? null, started: !!(it.completion?.started_at || it.completion?.in_progress_at), athleteName: (client as any).full_name ?? null };
+      return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: dayDisplayTitle(it), completionId: it.completion?.id ?? null, started: !!(it.completion?.started_at || it.completion?.in_progress_at), athleteName: (client as any).full_name ?? null };
     },
   });
 }

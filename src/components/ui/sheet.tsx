@@ -68,12 +68,14 @@ interface SheetContentProps
    * dragged itself (a press-and-hold reorder) would fight it.
    */
   swipeToClose?: boolean;
+  /** The dim behind it (default: black at 80%). A sheet over a story keeps the story showing through. */
+  overlayClassName?: string;
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, safeTopClose, swipeToClose, onOpenAutoFocus, onPointerDownOutside, ...props }, ref) => {
+>(({ side = "right", className, overlayClassName, children, hideCloseButton, safeTopClose, swipeToClose, onOpenAutoFocus, onPointerDownOutside, ...props }, ref) => {
   // swipe down to close: the sheet's own element, closed through Radix (a Close it holds) so onOpenChange runs as for ✕
   const [node, setNode] = React.useState<HTMLDivElement | null>(null);
   const dragClose = React.useRef<HTMLButtonElement | null>(null);
@@ -102,7 +104,7 @@ const SheetContent = React.forwardRef<
       : undefined;
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay className={overlayClassName} />
       <SheetPrimitive.Content
         ref={setRefs}
         className={cn(sheetVariants({ side }), className)}

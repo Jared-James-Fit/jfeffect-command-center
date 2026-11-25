@@ -20,6 +20,7 @@ import { postedToast, useWorkoutStudio } from "@/components/community/use-workou
 import { PostComposer, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
 import { opensLibraryOnTap, useComposerPicker } from "@/components/community/composer-pick";
 import { FX, NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
+import { useCardioStory } from "@/components/community/use-cardio-story";
 import { TemplateChip, TemplateTextSheet, useTemplateFavorites, useTemplateText } from "@/components/community/template-tools";
 import { storyFilter } from "@/lib/story-filters";
 import { primeCamera, refreshPtzAsk, studioCameraAsk } from "@/lib/camera/camera-prime";
@@ -137,8 +138,10 @@ export function ShareWorkoutButton({
   const favs = useTemplateFavorites();
   const tplText = useTemplateText();
   const [editingTpl, setEditingTpl] = useState(false);
+  const cardio = useCardioStory(active && !previewOnly);
   const filterCtx = useFilterContext({
     enabled: active,
+    cardio,
     custom: tplText.text,
     firstName: (today?.athleteName ?? target?.athlete_name ?? "").trim().split(/\s+/)[0] || null,
     session: today ? { title: publicTitle ?? "Today's session", started: today.started } : null,
@@ -327,7 +330,7 @@ export function ShareWorkoutButton({
         onFavorite={() => void favs.toggle(fx!)}
         onEdit={tpl.edit ? () => setEditingTpl(true) : undefined}
       />
-      <TemplateTextSheet open={editingTpl} onClose={() => setEditingTpl(false)} filter={tpl} value={tplText.text[tpl.id]} onSave={(t) => tplText.set(tpl.id, t)} />
+      <TemplateTextSheet open={editingTpl} onClose={() => setEditingTpl(false)} filter={tpl} value={tplText.text[tpl.id]} onSave={(t) => tplText.set(tpl.id, t)} cardio={cardio} />
     </>
   ) : null;
   const filterOn =

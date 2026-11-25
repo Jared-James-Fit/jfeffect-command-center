@@ -31,6 +31,7 @@ import {
   computeElapsedSeconds,
   computeActiveSeconds,
 } from "./workout-duration";
+import { sessionDuration, type DurationInput } from "@/lib/workouts/session-duration";
 
 /* -------------------------------------------------------------------------- */
 /*  Shared schemas                                                            */
@@ -552,6 +553,14 @@ export const completeWorkout = createServerFn({ method: "POST" })
             .update(patch)
             .eq("id", existing.id);
           if (error) throw error;
+          // A length typed after Finish is the person's own: measured, said so.
+          if (patch.actual_duration_min != null && patch.actual_duration_min > 0) {
+            await writer
+              .from("pl_day_completions")
+              .update({ performed_duration_seconds: patch.actual_duration_min * 60, duration_source: "confirmed", duration_confidence: "high" } as any)
+              .eq("id", existing.id)
+              .then(() => undefined, () => undefined);
+          }
         }
         return { id: existing.id, alreadyCompleted: true, edited: hasEdits };
       }
@@ -566,7 +575,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
             let q = writer
               .from("pl_row_results")
               .select(
-                "row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds",
+                "row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds, completed_at",
               )
               .in("row_id", rowIds);
             if (scheduledWorkoutId) {
@@ -635,6 +644,17 @@ export const completeWorkout = createServerFn({ method: "POST" })
       // Slice 2b: cannot use onConflict here — the old (client_id, day_id)
       // unique was replaced by two partial uniques. Do a check-then-update
       // or insert instead.
+      // How long it actually took, apart from when it was typed in (session-duration.ts).
+      const durationRead = async (completionId: string) =>
+        writeDurationRead(writer, completionId, data.dayId, {
+          startedAt,
+          completedAt: nowIso,
+          // At Finish this number is the clock's or "first set to now", never a person's
+          // correction: the clock and the sets decide; an edit after Finish is confirmed below.
+          correctedMin: null,
+          clockSeconds: data.sessionElapsedSeconds ?? null,
+          setTimes: (setRows ?? []).map((r: any) => r.completed_at),
+        });
       if (existing?.id) {
         const { data: row, error } = await writer
           .from("pl_day_completions")
@@ -643,6 +663,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
           .select("id")
           .single();
         if (error) throw error;
+        await durationRead(row.id);
         return { id: row.id, summary };
       }
       if (scheduledWorkoutId) update.scheduled_workout_id = scheduledWorkoutId;
@@ -652,6 +673,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
         .select("id")
         .single();
       if (error) throw error;
+      await durationRead(row.id);
       return { id: row.id, summary };
     }
 
@@ -1351,5 +1373,46 @@ export const setTrainingTime = createServerFn({ method: "POST" })
       })
       .eq("id", row.id);
     if (error) throw error;
+    // A person set it: the duration read is now confirmed (best effort, the time above is saved).
+    await supabaseAdmin
+      .from("pl_day_completions")
+      .update({ performed_duration_seconds: data.durationMin * 60, duration_source: "confirmed", duration_confidence: "high" } as any)
+      .eq("id", row.id)
+      .then(() => undefined, () => undefined);
     return { ok: true };
   });
+
+
+/**
+ * The stored duration read (20270527104300_workout_duration_reads.sql): what
+ * the workout took, where that number came from and how sure it is, plus the
+ * plan's estimate at Finish. Best effort and after the completion is saved, so
+ * a database without the columns yet never fails a Finish.
+ */
+async function writeDurationRead(
+  writer: any,
+  completionId: string,
+  dayId: string,
+  input: Omit<DurationInput, "estimatedMin">,
+): Promise<void> {
+  try {
+    const { data: day } = await writer
+      .from("pl_days")
+      .select("duration_override_min, duration_estimate_min")
+      .eq("id", dayId)
+      .maybeSingle();
+    const estimatedMin = day?.duration_override_min ?? day?.duration_estimate_min ?? null;
+    const read = sessionDuration({ ...input, estimatedMin });
+    await writer
+      .from("pl_day_completions")
+      .update({
+        performed_duration_seconds: read.minutes != null ? read.minutes * 60 : null,
+        duration_source: read.minutes != null ? read.source : null,
+        duration_confidence: read.minutes != null ? read.confidence : null,
+        estimated_duration_min: estimatedMin,
+      } as any)
+      .eq("id", completionId);
+  } catch {
+    // the completion itself is saved; the read is recomputed by readers from the rows
+  }
+}
