@@ -335,10 +335,11 @@ describe("the screens", () => {
     expect(dash).toContain("personalRecords(allResults as any[], meets)");
     expect(dash).toContain("records.filter((r) => r.day >= startDay && r.day <= endDay)");
   });
-  it("workouts: analytics one tap from the header and the whole Performance card; no fold", () => {
+  it("workouts: analytics one tap from the header and from Recovery & Performance; no fold", () => {
     const wo = read("src/components/workouts/WorkoutsExperience.tsx");
     expect(wo).toContain("data-header-analytics");
-    expect(wo).toContain("<PerformanceCard");
+    expect(wo).toContain("<RecoveryPerformanceSection");
+    expect(read("src/components/workouts/recovery-performance.tsx")).toContain("View all analytics");
     const card = read("src/components/performance-card.tsx");
     expect(card).toContain('analytics ?? { to: "/portal/workouts/analytics" }');
     expect(card).not.toContain("Collapsible");

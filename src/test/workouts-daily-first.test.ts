@@ -50,10 +50,13 @@ describe("the day is the page's card", () => {
     expect(read("src/components/workouts/week-strip.tsx")).toContain('const Wrap = flat ? "div" : Card;');
   });
 
-  it("progress is one Performance card (gone until there's a workout); readiness only when it's news for today", () => {
-    expect(page).toMatch(/<PerformanceCard[\s\S]{0,240}month=\{monthProgress\}[\s\S]{0,60}hideWhenEmpty/);
-    expect(page).toMatch(/todayOpen && isSameDay\(selectedDate, today\) && \([\s\S]{0,40}<RecoveryPreviewCard[\s\S]{0,160}onlyWhenNews/);
-    expect(read("src/components/analytics/recovery-preview-card.tsx")).toContain('if (onlyWhenNews && !bd.limiter && (tier.label === "Ready" || tier.label === "Good")) return null;');
+  it("recovery and progress are one section (Nov 25 2026): no readiness card, no Performance card", () => {
+    expect(page).not.toContain("<RecoveryPreviewCard");
+    expect(page).not.toContain("<PerformanceCard");
+    expect(page).toMatch(/<RecoveryPerformanceSection[\s\S]{0,200}dayIds=\{todayDayIds\}[\s\S]{0,60}week=\{weekProgress\}/);
+    // the day (and its cardio) first, then Recovery & Performance, then the program
+    expect(page.indexOf("<SelectedDayList")).toBeLessThan(page.indexOf("<RecoveryPerformanceSection"));
+    expect(page.indexOf("<RecoveryPerformanceSection")).toBeLessThan(page.indexOf("<ProgramRoadmapCard"));
   });
 });
 
