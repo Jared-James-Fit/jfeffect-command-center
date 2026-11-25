@@ -236,8 +236,12 @@ export async function runAssessment(
   try {
     if (!(await autopilotAvailable(sb))) return null;
     if (x.checkinId) {
-      const { data: had } = await sb.from("autopilot_decisions").select("id, category, bucket").eq("checkin_id", x.checkinId).maybeSingle();
-      if (had) return null;
+      // a redone recap reads the decision already on record (one assessment per check-in)
+      const { data: had } = await sb.from("autopilot_decisions").select("*").eq("checkin_id", x.checkinId).maybeSingle();
+      if (had) {
+        const { assessmentFromRow } = await import("@/lib/autopilot/reply.server");
+        return { decisionId: had.id, assessment: assessmentFromRow(had), bucket: had.bucket };
+      }
     }
     const { input, loaded, view } = await gatherInput(sb, clientId, { trigger: x.trigger, checkinId: x.checkinId ?? null, loaded: x.loaded });
     const assessment = assessClient(input);
@@ -427,7 +431,7 @@ export async function publishDecision(sb: Db, decisionId: string, actor: Actor):
 
   // never during an active workout; preferably while they're out of the app
   const since = new Date(Date.now() - 6 * 3600_000).toISOString();
-  const { data: acts } = await sb.from("pl_day_completions").select("started_at, last_activity_at, completed_at, in_progress_at").eq("client_id", clientId).is("completed_at", null).or(`started_at.gte.${since},last_activity_at.gte.${since},in_progress_at.gte.${since}`);
+  const { data: acts } = await sb.from("pl_day_completions").select("started_at, last_activity_at, completed_at, in_progress_at").eq("client_id", clientId).is("completed_at", null).or(`started_at.gte."${since}",last_activity_at.gte."${since}",in_progress_at.gte."${since}"`);
   const win = publishWindow({
     now: Date.now(),
     readySince: Date.parse(dec.publish_after ?? dec.created_at),

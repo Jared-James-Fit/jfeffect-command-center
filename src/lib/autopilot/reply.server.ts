@@ -72,7 +72,7 @@ export async function listReplyVersions(sb: Db, checkinId: string): Promise<Repl
 }
 
 /** The stored decision read back as an assessment, for the reply writer. */
-function assessmentFromRow(row: any): AutopilotAssessment {
+export function assessmentFromRow(row: any): AutopilotAssessment {
   return {
     category: row.category,
     headline: row.headline,
