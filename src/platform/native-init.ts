@@ -14,6 +14,12 @@ export async function initNativeShell() {
   initialized = true;
   if (!isNative()) return;
 
+  // No tap or window.open reaches a purchase or sales page in the app (App Store 3.1.1).
+  try {
+    const { installShellPurchaseGuard } = await import("@/lib/native-purchases");
+    installShellPurchaseGuard(window as any);
+  } catch { /* never blocks the rest of the shell */ }
+
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar");
     // Dark content on the app's dark backgrounds; safe to call early.

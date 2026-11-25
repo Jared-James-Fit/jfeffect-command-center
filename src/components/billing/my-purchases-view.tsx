@@ -22,6 +22,7 @@ import type { Installment } from "@/lib/payment-schedule";
 import type { MyAction, MyOpen, MyPackage, MyPast, MyPayment, MyPlan, MySessionEntry, MySummary, Tone } from "@/lib/my-purchases";
 import { cn } from "@/lib/utils";
 import type { MyBillingView } from "@/components/billing/use-my-billing";
+import { goToPayment } from "@/lib/native-purchases";
 
 type Money = (cents: number) => string;
 
@@ -181,7 +182,7 @@ export function UpdateCardButton({
     setBusy(true);
     try {
       const { url } = await portalFn({ data: { origin: window.location.origin, returnPath } });
-      window.location.assign(url);
+      goToPayment(url);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open your card details");
     } finally {

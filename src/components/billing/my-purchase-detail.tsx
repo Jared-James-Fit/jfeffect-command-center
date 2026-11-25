@@ -28,6 +28,7 @@ import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
+import { goToPayment } from "@/lib/native-purchases";
 
 const HOW: Record<string, string> = {
   auto_pay: "Paid automatically by card on these dates.",
@@ -206,7 +207,7 @@ function PayPanel({ sale, clientId, cents, money }: { sale: any; clientId: strin
       const url = sanitizeShareUrl(res?.url);
       if (!url) throw new Error("Your coach needs to send a fresh payment link.");
       toast.dismiss(t);
-      window.location.assign(url);
+      goToPayment(url);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open the payment", { id: t });
     }

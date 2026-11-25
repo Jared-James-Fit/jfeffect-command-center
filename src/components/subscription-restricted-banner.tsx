@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isNative } from "@/platform";
 
 /**
  * Inline status banner for JF members whose subscription is not in a "full
@@ -30,6 +31,15 @@ export function SubscriptionRestrictedBanner({
     : s === "Deactivated" ? "Your account is paused."
     : null;
   if (!reason) return null;
+  // the iPhone app: no price, no billing words, no link to billing (native-purchases.ts)
+  if (isNative()) {
+    return (
+      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200 flex items-center gap-3" data-restricted-native>
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <div className="font-semibold">Some features aren't included in your account right now.</div>
+      </div>
+    );
+  }
   const detail =
     s === "Hold Plan"
       ? "Full membership features are locked while on the Hold Plan. Reactivate full membership to restore access."

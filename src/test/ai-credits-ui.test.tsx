@@ -72,7 +72,8 @@ describe("AI credits on screen", () => {
     const html = panel({ state: detail({ used: 30, allowance_left: 0, left: 0 }), out: true });
     expect(html).not.toContain("data-ai-credits-packs");
     expect(html).toContain("Your free credits come back Dec 1.");
-    expect(html).toContain("Purchases aren&#x27;t available in the app.");
+    // nothing about buying at all, not even that it can't be done here (App Store 3.1.1)
+    expect(html).not.toMatch(/Purchases|purchase|buy|jfeffect\.com/i);
     platform.native = false;
   });
 

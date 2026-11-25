@@ -31,6 +31,7 @@ import { googleCalendarLink, icsDataLink, outlookCalendarLink } from "@/lib/add-
 import { addDaysISO, localDateISO } from "@/lib/schedule-time";
 import type { Slot } from "@/lib/booking-slots";
 import { cn } from "@/lib/utils";
+import { useNativeShell } from "@/lib/native-purchases";
 
 type Prefill = {
   name: string;
@@ -140,6 +141,7 @@ export function BookingPage({
   preview?: boolean;
 }) {
   const qc = useQueryClient();
+  const native = useNativeShell();
   const pageFn = useServerFn(getBookingPage);
   const slotsFn = useServerFn(getBookingSlots);
   const bookFn = useServerFn(bookOnline);
@@ -417,12 +419,15 @@ export function BookingPage({
               {who && page.includedCall
                 ? "This call is included with a coaching package your account isn't on. Message your coach if you'd like it added."
                 : who
-                  ? "Your account doesn't include calls with a coach. Coaching does: a coach, a program written for you, and calls like this one."
+                  ? native
+                    ? "Your account doesn't include calls with a coach."
+                    : "Your account doesn't include calls with a coach. Coaching does: a coach, a program written for you, and calls like this one."
                   : "Sign in with your client account to pick a time."}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               {!who && signInLink}
-              {!(who && page.includedCall) && (
+              {/* the iPhone app links to no coaching sign-up (native-purchases.ts) */}
+              {!(who && page.includedCall) && !native && (
                 <Button asChild variant="outline" className="h-11">
                   <Link to="/coaching/apply">Apply for coaching</Link>
                 </Button>

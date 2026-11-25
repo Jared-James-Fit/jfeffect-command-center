@@ -22,6 +22,8 @@ import { AiCreditsReturn } from "@/components/ai-credits/ai-credits";
 import { MembershipPendingGate } from "@/components/member/membership-pending-gate";
 import { TutorialGate } from "@/components/tutorials/tutorials";
 import { AiConsentPrompt } from "@/components/ai-consent/ai-consent";
+import { navForShell, useNativeShell } from "@/lib/native-purchases";
+import { isNative } from "@/platform";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
@@ -35,6 +37,8 @@ function PortalLayout() {
   useWarmClientPages({ portalUserId, enabled: !isImpersonating && !tierLoading, nutrition: !isSelfServe });
   // No community for this account (not an active client): no centre button.
   const { data: community } = useCommunityActivity(true);
+  // the iPhone app's menu has no billing or purchase pages (native-purchases.ts)
+  const native = useNativeShell();
   const bottomNav = useMemo(() => {
     const base = isSelfServe ? selfServeBottomNav : clientBottomNav;
     return community?.enabled === false ? base.filter((i) => i.to !== "/portal/community") : base;
@@ -46,7 +50,7 @@ function PortalLayout() {
       <PovFrame />
       <ClientPovBanner />
       {/* Crew draws its own top bar (+ · JF Effect · heart · you), for a coach viewing as a client too (under the banner) */}
-      <AppShell items={isSelfServe ? selfServeNav : clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>
+      <AppShell items={navForShell(isSelfServe ? selfServeNav : clientNav, native)} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>
         {isSelfServe && <MemberGates />}
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home
@@ -93,7 +97,9 @@ function MemberGates() {
   const lapsed = !loading && accountType === "jf_member" && !hasAccess("app_membership");
   useEffect(() => {
     if (isCoachingOnlyPath(pathname)) navigate({ to: "/portal", replace: true });
-    else if (lapsed && !isImpersonating && !isLapsedMemberPath(pathname)) navigate({ to: "/portal/membership" as any, replace: true });
+    // the iPhone app opens no billing page: a lapsed member lands on Account there (native-purchases.ts)
+    else if (lapsed && !isImpersonating && !isLapsedMemberPath(pathname))
+      navigate({ to: (isNative() ? "/portal/account" : "/portal/membership") as any, replace: true });
   }, [pathname, lapsed, isImpersonating, navigate]);
   return (
     <>

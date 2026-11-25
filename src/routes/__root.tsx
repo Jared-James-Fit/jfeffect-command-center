@@ -14,6 +14,7 @@ import { PortraitLock } from "@/components/portrait-only";
 import { AppPulse } from "@/components/app-pulse";
 import { PHONE_BOOT_SCRIPT } from "@/lib/portrait-only";
 import { LAUNCH_BOOT_SCRIPT } from "@/lib/landing-launch";
+import { NATIVE_SHELL_BOOT_SCRIPT, setShellStaff, shellRedirect } from "@/lib/native-purchases";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { saveLastRoute } from "@/lib/route-persistence";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
@@ -24,6 +25,7 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  redirect,
   useRouter,
   useLocation,
   HeadContent,
@@ -236,6 +238,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // The iPhone app never opens a sales, pricing, checkout or billing page (native-purchases.ts);
+  // on the web and on the server this does nothing.
+  beforeLoad: ({ location }) => {
+    const to = shellRedirect(location.pathname);
+    if (to) throw redirect({ to: "/", replace: true });
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -322,6 +330,25 @@ function RouteTracker() {
   return null;
 }
 
+/**
+ * The iPhone app's purchase guard, after hydration (native-purchases.ts): staff keep
+ * their payment tools, and a blocked page the server rendered (a cold open) goes to "/".
+ * Renders nothing.
+ */
+function ShellPurchaseGuard() {
+  const { accountRole, loading } = useAuth();
+  const location = useLocation();
+  const router = useRouter();
+  useEffect(() => {
+    if (!loading) setShellStaff(accountRole);
+  }, [accountRole, loading]);
+  useEffect(() => {
+    const to = shellRedirect(location.pathname);
+    if (to) void router.navigate({ to: "/", replace: true });
+  }, [location.pathname, router]);
+  return null;
+}
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -334,6 +361,8 @@ function RootShell({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: PHONE_BOOT_SCRIPT }} />
         {/* "/": the app launch for anyone signed in or in the installed app, the landing page for everyone else (landing-launch.ts). */}
         <script dangerouslySetInnerHTML={{ __html: LAUNCH_BOOT_SCRIPT }} />
+        {/* The iPhone app: <html data-native-shell> (hides data-web-only), and no blocked page opened cold (native-purchases.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: NATIVE_SHELL_BOOT_SCRIPT }} />
         <HeadContent />
         {/* The status bar takes the theme's colour from the first frame (the tags above exist now). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SCRIPT }} />
@@ -379,6 +408,7 @@ function RootComponent() {
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
             <RouteTracker />
+            <ShellPurchaseGuard />
             <AppPulse />
             <Toaster offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", left: "16px", right: "16px" }} />
             <ProgressDrawer />

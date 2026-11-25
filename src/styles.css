@@ -525,6 +525,10 @@ html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-c
    never flashes a marketing page and a visitor never sees a loading splash. */
 html[data-launch="app"] [data-landing] { display: none !important; }
 html:not([data-launch="app"]) [data-launch-splash] { display: none !important; }
+/* The iPhone app (native-purchases.ts NATIVE_SHELL_BOOT_SCRIPT): nothing that sells, prices or
+   points to a sales page; the public header keeps Sign in on a phone instead of the menu. */
+html[data-native-shell] [data-web-only] { display: none !important; }
+html[data-native-shell] [data-public-signin] { display: inline-flex !important; }
 /* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */
 html[data-keyboard-open="true"] {
