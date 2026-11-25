@@ -175,7 +175,6 @@ function ClientMessages() {
     at: coachLast?.created_at ?? null,
     searchText: `${coachName} coach ${coachLast?.body ?? ""}`,
     unread: coachUnread,
-    unreadPreview: coachUnread ? coachLast?.coachText : null,
     markUnread: markCoachUnread,
     onOpenChange: setCoachChatOpen,
     markRead: async () => {
@@ -275,7 +274,6 @@ function ClientMessages() {
     preview: supportRow.preview,
     at: supportRow.at,
     unread: supportRow.unread,
-    unreadPreview: supportRow.unread ? supportRow.preview : null,
     searchText: `${SUPPORT_CHAT_NAME} help support app account question bug ${support.messages[support.messages.length - 1]?.body ?? ""}`,
     openOnArrival: openSupport,
     markRead: async () => {
@@ -307,12 +305,12 @@ function ClientMessages() {
           "calc(var(--vv-h, 100dvh) - var(--app-top-chrome, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
-      {/* One inbox, like iMessage: the coach chat pinned first, then your own
-          pins, then groups and 1:1 chats by most recent. Only chat? It opens
-          straight into it, and back still shows the list (compose, New group). */}
+      {/* One inbox, like iMessage: the coach chat a normal row pinned first,
+          then your own pins, then groups and 1:1 chats by most recent. Only
+          chat? It opens straight into it, and back still shows the list. */}
       <div className="min-h-0 flex-1">
         <GroupChatErrorBoundary>
-          <GroupChatsPane asAdmin={false} pinned={pins} />
+          <GroupChatsPane pinned={pins} />
         </GroupChatErrorBoundary>
       </div>
 

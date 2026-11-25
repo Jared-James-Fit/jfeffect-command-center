@@ -35,10 +35,15 @@ import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { cn } from "@/lib/utils";
 import { useChatPresence } from "@/hooks/use-chat-presence";
 import { LiveAvatar, LiveMark } from "@/components/live-indicator";
-import { GroupChatsPane } from "@/components/group-chats-pane";
-import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
+import { useGroupLastMessages, useGroupListRealtime, groupUnread } from "@/components/group-chats-pane";
+import { GroupChatRow, GroupThreadPane } from "@/components/messages/group-thread-pane";
+import { CreateGroupDialog } from "@/components/create-group-dialog";
+import { InboxControls } from "@/components/messages/inbox-chips";
+import { inPrimary, type PrimaryFilter } from "@/lib/inbox-filters";
+import { listAllGroupsForAdmin, listMyGroupMemberships } from "@/lib/group-chats";
+import { useAdminNavBadgeCounts } from "@/hooks/use-admin-nav-badges";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
-import { Megaphone, Users as UsersIcon } from "lucide-react";
+import { HelpCircle, Megaphone, SlidersHorizontal, Users as UsersIcon, X, Zap } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowState } from "@/lib/inbox-workflow";
 import { formatReadReceipt } from "@/lib/read-receipt";
@@ -60,8 +65,7 @@ import {
 } from "@/lib/inbox-brief";
 import { ClientBriefSheet } from "@/components/messages/client-brief-sheet";
 import { CHAT_ROW_AVATAR, ChatListRow, UNREAD_DOT } from "@/components/messages/chat-list-row";
-import { InboxGuideButton, InboxGuideSheet, type GuideFilter } from "@/components/messages/inbox-guide";
-import { filterHelp } from "@/lib/inbox-guide";
+import { InboxGuideSheet, type GuideFilter } from "@/components/messages/inbox-guide";
 import { messagePreviewText } from "@/lib/message-preview";
 import { MemberSupportPane, SUPPORT_REFRESH_KEYS } from "@/components/support/member-support-pane";
 import { useServerFn } from "@tanstack/react-start";
@@ -164,10 +168,13 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
 // name, blue dot, the line under it), so they aren't filters; the Messages
 // tab's badge and the Inbox chip count new messages only (messagesBadge). Inbox is "everything"; Archived is the way back to archived
 // chats. Every chip but Inbox shows only while something's in it.
-// Support: JF Effect Support as its own queue (Needs Me first), shown while anyone has written to Support.
-const FILTERS = ["Inbox", "Support", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;
+// Support: JF Effect Support as its own queue (Needs Me first), in the Filter menu while anyone has written to Support.
+const FILTERS = ["Inbox", "Reply", "Important", "Support", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 const FILTER_LABEL: Partial<Record<Filter, string>> = {
+  Reply: "Needs reply",
+  Important: "Important",
+  Support: "JF Effect Support",
   Weekly: "Weekly check-ins",
   Nutrition: "Nutrition updates",
   "To Review": "Forms to review",
@@ -184,7 +191,7 @@ const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));
  * Archived doesn't, so a number only ever means "this is waiting on you".
  */
 const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info">> = {
-  Support: "info", Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info", Program: "warn",
+  Reply: "info", Important: "warn", Support: "info", Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info", Program: "warn",
 };
 const BADGE_STYLE = {
   urgent: "bg-red-500 text-white",
@@ -201,7 +208,7 @@ const GUIDE_FILTERS: GuideFilter[] = FILTERS.filter((f) => f !== "Inbox").map((f
 const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));
 
 type FilterRow = {
-  state?: { status?: string | null } | null;
+  state?: { status?: string | null; priority?: string | null } | null;
   workflow: { state: string };
   signals: ClientSignals;
   last?: unknown;
@@ -214,6 +221,8 @@ function inFilter(it: FilterRow, filter: Filter): boolean {
   switch (filter) {
     case "Weekly": case "Nutrition": case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions": case "Program":
       return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
+    case "Reply": return status !== "archived" && it.workflow.state === "needs_response";
+    case "Important": return status !== "archived" && !!it.state?.priority && it.state.priority !== "Normal";
     case "Archived": return status === "archived";
     // Support's rows are Support chats only (supportQueue)
     case "Support": return false;
@@ -251,11 +260,17 @@ export function MessagesInbox({
   const [smsOpen, setSmsOpen] = useState(false);
   // the selected client's workout notes log (pain, review and exercise notes)
   const [notesOpen, setNotesOpen] = useState(false);
-  const [ownTab, setTab] = useState<"chats" | "groups">("chats");
-  // The Communication page drives 1:1 vs Groups from its own top tabs.
-  const tab = view ?? ownTab;
+  // All · Unread · Groups · 1:1 Chats (the client's Messages has the same four);
+  // `filter` is the Filter menu's narrower view on top of it.
+  const [primary, setPrimary] = useState<PrimaryFilter>(view === "groups" ? "groups" : "all");
+  useEffect(() => { if (view === "groups") setPrimary("groups"); }, [view]);
+  // A coach-run group open in the pane.
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [massOpen, setMassOpen] = useState(false);
-  const { role } = useAuth();
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const { role, user } = useAuth();
+  const { data: badgeCounts } = useAdminNavBadgeCounts();
+  const appAlerts = badgeCounts?.supportAlerts ?? 0;
   const cleoOn = useCleoAccess();
 
   useEffect(() => { if (selectedFromUrl) { setSelectedId(selectedFromUrl); setSupportId(null); } }, [selectedFromUrl]);
@@ -319,6 +334,33 @@ export function MessagesInbox({
   });
   const supportChats = useMemo(() => sortSupportChats(supportRows.map(supportChat)), [supportRows]);
   const updateSupport = useServerFn(updateMemberSupport);
+
+  // Coach-run group chats: rows in the same list (All, Unread, Groups), read like 1:1 rows.
+  const { data: rawGroups = [] } = useQuery({
+    queryKey: ["chat-groups", true],
+    enabled: role === "admin" || role === "coach",
+    queryFn: listAllGroupsForAdmin,
+  });
+  const staffGroups = Array.isArray(rawGroups) ? rawGroups : [];
+  const { data: myMemberships = [] } = useQuery({
+    queryKey: ["group-memberships", user?.id ?? null],
+    enabled: !!user?.id,
+    queryFn: () => listMyGroupMemberships(user!.id),
+  });
+  const { data: groupLast = {} as Record<string, any> } = useGroupLastMessages(staffGroups.map((g) => g.id));
+  useGroupListRealtime("admin-groups");
+  const groupItems = useMemo(() => {
+    const readAt = new Map((Array.isArray(myMemberships) ? myMemberships : []).map((m) => [m.group_id, m.last_read_at]));
+    return staffGroups.map((group) => {
+      const last = (groupLast as Record<string, any>)[group.id] ?? null;
+      return {
+        group,
+        last,
+        at: (last?.created_at ?? group.updated_at ?? "") as string,
+        unread: !group.archived && readAt.has(group.id) && groupUnread(last, readAt.get(group.id) ?? null, user?.id),
+      };
+    });
+  }, [staffGroups, groupLast, myMemberships, user?.id]);
 
   const { data: lastMessages = [] } = useQuery({
     queryKey: ["last-messages"],
@@ -746,13 +788,44 @@ export function MessagesInbox({
       && (filter === "Support" ? inSupportQueue(c, supportQueue) : supportInFilter(c, filter))),
     [supportChats, search, filter, supportQueue],
   );
-  const listRows = useMemo(
-    () => mergeByRecency(
+  // Group chats this view shows: not under the Filter menu's client filters (those are
+  // about one client), archived ones only under Archived.
+  const groupsVisible = useMemo(() => {
+    if (filter !== "Inbox" && filter !== "Archived") return [];
+    const s = search.trim().toLowerCase();
+    return groupItems
+      .filter((g) => (filter === "Archived" ? g.group.archived : !g.group.archived))
+      .filter((g) => !s || g.group.name.toLowerCase().includes(s))
+      .sort((a, b) => newestFirst(a.at, b.at));
+  }, [groupItems, filter, search]);
+  const unreadGroups = useMemo(() => groupItems.filter((g) => g.unread).length, [groupItems]);
+  // One list, newest first: clients' chats, members' Support chats and group
+  // chats, narrowed by All · Unread · Groups · 1:1 Chats.
+  const listRows = useMemo(() => {
+    const direct = mergeByRecency(
       conversations, (it) => latestOf(it.last?.created_at, it.liftReview?.latestAt),
       supportVisible, (c) => c.at,
-    ),
-    [conversations, supportVisible],
-  );
+    );
+    type ListRow = (typeof direct)[number] | { kind: "group"; item: (typeof groupsVisible)[number] };
+    const at = (r: ListRow) => r.kind === "group" ? r.item.at
+      : r.kind === "support" ? r.item.at
+        : latestOf(r.item.last?.created_at, r.item.liftReview?.latestAt);
+    const merged: ListRow[] = [];
+    let i = 0;
+    let j = 0;
+    while (i < direct.length || j < groupsVisible.length) {
+      if (j >= groupsVisible.length) merged.push(direct[i++]);
+      else if (i >= direct.length) merged.push({ kind: "group", item: groupsVisible[j++] });
+      else if (newestFirst(groupsVisible[j].at, at(direct[i])) < 0) merged.push({ kind: "group", item: groupsVisible[j++] });
+      else merged.push(direct[i++]);
+    }
+    return merged.filter((r) => inPrimary({
+      kind: r.kind === "group" ? "group" : "direct",
+      unread: r.kind === "group" ? r.item.unread : r.kind === "support" ? r.item.unread > 0 : r.item.unread > 0,
+    }, primary));
+  }, [conversations, supportVisible, groupsVisible, primary]);
+  // Cleo and the coaching queues: the top of All with nothing narrowing it.
+  const pinnedSystem = primary === "all" && filter === "Inbox" && !search;
 
   const briefRow = briefFor ? allRows.find((r) => r.client.id === briefFor) ?? null : null;
 
@@ -785,8 +858,9 @@ export function MessagesInbox({
     ? supportChats.find((c) => c.threadId === supportId) ?? null
     : selectedIsMember ? supportChats.find((c) => c.clientId === selected!.id) ?? null : null;
   const supportOpen = !!supportId || selectedIsMember;
-  const paneOpen = !!selected || !!supportId;
-  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin", tab !== "groups" && !!selected && !selectedIsMember);
+  const openGroup = groupId ? staffGroups.find((g) => g.id === groupId) ?? null : null;
+  const paneOpen = !!selected || !!supportId || !!openGroup;
+  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin", !openGroup && !!selected && !selectedIsMember);
 
   // A client is "active in the app" if they've pinged within the last 3 min.
   const isClientActive = (last_active_at?: string | null) => {
@@ -802,17 +876,26 @@ export function MessagesInbox({
 
   const selectClient = (id: string) => {
     setSupportId(null);
+    setGroupId(null);
     setSelectedId(id);
     navigate({ to: "/admin/communication", search: { tab: "messages", client: id } as any, replace: true });
   };
   const selectSupport = (threadId: string) => {
     setSelectedId(null);
+    setGroupId(null);
     setSupportId(threadId);
     navigate({ to: "/admin/communication", search: { tab: "messages", support: threadId } as any, replace: true });
+  };
+  const selectGroup = (id: string) => {
+    setSelectedId(null);
+    setSupportId(null);
+    setGroupId(id);
+    navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
   };
   const clearSelection = () => {
     setSelectedId(null);
     setSupportId(null);
+    setGroupId(null);
     navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
   };
   const supportAction = async (threadId: string, patch: { status?: "open" | "closed"; read?: boolean; handler?: "cleo" | "human" }, ok: string) => {
@@ -903,98 +986,61 @@ export function MessagesInbox({
             }
       }
     >
-      {tab === "groups" ? (
-        <div className="flex min-h-0 flex-1 w-full flex-col">
-          {!view && <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />}
-          <div className="min-h-0 flex-1">
-            <GroupChatErrorBoundary key="groups-pane">
-              <GroupChatsPane asAdmin />
-            </GroupChatErrorBoundary>
-          </div>
-          <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
-        </div>
-      ) : (
       <div className="flex min-h-0 flex-1 w-full flex-col">
-        {!view && <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />}
         <div className="flex min-h-0 flex-1">
       {/* Inbox sidebar */}
       <aside
         className={cn(
-          "flex w-full flex-col border-r border-border bg-card md:w-[340px] md:shrink-0",
+          "flex w-full flex-col border-r border-border bg-card md:w-[380px] md:shrink-0",
           paneOpen ? "hidden md:flex" : "flex",
         )}
       >
         <header
-          className="border-b border-border px-3 py-2 md:px-4 md:py-3"
+          className="border-b border-border pt-2"
           style={
             embedded
               ? undefined
-              : { paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }
+              : { paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }
           }
         >
-          {/* No second title: the page (Communication) and its 1:1 Chats tab already say where you are. */}
-          <div className="flex items-center gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-10 pl-9 text-base"
-                placeholder="Search client…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+          <InboxControls
+            className="pb-2.5 pt-0"
+            query={search}
+            onQuery={setSearch}
+            placeholder="Search"
+            filter={primary}
+            onFilter={(f) => { setPrimary(f); if (f === "groups" && filter !== "Inbox" && filter !== "Archived") setFilter("Inbox"); }}
+            unread={newChats + unreadGroups}
+            actions={<>
+              <FilterMenu
+                filter={filter}
+                counts={filterCounts}
+                onPick={(f) => { setFilter(f); if (f !== "Inbox" && f !== "Archived" && primary === "groups") setPrimary("all"); }}
               />
-            </div>
-            <InboxGuideButton onClick={() => setGuideOpen(true)} />
-            {view && (
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => setMassOpen(true)}
-                className="h-10 w-10 shrink-0"
-                aria-label="Mass message"
-                title="Mass message: the same message in each client's chat"
+              <InboxMoreMenu
+                appAlerts={appAlerts}
+                onNewGroup={() => setNewGroupOpen(true)}
+                onMass={() => setMassOpen(true)}
+                onGuide={() => setGuideOpen(true)}
+              />
+            </>}
+            leading={filter !== "Inbox" ? (
+              // the Filter menu's view you're on, first in the row: tap to clear it
+              <button
+                type="button"
+                onClick={() => setFilter("Inbox")}
+                data-active-filter={filter}
+                aria-label={`Clear filter: ${FILTER_LABEL[filter] ?? filter}`}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-foreground pl-3.5 pr-2.5 text-[15px] font-semibold text-background"
               >
-                <Megaphone className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f || (f === "Support" && supportChats.length > 0)).map((f) => {
-              const n = f === "Inbox" ? newChats : FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;
-              const on = filter === f;
-              const label = FILTER_LABEL[f] ?? f;
-              return (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  data-inbox-filter={f}
-                  aria-label={n ? `${label}, ${n}${f === "Inbox" ? " with new messages" : ""}` : label}
-                  aria-pressed={on}
-                  className={cn(
-                    // Instagram's chips: the one you're on is a grey fill, the rest outlined
-                    "inline-flex h-8 shrink-0 items-center rounded-full border text-[15px] font-semibold text-foreground transition",
-                    n ? "pl-3.5 pr-1.5" : "px-3.5",
-                    on ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60",
-                  )}
-                >
-                  {label}
-                  {n > 0 && (
-                    <span
-                      data-filter-badge={f === "Inbox" ? "new" : FILTER_BADGE[f]}
-                      className={cn(
-                        "ml-1.5 inline-block h-5 min-w-5 rounded-full px-1.5 text-center text-[12px] font-bold leading-5 tabular-nums",
-                        // new messages wear the blue dot's colour, like the tab badge's number
-                        f === "Inbox" ? cn(UNREAD_DOT, "text-white") : BADGE_STYLE[FILTER_BADGE[f]!],
-                      )}
-                    >
-                      {badgeNumber(n)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                {FILTER_LABEL[filter] ?? filter}
+                <X className="h-4 w-4" />
+              </button>
+            ) : undefined}
+          />
           {filter === "Support" && (
-            <div className="mt-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Support queue">
+            // JF Effect Support's own queue: Needs Me first
+            <div className="-mt-0.5 flex gap-1.5 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Support queue">
               {SUPPORT_QUEUE_FILTERS.map(([key, label]) => {
                 const on = supportQueue === key;
                 const n = key === "needs_me" || key === "unread" ? supportCounts[key] : 0;
@@ -1004,6 +1050,7 @@ export function MessagesInbox({
                     type="button"
                     role="tab"
                     aria-selected={on}
+                    title={SUPPORT_QUEUE_HELP[key]}
                     onClick={() => setSupportQueue(key)}
                     data-support-queue={key}
                     className={cn(
@@ -1018,10 +1065,8 @@ export function MessagesInbox({
               })}
             </div>
           )}
-          {/* What the filter you're on shows, in a sentence (the ? has them all). */}
-          <p className="mt-0.5 text-[13px] leading-[18px] text-muted-foreground" data-filter-help={filter}>
-            {filter === "Support" ? SUPPORT_QUEUE_HELP[supportQueue] : filterHelp(filter, newChats)}
-          </p>
+          {/* the filter's way out to where its work lives (the forms tracker, program fixes) */}
+          <div className="px-4 empty:hidden [&>*]:mb-2 [&>*]:mt-0">
           {formFilterSummary && (
             <Link
               to="/admin/forms"
@@ -1057,6 +1102,7 @@ export function MessagesInbox({
               <span aria-hidden>›</span>
             </Link>
           )}
+          </div>
         </header>
         <div
           className={cn(
@@ -1066,40 +1112,40 @@ export function MessagesInbox({
               : "pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),1.5rem))]",
           )}
         >
-          {cleoOn && !search && (
-            // Cleo's way in: pinned at the top of the inbox (there is no
-            // floating button), for whoever has Cleo (useCleoAccess). Not a
-            // client thread: nothing is ever sent.
-            <div className="flex items-stretch" data-cleo-row>
-              <button type="button" onClick={() => openSummer()} className="flex min-h-[72px] min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left transition hover:bg-muted/60">
-                <CleoAvatar size="lg" />
-                <span className="min-w-0">
-                  <span className="block truncate text-[16px] leading-5">Cleo</span>
-                  <span className="mt-0.5 block truncate text-[15px] leading-5 text-muted-foreground">{CLEO_ROLE_LINE} · Ask anything, or tap the mic</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openSummer({ dictate: true })}
-                className="flex w-16 shrink-0 items-center justify-center transition hover:bg-muted/60"
-                aria-label="Talk to Cleo"
-                title="Talk to Cleo"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-foreground">
+          {/* Cleo and the coaching queues lead All, pinned like iMessage's pins: a
+              normal row each, hidden by a search, another filter or Groups. */}
+          {pinnedSystem && cleoOn && (
+            // Not a client thread: nothing is ever sent.
+            <ChatListRow
+              as="div"
+              data-cleo-row
+              onClick={() => openSummer()}
+              avatar={<CleoAvatar size="lg" />}
+              name="Cleo"
+              preview={`${CLEO_ROLE_LINE} · Ask anything, or tap the mic`}
+              pinned
+              after={
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openSummer({ dictate: true }); }}
+                  className="grid h-10 w-10 place-items-center rounded-full border border-border text-foreground transition hover:bg-muted/60"
+                  aria-label="Talk to Cleo"
+                  title="Talk to Cleo"
+                >
                   <Mic className="h-5 w-5" />
-                </span>
-              </button>
-            </div>
+                </button>
+              }
+            />
           )}
           {/* Replies and follow-ups to pain reports waiting for approval (whoever has automation; it hides itself otherwise). */}
-          {!search && filter === "Inbox" && <RecoveryInboxRow />}
-          {!search && filter === "Inbox" && <CompetitionsInboxRow />}
+          {pinnedSystem && <RecoveryInboxRow />}
+          {pinnedSystem && <CompetitionsInboxRow />}
           {/* New coaching applications, with the AI's read and a text to send (admin). */}
-          {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
+          {role === "admin" && pinnedSystem && <LeadsInboxRow />}
           {/* Free membership applications waiting on a decision (admin). */}
-          {role === "admin" && !search && filter === "Inbox" && <MemberApplicationsInboxRow />}
+          {role === "admin" && pinnedSystem && <MemberApplicationsInboxRow />}
           {/* Their athletes found on OpenIPF and new meets for the linked ones (a coach sees their own clients'). */}
-          {!search && filter === "Inbox" && <OpenIpfInboxRow />}
+          {pinnedSystem && <OpenIpfInboxRow />}
           {listRows.length === 0 && clientsState === "loading" ? (
             <ListSkeleton rows={6} className="p-4" label="Loading conversations" />
           ) : listRows.length === 0 && clientsState === "offline" ? (
@@ -1108,9 +1154,19 @@ export function MessagesInbox({
             <ErrorState error={clientsQ.error} what="your conversations" onRetry={() => clientsQ.refetch()} retrying={clientsQ.isFetching} className="m-4" />
           ) : listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              {filter === "Support" && supportQueue === "needs_me" ? "Nothing needs you in Support. Cleo hands chats to you here." : "No conversations."}
+              {filter === "Support" && supportQueue === "needs_me" ? "Nothing needs you in Support. Cleo hands chats to you here."
+                : primary === "unread" ? "You're all caught up." : primary === "groups" ? "No group chats yet. Start one from ⋯." : "No conversations."}
             </div>
-          ) : listRows.map((row) => row.kind === "support" ? (
+          ) : listRows.map((row) => row.kind === "group" ? (
+            <GroupChatRow
+              key={`group:${row.item.group.id}`}
+              group={row.item.group}
+              last={row.item.last}
+              unread={row.item.unread}
+              selected={groupId === row.item.group.id}
+              onClick={() => selectGroup(row.item.group.id)}
+            />
+          ) : row.kind === "support" ? (
             <SupportChatRow
               key={`support:${row.item.threadId}`}
               chat={row.item}
@@ -1240,7 +1296,9 @@ export function MessagesInbox({
           paneOpen ? "flex" : "hidden md:flex",
         )}
       >
-        {supportOpen ? (
+        {openGroup ? (
+          <GroupThreadPane key={openGroup.id} group={openGroup} canManage onBack={clearSelection} />
+        ) : supportOpen ? (
           <MemberSupportPane
             key={openSupport?.threadId ?? supportId ?? `client:${selected?.id}`}
             threadId={openSupport?.threadId ?? supportId ?? undefined}
@@ -1445,8 +1503,8 @@ export function MessagesInbox({
           onOpenChat={() => { if (briefRow) selectClient(briefRow.client.id); }}
           onMarkDone={() => { if (briefRow) void changeWorkflow(briefRow.client.id, "done", { undoFrom: "needs_response" }); }}
         />
+        {newGroupOpen && <CreateGroupDialog open={newGroupOpen} onOpenChange={setNewGroupOpen} />}
       </div>
-      )}
     </div>
   );
 }
@@ -1507,36 +1565,117 @@ function SupportChatRow({
   );
 }
 
-function TabsHeader({
-  tab, setTab, onMass,
-}: { tab: "chats" | "groups"; setTab: (t: "chats" | "groups") => void; onMass: () => void }) {
+/**
+ * Everything that isn't a chat, out of the way under one ⋯ beside the search:
+ * a new group, a mass message, automations, app alerts and the guide.
+ */
+function InboxMoreMenu({ appAlerts, onNewGroup, onMass, onGuide }: { appAlerts: number; onNewGroup: () => void; onMass: () => void; onGuide: () => void }) {
+  const navigate = useNavigate();
+  // after the menu has closed, so a dialog takes focus cleanly
+  const later = (fn: () => void) => () => window.setTimeout(fn, 0);
   return (
-    <div className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-1.5 md:px-4 md:py-2">
-      <div className="inline-flex rounded-full bg-secondary/60 p-0.5 text-xs">
-        <button
-          onClick={() => setTab("chats")}
-          className={cn(
-            "rounded-full px-3 py-1 font-semibold transition",
-            tab === "chats" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-          )}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" className="relative h-10 w-10 shrink-0" aria-label={appAlerts ? `More, ${appAlerts} app alerts` : "More"} data-inbox-more>
+          <MoreHorizontal className="h-5 w-5" />
+          {appAlerts > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" aria-hidden />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuItem className="min-h-10" onSelect={later(onNewGroup)}>
+          <UsersIcon className="mr-2 h-4 w-4" /> New group chat
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-10" onSelect={later(onMass)}>
+          <Megaphone className="mr-2 h-4 w-4" /> Mass message
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-10" onSelect={() => navigate({ to: "/admin/automations" })}>
+          <Zap className="mr-2 h-4 w-4" /> Automations
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-10" onSelect={() => navigate({ to: "/admin/communication", search: { tab: "support" } as any })} data-inbox-alerts>
+          <AlertTriangle className="mr-2 h-4 w-4" /> App alerts
+          {appAlerts > 0 && <span className="ml-auto rounded-full bg-destructive px-1.5 text-[11px] font-bold leading-5 text-destructive-foreground tabular-nums">{appAlerts > 99 ? "99+" : appAlerts}</span>}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="min-h-10" onSelect={later(onGuide)}>
+          <HelpCircle className="mr-2 h-4 w-4" /> How Messages works
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** The Filter menu's groups, in the order a coach works them. */
+const FILTER_GROUPS: { label: string; filters: Filter[] }[] = [
+  { label: "Conversations", filters: ["Reply", "Important", "Support"] },
+  { label: "Forms", filters: ["Weekly", "Nutrition", "To Review", "Overdue"] },
+  { label: "Training", filters: ["Pain", "Media", "Sessions", "Program"] },
+  { label: "", filters: ["Archived"] },
+];
+
+/**
+ * The coach's narrower views in one chip after the four filters: Needs reply,
+ * Important, check-ins, Nutrition Updates, forms, pain, photos & videos,
+ * session requests, program data and Archived, each with how many chats are
+ * in it. On one, the chip says which, and the menu's first line clears it.
+ */
+function FilterMenu({ filter, counts, onPick }: { filter: Filter; counts: Partial<Record<Filter, number>>; onPick: (f: Filter) => void }) {
+  const on = filter !== "Inbox";
+  const waiting = FILTERS.some((f) => f !== "Inbox" && !!FILTER_BADGE[f] && (counts[f] ?? 0) > 0);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          data-inbox-filter-menu={on ? filter : "none"}
+          aria-label={on ? `Filter: ${FILTER_LABEL[filter] ?? filter}` : waiting ? "Filter, something's waiting" : "Filter"}
+          className={cn("relative h-10 w-10 shrink-0", on && "bg-secondary")}
         >
-          1:1 Chats
-        </button>
-        <button
-          onClick={() => setTab("groups")}
-          className={cn(
-            "rounded-full px-3 py-1 font-semibold transition",
-            tab === "groups" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-          )}
-        >
-          <UsersIcon className="mr-1 inline h-3 w-3" /> Groups
-        </button>
-      </div>
-      <div className="flex-1" />
-      <Button size="sm" variant="outline" onClick={onMass} className="h-8 shrink-0 px-2 md:px-3" aria-label="Mass message">
-        <Megaphone className="h-3.5 w-3.5 md:mr-1" />
-        <span className="hidden md:inline">Mass Message</span>
-      </Button>
-    </div>
+          <SlidersHorizontal className="h-5 w-5" />
+          {waiting && !on && <span className={cn("absolute right-1.5 top-1.5 h-2 w-2 rounded-full", UNREAD_DOT)} aria-hidden />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-[70vh] w-64 overflow-y-auto">
+        {on && (
+          <>
+            <DropdownMenuItem className="min-h-10 font-semibold" onSelect={() => onPick("Inbox")}>
+              <X className="mr-2 h-4 w-4" /> Clear filter
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {FILTER_GROUPS.map((g, gi) => (
+          <div key={g.label || gi}>
+            {gi > 0 && <DropdownMenuSeparator />}
+            {g.label && <DropdownMenuLabel className="text-[12px] font-semibold text-muted-foreground">{g.label}</DropdownMenuLabel>}
+            {g.filters.map((f) => {
+              const n = counts[f] ?? 0;
+              return (
+                <DropdownMenuItem
+                  key={f}
+                  className={cn("min-h-10", filter === f && "bg-secondary")}
+                  onSelect={() => onPick(f)}
+                  data-inbox-filter={f}
+                >
+                  <span className="flex-1">{FILTER_LABEL[f] ?? f}</span>
+                  {n > 0 && (
+                    <span
+                      data-filter-badge={FILTER_BADGE[f] ?? "count"}
+                      className={cn(
+                        "ml-2 inline-block h-5 min-w-5 rounded-full px-1.5 text-center text-[12px] font-bold leading-5 tabular-nums",
+                        FILTER_BADGE[f] ? BADGE_STYLE[FILTER_BADGE[f]!] : "bg-foreground/10 text-foreground",
+                      )}
+                    >
+                      {badgeNumber(n)}
+                    </span>
+                  )}
+                  {filter === f && <Check className="ml-2 h-4 w-4" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
