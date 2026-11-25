@@ -1,8 +1,9 @@
 /**
  * The coach's calendar choices, remembered on their account so they follow
  * them across phone and desktop: the Calendar page's view (Month / Week /
- * Day / List), the Home card's view (Day / Week / Month / List), and Coaching vs
- * + Google. Every account has its own (a client's Calendar page and Home card
+ * Day / List), the Home card's view (Day / Week / Month / List), Coaching vs
+ * + Google, and how the Workouts week reads (the horizontal calendar or the
+ * list, `workoutsWeek`). Every account has its own (a client's Calendar page and Home card
  * read the same two choices as the coach's). A copy on the device makes the first paint right (no flash of
  * the default), and the account copy wins when it's newer (changed on the
  * other device). Whichever was changed last wins, as for the theme.
@@ -15,6 +16,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import type { WeekLayout } from "@/lib/workouts/week-layout";
 
 export type BoardView = "month" | "week" | "day" | "upcoming";
 export type HomeView = "day" | "week" | "month" | "list";
@@ -27,6 +29,8 @@ export type CalendarPrefs = {
   /** List: one day at a time, or the week. */
   listScope?: ListScope;
   includeGoogle?: boolean;
+  /** Workouts: the week as the horizontal calendar (the default) or the list. */
+  workoutsWeek?: WeekLayout;
   /** When these were last changed (ISO), to pick the newer of device and account. */
   updatedAt?: string;
 };
@@ -47,6 +51,7 @@ export function sanitizePrefs(raw: unknown): CalendarPrefs {
   if (HOME_VIEWS.includes(r.homeView as HomeView)) out.homeView = r.homeView as HomeView;
   if (r.listScope === "day" || r.listScope === "week") out.listScope = r.listScope;
   if (typeof r.includeGoogle === "boolean") out.includeGoogle = r.includeGoogle;
+  if (r.workoutsWeek === "calendar" || r.workoutsWeek === "list") out.workoutsWeek = r.workoutsWeek;
   if (typeof r.updatedAt === "string" && !Number.isNaN(Date.parse(r.updatedAt))) out.updatedAt = r.updatedAt;
   return out;
 }

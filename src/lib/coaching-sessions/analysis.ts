@@ -20,9 +20,22 @@
  */
 import { numbersIn, ungroundedNumbers } from "@/lib/competition/grounding";
 import { parseJsonObject } from "./brief";
+import { ambiguousLoads, unitCheckLine } from "./units";
 
 export type Basis = "confirmed" | "tentative" | "interpretation";
-export type ItemKind = "agreement" | "tentative" | "athlete_commitment" | "coach_commitment" | "concern" | "goal" | "win" | "open_question";
+export type ItemKind =
+  | "agreement"
+  | "tentative"
+  | "athlete_commitment"
+  | "coach_commitment"
+  | "concern"
+  | "goal"
+  | "win"
+  | "open_question"
+  /** coaching feedback the coach gave */
+  | "feedback"
+  /** a measurable objective set in the meeting */
+  | "objective";
 export type Speaker = "coach" | "athlete" | "unclear";
 
 export type AnalysisItem = { kind: ItemKind; text: string; quote: string; speaker: Speaker; due: string | null; basis: Basis };
@@ -41,11 +54,13 @@ export type AnalysisRecommendation = {
   tradeoffs: string;
   affects: string;
   basis: Basis;
+  /** what needs the coach's check before it's used (an unconfirmed unit) */
+  flags?: string[];
 };
 
 export const INTEL_KINDS = ["goal", "preference", "training_response", "approach", "decision", "technique", "constraint", "achievement", "relationship", "concern", "other"] as const;
 export type IntelKind = (typeof INTEL_KINDS)[number];
-export type IntelCandidate = { kind: IntelKind; text: string; permanence: "lasting" | "temporary"; expiresOn: string | null; quote: string };
+export type IntelCandidate = { kind: IntelKind; text: string; permanence: "lasting" | "temporary"; expiresOn: string | null; quote: string; speaker?: Speaker; event?: boolean };
 
 export type Contradiction = { text: string; quote: string; against: string };
 
@@ -58,6 +73,8 @@ export type MeetingAnalysis = {
   /** private to the coach: how the conversation went, never sent */
   feedback: { strengths: string[]; consider: string[] };
   followUp: { level: string; when: string; why: string } | null;
+  /** loads said without a clear unit, to confirm before they're used */
+  unitChecks?: string[];
   dropped: string[];
 };
 
@@ -109,7 +126,7 @@ export function hedged(quote: string): boolean {
 
 const clip = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
 const list = (v: unknown) => (Array.isArray(v) ? v : []);
-const ITEM_KINDS: ItemKind[] = ["agreement", "tentative", "athlete_commitment", "coach_commitment", "concern", "goal", "win", "open_question"];
+const ITEM_KINDS: ItemKind[] = ["agreement", "tentative", "athlete_commitment", "coach_commitment", "concern", "goal", "win", "open_question", "feedback", "objective"];
 const isDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
@@ -119,7 +136,26 @@ export type CheckContext = {
   recordNumbers?: unknown;
   /** confirmed lasting intelligence, not proposed again */
   knownIntelligence?: string[];
+  /** the client's training unit, for loads said in the meeting */
+  clientUnit?: "kg" | "lb" | null;
+  /** recommendations already decided in recent meetings: not proposed again */
+  recentRecommendations?: string[];
 };
+
+/** Two titles say the same thing (most of their words in common). */
+export function sameIdea(a: string, b: string): boolean {
+  // "4th" and "fourth", "Saturdays" and "Saturday" are the same word here
+  const stem = (w: string) => ORDINALS[w] ?? (w.length > 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w);
+  const words = (t: string) => new Set(normalizeWords(t).split(" ").map(stem).filter((w) => w.length > 2 && !STOP.has(w)));
+  const A = words(a);
+  const B = words(b);
+  if (!A.size || !B.size) return false;
+  let both = 0;
+  for (const w of A) if (B.has(w)) both++;
+  return both / Math.min(A.size, B.size) >= 0.7;
+}
+const ORDINALS: Record<string, string> = { "1st": "first", "2nd": "second", "3rd": "third", "4th": "fourth", "5th": "fifth", "6th": "sixth", "7th": "seventh" };
+const STOP = new Set(["the", "and", "for", "with", "their", "them", "they", "your", "you", "from", "into", "this", "that", "keep", "more", "less", "each", "week", "weeks", "then"]);
 
 /** Read and check a model's analysis against the transcript it was given. */
 export function checkAnalysis(text: string, transcript: string, ctx: CheckContext): MeetingAnalysis | null {
@@ -185,6 +221,15 @@ export function checkAnalysis(text: string, transcript: string, ctx: CheckContex
       dropped.push(`Recommendation "${title.slice(0, 70)}": no change was described`);
       continue;
     }
+    if ((ctx.recentRecommendations ?? []).some((t) => sameIdea(t, rec.title))) {
+      dropped.push(`Recommendation "${title.slice(0, 70)}": already decided in a recent meeting`);
+      continue;
+    }
+    if (recommendations.some((r) => sameIdea(r.title, rec.title))) continue;
+    if (rec.area === "training" || rec.area === "competition" || rec.area === "nutrition") {
+      const loads = ambiguousLoads([rec.current, rec.proposed, ...rec.quotes].join(" \n "), ctx.clientUnit ?? null);
+      if (loads.length) rec.flags = loads.map((c) => unitCheckLine(c, ctx.clientUnit ?? null));
+    }
     recommendations.push(rec);
   }
   if (recommendations.length > 5) {
@@ -206,7 +251,8 @@ export function checkAnalysis(text: string, transcript: string, ctx: CheckContex
     if (known.has(normalizeWords(t))) continue;
     const temporary = r?.permanence === "temporary";
     const expiresOn = temporary ? (isDate(r?.expires_on) && r.expires_on > ctx.today ? r.expires_on : addDays(ctx.today, 28)) : null;
-    intelligence.push({ kind, text: t, permanence: temporary ? "temporary" : "lasting", expiresOn, quote });
+    const speaker: Speaker = r?.speaker === "coach" || r?.speaker === "athlete" ? r.speaker : "unclear";
+    intelligence.push({ kind, text: t, permanence: temporary ? "temporary" : "lasting", expiresOn, quote, speaker, event: r?.scope === "event" || r?.event === true });
   }
 
   const contradictions: Contradiction[] = [];
@@ -231,6 +277,8 @@ export function checkAnalysis(text: string, transcript: string, ctx: CheckContex
       consider: list(fb.consider).map((s) => clip(s, 240)).filter(Boolean).slice(0, 3),
     },
     followUp: f && typeof f === "object" && clip(f.level, 40) ? { level: clip(f.level, 40), when: clip(f.when, 120), why: clip(f.why, 300) } : null,
+    // across the whole conversation, only loads for a meet (attempts are where a wrong unit costs a result)
+    unitChecks: ambiguousLoads(transcript, ctx.clientUnit ?? null, { meetOnly: true }).slice(0, 6).map((c) => unitCheckLine(c, ctx.clientUnit ?? null)),
     dropped,
   };
 }

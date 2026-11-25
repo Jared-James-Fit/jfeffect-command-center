@@ -72,6 +72,16 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
         } catch (e: any) {
           sessionReminders = { error: String(e?.message ?? e) };
         }
+        // Calls' day-before message (confirm, and only-useful preparation
+        // questions) goes first, so the push reminders below skip their own
+        // day-before push for those calls: one notification, never two.
+        let meetingAutomation: unknown = null;
+        try {
+          const { runMeetingAutomation } = await import("@/lib/coaching-sessions/automation.server");
+          meetingAutomation = await runMeetingAutomation(supabaseAdmin as any);
+        } catch (e: any) {
+          meetingAutomation = { error: String(e?.message ?? e) };
+        }
         // Push reminders for calls and sessions (client and coach) and the coach's
         // "tomorrow" summary: session-reminders.ts, each sent once by its key.
         let pushReminders: unknown = null;
@@ -87,7 +97,7 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
         } catch (e: any) {
           googleSync = { error: String(e?.message ?? e) };
         }
-        return Response.json({ sent, failed, skipped, total: (due ?? []).length, sessionReminders, pushReminders, googleSync });
+        return Response.json({ sent, failed, skipped, total: (due ?? []).length, sessionReminders, meetingAutomation, pushReminders, googleSync });
       },
     },
   },

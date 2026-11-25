@@ -58,7 +58,7 @@ export function aiConsentNeedsAsking(row: AiConsentRow): boolean {
   return s === "unasked" || s === "outdated";
 }
 
-/** Tags a server refusal the person can fix themselves (the app opens the consent sheet). */
+/** Tags a server refusal the person can fix themselves (the app shows its inline request beside the action). */
 export const AI_CONSENT_MARKER = "[ai-consent]";
 
 export function selfConsentMessage(): string {

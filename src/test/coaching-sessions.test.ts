@@ -105,17 +105,22 @@ describe("preparation keeps every line's source", () => {
   });
 });
 
-describe("the agenda leaves the athlete a real share of the call", () => {
-  it("15 to 30 minutes, the five sections, the athlete's corner 25–35%", () => {
+describe("the plan is coach-led: Connect, Recognize, Evaluate, Coach, Execute, Align", () => {
+  it("15 to 30 minutes, the stages in order, timing that adds up, room for them to talk", () => {
     for (const topics of [null, "a", "b"]) {
       const prep = buildSessionPrep({ ...base, topics, coachPriorities: ["Settle the attempts"] });
       const a = planAgenda(prep);
+      expect(a.version).toBe(2);
       expect(a.minutes).toBeGreaterThanOrEqual(15);
       expect(a.minutes).toBeLessThanOrEqual(30);
-      expect(a.sections.map((s) => s.key)).toEqual(["going_well", "improve", "athletes_corner", "game_plan", "alignment"]);
+      const order = ["connect", "recognize", "evaluate", "coach", "execute", "align"];
+      const keys = a.sections.map((s) => s.key);
+      expect(keys).toEqual(order.filter((k) => keys.includes(k as any)));
+      expect(keys[0]).toBe("connect");
+      expect(keys.at(-1)).toBe("align");
       expect(a.sections.reduce((s, x) => s + x.minutes, 0)).toBe(a.minutes);
       expect(a.athleteShare).toBeGreaterThanOrEqual(ATHLETE_SHARE.min);
-      expect(a.athleteShare).toBeLessThanOrEqual(ATHLETE_SHARE.max + 0.05);
+      expect(a.objective.length).toBeGreaterThan(5);
     }
   });
 });

@@ -24,6 +24,9 @@ export const Route = createFileRoute("/api/public/hooks/coaching-sessions-tick")
           if (!s.transcript_path) continue;
           const { error } = await sb.storage.from("coaching-transcripts").remove([s.transcript_path]);
           if (error) continue;
+          // the recording's audio goes with its transcript
+          const { deleteRecordingAudio } = await import("@/lib/coaching-sessions/audio.server");
+          await deleteRecordingAudio(sb, s.id).catch(() => 0);
           await sb
             .from("coaching_sessions")
             .update({ transcript_path: null, transcript_deleted_at: new Date().toISOString() })

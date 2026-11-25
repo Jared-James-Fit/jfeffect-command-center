@@ -15,6 +15,7 @@ import {
   type Commitment,
   type CompetitionContext,
   type Intervention,
+  type MeetingExtras,
   type SessionPrep,
   type Agenda,
 } from "./prepare";
@@ -107,6 +108,8 @@ export type SessionContext = {
   records: Awaited<ReturnType<typeof loadClientPrepRecords>>;
   /** competitions by id, for what the questionnaire still needs to ask */
   registration: Record<string, string>;
+  /** everything else on file a meeting can use (each part best effort) */
+  extras: MeetingExtras;
 };
 
 /**
@@ -144,7 +147,7 @@ export async function loadSessionContext(supabase: any, clientId: string, opts: 
       .limit(1);
     return !!link?.length;
   }, false);
-  const [competitions, preps, plan, goal, commitments, intelligence, booked, records, done] = await Promise.all([
+  const [competitions, preps, plan, goal, commitments, intelligence, booked, records, done, extrasRaw] = await Promise.all([
     safe(async () => (await supabase.from("competitions").select("id, name, meet_date, location, weight_class, status, prep_id, internal_test, registration").eq("client_id", clientId)).data ?? [], [] as any[]),
     safe(async () => (await supabase.from("pl_preps").select("id, title, event_name, event_date, weight_class, status, archived").eq("client_id", clientId)).data ?? [], [] as any[]),
     safe(async () => {
@@ -188,8 +191,10 @@ export async function loadSessionContext(supabase: any, clientId: string, opts: 
       const s = data?.[0] as any;
       return s ? String(s.scheduled_at ?? s.created_at).slice(0, 10) : null;
     }, null),
+    loadMeetingExtras(supabase, clientId, today, "lb"),
   ]);
   const lastReview = records.reviews[0]?.date ?? null;
+  const extras: MeetingExtras = { ...extrasRaw, unit: records.unit };
   return {
     today,
     clientId,
@@ -217,6 +222,129 @@ export async function loadSessionContext(supabase: any, clientId: string, opts: 
     lastCallOn: [lastReview, done].filter(Boolean).sort().pop() ?? null,
     records,
     registration: Object.fromEntries((competitions as any[]).map((c) => [c.id, String(c.registration ?? "unknown")])),
+    extras,
+  };
+}
+
+const addDaysIso = (iso: string, n: number) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * The rest of the client's file a meeting can use, read with the caller's own
+ * login (RLS decides): the program on the calendar and what follows it, their
+ * own recent words in the coach chat, set videos, cardio, the last meeting's
+ * summary and the commitments closed since. Every part is best effort: one
+ * that can't be read is left out, never guessed.
+ */
+export async function loadMeetingExtras(supabase: any, clientId: string, today: string, unit: "kg" | "lb"): Promise<MeetingExtras> {
+  const from = addDaysIso(today, -28);
+  const [blocks, msgs, videos, cardioT, cardioC, last, done] = await Promise.all([
+    safe(async () => {
+      const { data, error } = await supabase
+        .from("pl_blocks")
+        .select("name, start_date, end_date, weeks, status, archived, client_visible")
+        .eq("client_id", clientId)
+        .eq("archived", false)
+        .not("start_date", "is", null)
+        .order("start_date");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    }, [] as any[]),
+    safe(async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("body, created_at, sender_role, is_internal_note, deleted_at")
+        .eq("client_id", clientId)
+        .eq("sender_role", "client")
+        .gte("created_at", `${addDaysIso(today, -10)}T00:00:00Z`)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    }, [] as any[]),
+    safe(async () => {
+      const { data, error } = await supabase
+        .from("pl_set_videos")
+        .select("created_at")
+        .eq("client_id", clientId)
+        .is("deleted_at", null)
+        .gte("created_at", `${from}T00:00:00Z`)
+        .order("created_at", { ascending: false })
+        .limit(60);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    }, null as any[] | null),
+    safe(async () => {
+      const { data, error } = await supabase.from("cardio_targets").select("frequency_per_week, start_date, end_date").eq("client_id", clientId);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    }, [] as any[]),
+    safe(async () => {
+      const { data, error } = await supabase
+        .from("cardio_completions")
+        .select("completed_date, completed, skipped")
+        .eq("client_id", clientId)
+        .gte("completed_date", from);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    }, null as any[] | null),
+    safe(async () => {
+      const { data } = await supabase
+        .from("coaching_sessions")
+        .select("scheduled_at, created_at, analysis, game_plan")
+        .eq("client_id", clientId)
+        .eq("status", "done")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      return (data?.[0] ?? null) as any;
+    }, null),
+    safe(async () => {
+      const { data } = await supabase
+        .from("coaching_session_commitments")
+        .select("owner, text, closed_at")
+        .eq("client_id", clientId)
+        .eq("status", "done")
+        .gte("closed_at", `${from}T00:00:00Z`)
+        .order("closed_at", { ascending: false })
+        .limit(6);
+      return (data ?? []) as any[];
+    }, [] as any[]),
+  ]);
+  // the program on the calendar today, and the one after it
+  const live = (blocks as any[]).filter((b) => b.client_visible !== false && b.status !== "Draft");
+  const now = live.find((b) => b.start_date <= today && (!b.end_date || b.end_date >= today)) ?? null;
+  const next = live.find((b) => b.start_date > today) ?? null;
+  const week = now?.start_date ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${now.start_date}T00:00:00Z`)) / (7 * 86_400_000)) + 1 : null;
+  // their own words worth bringing to a meeting: a question, a worry, a request (never "ok" or "thanks")
+  const worth = (t: string) => t.length >= 25 && (/\?/.test(t) || /\b(worried|concern|struggl|hurt|pain|can't|cant|help|confused|not sure|unsure|stress|tired|sore|want to|should i)\b/i.test(t));
+  const recentMessages = (msgs as any[])
+    .filter((m) => !m.is_internal_note && !m.deleted_at && typeof m.body === "string" && worth(m.body.trim()))
+    .slice(0, 3)
+    .map((m) => ({ date: String(m.created_at).slice(0, 10), text: m.body.trim().replace(/\s+/g, " ").slice(0, 220) }));
+  const perWeek = (cardioT as any[])
+    .filter((t) => (!t.end_date || t.end_date >= from) && (!t.start_date || t.start_date <= today))
+    .reduce((a, t) => a + (Number(t.frequency_per_week) || 0), 0);
+  const cardio = perWeek > 0 && cardioC ? { planned: Math.round(perWeek * 4), done: (cardioC as any[]).filter((c) => c.completed && !c.skipped).length } : null;
+  return {
+    unit,
+    program: now
+      ? {
+          name: String(now.name),
+          week: week && now.weeks ? Math.min(week, Number(now.weeks)) : week,
+          weeks: now.weeks ? Number(now.weeks) : null,
+          endsOn: now.end_date ?? null,
+          nextName: next ? String(next.name) : null,
+          nextStarts: next?.start_date ?? null,
+        }
+      : null,
+    recentMessages,
+    videos: videos ? { count: videos.length, lastDate: videos[0] ? String(videos[0].created_at).slice(0, 10) : null } : null,
+    cardio,
+    lastMeeting: last ? { date: String(last.scheduled_at ?? last.created_at).slice(0, 10), summary: last.analysis?.summary ? String(last.analysis.summary).slice(0, 280) : null } : null,
+    doneCommitments: (done as any[]).map((d) => ({ owner: d.owner, text: d.text, closedOn: d.closed_at ? String(d.closed_at).slice(0, 10) : null })),
   };
 }
 
@@ -260,6 +388,8 @@ export async function prepareFor(
     before?: string;
     /** questionnaire keys they answered: what's missing from the records is covered by their words */
     covered?: Set<string>;
+    format?: string | null;
+    now?: string;
   },
 ): Promise<PreparedSession> {
   const competition = await competitionContext(supabase, opts.event?.competitionId ?? null);
@@ -278,6 +408,8 @@ export async function prepareFor(
     coachNotes: opts.coachNotes ?? null,
     coachPriorities: opts.priorities ?? [],
     answers: opts.answers ?? {},
+    firstName: ctx.firstName,
+    ...ctx.extras,
   });
   if (opts.covered?.size) {
     const c = opts.covered;
@@ -285,7 +417,7 @@ export async function prepareFor(
       (m) => !((c.has("bodyweight") && /weigh-in/i.test(m.text)) || (c.has("training_feel") && /check-in/i.test(m.text))),
     );
   }
-  const agenda = planAgenda(prep, opts.minutes ? { minutes: opts.minutes } : {});
+  const agenda = planAgenda(prep, { minutes: opts.minutes ?? undefined, format: opts.format ?? "call", now: opts.now, firstName: ctx.firstName });
   const intervention = recommendIntervention({
     today: ctx.today,
     event: opts.event,
@@ -312,18 +444,48 @@ export function pickEvent(ctx: SessionContext, eventKey: string | null | undefin
 /* ------------------------------------------------------------------ */
 /* The pre-call questions                                              */
 
-/** What the questions would ask for this session, worked out from the records. */
+/** What the questions would ask for this session, worked out from the records (only what they can't tell). */
 export function questionsFor(ctx: SessionContext, event: SessionEvent | null, topicsKnown: boolean) {
-  return import("./questionnaire").then(({ questionnaireFor }) =>
-    questionnaireFor({
+  return import("./questionnaire").then(({ questionnaireFor }) => {
+    const pain = ctx.records.pain.find((p) => p.reasons.length > 0 && !/better|improv/i.test(p.trend ?? ""));
+    const wk = ctx.records.workouts;
+    const unlogged = wk && wk.planned >= 4 && wk.done / wk.planned < 0.75 ? wk.planned - wk.done : 0;
+    return questionnaireFor({
       today: ctx.today,
       lastCheckin: ctx.records.checkins?.latest ?? null,
       lastWeighIn: ctx.records.bodyweight?.latestDate ?? null,
-      event: event ? { kind: event.kind, daysOut: event.daysOut } : null,
+      event: event ? { kind: event.kind, daysOut: event.daysOut, title: event.title } : null,
       registeredKnown: !!(event?.competitionId && ctx.registration[event.competitionId] === "registered"),
       topicsKnown,
-    }),
-  );
+      painOpen: pain ? { label: pain.label, since: null } : null,
+      unlogged,
+      bodyweightMatters: !!(event?.weightClass || ctx.records.bodyweight?.goalKg),
+    });
+  });
+}
+
+/** A short fingerprint of a prep: a refresh that produces the same one changes nothing. */
+export function prepHash(prep: SessionPrep): string {
+  const text = JSON.stringify(prep, (k, v) => (k === "addedAt" ? undefined : v));
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * Whether the coach behind a meeting has Cleo, read by the server (the worker
+ * has no login of theirs): the admin always, a coach while coaches are on.
+ */
+export async function cleoForUser(sb: any, userId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  return safe(async () => {
+    const { data: roles } = await sb.from("user_roles").select("role").eq("user_id", userId);
+    const r = new Set(((roles ?? []) as any[]).map((x) => String(x.role)));
+    if (r.has("admin")) return true;
+    if (!r.has("coach")) return false;
+    const { data } = await sb.rpc("cleo_access_settings");
+    return (data as any)?.coach === true || (data as any)?.coach === "true";
+  }, false);
 }
 
 /**

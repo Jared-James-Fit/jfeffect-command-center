@@ -28751,6 +28751,8 @@ export type Database = {
           uses_credit: boolean
           visible_to_client: boolean
           wants_meet: boolean
+          client_confirmed_at: string | null
+          confirmation_requested_at: string | null
         }
         Insert: {
           booked_via?: string | null
@@ -28789,6 +28791,8 @@ export type Database = {
           uses_credit?: boolean
           visible_to_client?: boolean
           wants_meet?: boolean
+          client_confirmed_at?: string | null
+          confirmation_requested_at?: string | null
         }
         Update: {
           booked_via?: string | null
@@ -28827,6 +28831,8 @@ export type Database = {
           uses_credit?: boolean
           visible_to_client?: boolean
           wants_meet?: boolean
+          client_confirmed_at?: string | null
+          confirmation_requested_at?: string | null
         }
         Relationships: [
           {

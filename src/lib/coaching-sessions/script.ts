@@ -1,15 +1,15 @@
 /**
- * The coach's presenter script (Nov 25 2026, pure, tested in
- * coaching-sessions-script.test.ts): one script per slide of the shared
- * screen, built in code from the very agenda the presentation reads
- * (athleteView's order: a title slide, then each agenda section), so the
- * script and the screen can never disagree. No model writes it: every line
- * is a template around the prep's own sourced items and Cleo's checked brief
- * questions, so nothing is invented, it costs nothing and it's ready the
- * moment the meeting opens. Private: only the coach's window renders it; the
- * shared screen (getPresentationFn) never sees any of it.
+ * The coach's speaking script (pure, tested in coaching-sessions-script.test.ts):
+ * one script per stage of the plan, built in code from the very plan the shared
+ * screen reads, so the script and the screen never disagree. Coach-led: the
+ * coach says what they see, what's working, what's limiting progress and what
+ * to do about it; a question appears only where a talking point is one (a
+ * clarification, the closing say-back). No model writes it: each line is the
+ * point's own phrasing (the coach's edit first, then Cleo's checked refinement,
+ * then the plan's), so nothing is invented, it costs nothing and it's ready
+ * the moment the meeting opens. Private: only the coach's windows render it.
  */
-import type { Agenda, PrepItem, SectionKey } from "./prepare";
+import { normalizeAgenda, type Agenda, type PrepItem, type SectionKey, type TalkingPoint } from "./prepare";
 import type { SessionBrief } from "./brief";
 
 export type ScriptSlide = {
@@ -18,16 +18,18 @@ export type ScriptSlide = {
   minutes: number;
   /** what to say, in order */
   say: string[];
-  /** questions to ask */
+  /** questions to ask (only real ones) */
   ask: string[];
-  /** where to stop talking and let them speak */
+  /** a note to the coach about this stage */
   pause: string | null;
-  /** the line that moves to the next slide */
+  /** the line that moves to the next stage */
   transition: string | null;
+  /** the talking points behind it, for marking addressed */
+  pointIds?: string[];
 };
 
 export type ScriptInput = {
-  agenda: Agenda | null | undefined;
+  agenda: Agenda | null | undefined | unknown;
   brief?: SessionBrief | null;
   firstName: string | null;
   eventTitle?: string | null;
@@ -36,108 +38,105 @@ export type ScriptInput = {
   missing?: PrepItem[];
 };
 
-const lower = (t: string) => (t ? t[0].toLowerCase() + t.slice(1) : t);
-const shareable = (i: PrepItem) => i.source === "record" || i.source === "athlete";
+const lower = (t: string) => (t ? t[0]!.toLowerCase() + t.slice(1) : t);
+const end = (s: string) => (/[.!?”"]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
 
 const NEXT_WORDS: Record<SectionKey, string> = {
-  going_well: "what's going well",
-  improve: "where we can improve",
-  athletes_corner: "your corner, where you lead",
-  game_plan: "our game plan",
-  alignment: "next steps",
+  connect: "catching up",
+  recognize: "what's going well",
+  evaluate: "what I'm seeing",
+  coach: "what I recommend",
+  execute: "the plan from here",
+  align: "where we're headed",
 };
 
+/** What the stage is for, said to the coach. */
+const COACH_NOTE: Record<SectionKey, string> = {
+  connect: "Keep it short and real. Listen, then lead into the meeting.",
+  recognize: "Be specific: name the win and why it matters. Don't rush past it.",
+  evaluate: "Say what you see plainly. Facts first, your read second, and settle anything unclear before you build on it.",
+  coach: "Give direction with the why. Leave a beat after each recommendation for their reaction.",
+  execute: "Be concrete: who does what, by when, and how you'll both know it's done.",
+  align: "Have them say it back. Finish on confidence, not a list.",
+};
+
+/** A point as spoken: the coach's edit, Cleo's refinement, the plan's phrasing, else the statement itself. */
+export function spoken(i: TalkingPoint, section: SectionKey): string {
+  if (i.edited) return end(i.say?.trim() || i.text);
+  if (i.cleoSay?.trim()) return end(i.cleoSay);
+  if (i.say?.trim()) return end(i.say);
+  const t = i.text.trim();
+  if (i.kind === "question") return end(t);
+  switch (section) {
+    case "recognize":
+      return `${end(t)} That's earned.`;
+    case "evaluate":
+      return i.source === "read" ? `My read: ${end(lower(t))}` : `What I'm seeing: ${end(lower(t))}`;
+    case "coach":
+      return i.source === "athlete" ? `You raised this: ${end(lower(t.replace(/^They want to cover:\s*/i, "")))} Here's my take.` : `My recommendation: ${end(lower(t))}`;
+    case "execute":
+      return end(t);
+    default:
+      return end(t);
+  }
+}
+
 export function buildPresenterScript(x: ScriptInput): ScriptSlide[] {
+  const agenda = normalizeAgenda(x.agenda);
   const name = x.firstName?.trim() || "";
-  const hi = name ? `${name}, ` : "";
-  const sections = x.agenda?.sections ?? [];
-  const minutes = x.agenda?.minutes ?? null;
-  const questions = x.brief?.questions ?? [];
-  const qFor = (k: SectionKey) => questions.filter((q) => q.section === k).map((q) => q.text);
+  const sections = (agenda?.sections ?? []).map((s) => ({ ...s, items: s.items.filter((i) => i.status !== "skipped") })).filter((s) => s.items.length);
+  const minutes = agenda?.minutes ?? null;
   const meet = x.daysOut != null && x.daysOut >= 0;
   const slides: ScriptSlide[] = [];
 
-  // Title slide
   const titleSay: string[] = [
     `${name ? `Hey ${name}, ` : "Hey, "}thanks for making the time.`,
-    meet
-      ? `${x.daysOut === 0 ? "It's meet day" : `We're ${x.daysOut} days out${x.eventTitle ? ` from ${x.eventTitle}` : ""}`}${x.phase ? `, in ${lower(x.phase)}` : ""}. This call is about walking into it clear and confident.`
-      : `This call is about where things stand and what we do next.`,
-    `${minutes ? `We've got about ${minutes} minutes. ` : ""}Quick plan: what's going well, where we can improve, then your corner, where you lead, and we finish with our game plan and next steps.`,
+    agenda?.objective
+      ? `Today's about one thing: ${end(lower(agenda.objective))}`
+      : meet
+        ? `We're ${x.daysOut === 0 ? "at meet day" : `${x.daysOut} days out${x.eventTitle ? ` from ${x.eventTitle}` : ""}`}${x.phase ? `, in ${lower(x.phase)}` : ""}.`
+        : "Today's about where things stand and what we do next.",
+    `${minutes ? `We've got about ${minutes} minutes. ` : ""}I'll go through what I'm seeing and what I recommend, and there's room for anything you want to raise.`,
   ];
   slides.push({
     key: "title",
     title: x.eventTitle || "Opening",
     minutes: 1,
     say: titleSay,
-    ask: ["Before we start, anything on your mind you want to make sure we get to today?"],
-    pause: "Stop and let them answer. Write down anything they raise and make sure it gets time in their corner.",
-    transition: sections[0] ? `Good. Let's start with ${NEXT_WORDS[sections[0].key]}.` : null,
+    ask: [],
+    pause: agenda?.outcome ? `The outcome you want: ${agenda.outcome}` : null,
+    transition: sections[0] ? `Let's start with ${NEXT_WORDS[sections[0].key]}.` : null,
   });
 
   sections.forEach((sec, idx) => {
     const next = sections[idx + 1];
-    const transition = next ? `Let's move to ${NEXT_WORDS[next.key]}.` : "That's everything. Thanks for this, I'll send the game plan to your chat after the call.";
-    const shared = sec.items.filter(shareable).map((i) => i.text);
-    const priv = sec.items.filter((i) => !shareable(i)).map((i) => i.text);
     const say: string[] = [];
-    const ask: string[] = [...qFor(sec.key)];
-    let pause: string | null = null;
-
-    if (sec.key === "going_well") {
-      if (shared.length) {
-        say.push("Let's start with what's working, because it's earned.");
-        for (const t of shared) say.push(`${t}. That's yours, nice work.`);
-      } else {
-        say.push("Before the numbers, I want to hear what you think has gone well. You know your training better than any record.");
-      }
-      if (!ask.length) ask.push("What are you proudest of from this prep so far?");
-      pause = "Let them answer fully. Reinforce what they name: repeat it back and say why it matters for the meet.";
-    } else if (sec.key === "improve") {
-      say.push("Now the stuff that will move you forward most. This isn't about blame, it's about fixing it before it costs us.");
-      for (const t of shared) say.push(`On file: ${lower(t)}.`);
-      for (const t of priv) say.push(`(Your read, keep it as your own framing) ${t}`);
-      if (!ask.length) ask.push("What's made that harder lately?");
-      ask.push("What would make it easier to get done between now and the meet?");
-      pause = "Ask, then stop. Don't fill the silence or offer reasons for them. Listen for the real cause before you suggest a fix.";
-    } else if (sec.key === "athletes_corner") {
-      say.push(`${hi}this part is yours. Anything you want to talk about, questions, worries, things you want from me.`);
-      for (const t of shared) say.push(`You mentioned: ${lower(t)}. Tell me more about that.`);
-      if (!ask.length) ask.push("What's on your mind about the meet right now?");
-      ask.push("Is there anything you're nervous about that we haven't talked about?");
-      ask.push("What do you need from me between now and the meet to feel ready?");
-      pause = "This is their time. Talk less than they do. Acknowledge every concern before answering it, and if you don't know, say you'll find out.";
-    } else if (sec.key === "game_plan") {
-      say.push("Here's what's coming and what we're deciding together.");
-      for (const t of shared) say.push(t.endsWith(".") ? t : `${t}.`);
-      for (const t of priv) say.push(`(Your read, talk it through, don't read it out) ${t}`);
-      if (!ask.length) ask.push("How does that plan sit with you?");
-      ask.push("Anything in there you'd change or that doesn't feel right?");
-      pause = "Pause after each decision and get a clear yes or their concern before moving on. Add each agreement under What we agreed.";
-    } else if (sec.key === "alignment") {
-      say.push("Let's lock in who does what, by when.");
-      for (const t of shared) say.push(t.endsWith(".") ? t : `${t}.`);
-      for (const t of priv) say.push(`(Follow-up from last time) ${t}`);
-      for (const m of x.missing ?? []) say.push(`I still need ${lower(m.text)}. Can you get that to me this week?`);
-      if (!ask.length) ask.push("Can you say back what you're doing before the meet, so we're on the same page?");
-      say.push(
-        meet
-          ? "You've done the work. The job now is to show up rested, make your weight and execute. I'm with you the whole way."
-          : "Good work today. I'm with you on all of it.",
-      );
-      pause = "Let them summarise their part in their own words. Add each one under commitments.";
+    const ask: string[] = [];
+    for (const i of sec.items) {
+      const line = spoken(i, sec.key);
+      if (i.kind === "question") ask.push(line);
+      // the coach sees which lines aren't on the shared screen (a greeting or the close never is)
+      else say.push(i.share || sec.key === "connect" || sec.key === "align" ? line : `(For you) ${line}`);
     }
-
-    // the same question from the brief and the defaults is asked once
-    const seen = new Set<string>();
-    const asks = ask.filter((q) => {
-      const k = q.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    slides.push({ key: sec.key, title: sec.title, minutes: sec.minutes, say, ask: asks, pause, transition });
+    if (sec.key === "align") {
+      for (const m of (x.missing ?? []).slice(0, 2)) say.push(`One thing I still need from you: ${end(lower(m.text))}`);
+      say.push(meet ? "You've done the work. Now we execute. I'm with you the whole way." : "Good work today. I'm with you on all of it.");
+    }
+    const transition = next ? `Next, ${NEXT_WORDS[next.key]}.` : "That's it. I'll send the recap to your chat.";
+    slides.push({ key: sec.key, title: sec.title, minutes: sec.minutes, say, ask, pause: COACH_NOTE[sec.key], transition, pointIds: sec.items.map((i) => i.id) });
   });
+
+  // what's still unclear is asked where it's evaluated (else the first stage after the opening),
+  // and only while it's open: a question is there to settle something, never to interview
+  const open = (agenda?.clarify ?? []).filter((c) => (c.status ?? "open") === "open");
+  if (open.length) {
+    const target = slides.find((s) => s.key === "evaluate") ?? slides.find((s) => s.key === "coach") ?? slides.find((s) => s.key !== "title" && s.key !== "connect") ?? slides[0];
+    for (const c of open.slice(0, 3)) {
+      const q = (c.say?.trim() || c.text).trim();
+      if (!target.ask.includes(q)) target.ask.push(/[?]$/.test(q) ? q : `${q.replace(/[.!]$/, "")}?`);
+    }
+    target.pointIds = [...(target.pointIds ?? []), ...open.slice(0, 3).map((c) => c.id)];
+  }
 
   return slides;
 }
@@ -147,18 +146,18 @@ export function slideText(s: ScriptSlide): string {
   const parts: string[] = [];
   if (s.say.length) parts.push(s.say.join("\n"));
   if (s.ask.length) parts.push(`Ask:\n${s.ask.map((q) => `- ${q}`).join("\n")}`);
-  if (s.pause) parts.push(`Pause: ${s.pause}`);
+  if (s.pause) parts.push(`Note: ${s.pause}`);
   if (s.transition) parts.push(`Then: ${s.transition}`);
   return parts.join("\n\n");
 }
 
-/** The channel the shared screen and the coach's script talk on (same browser, same origin). */
+/** The channel the shared screen and the coach's windows talk on (same browser, same origin). */
 export const presentChannel = (sessionId: string) => `jf-present-${sessionId}`;
 export type PresentMessage = { type: "slide"; index: number } | { type: "go"; index: number } | { type: "hello" };
 
 /**
- * The coach's script in a window of its own (Nov 25 2026), so only the slides
- * window is ever shared. Falls back to this tab when the browser blocks it.
+ * The coach's script in a window of its own, so only the slides window is
+ * ever shared. Falls back to this tab when the browser blocks it.
  */
 export function openScriptWindow(sessionId: string): boolean {
   const url = `/admin/meetings/${sessionId}/script`;
@@ -170,7 +169,7 @@ export function openScriptWindow(sessionId: string): boolean {
   return false;
 }
 
-/** The script's input from a session read (getSessionFn), the same for the sheet and the script window. */
+/** The script's input from a session read (getSessionFn), the same everywhere it's shown. */
 export function scriptInputFrom(data: any): ScriptInput {
   const s = data?.session ?? {};
   return {
