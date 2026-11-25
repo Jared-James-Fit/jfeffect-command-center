@@ -85,6 +85,7 @@ const WeightManagementCard = lazyDefault(() => import("@/components/weight-manag
 const RoadmapCoachCard = lazyDefault(() => import("@/components/nutrition-roadmap/roadmap-coach"), "RoadmapCoachCard");
 const CardioWorkspace = lazyDefault(() => import("@/components/cardio/cardio-workspace"), "CardioWorkspace");
 const CompetitionWorkspace = lazyDefault(() => import("@/components/competition/competition-tab"), "CompetitionWorkspace");
+const MeetingsWorkspace = lazyDefault(() => import("@/components/coaching-sessions/meetings-tab"), "MeetingsWorkspace");
 const NutritionCleoDock = lazyDefault(() => import("@/components/nutrition/nutrition-cleo-dock"), "NutritionCleoDock");
 const NutritionQualityCard = lazyDefault(() => import("@/components/nutrition/NutritionQualityCard"), "NutritionQualityCard");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
@@ -850,6 +851,13 @@ export function ClientProfileWorkspace({
         <TabsContent value="competition" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <Suspense fallback={<TabFallback />}>
             <CompetitionWorkspace clientId={id} />
+          </Suspense>
+        </TabsContent>
+
+        {/* Meetings (Nov 25 2026): every coaching conversation, prepared, presented and remembered. */}
+        <TabsContent value="meetings" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <MeetingsWorkspace clientId={id} onOpenTab={(t: string) => setTab(t as TabValue)} />
           </Suspense>
         </TabsContent>
 

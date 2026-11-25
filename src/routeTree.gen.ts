@@ -275,6 +275,8 @@ import { Route as ApiPublicHooksCleoTurnRouteImport } from './routes/api/public/
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
 import { Route as ApiPublicHooksCoachingPackageStripeRouteImport } from './routes/api/public/hooks/coaching-package-stripe'
+import { Route as ApiPublicHooksCoachingSessionsSelfcheckRouteImport } from './routes/api/public/hooks/coaching-sessions-selfcheck'
+import { Route as ApiPublicHooksCoachingSessionsTickRouteImport } from './routes/api/public/hooks/coaching-sessions-tick'
 import { Route as ApiPublicHooksCompetitionIntelTickRouteImport } from './routes/api/public/hooks/competition-intel-tick'
 import { Route as ApiPublicHooksCompetitionSelfcheckRouteImport } from './routes/api/public/hooks/competition-selfcheck'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
@@ -331,6 +333,7 @@ import { Route as AuthenticatedAdminClientsIdProgressRouteImport } from './route
 import { Route as AuthenticatedAdminClientsIdScheduleRouteImport } from './routes/_authenticated/admin/clients.$id.schedule'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
+import { Route as AuthenticatedAdminMeetingsSessionIdPresentRouteImport } from './routes/_authenticated/admin/meetings.$sessionId.present'
 import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport } from './routes/_authenticated/admin/settings_.notifications.coaching-applications'
 import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
@@ -1860,6 +1863,18 @@ const ApiPublicHooksCoachingPackageStripeRoute =
     path: '/api/public/hooks/coaching-package-stripe',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCoachingSessionsSelfcheckRoute =
+  ApiPublicHooksCoachingSessionsSelfcheckRouteImport.update({
+    id: '/api/public/hooks/coaching-sessions-selfcheck',
+    path: '/api/public/hooks/coaching-sessions-selfcheck',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksCoachingSessionsTickRoute =
+  ApiPublicHooksCoachingSessionsTickRouteImport.update({
+    id: '/api/public/hooks/coaching-sessions-tick',
+    path: '/api/public/hooks/coaching-sessions-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksCompetitionIntelTickRoute =
   ApiPublicHooksCompetitionIntelTickRouteImport.update({
     id: '/api/public/hooks/competition-intel-tick',
@@ -2192,6 +2207,12 @@ const AuthenticatedAdminCrmContactsIdRoute =
     path: '/crm/contacts/$id',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMeetingsSessionIdPresentRoute =
+  AuthenticatedAdminMeetingsSessionIdPresentRouteImport.update({
+    id: '/meetings/$sessionId/present',
+    path: '/meetings/$sessionId/present',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute =
   AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport.update({
     id: '/review/$submissionId',
@@ -2472,6 +2493,8 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
+  '/api/public/hooks/coaching-sessions-selfcheck': typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
+  '/api/public/hooks/coaching-sessions-tick': typeof ApiPublicHooksCoachingSessionsTickRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
   '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
@@ -2545,6 +2568,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -2796,6 +2820,8 @@ export interface FileRoutesByTo {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
+  '/api/public/hooks/coaching-sessions-selfcheck': typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
+  '/api/public/hooks/coaching-sessions-tick': typeof ApiPublicHooksCoachingSessionsTickRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
   '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
@@ -2869,6 +2895,7 @@ export interface FileRoutesByTo {
   '/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -3126,6 +3153,8 @@ export interface FileRoutesById {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
+  '/api/public/hooks/coaching-sessions-selfcheck': typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
+  '/api/public/hooks/coaching-sessions-tick': typeof ApiPublicHooksCoachingSessionsTickRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
   '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
@@ -3199,6 +3228,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/_authenticated/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
+  '/_authenticated/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/_authenticated/admin/settings_/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/_authenticated/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -3456,6 +3486,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
+    | '/api/public/hooks/coaching-sessions-selfcheck'
+    | '/api/public/hooks/coaching-sessions-tick'
     | '/api/public/hooks/competition-intel-tick'
     | '/api/public/hooks/competition-selfcheck'
     | '/api/public/hooks/daily-visuals-tick'
@@ -3529,6 +3561,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id/progress'
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
+    | '/admin/meetings/$sessionId/present'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
@@ -3780,6 +3813,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
+    | '/api/public/hooks/coaching-sessions-selfcheck'
+    | '/api/public/hooks/coaching-sessions-tick'
     | '/api/public/hooks/competition-intel-tick'
     | '/api/public/hooks/competition-selfcheck'
     | '/api/public/hooks/daily-visuals-tick'
@@ -3853,6 +3888,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id/progress'
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
+    | '/admin/meetings/$sessionId/present'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
@@ -4109,6 +4145,8 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
+    | '/api/public/hooks/coaching-sessions-selfcheck'
+    | '/api/public/hooks/coaching-sessions-tick'
     | '/api/public/hooks/competition-intel-tick'
     | '/api/public/hooks/competition-selfcheck'
     | '/api/public/hooks/daily-visuals-tick'
@@ -4182,6 +4220,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/$id/progress'
     | '/_authenticated/admin/clients/$id/schedule'
     | '/_authenticated/admin/crm/contacts/$id'
+    | '/_authenticated/admin/meetings/$sessionId/present'
     | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
     | '/_authenticated/admin/settings_/notifications/coaching-applications'
     | '/_authenticated/m/forms/$assignmentId/complete'
@@ -4258,6 +4297,8 @@ export interface RootRouteChildren {
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
   ApiPublicHooksCoachingPackageStripeRoute: typeof ApiPublicHooksCoachingPackageStripeRoute
+  ApiPublicHooksCoachingSessionsSelfcheckRoute: typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
+  ApiPublicHooksCoachingSessionsTickRoute: typeof ApiPublicHooksCoachingSessionsTickRoute
   ApiPublicHooksCompetitionIntelTickRoute: typeof ApiPublicHooksCompetitionIntelTickRoute
   ApiPublicHooksCompetitionSelfcheckRoute: typeof ApiPublicHooksCompetitionSelfcheckRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
@@ -6172,6 +6213,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCoachingPackageStripeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/coaching-sessions-selfcheck': {
+      id: '/api/public/hooks/coaching-sessions-selfcheck'
+      path: '/api/public/hooks/coaching-sessions-selfcheck'
+      fullPath: '/api/public/hooks/coaching-sessions-selfcheck'
+      preLoaderRoute: typeof ApiPublicHooksCoachingSessionsSelfcheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/coaching-sessions-tick': {
+      id: '/api/public/hooks/coaching-sessions-tick'
+      path: '/api/public/hooks/coaching-sessions-tick'
+      fullPath: '/api/public/hooks/coaching-sessions-tick'
+      preLoaderRoute: typeof ApiPublicHooksCoachingSessionsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/competition-intel-tick': {
       id: '/api/public/hooks/competition-intel-tick'
       path: '/api/public/hooks/competition-intel-tick'
@@ -6564,6 +6619,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCrmContactsIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/meetings/$sessionId/present': {
+      id: '/_authenticated/admin/meetings/$sessionId/present'
+      path: '/meetings/$sessionId/present'
+      fullPath: '/admin/meetings/$sessionId/present'
+      preLoaderRoute: typeof AuthenticatedAdminMeetingsSessionIdPresentRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/nutrition-dashboard/review/$submissionId': {
       id: '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
       path: '/review/$submissionId'
@@ -6883,6 +6945,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientProgramsClientIdIntelligenceRoute: typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
   AuthenticatedAdminClientProgramsClientIdNextProgramRoute: typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
+  AuthenticatedAdminMeetingsSessionIdPresentRoute: typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   AuthenticatedAdminChallengesIdIndexRoute: typeof AuthenticatedAdminChallengesIdIndexRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
@@ -7059,6 +7122,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminClientProgramsClientIdNextProgramRoute:
       AuthenticatedAdminClientProgramsClientIdNextProgramRoute,
     AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
+    AuthenticatedAdminMeetingsSessionIdPresentRoute:
+      AuthenticatedAdminMeetingsSessionIdPresentRoute,
     AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
       AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,
     AuthenticatedAdminChallengesIdIndexRoute:
@@ -7350,6 +7415,10 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksCoachAutomationTickRoute,
   ApiPublicHooksCoachingPackageStripeRoute:
     ApiPublicHooksCoachingPackageStripeRoute,
+  ApiPublicHooksCoachingSessionsSelfcheckRoute:
+    ApiPublicHooksCoachingSessionsSelfcheckRoute,
+  ApiPublicHooksCoachingSessionsTickRoute:
+    ApiPublicHooksCoachingSessionsTickRoute,
   ApiPublicHooksCompetitionIntelTickRoute:
     ApiPublicHooksCompetitionIntelTickRoute,
   ApiPublicHooksCompetitionSelfcheckRoute:
