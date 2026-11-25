@@ -28,8 +28,9 @@ describe("a reload while a demo video was playing is reported, not guessed", () 
   it("every reload the app does itself names its reason first", () => {
     expect(read("src/lib/chunk-recovery.ts")).toContain("noteReloadReason(`chunk recovery (${reason})`);\n  window.location.reload();");
     expect(read("src/lib/lazy-chunk.tsx")).toContain('noteReloadReason("Update app");\n  window.location.reload();');
-    expect(read("src/hooks/use-app-freshness.ts")).toContain('noteReloadReason("new build on reopen");\n          window.location.reload();');
-    expect(read("src/lib/pwa/register-sw.ts")).toContain('noteReloadReason("update prompt");');
+    expect(read("src/hooks/use-app-freshness.ts")).toContain('noteReloadReason(hidden ? "new build in the background" : "new build on reopen");\n          window.location.reload();');
+    // there's no update prompt to reload from (Nov 25 2026)
+    expect(read("src/lib/pwa/register-sw.ts")).not.toContain("location.reload");
     expect(read("src/components/router-error-fallback.tsx")).toContain("noteReloadReason(`page error: ");
     // reported on the next launch, once
     expect(read("src/components/app-shell.tsx")).toContain("const c = takeDemoCrumb();");
