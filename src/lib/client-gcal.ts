@@ -359,6 +359,8 @@ export type ImportedGoogleEvent = {
   /** dateTime ISO, or yyyy-mm-dd for all-day */
   start: string;
   end: string | null;
+  /** marked "free" in Google (transparency): shown, never busy time for a suggested workout */
+  free?: boolean;
 };
 
 /**
@@ -403,6 +405,7 @@ export function pickImportedEvents(input: {
       allDay,
       start: (allDay ? e.start?.date : e.start?.dateTime) as string,
       end: (allDay ? e.end?.date : e.end?.dateTime) ?? null,
+      ...(e.transparency === "transparent" ? { free: true } : {}),
     };
   });
 }

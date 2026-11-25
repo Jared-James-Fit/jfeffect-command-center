@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dumbbell, ChevronRight, Calendar as CalendarIcon, Pencil, MessageSquare, Move, ChevronDown, CircleDot } from "lucide-react";
 import { format } from "date-fns";
 import { getWorkoutStatus } from "@/lib/workout-status";
-import { cleanDayTitle, dayScheduledDate } from "@/lib/workout-today";
+import { dayDisplayTitle, dayScheduledDate } from "@/lib/workout-today";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
@@ -26,7 +26,7 @@ export function WorkoutListCard({
 }) {
   if (!item.day?.id) return null;
   const status = getWorkoutStatus(item);
-  const title = cleanDayTitle(item.day.title, item.day.day_index);
+  const title = dayDisplayTitle(item);
   const weekLabel = item.week?.week_index ? `Week ${item.week.week_index}` : "";
   const isCompleted = !!item.completion?.completed_at;
   const hasReview = !!item.completion?.has_feedback;
