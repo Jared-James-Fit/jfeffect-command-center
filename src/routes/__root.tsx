@@ -55,6 +55,10 @@ import { SITE_NAME, shareImageMeta, shareMeta } from "@/lib/share-meta";
 // wait on the main thread (Nov 23 2026).
 
 function NotFoundComponent() {
+  // counted for the admin's Analytics (Technical → pages not found); the path only, ids taken out
+  useEffect(() => {
+    void import("@/lib/app-pulse/telemetry").then((m) => m.recordNotFound()).catch(() => null);
+  }, []);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">

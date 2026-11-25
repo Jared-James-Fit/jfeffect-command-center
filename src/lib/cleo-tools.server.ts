@@ -68,7 +68,7 @@ function answerText(v: unknown): string {
  * `money`: clients' sales and payments (the admin, the owner, the finance login; never a coach). Defaults to `books`.
  * `caller`: the signed-in login, so nothing one person's lookups learned is handed to another.
  */
-type ToolCtx = { db: any; tz: string; today: string; books?: boolean; money?: boolean; caller: string };
+type ToolCtx = { db: any; tz: string; today: string; books?: boolean; money?: boolean; caller: string; analytics?: boolean };
 
 // Kept per login: the database decides who may see the list of tables (cleo_data_catalog answers
 // coaches with nothing), so one person's answer is never reused for anyone else's question.
@@ -166,6 +166,21 @@ export function cleoReadTools(ctx: ToolCtx) {
   const moneyAccess = ctx.money ?? books;
 
   const tools = {
+    business_analytics: tool({
+      description:
+        "JF Effect's own business analytics (the admin's Analytics section): website visitors, sessions, engagement and bounce, active users (daily, weekly, monthly), sign-ups, applications, new paying clients and free-to-paid, revenue and MRR, retention (day 1/7/30/90, cohorts, people at risk), acquisition channels and campaigns with first- and last-touch attribution, approximate geography, the conversion funnel and onboarding, feature adoption, web vitals and errors, plus rule-based insights and last week's summary. Use for any question about how the business, the website or the app is doing. Pass `section` (or 'all') and optionally `from` / `to` (YYYY-MM-DD; defaults to the last 30 days).",
+      inputSchema: z.object({
+        section: z.enum(["all", "overview", "acquisition", "geography", "conversions", "engagement", "retention", "revenue", "technical", "insights"]),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      }),
+      execute: safe("the analytics", async ({ section, from, to }: { section: string; from?: string; to?: string }) => {
+        // the admin's own Analytics, re-checked through the caller's login (and its two-step)
+        const { analyticsForCleo } = await import("@/lib/bi/bi.server");
+        return analyticsForCleo(db, ctx.caller, section, from, to, today);
+      }),
+    }),
+
     business_documents: tool({
       description:
         "The business's own documents, word for word: the Coaching Agreement every coaching client signs (billing, cancelling, ending coaching, refunds, fixed terms, freezes, sessions, conduct...), the Terms of Service, Privacy Policy, Cancellation & Refund Policy, JF Membership Agreement, Recurring Billing Disclosure, and the coach FAQs. Use for any question about what a policy, agreement or FAQ says. Pass `search` with the topic (e.g. 'ending coaching cancel notice') to get the sections that answer it; `document` to read one (e.g. 'coaching-agreement'); nothing to list them.",
@@ -713,5 +728,7 @@ export function cleoReadTools(ctx: ToolCtx) {
   };
   // A client's sales and payments are the admin's and the finance login's, never a coach's (record_payment / send_payment_link aren't offered to a coach either).
   if (!moneyAccess) delete (tools as Partial<typeof tools>).purchases;
+  // the business's analytics are the admin's (their revenue too), never a coach's or finance's
+  if (!ctx.analytics) delete (tools as Partial<typeof tools>).business_analytics;
   return tools;
 }

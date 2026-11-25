@@ -28,10 +28,10 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SelkirkRouteImport } from './routes/selkirk'
-import { Route as SupportRouteImport } from './routes/support'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as WelcomeRouteImport } from './routes/welcome'
@@ -436,11 +436,6 @@ const SelkirkRoute = SelkirkRouteImport.update({
   path: '/selkirk',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SupportRoute = SupportRouteImport.update({
-  id: '/support',
-  path: '/support',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -454,6 +449,11 @@ const SitemapRoute = SitemapRouteImport.update({
 const StaffSetupRoute = StaffSetupRouteImport.update({
   id: '/staff-setup',
   path: '/staff-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -2278,10 +2278,10 @@ export interface FileRoutesByFullPath {
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/selkirk': typeof SelkirkRoute
-  '/support': typeof SupportRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/welcome': typeof WelcomeRoute
@@ -2611,10 +2611,10 @@ export interface FileRoutesByTo {
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/selkirk': typeof SelkirkRoute
-  '/support': typeof SupportRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/welcome': typeof WelcomeRoute
@@ -2942,10 +2942,10 @@ export interface FileRoutesById {
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/selkirk': typeof SelkirkRoute
-  '/support': typeof SupportRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/welcome': typeof WelcomeRoute
@@ -3277,10 +3277,10 @@ export interface FileRouteTypes {
     | '/recover'
     | '/reset-password'
     | '/selkirk'
-    | '/support'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/support'
     | '/terms'
     | '/unsubscribe'
     | '/welcome'
@@ -3610,10 +3610,10 @@ export interface FileRouteTypes {
     | '/recover'
     | '/reset-password'
     | '/selkirk'
-    | '/support'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/support'
     | '/terms'
     | '/unsubscribe'
     | '/welcome'
@@ -3940,10 +3940,10 @@ export interface FileRouteTypes {
     | '/recover'
     | '/reset-password'
     | '/selkirk'
-    | '/support'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/support'
     | '/terms'
     | '/unsubscribe'
     | '/welcome'
@@ -4275,10 +4275,10 @@ export interface RootRouteChildren {
   RecoverRoute: typeof RecoverRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SelkirkRoute: typeof SelkirkRoute
-  SupportRoute: typeof SupportRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   StaffSetupRoute: typeof StaffSetupRoute
+  SupportRoute: typeof SupportRoute
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   WelcomeRoute: typeof WelcomeRoute
@@ -4510,13 +4510,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SelkirkRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/support': {
-      id: '/support'
-      path: '/support'
-      fullPath: '/support'
-      preLoaderRoute: typeof SupportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/setup': {
       id: '/setup'
       path: '/setup'
@@ -4536,6 +4529,13 @@ declare module '@tanstack/react-router' {
       path: '/staff-setup'
       fullPath: '/staff-setup'
       preLoaderRoute: typeof StaffSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -7403,10 +7403,10 @@ const rootRouteChildren: RootRouteChildren = {
   RecoverRoute: RecoverRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SelkirkRoute: SelkirkRoute,
-  SupportRoute: SupportRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   StaffSetupRoute: StaffSetupRoute,
+  SupportRoute: SupportRoute,
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   WelcomeRoute: WelcomeRoute,

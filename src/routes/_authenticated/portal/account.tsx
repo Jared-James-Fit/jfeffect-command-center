@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DeactivateAccountPanel, DeleteAccountPanel, useLifecycleStatus } from "@/components/account/account-lifecycle";
 import { AiConsentPanel } from "@/components/ai-consent/ai-consent";
+import { UsageAnalyticsPanel } from "@/components/privacy/usage-analytics-panel";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS, SOCIAL_PLATFORMS } from "@/lib/social-handles";
@@ -694,6 +695,13 @@ function AccountPage() {
                 <div className="mt-5 border-t border-border pt-5">
                   <SectionErrorBoundary label="AI processing">
                     <AiConsentPanel />
+                  </SectionErrorBoundary>
+                </div>
+              )}
+              {!isImpersonating && (
+                <div className="mt-5 border-t border-border pt-5">
+                  <SectionErrorBoundary label="Usage analytics">
+                    <UsageAnalyticsPanel />
                   </SectionErrorBoundary>
                 </div>
               )}

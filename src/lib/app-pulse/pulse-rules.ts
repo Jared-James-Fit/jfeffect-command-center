@@ -19,6 +19,7 @@ export type Surface = "site" | "app" | "admin";
 export type Platform = "ios_app" | "android_app" | "home_screen" | "browser";
 export type DeviceClass = "phone" | "tablet" | "desktop";
 export type OsFamily = "ios" | "android" | "macos" | "windows" | "linux" | "chromeos" | "other";
+export type BrowserFamily = "safari" | "chrome" | "firefox" | "edge" | "samsung" | "opera" | "instagram" | "facebook" | "tiktok" | "webview" | "other";
 
 /** How long a visit survives with nobody using the app (matches the Crew feed's new-visit rule). */
 export const SESSION_IDLE_MS = 30 * 60_000;
@@ -69,6 +70,8 @@ const FEATURE_RULES: Rule[] = [
   [/^\/portal\/(calendar|appointments|events)/, "Calendar"],
   [/^\/portal\/(check-in|check-ins)/, "Forms & check-ins"],
   [/^\/portal\/goals-setup/, "Goals & setup"],
+  [/^\/portal\/competition/, "Competition"],
+  [/^\/portal\/cardio/, "Cardio"],
   [/^\/portal\/(purchases|upgrade|membership)/, "Purchases"],
   [/^\/portal\/(account|agreements|documents)/, "Account"],
   [/^\/portal\/tools/, "Tools"],
@@ -87,7 +90,7 @@ const FEATURE_RULES: Rule[] = [
   [/^\/admin\/(leads)/, "Applications"],
   [/^\/admin\/tasks/, "Tasks"],
   [/^\/admin\/(usage)/, "Usage & spend"],
-  [/^\/admin\/(insights)/, "App & website"],
+  [/^\/admin\/(insights)/, "Analytics"],
   [/^\/admin\/(settings|voice|chat-sounds|chat-gifs|legal|feature-flags)/, "Settings"],
   [/^\/admin\/(team|staff|coaches)/, "Team"],
   [/^\/admin\/(nutrition-dashboard|nutrition-targets)/, "Nutrition (staff)"],
@@ -128,6 +131,26 @@ export function osOf(ua: string, platformHint?: string | null): OsFamily {
   if (/Mac OS X|Macintosh|macOS/i.test(s)) return "macos";
   if (/Windows/i.test(s)) return "windows";
   if (/Linux/i.test(s)) return "linux";
+  return "other";
+}
+
+/**
+ * The browser family, from its user agent: an in-app browser (Instagram, Facebook, TikTok) is its
+ * own family, since where a link was opened says where the visit came from. Never a version.
+ */
+export function browserOf(ua: string, native = false): BrowserFamily {
+  const s = String(ua ?? "");
+  if (/Instagram/i.test(s)) return "instagram";
+  if (/FBAN|FBAV|FB_IAB|FBIOS|Messenger/i.test(s)) return "facebook";
+  if (/musical_ly|BytedanceWebview|TikTok|trill_/i.test(s)) return "tiktok";
+  if (native) return "webview";
+  if (/SamsungBrowser/i.test(s)) return "samsung";
+  if (/Edg(e|A|iOS)?\//.test(s)) return "edge";
+  if (/OPR\/|Opera/.test(s)) return "opera";
+  if (/Firefox\/|FxiOS\//.test(s)) return "firefox";
+  if (/Chrome\/|CriOS\//.test(s)) return "chrome";
+  if (/Safari\//.test(s) && /Version\//.test(s)) return "safari";
+  if (/iPhone|iPad|iPod/.test(s)) return "webview";
   return "other";
 }
 

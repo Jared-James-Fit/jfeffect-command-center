@@ -21,7 +21,24 @@ export type MapPlace = {
   visitors: number;
   sessions: number;
   live: number;
+  /** registered people placed here, and paying clients (Analytics → Audience & Geography) */
+  registered?: number;
+  paying?: number;
 };
+
+export type MapMetric = "sessions" | "visitors" | "people" | "registered" | "paying";
+
+const METRIC_WORD: Record<MapMetric, [string, string]> = {
+  sessions: ["visit", "visits"],
+  visitors: ["visitor", "visitors"],
+  people: ["member or client", "members or clients"],
+  registered: ["registered person", "registered people"],
+  paying: ["paying client", "paying clients"],
+};
+
+function metricOf(p: MapPlace, m: MapMetric): number {
+  return Number((p as any)[m] ?? 0) || 0;
+}
 
 const TILE = 256;
 const MIN_Z = 1;
@@ -61,8 +78,24 @@ function isDark(): boolean {
   return typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 }
 
-export function PlaceMap({ places, height = 340 }: { places: MapPlace[]; height?: number }) {
-  const pts = useMemo(() => places.filter((p) => p.lat != null && p.lng != null) as (MapPlace & { lat: number; lng: number })[], [places]);
+export function PlaceMap({
+  places,
+  height = 340,
+  metric = "sessions",
+  heat = false,
+}: {
+  places: MapPlace[];
+  height?: number;
+  /** what sizes a bubble (and weighs the heat) */
+  metric?: MapMetric;
+  /** a density heatmap instead of bubbles */
+  heat?: boolean;
+}) {
+  const pts = useMemo(
+    () => (places.filter((p) => p.lat != null && p.lng != null) as (MapPlace & { lat: number; lng: number })[]).filter((p) => metric === "sessions" || metricOf(p, metric) > 0),
+    [places, metric],
+  );
+  const heatRef = useRef<HTMLCanvasElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [view, setView] = useState<{ lat: number; lng: number; z: number } | null>(null);
@@ -91,7 +124,37 @@ export function PlaceMap({ places, height = 340 }: { places: MapPlace[]; height?
   const center = project(v.lat, v.lng, v.z);
   const left = center.x - width / 2;
   const top = center.y - height / 2;
-  const maxSessions = Math.max(1, ...pts.map((p) => p.sessions));
+  const maxSessions = Math.max(1, ...pts.map((p) => metricOf(p, metric)));
+
+  // the heat layer: one soft disc per place, weighted by the metric, drawn on a canvas the map's size
+  useEffect(() => {
+    const cv = heatRef.current;
+    if (!cv) return;
+    const dpr = typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1;
+    cv.width = Math.round(width * dpr);
+    cv.height = Math.round(height * dpr);
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    if (!heat) return;
+    const radius = 18 + v.z * 3;
+    for (const p of pts) {
+      const pos = project(p.lat, p.lng, v.z);
+      const x = pos.x - left;
+      const y = pos.y - top;
+      if (x < -radius || y < -radius || x > width + radius || y > height + radius) continue;
+      const w = Math.sqrt(metricOf(p, metric) / maxSessions);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, radius * (0.6 + w));
+      g.addColorStop(0, `rgba(235, 104, 52, ${0.25 + 0.55 * w})`);
+      g.addColorStop(0.5, `rgba(235, 104, 52, ${0.12 + 0.25 * w})`);
+      g.addColorStop(1, "rgba(235, 104, 52, 0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * (0.6 + w), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, [heat, pts, metric, maxSessions, width, height, left, top, v.z]);
 
   const tiles = useMemo(() => {
     const out: { key: string; x: number; y: number; url: string }[] = [];
@@ -180,12 +243,13 @@ export function PlaceMap({ places, height = 340 }: { places: MapPlace[]; height?
               style={{ left: t.x, top: t.y, width: TILE, height: TILE }}
             />
           ))}
+        <canvas ref={heatRef} className="pointer-events-none absolute inset-0" style={{ width, height }} aria-hidden />
         {pts.map((p) => {
           const pos = project(p.lat, p.lng, v.z);
           const x = pos.x - left;
           const y = pos.y - top;
           if (x < -40 || y < -40 || x > width + 40 || y > height + 40) return null;
-          const r = 7 + Math.sqrt(p.sessions / maxSessions) * 17;
+          const r = heat ? 5 : 7 + Math.sqrt(metricOf(p, metric) / maxSessions) * 17;
           return (
             <button
               key={p.key}
@@ -193,7 +257,7 @@ export function PlaceMap({ places, height = 340 }: { places: MapPlace[]; height?
               onClick={() => setPicked(p.key === picked ? null : p.key)}
               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               style={{ left: x, top: y, width: r * 2, height: r * 2 }}
-              aria-label={`${p.label}: ${p.sessions} visits${p.live ? `, ${p.live} in the app now` : ""}`}
+              aria-label={`${p.label}: ${metricOf(p, metric)} ${METRIC_WORD[metric][metricOf(p, metric) === 1 ? 0 : 1]}${p.live ? `, ${p.live} in the app now` : ""}`}
             >
               {p.live > 0 && <span className="absolute inset-[-5px] animate-ping rounded-full border-2 border-[var(--viz-3)] motion-reduce:animate-none" aria-hidden />}
               <span
@@ -222,6 +286,8 @@ export function PlaceMap({ places, height = 340 }: { places: MapPlace[]; height?
               <div>{pickedPlace.sessions} visit{pickedPlace.sessions === 1 ? "" : "s"}</div>
               {pickedPlace.people > 0 && <div>{pickedPlace.people} member{pickedPlace.people === 1 ? "" : "s"} or client{pickedPlace.people === 1 ? "" : "s"}</div>}
               {pickedPlace.visitors > 0 && <div>{pickedPlace.visitors} website visitor{pickedPlace.visitors === 1 ? "" : "s"}</div>}
+              {(pickedPlace.registered ?? 0) > 0 && <div>{pickedPlace.registered} new account{pickedPlace.registered === 1 ? "" : "s"}</div>}
+              {(pickedPlace.paying ?? 0) > 0 && <div>{pickedPlace.paying} paying client{pickedPlace.paying === 1 ? "" : "s"}</div>}
               {pickedPlace.live > 0 && <div className="font-medium text-foreground">{pickedPlace.live} in the app now</div>}
             </div>
           </div>
