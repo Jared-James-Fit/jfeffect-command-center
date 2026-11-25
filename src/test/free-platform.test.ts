@@ -160,7 +160,7 @@ describe("Crew reports", () => {
   it("every post you don't own has Report", () => {
     const menu = read("src/components/community/post-actions.tsx");
     expect(menu).toContain("const canReport = !mine && !viewerIsStaff;");
-    expect(menu).toContain('<ReportSheet kind="post"');
+    expect(menu).toContain('<ReportSheet kind={post.story ? "story" : "post"}');
   });
 });
 

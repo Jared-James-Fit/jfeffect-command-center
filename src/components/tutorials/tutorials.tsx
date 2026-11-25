@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, ChevronRight, LifeBuoy, ListChecks, PlayCircle, Search } from "lucide-react";
+import { Check, ChevronRight, LifeBuoy, ListChecks, Mail, PlayCircle, Search, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { QuickLogTips } from "@/components/workout-day/quick-log-tips";
 import { MemberSetupWizard } from "@/components/member/member-setup-wizard";
 import { cn } from "@/lib/utils";
+import { CREW_CONTACT_EMAIL, CREW_TERMS_SLUG } from "@/lib/crew-safety";
 
 /** "Replay this tutorial" from anywhere (the hub): the gate in the portal opens it. */
 const OPEN_EVENT = "jf:open-tutorial";
@@ -200,6 +201,25 @@ export function HelpTutorialsHub() {
         <Button asChild variant="secondary" className="justify-start" data-help-ask-cleo>
           <Link to="/portal/messages" search={{ chat: "support" } as any}><LifeBuoy className="mr-2 h-4 w-4" /> Ask Cleo in JF Effect Support</Link>
         </Button>
+      </section>
+
+      {/* published contact (App Review 1.2): a person, by email, for anything in Crew or the app */}
+      <section className="space-y-1" data-help-contact>
+        <h3 className="text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">Contact us</h3>
+        <div className="divide-y divide-border rounded-xl border border-border">
+          <a href={`mailto:${CREW_CONTACT_EMAIL}`} className="flex min-h-12 items-center gap-3 px-3 py-2 hover:bg-secondary/40">
+            <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px]">{CREW_CONTACT_EMAIL}</span>
+              <span className="block text-[13px] text-muted-foreground">Questions, problems, or something in Crew that needs the team</span>
+            </span>
+          </a>
+          <Link to="/legal/$slug" params={{ slug: CREW_TERMS_SLUG }} className="flex min-h-12 items-center gap-3 px-3 py-2 hover:bg-secondary/40">
+            <ShieldCheck className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 text-[15px]">Terms of Service</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </Link>
+        </div>
       </section>
       {wizard && <MemberSetupWizard open={wizard} onClose={() => setWizard(false)} />}
     </div>

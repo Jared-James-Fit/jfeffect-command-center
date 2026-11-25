@@ -1,9 +1,11 @@
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { previousLeagueMonth } from "@/lib/league-recap";
 import type { LeagueRow } from "@/lib/league-boost";
 import type { RankingsAudience } from "@/lib/rankings-audience";
+import { useBlockedClientIds, withoutBlocked } from "@/lib/crew-safety";
 
 export type PerformanceLeagueRow = LeagueRow & {
   is_coach?: boolean;
@@ -53,7 +55,11 @@ export function normalizeLeagueRow(r: any): PerformanceLeagueRow {
  */
 export function usePerformanceLeague(view: "current" | "previous" = "current", audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  // never someone blocked either way (their row leaves; everyone keeps the rank the database gave)
+  const blocked = useBlockedClientIds().data;
+  const hideBlocked = useCallback((rows: PerformanceLeagueRow[]) => withoutBlocked(rows, blocked), [blocked]);
   return useQuery({
+    select: blocked?.length ? hideBlocked : undefined,
     queryKey: ["athlete-rankings-monthly-view", view, viewerId, audience],
     staleTime: 60_000,
     queryFn: async () => {

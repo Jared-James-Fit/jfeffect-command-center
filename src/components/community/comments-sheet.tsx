@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowUp, Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Share2, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowUp, Copy, CornerUpLeft, Eye, EyeOff, Flag, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Share2, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { StoryAvatar } from "@/components/community/story-ring";
 import { CoachBadge } from "@/components/community/post-card";
 import { SharedCommentCard } from "@/components/community/shared-comment";
+import { ReportSheet } from "@/components/community/report-sheet";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { followLabel, useFollow, useFollowState } from "@/lib/community-social";
@@ -139,6 +140,10 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
   const [menuFor, setMenuFor] = useState<CommunityComment | null>(null);
   const [shareFor, setShareFor] = useState<CommunityComment | null>(null);
   const [deleteFor, setDeleteFor] = useState<CommunityComment | null>(null);
+  // Report: mounted on first use, kept for its closing slide
+  const [reportFor, setReportFor] = useState<CommunityComment | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const { isImpersonating } = useClientImpersonation();
   const [viewing, setViewing] = useState<CommunityComment | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -530,7 +535,16 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
         canPin={(c) => post.is_mine && !c.parent_id && !c.hidden && !c.pending}
         pinnedId={pinnedId}
         onPin={togglePin}
+        // someone else's comment goes to the team (staff hide or delete it instead; never in View as client)
+        canReport={(c) => !c.is_mine && !c.pending && !viewerIsStaff && !isImpersonating}
+        onReport={(c) => {
+          setReportFor(c);
+          setReporting(true);
+        }}
       />
+      {reportFor && (
+        <ReportSheet kind="comment" targetId={reportFor.id} author={reportFor.author} postId={post.id} open={reporting} onOpenChange={setReporting} />
+      )}
       <ShareCommentSheet c={shareFor} onClose={() => setShareFor(null)} postAuthor={post.author.name} />
       {trimmer.element}
       <MediaViewer c={viewing} thumbUrl={viewing ? urlFor(viewing, urls) : null} onClose={() => setViewing(null)} />
@@ -814,7 +828,7 @@ function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | n
   );
 }
 
-/** What holding a comment opens. Delete only shows for its writer, the post's owner and coaches. */
+/** What holding a comment opens. Delete only shows for its writer, the post's owner and coaches; Report on anyone else's. */
 function CommentMenu({
   c,
   onClose,
@@ -827,6 +841,8 @@ function CommentMenu({
   canPin,
   pinnedId,
   onPin,
+  canReport,
+  onReport,
 }: {
   c: CommunityComment | null;
   onClose: () => void;
@@ -840,6 +856,8 @@ function CommentMenu({
   canPin: (c: CommunityComment) => boolean;
   pinnedId: string | null;
   onPin: (c: CommunityComment) => void;
+  canReport: (c: CommunityComment) => boolean;
+  onReport: (c: CommunityComment) => void;
 }) {
   const act = (fn: () => void) => () => {
     onClose();
@@ -898,6 +916,7 @@ function CommentMenu({
                 />
               )}
               {c.can_delete && <MenuRow icon={Trash2} label="Delete" danger onClick={act(() => onDelete(c))} />}
+              {canReport(c) && <MenuRow icon={Flag} label="Report" sub="Report it or block them" danger onClick={act(() => onReport(c))} />}
             </div>
           </>
         )}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, Scale, ShieldCheck, Swords, Trophy } from "lucide-react";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { usePortalUserId } from "@/lib/client-impersonation";
+import { useBlockedClientIds, withoutBlocked } from "@/lib/crew-safety";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -49,10 +50,19 @@ import {
 
 const db = supabase as any;
 
+/** The boards never show someone blocked either way (their row leaves; ranks stay the database's). */
+function useHideBlocked<R extends { client_id?: string | null; key?: string }>(): ((rows: R[]) => R[]) | undefined {
+  const blocked = useBlockedClientIds().data;
+  const hide = useCallback((rows: R[]) => withoutBlocked(rows, blocked), [blocked]);
+  return blocked?.length ? hide : undefined;
+}
+
 /** `audience`: Community (everyone, the Hall as it has always been) or JF Effect Athletes (active coaching clients; ranks and counts among them). */
 export function useStrengthBoard(audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  const hideBlocked = useHideBlocked<ReturnType<typeof normalizeAllRow>>();
   return useQuery({
+    select: hideBlocked,
     queryKey: ["strength-board", "all", viewerId, audience],
     staleTime: 5 * 60_000,
     queryFn: async () => {
@@ -66,7 +76,9 @@ export function useStrengthBoard(audience: RankingsAudience = "community") {
 /** Everyone in the Hall, ranked or not (every client ever, plus meet athletes). */
 function useStrengthRoster(audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  const hideBlocked = useHideBlocked<ReturnType<typeof normalizeRosterRow>>();
   return useQuery({
+    select: hideBlocked,
     queryKey: ["strength-board", "roster", viewerId, audience],
     staleTime: 10 * 60_000,
     queryFn: async () => {
@@ -79,7 +91,9 @@ function useStrengthRoster(audience: RankingsAudience = "community") {
 
 export function useMeetBoard(audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  const hideBlocked = useHideBlocked<ReturnType<typeof normalizeMeetRow>>();
   return useQuery({
+    select: hideBlocked,
     queryKey: ["strength-board", "meets", viewerId, audience],
     staleTime: 10 * 60_000,
     queryFn: async () => {

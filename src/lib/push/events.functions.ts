@@ -295,6 +295,14 @@ export const notifyCommunityReport = createServerFn({ method: "POST" })
       .eq("target_id", data.targetId)
       .maybeSingle();
     if (!rep || rep.status !== "open") return { skipped: "no_open_report" };
+    // the hourly tick (crew-reports.server.ts) won't push about this one again
+    await (supabaseAdmin as any)
+      .from("community_reports")
+      .update({ notified_at: new Date().toISOString() })
+      .eq("target_kind", data.kind)
+      .eq("target_id", data.targetId)
+      .eq("status", "open")
+      .is("notified_at", null);
     const { data: staff } = await supabaseAdmin
       .from("user_roles")
       .select("user_id")
