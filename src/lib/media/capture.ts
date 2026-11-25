@@ -306,18 +306,6 @@ export function slideZoom(start: number, dy: number, range: { min?: number; max?
   return Math.round(Math.min(max, Math.max(min, z)) * 10) / 10;
 }
 
-/* ---- thumbnails first ---------------------------------------------------- */
-
-/** The long side of a pick's first preview: on screen at once, the full picture decoded only when it's edited or posted. */
-export const PREVIEW_LONG = 1280;
-
-/** A preview's size: the picture brought down to `long` on its long side, never up. */
-export function previewSize(w: number, h: number, long = PREVIEW_LONG): Size {
-  if (!(w > 0 && h > 0)) return { w: 0, h: 0 };
-  const k = Math.min(1, long / Math.max(w, h));
-  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
-}
-
 /* ---- a shot's framing: kept whole, framed non-destructively ------------- */
 
 /**

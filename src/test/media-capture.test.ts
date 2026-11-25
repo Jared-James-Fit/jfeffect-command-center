@@ -12,7 +12,6 @@ import {
   framingForCrop,
   guideRect,
   levelAngle,
-  previewSize,
   purposeAccept,
   purposeStart,
   ratioValue,
@@ -23,6 +22,7 @@ import {
   DEFAULT_CAPTURE_SETTINGS,
 } from "@/lib/media/capture";
 import { cropRect } from "@/lib/photo-frame";
+import { bakeKey } from "@/lib/media/bake-key";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -158,10 +158,6 @@ describe("focus, the level and the zoom", () => {
     expect(slideZoom(1, 400, { min: 1, max: 10 })).toBe(1);
     expect(slideZoom(1, -5000, { min: 1, max: 6 })).toBe(6);
   });
-  it("previews are small first, never scaled up", () => {
-    expect(previewSize(4032, 3024)).toEqual({ w: 1280, h: 960 });
-    expect(previewSize(800, 600)).toEqual({ w: 800, h: 600 });
-  });
 });
 
 describe("every place captures through the one camera", () => {
@@ -182,5 +178,27 @@ describe("every place captures through the one camera", () => {
     for (const k of ["data-capture-shutter", "data-capture-guide", "data-capture-focus", "data-capture-level", "data-capture-count", "data-capture-flash", "data-capture-mode", "data-capture-ratio", "data-capture-timer"])
       expect(cam).toContain(k);
     expect(cam).toContain("HOLD_TO_RECORD_MS");
+  });
+});
+
+describe("making a post's slides: once, from the latest edits", () => {
+  it("the same edits give the same key; any change to them makes the slide again", () => {
+    const base = { kind: "image" as const, framing: { z: 1.2, cx: 0.4, cy: 0.5 }, grade: null };
+    expect(bakeKey(base, 9 / 16)).toBe(bakeKey({ ...base, framing: { ...base.framing } }, 9 / 16));
+    expect(bakeKey(base, 9 / 16)).not.toBe(bakeKey(base, 4 / 5));
+    expect(bakeKey(base, 9 / 16)).not.toBe(bakeKey({ ...base, framing: { ...base.framing, r: 90 } }, 9 / 16));
+    expect(bakeKey(base, 9 / 16)).not.toBe(bakeKey({ ...base, framing: { ...base.framing, cx: 0.41 } }, 9 / 16));
+    const clip = { kind: "video" as const, trim: { start: 1, end: 4 }, muted: false };
+    expect(bakeKey(clip, 1)).not.toBe(bakeKey({ ...clip, muted: true }, 1));
+    expect(bakeKey(clip, 1)).not.toBe(bakeKey({ ...clip, trim: { start: 1, end: 5 } }, 1));
+  });
+  it("a retry keeps the edits on the slide and makes nothing twice; tiles use small copies", () => {
+    const tray = read("src/components/community/slide-tray.tsx");
+    expect(tray).toContain("if (it.baked && it.baked === key) return slide;");
+    expect(tray).toContain("patch(it.id, { baked: key, slide: next });");
+    expect(tray).not.toContain("patch(it.id, { cover: null, framing: null, slide: next });");
+    expect(tray).toContain('patch(id, { status: "done", progress: 100, slide, baked: null });');
+    expect(tray).toContain("tile: m.kind === \"image\" && m.thumb ? URL.createObjectURL(m.thumb) : null,");
+    expect(read("src/components/community/post-composer.tsx")).toContain("src={it.tile ?? it.preview}");
   });
 });

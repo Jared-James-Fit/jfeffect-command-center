@@ -1104,7 +1104,7 @@ function PickGrid({ tray, list, focused, onFocus, onPick }: { tray: ReturnType<t
                 aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : `${it.kind === "video" ? "Clip" : "Photo"} ${i + 1}${on ? ", showing" : ""}`}
                 aria-pressed={on}
               >
-                {it.preview ? <img src={it.preview} alt="" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full jf-skeleton bg-zinc-800" />}
+                {it.preview ? <img src={it.tile ?? it.preview} alt="" draggable={false} decoding="async" className="h-full w-full object-cover" /> : <div className="h-full w-full jf-skeleton bg-zinc-800" />}
               </button>
               {on && <span className="pointer-events-none absolute inset-0 bg-white/25" />}
               <span key={`${i}-${list.length}`} className="pointer-events-none absolute right-1.5 top-1.5 grid h-[22px] min-w-[22px] place-items-center rounded-full border-[1.5px] border-white bg-primary px-1 text-[12px] font-bold text-white shadow animate-in zoom-in-50 duration-200">
@@ -1287,7 +1287,7 @@ function EditStep({
               aria-label={`Slide ${i + 1}`}
               aria-pressed={i === slide}
             >
-              {it.preview && <img src={it.preview} alt="" className="h-full w-full object-cover" />}
+              {it.preview && <img src={it.tile ?? it.preview} alt="" decoding="async" className="h-full w-full object-cover" />}
               {it.kind === "video" && <Play className="absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 fill-white text-white" />}
             </button>
           ))}

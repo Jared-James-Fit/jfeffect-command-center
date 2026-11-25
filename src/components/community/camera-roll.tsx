@@ -571,7 +571,7 @@ export function CameraRoll({
             {extras.map((it) => (
               <Tile
                 key={it.id}
-                thumb={it.preview}
+                thumb={it.tile ?? it.preview}
                 video={it.kind === "video" ? (it.seconds ?? null) : null}
                 number={order.get(it.id) ?? null}
                 multi={multi}
