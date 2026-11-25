@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Aperture, Check, ChevronRight, Eye, Heart, Play, Plus, Send, Sticker as StickerIcon, Trophy, VolumeX, X } from "lucide-react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Aperture, Check, ChevronRight, Eye, Heart, MessageCircle, MoreHorizontal, Play, Plus, Send, Trophy, VolumeX, X } from "lucide-react";
 import { storyLookLine, useStoryLooks } from "@/lib/story-looks";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -7,11 +7,13 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { clipFrame, type ClipFrame } from "@/lib/photo-frame";
-import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, canShareToStory, compactNumber, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyLinkLabel, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
 import { StoryViewersPanel } from "@/components/community/post-activity";
+import { StoryMenuSheet } from "@/components/community/story-menu";
+import { CommentsSheet, PostShareSheet } from "@/components/community/lazy-sheets";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
 import { InlineFollow } from "@/components/community/follow-button";
@@ -45,8 +47,8 @@ const TURN_MS = 320;
  * posted as a story in the last day (the recap's Share to Story, the camera's
  * STORY, Add to your story) and the coach's lessons, never a copy of a feed
  * post (storyWorthy): Instagram's way, a story is something someone chose to
- * put there. Each one can be cheered right there (the heart, as everywhere)
- * or opened in full. After the last one, an end card points at the next good
+ * put there. Each one is answered right there: a private message, the heart,
+ * the comments and a share (StoryBar), never a page of its own. After the last one, an end card points at the next good
  * thing instead of dropping you back on the feed (see StoryEndCard). There's
  * no separate crew "Activity" story: the week's wins are Wednesday Wins in
  * the feed, and Rankings. Who-sees-it on every story applies as in the feed.
@@ -378,6 +380,9 @@ function StoryViewer({
   const [composing, setComposing] = useState(false);
   // your own story, swiped up: its Activity (counted up so the same swipe twice still opens it)
   const [askActivity, setAskActivity] = useState(0);
+  // someone else's story, swiped up: its comments (a story with no post of its own to open); your ⋯ menu the same way
+  const [askComments, setAskComments] = useState(0);
+  const [askMenu, setAskMenu] = useState(0);
   // Swipe down to close, as on Instagram: the story follows the finger (shrinking, the feed showing
   // through behind it); let go far enough down, or flick, and it slides away, else it springs back.
   const [drag, setDrag] = useState<{ y: number; settle: boolean } | null>(null);
@@ -598,8 +603,12 @@ function StoryViewer({
     if (!p) return;
     const dy = e.clientY - p.y;
     if (dy > 80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return close();
-    // swipe up: on yours, its Activity (Instagram's viewers); on anyone else's, the post (the workout, comments, or the one it shares)
-    if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return post.is_mine ? setAskActivity((n) => n + 1) : onOpenPost(storyTarget(post));
+    // swipe up: on yours, its Activity (Instagram's viewers); on anyone else's, what the story points at (the workout it
+    // shows, or the post it shares), else its comments right here: a story never opens a page of its own
+    if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) {
+      if (post.is_mine) return setAskActivity((n) => n + 1);
+      return storyLinkLabel(post) ? onOpenPost(storyTarget(post)) : setAskComments((n) => n + 1);
+    }
     if (wasHold || Date.now() - p.t > 220) return;
     if (p.x < window.innerWidth / 3) prev();
     else next();
@@ -673,7 +682,7 @@ function StoryViewer({
         ) : (
         <>
         <DialogTitle className="sr-only">{group.mine ? "Your story" : `${group.author.name}'s story`}</DialogTitle>
-        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe left or right for the next or last person, swipe up for the post (on your own story, its activity), swipe down to close. Reply or send a quick reaction at the bottom.</DialogDescription>
+        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe left or right for the next or last person, swipe up for its comments (on your own story, its activity), swipe down to close. Reply, like, comment or share at the bottom.</DialogDescription>
         <div
           className="relative flex min-h-0 flex-1 select-none flex-col touch-none"
           onPointerDown={onDown}
@@ -772,7 +781,12 @@ function StoryViewer({
                   {!group.mine && openPerson && <InlineFollow userId={who.user_id} name={who.name} tone="story" />}
                 </span>
               </span>
-              <button type="button" onClick={close} className="ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10" aria-label="Close">
+              {post.is_mine && !isImpersonating && (
+                <button type="button" onClick={() => setAskMenu((n) => n + 1)} className="ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10" aria-label="More" data-story-more>
+                  <MoreHorizontal className="h-6 w-6" />
+                </button>
+              )}
+              <button type="button" onClick={close} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10", !(post.is_mine && !isImpersonating) && "ml-auto")} aria-label="Close">
                 <X className="h-6 w-6" />
               </button>
             </div>
@@ -802,6 +816,9 @@ function StoryViewer({
               onHold={setComposing}
               onOpenPerson={openPerson}
               onDeleted={close}
+              viewerIsStaff={viewerIsStaff}
+              askMenu={askMenu}
+              onViewFeedPost={onOpenPost}
             />
           ) : (
             <StoryBar
@@ -810,6 +827,7 @@ function StoryViewer({
               onOpenPerson={openPerson}
               onOpen={() => onOpenPost(storyTarget(post))}
               onComposing={setComposing}
+              askComments={askComments}
               // a moment that's a crew-wide post: ✈️ adds it to your story (the story slides away, the camera opens)
               onShare={
                 shareReady && !isImpersonating && canShareToStory(post)
@@ -1052,10 +1070,14 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
 }
 
 /**
- * Your own story: who's seen it and the hearts (nothing to reply to). Seen by,
- * the hearts or a swipe up open its viewers (Instagram's: the story shrinks
- * to the top, StoryViewersPanel), whose strip moves the story to another of
- * your moments.
+ * Your own story: who's seen it, the likes, the comments and a share, along
+ * the bottom (nothing to reply to). Seen by, the likes or a swipe up open its
+ * viewers (Instagram's: the story shrinks to the top, StoryViewersPanel),
+ * whose strip moves the story to another of your moments; the speech bubble
+ * opens its comments over the story, and the paper plane shares it in the
+ * app or out of it. The ⋯ in the story's top row holds the rest (Share to
+ * feed, Change sticker: StoryMenuSheet), so the bar stays clean. The story
+ * waits while any of them is open.
  */
 function MyStoryBar({
   post,
@@ -1067,6 +1089,9 @@ function MyStoryBar({
   onHold,
   onOpenPerson,
   onDeleted,
+  viewerIsStaff,
+  askMenu,
+  onViewFeedPost,
 }: {
   post: CommunityPost;
   moments: CommunityPost[];
@@ -1077,10 +1102,19 @@ function MyStoryBar({
   onHold: (on: boolean) => void;
   onOpenPerson?: (a: CommunityAuthor) => void;
   onDeleted: () => void;
+  viewerIsStaff: boolean;
+  /** The ⋯ in the story's top row (counted up, like `ask`). */
+  askMenu: number;
+  onViewFeedPost: (id: string) => void;
 }) {
   const { isImpersonating } = useClientImpersonation();
   const [viewers, setViewers] = useState(false);
   const [sticker, setSticker] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsMounted, setCommentsMounted] = useState(false);
+  const [sharing, setSharing] = useState<boolean | null>(null);
   // only a swipe made while this is on screen (never one from before it was)
   const asked = useRef(ask);
   useEffect(() => {
@@ -1088,21 +1122,40 @@ function MyStoryBar({
     asked.current = ask;
     setViewers(true);
   }, [ask]);
-  // the story waits while its viewers (or the sticker editor) are open
+  const askedMenu = useRef(askMenu);
   useEffect(() => {
-    onHold(viewers || sticker);
-  }, [viewers, sticker, onHold]);
+    if (askMenu === askedMenu.current) return;
+    askedMenu.current = askMenu;
+    setMenu(true);
+  }, [askMenu]);
+  // the story waits while its viewers, comments, share or menu (or the sticker editor) are open
+  const sharingOpen = sharing === true;
+  useEffect(() => {
+    onHold(viewers || sticker || menuBusy || commentsOpen || sharingOpen);
+  }, [viewers, sticker, menuBusy, commentsOpen, sharingOpen, onHold]);
   useEffect(() => () => onHold(false), [onHold]);
+  // another moment: nothing from the last one stays open
+  useEffect(() => {
+    setCommentsOpen(false);
+    setCommentsMounted(false);
+    setSharing(null);
+    setMenu(false);
+  }, [post.id]);
   const v = post.views;
   const hearts = post.reaction_count ?? 0;
+  const comments = post.comment_count ?? 0;
   const closeViewers = useCallback(() => setViewers(false), []);
+  const openComments = () => {
+    setCommentsMounted(true);
+    setCommentsOpen(true);
+  };
   return (
     <>
-    <div className="absolute inset-x-0 bottom-0 z-30 flex items-center gap-2 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.85rem)" }} data-story-mine-bar>
+    <div className="absolute inset-x-0 bottom-0 z-30 flex items-center gap-1 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.85rem)" }} data-story-mine-bar>
       <button
         type="button"
         onClick={() => setViewers(true)}
-        className="flex h-11 min-w-0 items-center gap-2 rounded-full bg-white/15 pl-2 pr-4 text-[14px] font-bold backdrop-blur-sm active:scale-95"
+        className="mr-1 flex h-11 min-w-0 items-center gap-2 rounded-full bg-white/15 pl-2 pr-4 text-[14px] font-bold backdrop-blur-sm active:scale-95"
         aria-label={v?.count ? `Seen by ${v.count}. See who` : "No views yet"}
         data-story-activity
       >
@@ -1119,27 +1172,39 @@ function MyStoryBar({
         )}
         <span className="truncate">{v?.count ? `Seen by ${v.count}` : "No views yet"}</span>
       </button>
-      {hearts > 0 && (
-        <button type="button" onClick={() => setViewers(true)} className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-white/15 px-3.5 text-[14px] font-bold backdrop-blur-sm active:scale-95" aria-label={`${hearts} ${hearts === 1 ? "like" : "likes"}. See who`} data-story-likes>
-          ❤️ {hearts}
-        </button>
-      )}
-      {post.visibility === "community" && (
-        <button
-          type="button"
-          onClick={() => (isImpersonating ? toast.message(PREVIEW_ONLY_MESSAGE) : setSticker(true))}
-          className="ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/15 backdrop-blur-sm active:scale-95"
-          aria-label={post.sticker ? "Change your sticker" : "Add a poll, slider or question"}
-          data-story-add-sticker
-        >
-          <StickerIcon className="h-5 w-5" />
-        </button>
-      )}
-      <button type="button" onClick={onOpen} className={cn("inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95", post.visibility !== "community" && "ml-auto")}>
-        {storyFrameKind(post) === "win" ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
+      <span className="ml-auto" />
+      <button type="button" onClick={() => setViewers(true)} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={hearts ? `${hearts} ${hearts === 1 ? "like" : "likes"}. See who` : "No likes yet. See who saw it"} data-story-likes>
+        <Heart className="h-[26px] w-[26px]" strokeWidth={1.8} />
+        {hearts > 0 && <span>{compactNumber(hearts)}</span>}
       </button>
+      <button type="button" onClick={openComments} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={comments ? `Comments, ${comments}` : "Comments"} data-story-comment>
+        <MessageCircle className="h-[26px] w-[26px] -scale-x-100" strokeWidth={1.8} />
+        {comments > 0 && <span>{compactNumber(comments)}</span>}
+      </button>
+      <button type="button" onClick={() => setSharing(true)} aria-label="Share" className="grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-90" data-story-share>
+        <Send className="h-[25px] w-[25px] -rotate-12" strokeWidth={1.8} />
+      </button>
+      <StoryMenuSheet
+        post={post}
+        open={menu}
+        onClose={() => setMenu(false)}
+        onEditSticker={post.sticker && post.visibility === "community" ? () => (isImpersonating ? toast.message(PREVIEW_ONLY_MESSAGE) : setSticker(true)) : undefined}
+        onViewFeedPost={onViewFeedPost}
+        onHold={setMenuBusy}
+        link={storyLinkLabel(post) ? { label: storyLinkLabel(post)!, onOpen } : null}
+      />
       <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />
     </div>
+    {commentsMounted && (
+      <Suspense fallback={null}>
+        <CommentsSheet story open={commentsOpen} post={post} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsOpen(false)} onOpenAuthor={onOpenPerson} />
+      </Suspense>
+    )}
+    {sharing !== null && (
+      <Suspense fallback={null}>
+        <PostShareSheet post={post} open={sharing} onOpenChange={setSharing} />
+      </Suspense>
+    )}
     {viewers && (
       <StoryViewersPanel
         post={post}
@@ -1217,16 +1282,21 @@ const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉
 const QUICK_POST = ["😍", "😂", "🔥", "👏", "😮", "🙌", "💯", "🎉"];
 
 /**
- * The bar under a story, as on Instagram / TikTok: "Message Alyssa…" with
- * two quick emoji in it, and the heart. Tapping the field pauses the story
- * and opens eight quick reactions; one tap sends it (with a shower of it on
- * screen), or type and Send. It all goes privately, the same way as Message
- * on a post (useMessageAuthor): member to member as a message request, a
- * coach and their client in their coach chat; the other person sees
- * "Replied to your story" with the moment. Swipe up (or View workout) opens
- * the post itself.
+ * The bar under a story, as on Instagram / TikTok: "Send a message…" with two
+ * quick emoji in it, then the heart (like / unlike the story), the speech
+ * bubble (its comments, in a sheet over the story, the story still showing
+ * above it) and the paper plane (share it: people and chats in the app, or
+ * the phone's own share sheet). Tapping the field pauses the story and opens
+ * eight quick reactions; one tap sends it (with a shower of it on screen), or
+ * type and Send. A message is private and goes straight to the Messenger,
+ * the same way as Message on a post (useMessageAuthor): member to member as a
+ * message request, a coach and their client in their coach chat; the other
+ * person sees "Replied to your story" with the moment. A comment is public,
+ * seen by everyone who can see the story, and the sheet says so. The story
+ * waits while you type or while any sheet is open. A story has no page of its
+ * own: a link only shows for a workout's win and a story that shares a post.
  */
-function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPerson }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void; onComposing: (on: boolean) => void; onShare?: () => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
+function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPerson, askComments }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void; onComposing: (on: boolean) => void; onShare?: () => void; onOpenPerson?: (a: CommunityAuthor) => void; askComments: number }) {
   const { role } = useAuth();
   const { isImpersonating } = useClientImpersonation();
   const react = useReact(post, viewerIsStaff);
@@ -1235,7 +1305,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
   const win = frame === "win";
   const mine = post.my_reaction;
   const first = post.author.name.split(" ")[0];
-  // viewing as a client: their reply box ("Message <coach>…"), though nothing sends
+  // viewing as a client: their reply box ("Send a message…"), though nothing sends
   const staff = (role === "admin" || role === "coach") && !isImpersonating;
   // the same rule as Message on a post (coaches use team chat with each other)
   const canMessage = !post.is_mine && !(post.author.is_coach && staff);
@@ -1250,6 +1320,10 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
   const [pop, setPop] = useState(0);
   const [shower, setShower] = useState<{ id: number; emoji: string } | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  // the comments over the story, and the share sheet (mounted on its first tap)
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsMounted, setCommentsMounted] = useState(false);
+  const [sharing, setSharing] = useState<boolean | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const blurTimer = useRef<number | undefined>(undefined);
   const view = useVisualViewportBox(focused);
@@ -1259,13 +1333,29 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
   useEffect(() => {
     setText("");
     setSent(null);
+    setCommentsOpen(false);
+    setCommentsMounted(false);
+    setSharing(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
+  const openComments = () => {
+    setCommentsMounted(true);
+    setCommentsOpen(true);
+  };
+  // typing, or a sheet open: the story waits, and carries on from the same spot when it's put away
+  const sheetOpen = commentsOpen || sharing === true;
   useEffect(() => {
-    onComposing(focused || text.trim().length > 0);
+    onComposing(focused || text.trim().length > 0 || sheetOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focused, text]);
+  }, [focused, text, sheetOpen]);
   useEffect(() => () => onComposing(false), [onComposing]);
+  // a swipe up on a story with no page of its own opens its comments (only one made while this is on screen)
+  const askedComments = useRef(askComments);
+  useEffect(() => {
+    if (askComments === askedComments.current) return;
+    askedComments.current = askComments;
+    openComments();
+  }, [askComments]);
   useEffect(() => {
     if (!sent) return;
     const t = window.setTimeout(() => setSent(null), 2200);
@@ -1310,13 +1400,15 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
 
   // the frame shows a picture or a workout card: the words go here (a words frame already shows them)
   const caption = frame === "media" || frame === "win" ? post.caption?.trim() : null;
+  const link = storyLinkLabel(post);
   const typing = text.trim().length > 0;
+  const comments = post.comment_count ?? 0;
   return (
     <>
       {/* typing: the story dims, eight quick reactions in the middle */}
       {focused && (
         <div
-          className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 px-8 backdrop-blur-md animate-in fade-in duration-150"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 px-8 backdrop-blur-md animate-in fade-in duration-150"
           // centred in what the keyboard leaves free, above the bar
           style={{ paddingBottom: lift ? lift + 76 : 0 }}
           data-story-quick
@@ -1340,6 +1432,10 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
               </div>
             </div>
           )}
+          {/* a message and a comment are different things: this one is only for them */}
+          <p className="mt-6 max-w-[300px] text-center text-[12.5px] font-semibold leading-snug text-white/65" data-story-private-note>
+            Only {first} sees this, in your messages. To say something everyone can see, tap the speech bubble.
+          </p>
         </div>
       )}
 
@@ -1359,7 +1455,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
         style={{ bottom: lift, paddingBottom: lift ? "0.6rem" : "max(env(safe-area-inset-bottom), 0.75rem)" }}
         data-story-bar
       >
-        {!focused && (
+        {!focused && (caption || link || sent) && (
           <div className="mb-3 px-1">
             {/* its words, the people it tags tappable (their profile) */}
             {caption && (
@@ -1368,16 +1464,18 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
               </p>
             )}
             <div className="flex items-center gap-2">
-              <button type="button" onClick={onOpen} className="inline-flex h-8 items-center gap-0.5 rounded-full bg-white/15 pl-3 pr-2 text-[13px] font-bold backdrop-blur-sm active:scale-95">
-                {win ? "View workout" : post.shared_post && post.shared_post.author.user_id !== post.author.user_id ? `View ${post.shared_post.author.name.split(" ")[0]}'s post` : "View post"} <ChevronRight className="h-4 w-4" />
-              </button>
+              {link && (
+                <button type="button" onClick={onOpen} className="inline-flex h-8 items-center gap-0.5 rounded-full bg-white/15 pl-3 pr-2 text-[13px] font-bold backdrop-blur-sm active:scale-95" data-story-link>
+                  {link} <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
               {sent && <span className="min-w-0 truncate text-[13px] font-semibold text-white/85 animate-in fade-in duration-200" data-story-sent>✓ {sent}</span>}
             </div>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {canMessage ? (
-            <div className={cn("flex h-12 min-w-0 flex-1 items-center rounded-full border pl-4 pr-1", focused ? "border-white bg-black/40" : "border-white/50")}>
+            <div className={cn("mr-1 flex h-12 min-w-0 flex-1 items-center rounded-full border pl-4 pr-1", focused ? "border-white bg-black/40" : "border-white/50")}>
               <input
                 ref={input}
                 value={text}
@@ -1392,9 +1490,10 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
                 }}
                 disabled={full}
                 enterKeyHint="send"
-                placeholder={full ? `You can message ${first} again once they reply` : `Message ${first}…`}
+                placeholder={full ? `You can message ${first} again once they reply` : "Send a message…"}
                 className="h-full min-w-0 flex-1 select-text bg-transparent text-[16px] text-white outline-none placeholder:text-white/80 disabled:placeholder:text-white/55"
-                aria-label={`Message ${post.author.name}`}
+                aria-label={`Send ${post.author.name} a private message`}
+                data-story-reply-field
               />
               {typing ? (
                 <button type="button" onMouseDown={keepFocus} onClick={() => void deliver(text)} disabled={send.isPending} className="h-10 shrink-0 rounded-full px-3 text-[15px] font-bold active:scale-95 disabled:opacity-50" data-story-send>
@@ -1403,7 +1502,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
               ) : (
                 !full &&
                 quick.slice(0, 2).map((e) => (
-                  <button key={e} type="button" onMouseDown={keepFocus} onClick={() => void deliver(e, e)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[24px] leading-none active:scale-90" aria-label={`Send ${e} to ${first}`} data-story-emoji>
+                  <button key={e} type="button" onMouseDown={keepFocus} onClick={() => void deliver(e, e)} className="grid h-10 w-9 shrink-0 place-items-center rounded-full text-[22px] leading-none active:scale-90" aria-label={`Send ${e} to ${first}`} data-story-emoji>
                     {e}
                   </button>
                 ))
@@ -1413,19 +1512,39 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
             <div className="flex-1" />
           )}
           {!focused && (
-            <button type="button" onClick={like} aria-pressed={!!mine} aria-label={mine ? "Take it back" : win ? "Celebrate" : "Like"} className="grid h-12 w-12 shrink-0 place-items-center rounded-full active:scale-90" data-story-heart>
-              <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
-                {mine && mine !== "heart" ? <span className="text-[28px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-[30px] w-[30px]", mine && "fill-[#ef3340] text-[#ef3340]")} strokeWidth={1.8} />}
-              </span>
-            </button>
-          )}
-          {!focused && onShare && (
-            <button type="button" onClick={onShare} aria-label="Add to your story" className="-ml-1 grid h-12 w-11 shrink-0 place-items-center rounded-full active:scale-90" data-story-share>
-              <Send className="h-[27px] w-[27px] -rotate-12" strokeWidth={1.8} />
-            </button>
+            <>
+              <button type="button" onClick={like} aria-pressed={!!mine} aria-label={mine ? "Unlike" : "Like"} className="grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-90" data-story-heart>
+                <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
+                  {mine && mine !== "heart" ? <span className="text-[26px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-[28px] w-[28px]", mine && "fill-[#ef3340] text-[#ef3340]")} strokeWidth={1.8} />}
+                </span>
+              </button>
+              <button type="button" onClick={openComments} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={comments ? `Comments, ${comments}` : "Comments"} data-story-comment>
+                <MessageCircle className="h-[26px] w-[26px] -scale-x-100" strokeWidth={1.8} />
+                {comments > 0 && <span>{compactNumber(comments)}</span>}
+              </button>
+              <button type="button" onClick={() => setSharing(true)} aria-label="Share" className="grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-90" data-story-share>
+                <Send className="h-[25px] w-[25px] -rotate-12" strokeWidth={1.8} />
+              </button>
+            </>
           )}
         </div>
       </div>
+      {commentsMounted && (
+        <Suspense fallback={null}>
+          <CommentsSheet story open={commentsOpen} post={post} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsOpen(false)} onOpenAuthor={onOpenPerson} />
+        </Suspense>
+      )}
+      {sharing !== null && (
+        <Suspense fallback={null}>
+          <PostShareSheet
+            post={post}
+            open={sharing}
+            onOpenChange={setSharing}
+            // a moment that's a crew-wide post: Add to your story (the story slides away, the camera opens)
+            onStory={onShare ? () => window.setTimeout(onShare, 200) : undefined}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
