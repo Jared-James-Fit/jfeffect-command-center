@@ -31,8 +31,15 @@ import { CompetitionsCard } from "@/components/competition/competitions-card";
 import { PainWatchCard } from "@/components/pain/pain-watch-card";
 import { RoadmapBoardCard } from "@/components/nutrition-roadmap/roadmap-board-card";
 import { CheckinsToReviewCard, useReviewQueue } from "@/components/forms/checkins-to-review-card";
+import { AutopilotBoardCard, AutopilotBoardPage, AUTOPILOT_LAYER } from "@/components/autopilot/autopilot-board";
+import { useFullScreenLayer } from "@/components/full-screen-page";
+
+const DASHBOARD_LAYERS = [AUTOPILOT_LAYER] as const;
 
 export const Route = createFileRoute("/_authenticated/admin/")({
+  // ?layer=autopilot: Coaching updates full screen over the dashboard (`useFullScreenLayer`), so Back closes it
+  validateSearch: (s: Record<string, unknown>): { layer?: (typeof DASHBOARD_LAYERS)[number] } =>
+    typeof s.layer === "string" && (DASHBOARD_LAYERS as readonly string[]).includes(s.layer) ? { layer: s.layer as (typeof DASHBOARD_LAYERS)[number] } : {},
   component: AdminDashboard,
 });
 
@@ -205,6 +212,7 @@ function TrainingRow({ s, status }: { s: Pick<OverviewSession, "client_id" | "na
 
 function AdminDashboard() {
   const offlineNoCache = useIsOfflineWithoutCache();
+  const { layer, open: openLayer, close: closeLayer } = useFullScreenLayer(DASHBOARD_LAYERS);
   const listDirectory = useServerFn(listClientsDirectoryFn);
   const liveQueueQuery = {
     staleTime: 15_000,
@@ -281,6 +289,12 @@ function AdminDashboard() {
         {/* ---------------- CHECK-INS: what clients sent that's waiting on a review (hidden when none) ---------------- */}
         <SectionErrorBoundary label="Check-ins to review">
           <CheckinsToReviewCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- COACHING UPDATES: the week's autopilot assessments, exceptions first (hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Coaching updates">
+          <AutopilotBoardCard onOpen={() => openLayer(AUTOPILOT_LAYER)} />
+          <AutopilotBoardPage open={layer === AUTOPILOT_LAYER} onBack={closeLayer} />
         </SectionErrorBoundary>
 
         {/* ---------------- PAIN: clients whose pain wants a look (persistent, worse, severe, limiting; hidden when none) ---------------- */}
