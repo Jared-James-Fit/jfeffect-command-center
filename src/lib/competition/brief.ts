@@ -9,7 +9,14 @@
 import { planAttempts, type AttemptPlan } from "./attempts";
 import { recommendCall, type CallRecommendation } from "./call";
 import { readCompetitor, type CompetitorRead } from "./competitor";
-import { forecastMeet, type ConversionPoint, type Forecast, type LiftEvidence } from "./forecast";
+import { ourAtClass } from "./research";
+import {
+  forecastMeet,
+  type ConversionPoint,
+  type Forecast,
+  type LiftEvidence,
+  type PastCut,
+} from "./forecast";
 import { planGameDay, type DayStep } from "./gameday";
 import { buildLandscape, type Landscape } from "./landscape";
 import { competitionProfile, type CompetitionProfile, type ForecastCheck } from "./learning";
@@ -65,6 +72,8 @@ export type BriefContext = {
     bodyweightAvg: number | null;
     bodyweightTrendPerWeek: number | null;
     classLimit: number | null;
+    /** their bodyweight at this distance before past meets (forecast.ts pastCuts) */
+    pastCuts?: PastCut[];
   };
   lifts: Record<Lift, LiftEvidence>;
   meets: MeetRecord[];
@@ -111,6 +120,8 @@ export type ClassOption = {
   lifters: Array<{ name: string; total: number; date: string }>;
   ourPlace: number | null;
   reason: string;
+  /** what they'd total there (research.ts ourAtClass), set when the brief is built */
+  ours?: { kg: number | null; own: number[]; ownSince: string | null; scaled: number | null };
 };
 
 /** One training day of a competition lift: its most telling set, as the strength line read it. */
@@ -170,6 +181,7 @@ export type Brief = {
     bodyweightAvg: number | null;
     bodyweightTrendPerWeek: number | null;
     classLimit: number | null;
+    pastCuts: PastCut[];
     conversion: ConversionPoint[];
     watchFacts: BriefContext["watch"];
   };
@@ -241,6 +253,7 @@ export function buildBrief(ctx: BriefContext): Brief {
     conversion: ctx.conversion,
     concerns: pre.filter((w) => w.area === "pain" || w.area === "recovery"),
     increment: c.rules.incrementKg,
+    weightClass: c.weightClass,
   });
   const watch = watchList({
     ...ctx.watch,
@@ -366,7 +379,22 @@ export function buildBrief(ctx: BriefContext): Brief {
     profile,
     missing,
     projectionShift,
-    classOptions: ctx.classOptions ?? [],
+    // another class's field, with where they'd stand there on their own numbers at that class
+    classOptions: (ctx.classOptions ?? []).map((alt) => {
+      const ours = ourAtClass({
+        weightClass: alt.weightClass,
+        meets: ctx.meets,
+        today: ctx.today,
+        expectedHere: forecast.total?.expected ?? null,
+        limitHere: ctx.athlete.classLimit,
+      });
+      return {
+        ...alt,
+        ours,
+        ourPlace:
+          ours.kg != null ? 1 + alt.lifters.filter((l) => l.total > ours.kg!).length : alt.ourPlace,
+      };
+    }),
     inputs: {
       history,
       topSingles: ctx.topSingles,
@@ -376,6 +404,7 @@ export function buildBrief(ctx: BriefContext): Brief {
       bodyweightAvg: ctx.athlete.bodyweightAvg,
       bodyweightTrendPerWeek: ctx.athlete.bodyweightTrendPerWeek,
       classLimit: ctx.athlete.classLimit,
+      pastCuts: ctx.athlete.pastCuts ?? [],
       conversion: ctx.conversion,
       watchFacts: ctx.watch,
     },

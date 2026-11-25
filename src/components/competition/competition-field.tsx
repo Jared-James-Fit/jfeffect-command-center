@@ -256,7 +256,10 @@ export function CompetitionField({
     mutationFn: () => discover({ data: { competitionId } }),
     onSuccess: (r) => {
       refresh();
-      if (r.status === "added") toast.success(`${r.added} likely entrant${r.added === 1 ? "" : "s"} found from the rankings`);
+      if (r.status === "added")
+        toast.success(
+          `${r.added} likely entrant${r.added === 1 ? "" : "s"} found from the rankings`,
+        );
       else if (r.status === "nothing_new") toast.success("Nobody new in the rankings");
       else toast.error(r.error ?? "Couldn't read the rankings");
     },
@@ -281,7 +284,9 @@ export function CompetitionField({
   const applyMeet = useMutation({
     mutationFn: (m: MeetInfo) => {
       const q = m.qualifyingTotals.find(
-        (x) => weightClass && x.weightClass.replace(/[^0-9+]/g, "") === weightClass.replace(/[^0-9+]/g, ""),
+        (x) =>
+          weightClass &&
+          x.weightClass.replace(/[^0-9+]/g, "") === weightClass.replace(/[^0-9+]/g, ""),
       );
       return updateComp({
         data: {
@@ -362,13 +367,33 @@ export function CompetitionField({
           </p>
         ) : null}
         {classOptions.map((o) => (
-          <div key={o.weightClass} className="mt-3 rounded-xl bg-muted/50 p-3 text-[13px]" data-class-option>
+          <div
+            key={o.weightClass}
+            className="mt-3 rounded-xl bg-muted/50 p-3 text-[13px]"
+            data-class-option
+          >
             <p className="font-medium">
               The {o.weightClass} kg class ({o.reason})
-              {o.ourPlace != null ? `: our expected total would place about ${o.ourPlace}` : ""}
+              {o.ourPlace != null
+                ? `: at ${o.ours?.kg ?? "today's expected"}${o.ours?.kg != null ? " kg" : ""} they'd place about ${o.ourPlace}`
+                : ""}
             </p>
+            {o.ours?.own.length || o.ours?.scaled != null ? (
+              <p className="text-muted-foreground">
+                {o.ours?.own.length
+                  ? `Their own totals at ${o.weightClass} since ${o.ours.ownSince}: ${o.ours.own.join(", ")} kg`
+                  : ""}
+                {o.ours?.own.length && o.ours?.scaled != null ? " · " : ""}
+                {o.ours?.scaled != null
+                  ? `today's expected scaled to ${o.weightClass} kg: about ${o.ours.scaled} kg`
+                  : ""}
+              </p>
+            ) : null}
             <p className="text-muted-foreground">
-              {o.lifters.slice(0, 5).map((l) => `${l.name} ${l.total}`).join(" · ")}
+              {o.lifters
+                .slice(0, 5)
+                .map((l) => `${l.name} ${l.total}`)
+                .join(" · ")}
             </p>
           </div>
         ))}
@@ -411,7 +436,10 @@ export function CompetitionField({
           Instagram, can't be read: paste its text or a screenshot below.
         </p>
         {link?.meet ? (
-          <div className="mt-3 space-y-1 rounded-xl border border-border p-3 text-[13px]" data-meet-info>
+          <div
+            className="mt-3 space-y-1 rounded-xl border border-border p-3 text-[13px]"
+            data-meet-info
+          >
             <p className="font-medium">{link.title ?? "Meet details"}</p>
             {link.meet.date ? <p>Date: {link.meet.date}</p> : null}
             {link.meet.location ? <p>Venue: {link.meet.location}</p> : null}
@@ -435,7 +463,11 @@ export function CompetitionField({
               </p>
             ))}
             <div className="flex gap-2 pt-1">
-              <Button size="sm" loading={applyMeet.isPending} onClick={() => applyMeet.mutate(link.meet!)}>
+              <Button
+                size="sm"
+                loading={applyMeet.isPending}
+                onClick={() => applyMeet.mutate(link.meet!)}
+              >
                 Use these
               </Button>
               <Button size="sm" variant="outline" onClick={() => setLink(null)}>

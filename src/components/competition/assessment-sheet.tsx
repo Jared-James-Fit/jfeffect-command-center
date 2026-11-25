@@ -17,7 +17,14 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -461,7 +468,7 @@ export function AssessmentSheet({
             ) : null}
 
             <div
-              className="sticky bottom-0 -mx-6 flex flex-wrap gap-2 border-t border-border bg-background px-6 py-3"
+              className="sticky -bottom-6 -mx-6 flex flex-wrap items-center gap-2 border-t border-border bg-background px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:bg-card"
               data-assessment-actions
             >
               {actions.includes("release") ? (
@@ -480,28 +487,32 @@ export function AssessmentSheet({
                 </Button>
               ) : null}
               {actions.includes("approve") ? (
-                <>
-                  <Button
-                    size="sm"
-                    loading={busy}
-                    onClick={() => run.mutate({ action: "approve_release" })}
-                  >
-                    Approve and release
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => run.mutate({ action: "approve" })}
-                  >
-                    Approve only
-                  </Button>
-                </>
+                <Button
+                  size="sm"
+                  className="max-md:flex-1"
+                  loading={busy}
+                  onClick={() => run.mutate({ action: "approve_release" })}
+                >
+                  Approve and release
+                </Button>
+              ) : null}
+              {/* the rest: inline on a computer, one ⋯ on a phone (a decision is one row) */}
+              {actions.includes("approve") ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="max-md:hidden"
+                  disabled={busy}
+                  onClick={() => run.mutate({ action: "approve" })}
+                >
+                  Approve only
+                </Button>
               ) : null}
               {actions.includes("review") ? (
                 <Button
                   size="sm"
                   variant="outline"
+                  className="max-md:hidden"
                   disabled={busy}
                   onClick={() => run.mutate({ action: "review" })}
                 >
@@ -509,9 +520,48 @@ export function AssessmentSheet({
                 </Button>
               ) : null}
               {actions.includes("request_changes") && changes == null ? (
-                <Button size="sm" variant="ghost" onClick={() => setChanges("")}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="max-md:hidden"
+                  onClick={() => setChanges("")}
+                >
                   Request changes
                 </Button>
+              ) : null}
+              {actions.includes("approve") ||
+              actions.includes("review") ||
+              (actions.includes("request_changes") && changes == null) ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="md:hidden"
+                      aria-label="More actions"
+                      disabled={busy}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {actions.includes("approve") ? (
+                      <DropdownMenuItem onSelect={() => run.mutate({ action: "approve" })}>
+                        Approve only
+                      </DropdownMenuItem>
+                    ) : null}
+                    {actions.includes("review") ? (
+                      <DropdownMenuItem onSelect={() => run.mutate({ action: "review" })}>
+                        Mark reviewed
+                      </DropdownMenuItem>
+                    ) : null}
+                    {actions.includes("request_changes") && changes == null ? (
+                      <DropdownMenuItem onSelect={() => setChanges("")}>
+                        Request changes
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : null}
               {a.status === "released" ? (
                 <p className="text-[12px] text-muted-foreground">

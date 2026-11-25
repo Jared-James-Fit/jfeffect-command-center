@@ -7,10 +7,12 @@ const SB = env.VITE_SUPABASE_URL.replace(/\/$/,'');
 const REF = new URL(SB).hostname.split('.')[0];
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5173';
 const USER_ID = '11111111-2222-4333-8444-555555555555';
+// the session's email (a coach's screens set their own, so the sidebar never shows the athlete's)
+const EMAIL = process.env.SHOT_EMAIL || 'demo.athlete@example.com';
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now()/1000) + 3600*24;
-const jwt = `${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:USER_ID,role:'authenticated',aud:'authenticated',exp,email:'demo.athlete@example.com'})}.sig`;
-const user = { id: USER_ID, aud:'authenticated', role:'authenticated', email:'demo.athlete@example.com', email_confirmed_at:'2026-01-01T00:00:00Z', created_at:'2025-06-01T00:00:00Z', app_metadata:{provider:'email'}, user_metadata:{ first_name:'Alex' } };
+const jwt = `${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:USER_ID,role:'authenticated',aud:'authenticated',exp,email:EMAIL})}.sig`;
+const user = { id: USER_ID, aud:'authenticated', role:'authenticated', email:EMAIL, email_confirmed_at:'2026-01-01T00:00:00Z', created_at:'2025-06-01T00:00:00Z', app_metadata:{provider:'email'}, user_metadata:{ first_name:'Alex' } };
 const session = { access_token: jwt, refresh_token:'demo-refresh', token_type:'bearer', expires_in: 3600*24, expires_at: exp, user };
 
 module.exports.run = async function run({ initScript, serverFnMocks = {}, files = {}, path, fixtures = {}, rpc = {}, width = 390, height = 844, scale = 1, out, waitFor, before, theme = 'dark', log = true, afterLoad, desktop = false }) {

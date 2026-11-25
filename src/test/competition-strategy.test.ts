@@ -35,6 +35,7 @@ import {
 } from "@/lib/competition/write.server";
 import { DEFAULT_ROUTES, STRONG_MODELS, resolveRoute } from "@/lib/ai/routing";
 import type { Observation } from "@/lib/competition/types";
+import { splitRefs } from "@/lib/competition/refs";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -95,12 +96,16 @@ describe("competitor training is evidence, weighed", () => {
       meets,
       today,
       meetDate,
-      observations: [obs("2026-11-10", "squat", 262.5, 1, { source: "instagram", confidence: "medium" })],
+      observations: [
+        obs("2026-11-10", "squat", 262.5, 1, { source: "instagram", confidence: "medium" }),
+      ],
     });
     const s = one.training.squat!;
     expect(s.exposures).toBe(1);
     expect(s.weight).toBeLessThanOrEqual(0.12);
-    expect(one.projection!.lifts.squat!.expected - base.projection!.lifts.squat!.expected).toBeLessThanOrEqual(2.5);
+    expect(
+      one.projection!.lifts.squat!.expected - base.projection!.lifts.squat!.expected,
+    ).toBeLessThanOrEqual(2.5);
     expect(one.projection!.high).toBeGreaterThan(base.projection!.high);
   });
 
@@ -141,18 +146,25 @@ describe("competitor training is evidence, weighed", () => {
         obs("2026-11-12", "squat", 217.5, 1, { rpe: 9.5 }),
       ],
     });
-    expect(down.projection!.lifts.squat!.expected).toBeLessThan(base.projection!.lifts.squat!.expected);
+    expect(down.projection!.lifts.squat!.expected).toBeLessThan(
+      base.projection!.lifts.squat!.expected,
+    );
     expect(down.projection!.lifts.squat!.conservative).toBeLessThanOrEqual(
       down.projection!.lifts.squat!.expected,
     );
   });
 
   it("variations, high reps and stale posts don't set a level; a questionable rep counts half", () => {
-    expect(observationWeight(obs("2026-11-10", "deadlift", 300, 1, { standard: "variation" }), today)).toBeNull();
+    expect(
+      observationWeight(obs("2026-11-10", "deadlift", 300, 1, { standard: "variation" }), today),
+    ).toBeNull();
     expect(observationWeight(obs("2026-11-10", "squat", 180, 12), today)).toBeNull();
     expect(observationWeight(obs("2026-04-01", "squat", 260, 1), today)).toBeNull();
     const clean = observationWeight(obs("2026-11-10", "squat", 260, 1), today)!.w;
-    const q = observationWeight(obs("2026-11-10", "squat", 260, 1, { technique: "questionable" }), today)!.w;
+    const q = observationWeight(
+      obs("2026-11-10", "squat", 260, 1, { technique: "questionable" }),
+      today,
+    )!.w;
     expect(q).toBeCloseTo(clean / 2, 5);
   });
 
@@ -176,7 +188,9 @@ describe("competitor training is evidence, weighed", () => {
     expect(cut.basis.join(" ")).toMatch(/costs strength/);
     const wrapsMeets = meets.map((m) => ({ ...m, equipment: "Wraps" }));
     const wraps = readCompetitor({ meets: wrapsMeets, today, meetDate, classic: true });
-    expect(wraps.projection!.lifts.squat!.expected).toBeLessThan(base.projection!.lifts.squat!.expected);
+    expect(wraps.projection!.lifts.squat!.expected).toBeLessThan(
+      base.projection!.lifts.squat!.expected,
+    );
   });
 });
 
@@ -232,7 +246,14 @@ function ctx(over: Partial<BriefContext> = {}): BriefContext {
     warmups: { squat: { sessions: 6, medianSets: 5, lastPct: 0.9 } },
     topSingles: { squat: 230, bench: 145, deadlift: 260 },
     competitors: [
-      { id: "r1", name: "Rival Lifter", meets: meetsFromOplCsv(RIVAL_CSV), observations: [], identity: "matched", status: "suggested" },
+      {
+        id: "r1",
+        name: "Rival Lifter",
+        meets: meetsFromOplCsv(RIVAL_CSV),
+        observations: [],
+        identity: "matched",
+        status: "suggested",
+      },
     ],
     watch: {
       programEndsOn: "2027-02-08",
@@ -243,17 +264,49 @@ function ctx(over: Partial<BriefContext> = {}): BriefContext {
       adherence: 0.92,
       cardioMinutesPerWeek: null,
     },
-    call: { lastCallDaysAgo: null, upcomingCallOn: null, includedCallsLeft: null, packageName: null },
+    call: {
+      lastCallDaysAgo: null,
+      upcomingCallOn: null,
+      includedCallsLeft: null,
+      packageName: null,
+    },
     previous: null,
     checks: [],
     cues: {},
     sessions: {
       squat: [
-        { day: "2026-11-16", kg: 206.5, reps: 1, rpe: 6, e1rm: 232, confidence: "medium", heaviestKg: 206.5, velocity: 0.52 },
-        { day: "2026-11-09", kg: 192.5, reps: 4, rpe: 6, e1rm: 229, confidence: "medium", heaviestKg: 192.5, velocity: null },
+        {
+          day: "2026-11-16",
+          kg: 206.5,
+          reps: 1,
+          rpe: 6,
+          e1rm: 232,
+          confidence: "medium",
+          heaviestKg: 206.5,
+          velocity: 0.52,
+        },
+        {
+          day: "2026-11-09",
+          kg: 192.5,
+          reps: 4,
+          rpe: 6,
+          e1rm: 229,
+          confidence: "medium",
+          heaviestKg: 192.5,
+          velocity: null,
+        },
       ],
       deadlift: [
-        { day: "2026-11-13", kg: 224.5, reps: 4, rpe: 10, e1rm: 254, confidence: "high", heaviestKg: 224.5, velocity: null },
+        {
+          day: "2026-11-13",
+          kg: 224.5,
+          reps: 4,
+          rpe: 10,
+          e1rm: 254,
+          confidence: "high",
+          heaviestKg: 224.5,
+          velocity: null,
+        },
       ],
     },
     ...over,
@@ -267,7 +320,20 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
   const sq = b.forecast.lifts.squat!.range;
 
   it("the evidence is numbered and covers training, meets, conversion, warm-ups, bodyweight and the field", () => {
-    for (const id of ["T-SQ1", "T-SQ2", "T-DL1", "L-SQ", "CV-SQ", "W-SQ", "M1", "M3", "BW", "PRG", "C1", "C1-M1"])
+    for (const id of [
+      "T-SQ1",
+      "T-SQ2",
+      "T-DL1",
+      "L-SQ",
+      "CV-SQ",
+      "W-SQ",
+      "M1",
+      "M3",
+      "BW",
+      "PRG",
+      "C1",
+      "C1-M1",
+    ])
       expect(ids.has(id)).toBe(true);
     expect(evidence.find((e) => e.id === "T-SQ1")!.text).toMatch(/0\.52 m\/s/);
     expect(evidence.find((e) => e.id === "M1")!.text).toMatch(/280x/);
@@ -282,7 +348,8 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
         scenario: "expected",
         kg: sq.expected + 5,
         text: "Squat expected up a step",
-        reason: "Their squat converts above training at every recent meet and the RPE 6 single moved fast",
+        reason:
+          "Their squat converts above training at every recent meet and the RPE 6 single moved fast",
         evidence: ["CV-SQ", "T-SQ1", "M1"],
       },
     ]);
@@ -299,9 +366,30 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
 
   it("a call citing nothing real, or moving too far, or a big move on one item, is set aside with why", () => {
     const raw = readProposals([
-      { type: "forecast", lift: "squat", kg: sq.expected + 2.5, text: "Up", reason: "Because I feel it should be", evidence: ["T-ZZ9"] },
-      { type: "forecast", lift: "bench", kg: Math.round(b.forecast.lifts.bench!.range.expected * 1.2 / 2.5) * 2.5, text: "Bench way up", reason: "A strong recent bench single", evidence: ["M1", "AH"] },
-      { type: "forecast", lift: "deadlift", kg: b.forecast.lifts.deadlift!.range.expected + 12.5, text: "Deadlift up", reason: "One heavy set of four at RPE 10", evidence: ["T-DL1"] },
+      {
+        type: "forecast",
+        lift: "squat",
+        kg: sq.expected + 2.5,
+        text: "Up",
+        reason: "Because I feel it should be",
+        evidence: ["T-ZZ9"],
+      },
+      {
+        type: "forecast",
+        lift: "bench",
+        kg: Math.round((b.forecast.lifts.bench!.range.expected * 1.2) / 2.5) * 2.5,
+        text: "Bench way up",
+        reason: "A strong recent bench single",
+        evidence: ["M1", "AH"],
+      },
+      {
+        type: "forecast",
+        lift: "deadlift",
+        kg: b.forecast.lifts.deadlift!.range.expected + 12.5,
+        text: "Deadlift up",
+        reason: "One heavy set of four at RPE 10",
+        evidence: ["T-DL1"],
+      },
     ]);
     const checks = checkProposals(b, evidence, raw);
     expect(checks.every((c) => !c.ok)).toBe(true);
@@ -313,14 +401,46 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
   it("attempts: on the increment, rising, opener within the conservative day, jumps capped", () => {
     const a = b.attempts.lifts.squat!;
     const good = readProposals([
-      { type: "attempt", lift: "squat", attempt: 1, kg: a.opener + 2.5, text: "Open a step higher", reason: "They open at 95% of what they make and made every opener", evidence: ["AH", "M1"] },
+      {
+        type: "attempt",
+        lift: "squat",
+        attempt: 1,
+        kg: a.opener + 2.5,
+        text: "Open a step higher",
+        reason: "They open at 95% of what they make and made every opener",
+        evidence: ["AH", "M1"],
+      },
     ]);
     const c1 = checkProposals(b, evidence, good);
     expect(c1[0].ok).toBe(a.opener + 2.5 <= sq.conservative);
     const bad = readProposals([
-      { type: "attempt", lift: "squat", attempt: 1, kg: sq.conservative + 5, text: "Open heavy", reason: "Confidence in the squat", evidence: ["M1"] },
-      { type: "attempt", lift: "squat", attempt: 3, kg: 241.3, text: "Odd third", reason: "Odd plates", evidence: ["M1"] },
-      { type: "attempt", lift: "squat", attempt: 3, kg: sq.high + 10, text: "Huge third", reason: "Going for it all", evidence: ["M1"] },
+      {
+        type: "attempt",
+        lift: "squat",
+        attempt: 1,
+        kg: sq.conservative + 5,
+        text: "Open heavy",
+        reason: "Confidence in the squat",
+        evidence: ["M1"],
+      },
+      {
+        type: "attempt",
+        lift: "squat",
+        attempt: 3,
+        kg: 241.3,
+        text: "Odd third",
+        reason: "Odd plates",
+        evidence: ["M1"],
+      },
+      {
+        type: "attempt",
+        lift: "squat",
+        attempt: 3,
+        kg: sq.high + 10,
+        text: "Huge third",
+        reason: "Going for it all",
+        evidence: ["M1"],
+      },
     ]);
     const c2 = checkProposals(b, evidence, bad);
     expect(c2[0].ok).toBe(false);
@@ -331,23 +451,55 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
 
   it("an individual last warm-up stands within 82–97% of the opener and the ladder is rebuilt to it", () => {
     const opener = b.attempts.lifts.squat!.opener;
-    const last = Math.floor((opener * 0.9) / 2.5) * 2.5;
+    // a step under the engine's own last warm-up (a call has to change something)
+    const last = b.warmups.squat!.last.kg - 5;
+    expect(last / opener).toBeGreaterThanOrEqual(0.82);
     const raw = readProposals([
-      { type: "last_warmup", lift: "squat", kg: last, text: "Last warm-up a little lighter", reason: "Their last warm-up in training runs about 90% of the first working set", evidence: ["W-SQ"] },
-      { type: "last_warmup", lift: "bench", kg: b.attempts.lifts.bench!.opener, text: "Warm up to the opener", reason: "Wants to feel it", evidence: ["M1"] },
+      {
+        type: "last_warmup",
+        lift: "squat",
+        kg: last,
+        text: "Last warm-up a little lighter",
+        reason: "Their last warm-up in training runs about 90% of the first working set",
+        evidence: ["W-SQ"],
+      },
+      {
+        type: "last_warmup",
+        lift: "bench",
+        kg: b.attempts.lifts.bench!.opener,
+        text: "Warm up to the opener",
+        reason: "Wants to feel it",
+        evidence: ["M1"],
+      },
     ]);
     const { checks, adjusted } = strategyOf(b, evidence, raw);
     expect(checks[0].ok).toBe(true);
     expect(checks[1].ok).toBe(false);
     expect(adjusted.warmups.squat!.last.kg).toBe(last);
-    expect(adjusted.warmups.squat!.sets.every((s, i, xs) => i === 0 || s.kg > xs[i - 1].kg)).toBe(true);
+    expect(adjusted.warmups.squat!.sets.every((s, i, xs) => i === 0 || s.kg > xs[i - 1].kg)).toBe(
+      true,
+    );
   });
 
   it("a competitor call needs their own record and moves the field", () => {
     const exp = b.competitors[0].read.projection!.expected;
     const raw = readProposals([
-      { type: "competitor", competitor: "Rival Lifter", kg: exp + 15, text: "Rival is better than their last meet", reason: "Their record climbs every meet", evidence: ["C1", "C1-M1", "C1-M2"] },
-      { type: "competitor", competitor: "Rival Lifter", kg: exp + 15, text: "Rival up", reason: "Our athlete trains hard", evidence: ["T-SQ1", "M1"] },
+      {
+        type: "competitor",
+        competitor: "Rival Lifter",
+        kg: exp + 15,
+        text: "Rival is better than their last meet",
+        reason: "Their record climbs every meet",
+        evidence: ["C1", "C1-M1", "C1-M2"],
+      },
+      {
+        type: "competitor",
+        competitor: "Rival Lifter",
+        kg: exp + 15,
+        text: "Rival up",
+        reason: "Our athlete trains hard",
+        evidence: ["T-SQ1", "M1"],
+      },
     ]);
     const checks = checkProposals(b, evidence, raw);
     expect(checks[0].ok).toBe(true);
@@ -361,21 +513,39 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
     const a = b.attempts.lifts.deadlift!;
     const second = a.pathways.balanced[1] + 2.5;
     const raw = readProposals([
-      { type: "attempt", lift: "deadlift", attempt: 2, kg: second, text: "A bigger second", reason: "Their deadlift seconds move fast and thirds are where they miss", evidence: ["M1", "M2"] },
+      {
+        type: "attempt",
+        lift: "deadlift",
+        attempt: 2,
+        kg: second,
+        text: "A bigger second",
+        reason: "Their deadlift seconds move fast and thirds are where they miss",
+        evidence: ["M1", "M2"],
+      },
     ]);
     const { checks, adjusted } = strategyOf(b, evidence, raw);
     expect(checks[0].ok).toBe(true);
     const n = readNarrative(
       JSON.stringify({
         coach_summary: "Good prep. The plan holds with one change to the deadlift second.",
-        athlete: { title: "Game plan", summary: "Here's the plan.", focus: ["Sleep"], expectations: [], message: "Plan's ready." },
+        athlete: {
+          title: "Game plan",
+          summary: "Here's the plan.",
+          focus: ["Sleep"],
+          expectations: [],
+          message: "Plan's ready.",
+        },
       }),
     )!;
     const athlete = athleteVersion(b, n, "game_plan", adjusted);
-    expect((athlete.plan!.attempts as any).deadlift.second).toEqual(adjusted.attempts.lifts.deadlift!.second);
+    expect((athlete.plan!.attempts as any).deadlift.second).toEqual(
+      adjusted.attempts.lifts.deadlift!.second,
+    );
     expect(adjusted.attempts.lifts.deadlift!.pathways.balanced[1]).toBe(second);
     const back = strategyOf(b, evidence, raw, ["P1"]);
-    expect(back.adjusted.attempts.lifts.deadlift!.pathways.balanced[1]).toBe(a.pathways.balanced[1]);
+    expect(back.adjusted.attempts.lifts.deadlift!.pathways.balanced[1]).toBe(
+      a.pathways.balanced[1],
+    );
     const plan = confirmedPlan({ engine: b, strategy: { adjusted } });
     expect(plan!.attempts.lifts.deadlift!.pathways.balanced[1]).toBe(second);
   });
@@ -383,13 +553,23 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
   it("grounding: the athlete's words carry no weights; numbers come from the brief, the evidence or a passing call", () => {
     expect(athleteNumbers("Open at 232.5 and go 240")).toEqual([232.5, 240]);
     expect(athleteNumbers("Eight weeks out, 3 sessions a week, in 2027")).toEqual([]);
-    const forModel = briefForModel(b, { athleteName: "Our Athlete", instructions: null, previousHeadline: null });
+    const forModel = briefForModel(b, {
+      athleteName: "Our Athlete",
+      instructions: null,
+      previousHeadline: null,
+    });
     const adjusted = applyProposals(b, []);
     const allowed = allowedNumbers(forModel, evidence, adjusted);
     const n = readNarrative(
       JSON.stringify({
         coach_summary: `Squat expected ${sq.expected} kg; a 7.5 kg jump is fine; the invented 777 isn't.`,
-        athlete: { title: "Plan", summary: "Open at 232.5.", focus: [], expectations: [], message: "Ready." },
+        athlete: {
+          title: "Plan",
+          summary: "Open at 232.5.",
+          focus: [],
+          expectations: [],
+          message: "Ready.",
+        },
       }),
     )!;
     const p = narrativeProblems(n, allowed).join(" ");
@@ -402,7 +582,12 @@ describe("Cleo's calls are checked by code and the plan rebuilt from them", () =
     const withAlt = buildBrief(
       ctx({
         classOptions: [
-          { weightClass: "74", lifters: [{ name: "Big Lifter", total: 770, date: "2026-06-13" }], ourPlace: 2, reason: "14.7% over the 66 kg limit" },
+          {
+            weightClass: "74",
+            lifters: [{ name: "Big Lifter", total: 770, date: "2026-06-13" }],
+            ourPlace: 2,
+            reason: "14.7% over the 66 kg limit",
+          },
         ],
       }),
     );
@@ -433,11 +618,136 @@ describe("automatic research", () => {
   const rankings = {
     total_length: 3,
     rows: [
-      [0, 1, "Carlos Castillo", "carloscastillo", null, null, "Canada", null, "IPF", "2026-06-13", "Lithuania", null, "ipf/2603", "M", "Raw", "25~", "Open", "65.6", "66", "227.5", "155", "290", "672.5", "529.31"],
-      [1, 2, "Our Athlete", "ourathlete", null, null, "Canada", "Canada-MB", "CANPL", "2026-03-14", "Canada", "NL", "canpl/2026-03-14", "M", "Raw", "27", "Open", "65.4", "66", "240", "150", "272.5", "662.5", "522.21"],
-      [2, 3, "Malhar Patil", "malharpatil", "mallyproduceslift", null, "Canada", "Canada-AB", "CANPL", "2026-03-14", "Canada", "NL", "canpl/2026-03-14", "M", "Raw", "30~", "Open", "65.7", "66", "242.5", "150", "270", "662.5", "520.37"],
-      [3, 4, "Far Away", "faraway", null, null, "USA", null, "IPF", "2026-06-13", "Lithuania", null, "ipf/2603", "M", "Raw", "25", "Open", "65.9", "66", "240", "160", "280", "680", "530"],
-      [4, 5, "Weak Lifter", "weaklifter", null, null, "Canada", null, "CANPL", "2026-03-14", "Canada", null, "canpl/2026-03-14", "M", "Raw", "25", "Open", "65", "66", "150", "100", "180", "430", "330"],
+      [
+        0,
+        1,
+        "Carlos Castillo",
+        "carloscastillo",
+        null,
+        null,
+        "Canada",
+        null,
+        "IPF",
+        "2026-06-13",
+        "Lithuania",
+        null,
+        "ipf/2603",
+        "M",
+        "Raw",
+        "25~",
+        "Open",
+        "65.6",
+        "66",
+        "227.5",
+        "155",
+        "290",
+        "672.5",
+        "529.31",
+      ],
+      [
+        1,
+        2,
+        "Our Athlete",
+        "ourathlete",
+        null,
+        null,
+        "Canada",
+        "Canada-MB",
+        "CANPL",
+        "2026-03-14",
+        "Canada",
+        "NL",
+        "canpl/2026-03-14",
+        "M",
+        "Raw",
+        "27",
+        "Open",
+        "65.4",
+        "66",
+        "240",
+        "150",
+        "272.5",
+        "662.5",
+        "522.21",
+      ],
+      [
+        2,
+        3,
+        "Malhar Patil",
+        "malharpatil",
+        "mallyproduceslift",
+        null,
+        "Canada",
+        "Canada-AB",
+        "CANPL",
+        "2026-03-14",
+        "Canada",
+        "NL",
+        "canpl/2026-03-14",
+        "M",
+        "Raw",
+        "30~",
+        "Open",
+        "65.7",
+        "66",
+        "242.5",
+        "150",
+        "270",
+        "662.5",
+        "520.37",
+      ],
+      [
+        3,
+        4,
+        "Far Away",
+        "faraway",
+        null,
+        null,
+        "USA",
+        null,
+        "IPF",
+        "2026-06-13",
+        "Lithuania",
+        null,
+        "ipf/2603",
+        "M",
+        "Raw",
+        "25",
+        "Open",
+        "65.9",
+        "66",
+        "240",
+        "160",
+        "280",
+        "680",
+        "530",
+      ],
+      [
+        4,
+        5,
+        "Weak Lifter",
+        "weaklifter",
+        null,
+        null,
+        "Canada",
+        null,
+        "CANPL",
+        "2026-03-14",
+        "Canada",
+        null,
+        "canpl/2026-03-14",
+        "M",
+        "Raw",
+        "25",
+        "Open",
+        "65",
+        "66",
+        "150",
+        "100",
+        "180",
+        "430",
+        "330",
+      ],
       ["bad row"],
     ],
   };
@@ -467,9 +777,9 @@ describe("automatic research", () => {
     expect(fetchableUrl("http://example.com")).toBeNull();
     expect(fetchableUrl("https://localhost/x")).toBeNull();
     expect(fetchableUrl("https://10.0.0.1/x")).toBeNull();
-    expect(
-      fetchableUrl("https://docs.google.com/spreadsheets/d/abc_123/edit#gid=42")!.url,
-    ).toBe("https://docs.google.com/spreadsheets/d/abc_123/export?format=csv&gid=42");
+    expect(fetchableUrl("https://docs.google.com/spreadsheets/d/abc_123/edit#gid=42")!.url).toBe(
+      "https://docs.google.com/spreadsheets/d/abc_123/export?format=csv&gid=42",
+    );
     expect(fetchableUrl("https://docs.google.com/document/d/xyz/edit")!.url).toBe(
       "https://docs.google.com/document/d/xyz/export?format=txt",
     );
@@ -480,7 +790,8 @@ describe("automatic research", () => {
   });
 
   it("meet details are copied, never guessed: a total or time not in the source is dropped", () => {
-    const src = "Nationals Feb 8 2027. Weigh-in 7:00, lifting 9:00. Qualifying totals: 66 kg men 600.";
+    const src =
+      "Nationals Feb 8 2027. Weigh-in 7:00, lifting 9:00. Qualifying totals: 66 kg men 600.";
     const info = cleanMeetInfo(
       {
         date: "2027-02-08",
@@ -512,7 +823,7 @@ describe("wiring", () => {
     const r = read("src/lib/competition/release.server.ts");
     expect(r).toMatch(/internal_test/);
     expect(r).toMatch(/same_person_as/);
-    const m = read("supabase/migrations/20270526090000_competition_intelligence.sql");
+    const m = read("supabase/migrations/20270527090000_competition_intelligence.sql");
     expect(m).toMatch(/internal_test boolean NOT NULL DEFAULT false/);
     expect(m).toMatch(/field_status text NOT NULL DEFAULT 'confirmed'/);
     expect(m).toMatch(/research jsonb NOT NULL DEFAULT/);
@@ -521,5 +832,50 @@ describe("wiring", () => {
     const h = read("src/routes/api/public/hooks/competition-selfcheck.ts");
     expect(h).toMatch(/authorizeHookRequest/);
     expect(h).toMatch(/internal_test/);
+  });
+});
+
+describe("evidence references in Cleo's words", () => {
+  const known = new Set(["CV-SQ", "C1-O1", "C1-O3", "M1", "M2", "W-SQ"]);
+  it("takes known ids out of the sentence and keeps them as tags", () => {
+    expect(
+      splitRefs("Squat runs above training on the platform (CV-SQ), so it's light.", known),
+    ).toEqual({
+      text: "Squat runs above training on the platform, so it's light.",
+      refs: ["CV-SQ"],
+    });
+    expect(
+      splitRefs("His third-deadlift misses (M1, M2) argue for a safer third.", known).refs,
+    ).toEqual(["M1", "M2"]);
+    expect(splitRefs("Sam's squats move him up (C1-O1 to C1-O3).", known)).toEqual({
+      text: "Sam's squats move him up.",
+      refs: ["C1-O1", "C1-O3"],
+    });
+  });
+  it("leaves a bracket that isn't only evidence ids alone", () => {
+    expect(splitRefs("A heavy single (RPE 9) on Jan 4.", known).text).toBe(
+      "A heavy single (RPE 9) on Jan 4.",
+    );
+    expect(splitRefs("Opener (M1 and his warm-ups) holds.", known).refs).toEqual([]);
+  });
+});
+
+describe("a call that changes nothing", () => {
+  const b = buildBrief(ctx());
+  it("is set aside as the engine's own number, never a call to keep or put back", () => {
+    const evidence = buildEvidence(b);
+    const raw = readProposals([
+      {
+        type: "last_warmup",
+        lift: "squat",
+        kg: b.warmups.squat!.last.kg,
+        text: "Last warm-up where the engine has it",
+        reason: "Their last warm-up in training sits right where the ramp puts it",
+        evidence: ["W-SQ"],
+      },
+    ]);
+    const { checks } = strategyOf(b, evidence, raw);
+    expect(checks[0].ok).toBe(false);
+    expect(checks[0].reasons.join(" ")).toMatch(/nothing to change/);
   });
 });

@@ -109,11 +109,13 @@ THE ENGINES AND YOU
 The brief's numbers come from deterministic engines: formulas that know the athlete only through generic rules (a strength line from hard sets, a default platform conversion, an opener at a fixed share of the expected max, a standard warm-up ramp, competitors projected from their meet trend). They are a baseline, not the answer. Your job is to read the EVIDENCE the way a world-class coach would and decide, area by area, whether each baseline holds for THIS athlete. Challenge it when the athlete's own history and recent training justify it, in either direction. Agree when it holds. Say "insufficient" when the evidence can't decide. Never rubber-stamp and never change a number for the sake of changing it.
 
 How an elite coach reads the evidence:
+- Forecast, first: put each lift's expected (L- items) beside what they actually made at their recent meets in this class (M items). A lifter who made 240 at three meets this year doesn't become a 220 lifter because an off-season block is at RPE 6. If the engine sits clearly under (or over) their recent platform form and nothing in the evidence explains it (pain, a bigger cut than they've made before (BWH), meets trending down, a program with no peak), that's a challenge with a forecast proposal. If something does explain it, say what.
 - Forecast: compare recent top sets (load, reps, RPE, bar speed) with what the athlete has done on a platform; their own training-to-platform history (CV- items); where they are in the season (off-season RPE 6 volume is not a max, and a deload or taper is not strength lost); how many weeks remain and what a lifter of their training age and level realistically gains in that time; bodyweight and the class (making weight costs strength, the bench most); pain and recovery; whether the program reaches a peak.
 - Attempts: their own attempt history (where they open, which lift they miss, how often thirds are made, misses that cost a total); the objective (placing and qualifying beat individual PRs); the field; rules (never lower after an attempt). An opener is made on a bad day; a third serves the objective.
 - Warm-ups: their own last-warm-up habit from training (W- items) against the standard ramp; flight timing.
 - Taper: what preceded their best meets; the last heavy single and volume drop; recommend to the coach, never rewrite the program.
-- Competitors: their recent level, not lifetime bests; a run of competition-standard training over weeks can move their expected (in either direction), one posted PR can't; class changes, equipment, consistency, how they attempt.
+- Bodyweight and the class: compare how far from the class they are today with how far they were at the same distance before meets they made in it (BWH). A cut they've made before is evidence they can make it; a much bigger one costs strength and needs a decision now, not in meet week, with the adjacent class's field (ALT- items) as the alternative.
+- Competitors: their recent level, not lifetime bests; someone with no meet in nine months or more may not be competing at that level any more, so say it rather than assume; a run of competition-standard training over weeks can move their expected (in either direction), one posted PR can't; class changes, equipment, consistency, how they attempt.
 - Strategy and risk: the two or three decisions that will actually decide this meet, and what to do when it goes wrong.
 
 PROPOSALS (structured calls, checked by code)
@@ -198,16 +200,14 @@ export function briefForModel(
       projection_shift_since_last: b.projectionShift,
     },
     field: {
-      threats: b.landscape.ranked
-        .slice(0, 8)
-        .map((t) => ({
-          name: t.name,
-          expected: t.expected,
-          range: t.range,
-          overlaps_ours: t.overlaps,
-          level: t.level,
-          why: t.why,
-        })),
+      threats: b.landscape.ranked.slice(0, 8).map((t) => ({
+        name: t.name,
+        expected: t.expected,
+        range: t.range,
+        overlaps_ours: t.overlaps,
+        level: t.level,
+        why: t.why,
+      })),
       biggest_threat: b.landscape.biggest?.name ?? null,
       to_win: b.landscape.toWin,
       to_podium: b.landscape.toPodium,
@@ -282,7 +282,12 @@ export function briefForModel(
       weight_class: c.weightClass,
       why_considered: c.reason,
       field: c.lifters,
-      our_expected_would_place: c.ourPlace,
+      // what they'd total there: their own meets at that class, and today's expected scaled to it
+      our_totals_at_this_class: c.ours?.own ?? [],
+      our_totals_since: c.ours?.ownSince ?? null,
+      our_expected_scaled_to_this_class: c.ours?.scaled ?? null,
+      our_estimate_here: c.ours?.kg ?? null,
+      we_would_place_about: c.ourPlace,
     })),
     bodyweight: {
       seven_day_avg: b.inputs.bodyweightAvg,
@@ -449,7 +454,11 @@ export function proposalProblems(checks: ProposalCheck[]): string[] {
 }
 
 /** The numbers Cleo may use: the brief, the evidence, and the plan rebuilt with the calls that stood. */
-export function allowedNumbers(forModel: unknown, evidence: EvidenceItem[], adjusted: AdjustedPlan) {
+export function allowedNumbers(
+  forModel: unknown,
+  evidence: EvidenceItem[],
+  adjusted: AdjustedPlan,
+) {
   const set = numbersIn(forModel);
   numbersIn(
     evidence.map((e) => e.text),
@@ -460,7 +469,9 @@ export function allowedNumbers(forModel: unknown, evidence: EvidenceItem[], adju
       lifts: adjusted.lifts,
       total: adjusted.total,
       attempts: adjusted.attempts,
-      warmups: Object.values(adjusted.warmups).map((w) => w && { sets: w.sets.map((s) => s.kg), last: w.last.kg }),
+      warmups: Object.values(adjusted.warmups).map(
+        (w) => w && { sets: w.sets.map((s) => s.kg), last: w.last.kg },
+      ),
       landscape: {
         toWin: adjusted.landscape.toWin,
         toPodium: adjusted.landscape.toPodium,
@@ -532,7 +543,13 @@ export async function writeNarrative(
   };
   const judge = (text: string) => {
     const n = readNarrative(text);
-    if (!n) return { n: null, checks: [] as ProposalCheck[], problems: ["The answer wasn't the JSON asked for."], adjusted: null as AdjustedPlan | null };
+    if (!n)
+      return {
+        n: null,
+        checks: [] as ProposalCheck[],
+        problems: ["The answer wasn't the JSON asked for."],
+        adjusted: null as AdjustedPlan | null,
+      };
     const checks = checkProposals(b, evidence, n.proposals);
     const adjusted = applyProposals(
       b,
@@ -545,7 +562,11 @@ export async function writeNarrative(
   const first = await call("write", prompt);
   let r = judge(first.text);
   if (r.n && !r.problems.length)
-    return { narrative: r.n, model: first.model, strategy: { checks: r.checks, adjusted: r.adjusted!, evidence } };
+    return {
+      narrative: r.n,
+      model: first.model,
+      strategy: { checks: r.checks, adjusted: r.adjusted!, evidence },
+    };
   const second = await call(
     "write2",
     `${prompt}\n\nYOUR LAST ANSWER HAD PROBLEMS. Fix them and answer again with the whole JSON:\n- ${r.problems.join("\n- ")}`,
@@ -553,13 +574,16 @@ export async function writeNarrative(
   r = judge(second.text);
   if (!r.n) throw new NarrativeRejected("The assessment wasn't readable twice.");
   // calls still failing their checks are set aside (kept, with why); the words must still hold
-  const wordProblems = narrativeProblems(
-    r.n,
-    allowedNumbers(forModel, evidence, r.adjusted!),
-  );
+  const wordProblems = narrativeProblems(r.n, allowedNumbers(forModel, evidence, r.adjusted!));
   if (wordProblems.length)
-    throw new NarrativeRejected(`The write-up didn't hold to the numbers: ${wordProblems.join(" ")}`);
-  return { narrative: r.n, model: second.model, strategy: { checks: r.checks, adjusted: r.adjusted!, evidence } };
+    throw new NarrativeRejected(
+      `The write-up didn't hold to the numbers: ${wordProblems.join(" ")}`,
+    );
+  return {
+    narrative: r.n,
+    model: second.model,
+    strategy: { checks: r.checks, adjusted: r.adjusted!, evidence },
+  };
 }
 
 /** The athlete-facing version: Cleo's words plus, for a game plan, the plan itself from the engines. */
@@ -576,20 +600,18 @@ export function athleteVersion(
     kind === "game_plan" || kind === "confirm"
       ? {
           attempts: Object.fromEntries(
-            (Object.entries(att.lifts) as [Lift, (typeof att.lifts)[Lift]][]).map(
-              ([l, a]) => [
-                l,
-                a
-                  ? {
-                      opener: a.opener,
-                      second: a.second,
-                      third: a.third,
-                      conditional: a.conditional,
-                      contingencies: a.contingencies.slice(0, 3),
-                    }
-                  : null,
-              ],
-            ),
+            (Object.entries(att.lifts) as [Lift, (typeof att.lifts)[Lift]][]).map(([l, a]) => [
+              l,
+              a
+                ? {
+                    opener: a.opener,
+                    second: a.second,
+                    third: a.third,
+                    conditional: a.conditional,
+                    contingencies: a.contingencies.slice(0, 3),
+                  }
+                : null,
+            ]),
           ),
           warmups: Object.fromEntries(
             (Object.entries(warm) as [Lift, (typeof warm)[Lift]][]).map(([l, w]) => [

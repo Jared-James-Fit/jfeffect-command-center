@@ -19,7 +19,9 @@ function CompetitionPage() {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 pb-8">
       <PageHeader title="Competition" backTo="/portal" />
-      <AthleteCompetition focusUpdate={update ?? null} />
+      <div className="px-4 md:px-5">
+        <AthleteCompetition focusUpdate={update ?? null} />
+      </div>
     </div>
   );
 }

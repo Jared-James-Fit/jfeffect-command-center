@@ -19,13 +19,15 @@ const IPF_MEN = ["53", "59", "66", "74", "83", "93", "105", "120", "120+"];
 const IPF_WOMEN = ["43", "47", "52", "57", "63", "69", "76", "84", "84+"];
 
 /** OpenPowerlifting's federation token for a meet's federation (Canada's IPF affiliate is CanPL from 2026). */
-export function oplFederation(federation: string | null | undefined, meetDate: string): string | null {
+export function oplFederation(
+  federation: string | null | undefined,
+  meetDate: string,
+): string | null {
   const f = String(federation ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
   if (!f) return null;
-  if (f === "canpl" || f === "canadianpowerlifting" || f === "canadapowerlifting")
-    return "canpl";
+  if (f === "canpl" || f === "canadianpowerlifting" || f === "canadapowerlifting") return "canpl";
   if (f === "cpu" || f === "canadianpowerliftingunion")
     return meetDate >= "2026-01-01" ? "canpl" : "cpu";
   if (f === "ipf" || f === "internationalpowerliftingfederation") return "ipf";
@@ -36,13 +38,19 @@ export function oplFederation(federation: string | null | undefined, meetDate: s
 /** The IPF class as OpenPowerlifting names it ("ipf66", "ipf120+"); null outside the IPF classes. */
 export function oplIpfClass(sex: "M" | "F" | null, weightClass: string | null): string | null {
   if (!sex || !weightClass) return null;
-  const wc = String(weightClass).replace(/\s*kg$/i, "").replace(/^-/, "").trim();
+  const wc = String(weightClass)
+    .replace(/\s*kg$/i, "")
+    .replace(/^-/, "")
+    .trim();
   const list = sex === "M" ? IPF_MEN : IPF_WOMEN;
   return list.includes(wc) ? `ipf${wc}` : null;
 }
 
 /** The next IPF class up and down from a class (for a class decision). */
-export function adjacentIpfClasses(sex: "M" | "F", weightClass: string): { up: string | null; down: string | null } {
+export function adjacentIpfClasses(
+  sex: "M" | "F",
+  weightClass: string,
+): { up: string | null; down: string | null } {
   const list = sex === "M" ? IPF_MEN : IPF_WOMEN;
   const i = list.indexOf(String(weightClass).replace(/\s*kg$/i, ""));
   if (i < 0) return { up: null, down: null };
@@ -105,7 +113,13 @@ export function parseRankings(json: unknown): RankingRow[] {
     const name = s(r[2]);
     const slug = s(r[3]);
     const date = s(r[9]);
-    if (!name || !slug || !/^[a-z0-9]{2,80}$/.test(slug) || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    if (
+      !name ||
+      !slug ||
+      !/^[a-z0-9]{2,80}$/.test(slug) ||
+      !date ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date)
+    )
       continue;
     const ig = s(r[4]);
     out.push({
@@ -194,6 +208,66 @@ export function classSummary(
   };
 }
 
+/**
+ * What the athlete would total in another class (pure): their own meets at
+ * that class in the last three years (the median of the latest three), and
+ * their expected here scaled to that class's bodyweight (the half power, the
+ * same rule the competitor read uses, at most 10% either way). Both are said;
+ * the estimate is their own record when there is one, else the scaled one.
+ * Never a forecast for the class: a class decision's evidence.
+ */
+export function ourAtClass(input: {
+  weightClass: string;
+  meets: Array<{
+    date: string;
+    weightClass: string | null;
+    total: number | null;
+    event?: string | null;
+  }>;
+  today: string;
+  expectedHere: number | null;
+  limitHere: number | null;
+}): { kg: number | null; own: number[]; ownSince: string | null; scaled: number | null } {
+  const key = (c: string | null | undefined) =>
+    String(c ?? "")
+      .replace(/kg$/i, "")
+      .trim();
+  const want = key(input.weightClass);
+  const threeYears = `${Number(input.today.slice(0, 4)) - 3}${input.today.slice(4)}`;
+  const own = input.meets
+    .filter(
+      (m) =>
+        (m.event ?? "SBD").toUpperCase() === "SBD" &&
+        key(m.weightClass) === want &&
+        (m.total ?? 0) > 0 &&
+        m.date >= threeYears &&
+        m.date <= input.today,
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 3);
+  const limitThere = Number(want.replace("+", ""));
+  const scaled =
+    input.expectedHere != null && input.limitHere && limitThere > 0
+      ? Math.round(
+          (input.expectedHere *
+            Math.max(0.9, Math.min(1.1, Math.pow(limitThere / input.limitHere, 0.5)))) /
+            2.5,
+        ) * 2.5
+      : null;
+  const totals = own.map((m) => m.total!).sort((a, b) => a - b);
+  const median = totals.length
+    ? totals.length % 2
+      ? totals[(totals.length - 1) / 2]
+      : (totals[totals.length / 2 - 1] + totals[totals.length / 2]) / 2
+    : null;
+  return {
+    kg: median ?? scaled,
+    own: own.map((m) => m.total!),
+    ownSince: own.length ? own[own.length - 1].date : null,
+    scaled,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* A public page someone linked                                       */
 
@@ -275,21 +349,25 @@ export function cleanMeetInfo(raw: unknown, source: string | null): MeetInfo {
   const src = source ?? null;
   const has = (v: string) => !src || src.includes(v);
   const date = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
-  const time = (v: unknown) =>
-    typeof v === "string" && /^\d{2}:\d{2}$/.test(v) ? v : null;
+  const time = (v: unknown) => (typeof v === "string" && /^\d{2}:\d{2}$/.test(v) ? v : null);
   const timeIn = (v: string | null) => {
     if (!v || !src) return v;
     const [h, m] = v.split(":").map(Number);
     const h12 = h % 12 || 12;
-    return [v, `${h}:${String(m).padStart(2, "0")}`, `${h12}:${String(m).padStart(2, "0")}`, m === 0 ? `${h12}` : null].some(
-      (x) => x && src.includes(x),
-    )
+    return [
+      v,
+      `${h}:${String(m).padStart(2, "0")}`,
+      `${h12}:${String(m).padStart(2, "0")}`,
+      m === 0 ? `${h12}` : null,
+    ].some((x) => x && src.includes(x))
       ? v
       : null;
   };
   const totals = (Array.isArray(j.qualifying_totals) ? j.qualifying_totals : [])
     .map((q: any) => ({
-      weightClass: String(q?.weight_class ?? "").trim().slice(0, 12),
+      weightClass: String(q?.weight_class ?? "")
+        .trim()
+        .slice(0, 12),
       sex: q?.sex === "M" || q?.sex === "F" ? q.sex : null,
       totalKg: Number(q?.total_kg),
     }))

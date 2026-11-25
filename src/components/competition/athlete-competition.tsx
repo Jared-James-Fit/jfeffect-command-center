@@ -52,7 +52,7 @@ export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | nul
     mutationFn: (id: string) => mark({ data: { assessmentId: id, what: "acknowledged" } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["my-competitions"] });
-      toast.success("Got it. Your coach can see you've read it.");
+      toast.success(`Got it. ${q.data?.coach ?? "Your coach"} can see you've read it.`);
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
   });
@@ -158,8 +158,10 @@ export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | nul
                       {plan.athlete?.title ?? "Your game plan"}
                     </h3>
                     <p className="text-[12px] text-muted-foreground">
-                      {plan.automated ? "Automated preparation update" : "From your coach"} ·{" "}
-                      {fmtWhen(plan.releasedAt)} · version {plan.version}
+                      {plan.automated
+                        ? "Automated preparation update"
+                        : `From ${q.data?.coach ?? "your coach"}`}{" "}
+                      · {fmtWhen(plan.releasedAt)} · version {plan.version}
                     </p>
                   </div>
                   {plan.acknowledgedAt ? (

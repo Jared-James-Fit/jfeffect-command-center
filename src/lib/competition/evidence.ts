@@ -45,14 +45,14 @@ const CODE: Record<Lift, string> = { squat: "SQ", bench: "BP", deadlift: "DL" };
 const LIFTS: Lift[] = ["squat", "bench", "deadlift"];
 
 const triple = (t: Array<number | null> | undefined) =>
-  (t ?? [])
-    .map((x) => (x == null ? "–" : x < 0 ? `${-x}x` : `${x}`))
-    .join("/");
+  (t ?? []).map((x) => (x == null ? "–" : x < 0 ? `${-x}x` : `${x}`)).join("/");
 
 export function meetLine(m: MeetRecord): string {
   const parts = [
     `${m.date} ${m.name ?? "Meet"}${m.federation ? ` (${m.federation})` : ""}`,
-    m.bodyweight ? `${m.bodyweight} kg bodyweight${m.weightClass ? ` in ${m.weightClass}` : ""}` : null,
+    m.bodyweight
+      ? `${m.bodyweight} kg bodyweight${m.weightClass ? ` in ${m.weightClass}` : ""}`
+      : null,
   ].filter(Boolean);
   const a = m.attempts;
   const lifts = a
@@ -107,9 +107,11 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
   }
 
   // meets, newest first
-  b.inputs.meets.slice(0, 10).forEach((m, i) =>
-    out.push({ id: `M${i + 1}`, kind: "meet", date: m.date, text: meetLine(m) }),
-  );
+  b.inputs.meets
+    .slice(0, 10)
+    .forEach((m, i) =>
+      out.push({ id: `M${i + 1}`, kind: "meet", date: m.date, text: meetLine(m) }),
+    );
   const ah = attemptPatternWords(b.inputs.history);
   if (ah.length || b.profile.patterns.length)
     out.push({
@@ -123,6 +125,18 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
       id: "BW",
       kind: "bodyweight",
       text: `7-day average ${b.inputs.bodyweightAvg ?? "unknown"} kg${b.inputs.bodyweightTrendPerWeek != null ? `, ${b.inputs.bodyweightTrendPerWeek > 0 ? "+" : ""}${b.inputs.bodyweightTrendPerWeek} kg a week` : ""}; class limit ${b.inputs.classLimit ?? "not set"}${b.inputs.bodyweightAvg != null && b.inputs.classLimit != null ? `; ${Math.round((b.inputs.bodyweightAvg - b.inputs.classLimit) * 10) / 10} kg over the limit` : ""}`,
+    });
+  const cuts = b.inputs.pastCuts ?? [];
+  if (cuts.length)
+    out.push({
+      id: "BWH",
+      kind: "bodyweight",
+      text: `Bodyweight in past preps (${b.daysOut} days out, like today, and 4 weeks out, against the weigh-in): ${cuts
+        .map(
+          (c) =>
+            `${c.meetDate}${c.weightClass ? ` (${c.weightClass})` : ""}: ${c.sameDistanceKg ?? "no weigh-ins"} kg → ${c.fourWeeksKg ?? "no weigh-ins"} kg → weighed in ${c.weighInKg}`,
+        )
+        .join("; ")}; today ${b.inputs.bodyweightAvg ?? "unknown"} kg`,
     });
   const wf = b.inputs.watchFacts;
   (wf.pain ?? []).forEach((p, i) =>
@@ -187,7 +201,15 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
       kind: "field",
       text: `The ${alt.weightClass} kg class (${alt.reason}): ${alt.lifters
         .map((l) => `${l.name} ${l.total} kg (${l.date})`)
-        .join("; ")}${alt.ourPlace != null ? `; our expected total would place about ${alt.ourPlace}` : ""}`,
+        .join("; ")}${
+        alt.ours?.own.length
+          ? `; their own totals at ${alt.weightClass} since ${alt.ours.ownSince}: ${alt.ours.own.join(", ")} kg`
+          : ""
+      }${alt.ours?.scaled != null ? `; today's expected scaled to ${alt.weightClass} kg bodyweight: about ${alt.ours.scaled} kg` : ""}${
+        alt.ourPlace != null
+          ? `; at ${alt.ours?.kg ?? "today's expected"} kg they'd place about ${alt.ourPlace} in this list`
+          : ""
+      }`,
     });
   if (b.landscape.ranked.length)
     out.push({

@@ -612,7 +612,7 @@ describe("wiring", () => {
     );
   });
   it("the worker is scheduled with a timeout and the tables are staff-read, server-written", () => {
-    const sql = read("supabase/migrations/20270526090000_competition_intelligence.sql");
+    const sql = read("supabase/migrations/20270527090000_competition_intelligence.sql");
     expect(sql).toMatch(/competition-intel-tick[\s\S]*timeout_milliseconds := 120000/);
     expect(sql).toMatch(/REVOKE INSERT, UPDATE, DELETE ON public\.%I FROM anon, authenticated/);
     expect(sql).toMatch(/coached_client_ids\(\)/);

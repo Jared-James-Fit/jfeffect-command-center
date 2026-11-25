@@ -42,7 +42,7 @@ import type { CompetitorRead } from "@/lib/competition/competitor";
 import { AssessmentSheet } from "./assessment-sheet";
 import { CompetitionForm, emptyCompetition, type CompetitionFormValues } from "./competition-form";
 import { CompetitionField } from "./competition-field";
-import { AttemptsView, ForecastTable, GameDayView, Kg, RangeText, WarmupsView } from "./plan-views";
+import { AttemptsView, ForecastTable, GameDayView, Kg, WarmupsView } from "./plan-views";
 import { cn } from "@/lib/utils";
 
 export const competitionWorkspaceKey = (clientId: string, competitionId: string | null) =>
@@ -60,6 +60,21 @@ const SECTIONS = [
   ["history", "History"],
 ] as const;
 type Section = (typeof SECTIONS)[number][0];
+
+/** a date inside the coming months, short: "Feb 1" (the year only when it isn't this one) */
+const shortDate = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
+  return d.toLocaleDateString("en-CA", {
+    month: "short",
+    day: "numeric",
+    ...(d.getUTCFullYear() !== new Date().getFullYear() &&
+    Math.abs(d.getTime() - Date.now()) > 120 * 864e5
+      ? { year: "numeric" as const }
+      : {}),
+    timeZone: "UTC",
+  });
+};
 
 const fmtDate = (iso: string | null | undefined) =>
   iso
@@ -616,22 +631,66 @@ function Overview({
         ? "Approved · not released"
         : "Waiting for your review";
 
+  const needsCoach = !!latest && outstanding.some((a) => a.id === latest.id);
+  const latestCard = latest ? (
+    <button
+      type="button"
+      onClick={() => onOpen(latest.id)}
+      className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left hover:bg-muted/30"
+      data-latest-assessment
+    >
+      <CleoAvatar size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-medium">
+            {MILESTONE_BY_KIND[latest.kind as keyof typeof MILESTONE_BY_KIND].title} · v
+            {latest.version}
+          </span>
+          {!latest.coach_opened_at ? (
+            <span className="h-2 w-2 rounded-full bg-[#0095f6]" aria-label="Unread" />
+          ) : null}
+          <span className="text-[12px] text-muted-foreground">
+            {COACH_STATE_WORD[coachState(latest)]} · {fmtWhen(latest.created_at)}
+          </span>
+        </div>
+        <p className="mt-1 text-[15px] font-semibold">{latest.headline}</p>
+        {latest.coach_message ? (
+          <p className="mt-0.5 text-[13px] text-muted-foreground">{latest.coach_message}</p>
+        ) : null}
+      </div>
+      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
+  ) : null;
+
   return (
     <div className="space-y-4" data-competition-overview>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      {latest && needsCoach ? latestCard : null}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
         <Tile
           label="Countdown"
           value={brief ? countdownWords(brief.daysOut) : fmtDate(comp.meet_date)}
-          sub={brief ? PHASE_LABEL[brief.phase as keyof typeof PHASE_LABEL] : undefined}
+          sub={
+            nextMilestone
+              ? nextMilestone.status === "waiting_ai" || nextMilestone.status === "generating"
+                ? `${MILESTONE_BY_KIND[nextMilestone.kind as keyof typeof MILESTONE_BY_KIND].title}: being written now`
+                : `Next: ${MILESTONE_BY_KIND[nextMilestone.kind as keyof typeof MILESTONE_BY_KIND].title}, ${shortDate(nextMilestone.due_on)}`
+              : brief
+                ? PHASE_LABEL[brief.phase as keyof typeof PHASE_LABEL]
+                : undefined
+          }
         />
         <Tile
           label="Projected total"
           value={
-            brief?.forecast?.total ? <RangeText r={brief.forecast.total} /> : "Not enough data"
+            brief?.forecast?.total ? (
+              <span className="tabular-nums">{brief.forecast.total.expected} kg</span>
+            ) : (
+              "Not enough data"
+            )
           }
           sub={
-            brief?.forecast
-              ? `${brief.forecast.confidence} confidence${comp.target_total_kg ? ` · target ${comp.target_total_kg}` : ""}`
+            brief?.forecast?.total
+              ? `${brief.forecast.total.conservative} to ${brief.forecast.total.high} · ${brief.forecast.confidence} confidence${comp.target_total_kg ? ` · target ${comp.target_total_kg}` : ""}`
               : undefined
           }
         />
@@ -676,64 +735,12 @@ function Overview({
           sub={concerns[0]?.text}
         />
         <Tile label="Game plan" value={planStatus} />
-        <Tile
-          label="Waiting on you"
-          value={
-            outstanding.length
-              ? `${outstanding.length} assessment${outstanding.length === 1 ? "" : "s"}`
-              : "Nothing"
-          }
-          sub={
-            outstanding.filter((a) => !a.coach_opened_at).length
-              ? `${outstanding.filter((a) => !a.coach_opened_at).length} unread`
-              : undefined
-          }
-        />
-        <Tile
-          label="Next milestone"
-          value={
-            nextMilestone
-              ? MILESTONE_BY_KIND[nextMilestone.kind as keyof typeof MILESTONE_BY_KIND].title
-              : "Nothing scheduled"
-          }
-          sub={
-            nextMilestone
-              ? nextMilestone.status === "waiting_ai" || nextMilestone.status === "generating"
-                ? "Being written now"
-                : fmtDate(nextMilestone.due_on)
-              : undefined
-          }
-        />
       </div>
 
       {latest ? (
-        <button
-          type="button"
-          onClick={() => onOpen(latest.id)}
-          className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left hover:bg-muted/30"
-          data-latest-assessment
-        >
-          <CleoAvatar size="sm" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-medium">
-                {MILESTONE_BY_KIND[latest.kind as keyof typeof MILESTONE_BY_KIND].title} · v
-                {latest.version}
-              </span>
-              {!latest.coach_opened_at ? (
-                <span className="h-2 w-2 rounded-full bg-[#0095f6]" aria-label="Unread" />
-              ) : null}
-              <span className="text-[12px] text-muted-foreground">
-                {COACH_STATE_WORD[coachState(latest)]} · {fmtWhen(latest.created_at)}
-              </span>
-            </div>
-            <p className="mt-1 text-[15px] font-semibold">{latest.headline}</p>
-            {latest.coach_message ? (
-              <p className="mt-0.5 text-[13px] text-muted-foreground">{latest.coach_message}</p>
-            ) : null}
-          </div>
-          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
+        needsCoach ? null : (
+          latestCard
+        )
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-border p-4 text-[14px]">
           <span className="text-muted-foreground">

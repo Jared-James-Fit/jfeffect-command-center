@@ -12,7 +12,7 @@
  * server keeps one row per lifter, lift and attempt, so a re-send never
  * duplicates). The last read of the plan stays on the phone for offline use.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
@@ -121,6 +121,23 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
   });
   const [local, setLocal] = useState<Record<string, Entry>>({});
   const [lift, setLift] = useState<Lift>("squat");
+  // the first time the log is read, open on the lift they're on (the first with an attempt to take)
+  const placed = useRef(false);
+  useEffect(() => {
+    if (placed.current || !q.data) return;
+    placed.current = true;
+    const done = (l: Lift) =>
+      ((q.data as any).log ?? []).filter(
+        (e: any) =>
+          e.entrant === "us" && e.lift === l && (e.result === "good" || e.result === "no_lift"),
+      ).length >= 3;
+    const on = (["squat", "bench", "deadlift"] as Lift[]).find((l) => !done(l));
+    if (on) setLift(on);
+    // and on the meet's own objective: the place it's for, else the qualifying total
+    const c = (q.data as any).competition ?? {};
+    if (c.target_place) setGoal(`place:${c.target_place}`);
+    else if (c.objective === "qualify" && c.qualification_total_kg) setGoal("qualify");
+  }, [q.data]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [assume, setAssume] = useState<"current" | "ceiling">("ceiling");
   const [goal, setGoal] = useState<string>("place:1");
@@ -222,6 +239,12 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
       const e = merged.get(`${entrant}|${l}|${n}`);
       return { kg: e?.kg ?? null, result: e?.result ?? null };
     });
+  const bestOf = (entrant: string, l: Lift): number | null => {
+    const made = attemptsOf(entrant, l)
+      .filter((x) => x.result === "good" && x.kg != null)
+      .map((x) => x.kg as number);
+    return made.length ? Math.max(...made) : null;
+  };
   const rpesOf = (entrant: string, l: Lift) =>
     [1, 2, 3].map((n) => merged.get(`${entrant}|${l}|${n}`)?.rpe ?? null);
 
@@ -397,25 +420,41 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
                 {us?.place ? ` · ${ordinal(us.place)}` : ""}
               </p>
             </div>
-            <div className="mt-3 rounded-xl bg-muted/60 p-3">
-              <p className="text-[12px] text-muted-foreground">Next attempt</p>
-              <p className="text-[26px] font-semibold tabular-nums leading-tight">
-                {next.kg != null ? `${next.kg} kg` : "—"}
-                <span className="ml-2 text-[14px] font-normal text-muted-foreground">
-                  {next.kg != null ? `${toLb(next.kg)} lb` : ""}
-                </span>
-              </p>
-              <p className="text-[12px] text-muted-foreground">
-                {next.why}
-                {rules.declareSeconds
-                  ? ` · declare within ${rules.declareSeconds >= 60 ? `${rules.declareSeconds / 60} minute` : `${rules.declareSeconds} s`}`
-                  : ""}
-              </p>
-            </div>
+            {next.kg == null && next.why === "All three taken" ? (
+              <div className="mt-3 rounded-xl bg-muted/60 p-3" data-lift-done>
+                <p className="text-[12px] text-muted-foreground">{LIFT_LABEL[lift]} done</p>
+                <p className="text-[26px] font-semibold tabular-nums leading-tight">
+                  {bestOf("us", lift) != null ? `${bestOf("us", lift)} kg` : "No lift made"}
+                  {bestOf("us", lift) != null ? (
+                    <span className="ml-2 text-[14px] font-normal text-muted-foreground">
+                      {toLb(bestOf("us", lift)!)} lb
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-[12px] text-muted-foreground">Best made of three</p>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-xl bg-muted/60 p-3">
+                <p className="text-[12px] text-muted-foreground">Next attempt</p>
+                <p className="text-[26px] font-semibold tabular-nums leading-tight">
+                  {next.kg != null ? `${next.kg} kg` : "—"}
+                  <span className="ml-2 text-[14px] font-normal text-muted-foreground">
+                    {next.kg != null ? `${toLb(next.kg)} lb` : ""}
+                  </span>
+                </p>
+                <p className="text-[12px] text-muted-foreground">
+                  {next.why}
+                  {rules.declareSeconds
+                    ? ` · declare within ${rules.declareSeconds >= 60 ? `${rules.declareSeconds / 60} minute` : `${rules.declareSeconds} s`}`
+                    : ""}
+                </p>
+              </div>
+            )}
             <div className="mt-3 space-y-2">
               {[1, 2, 3].map((n) => (
                 <AttemptRow
-                  key={n}
+                  // a row per lift: one lift's typed weights never carry into another's
+                  key={`${lift}-${n}`}
                   n={n}
                   entry={merged.get(`us|${lift}|${n}`) ?? null}
                   suggested={
@@ -516,6 +555,7 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
                     </div>
                     {!s.us ? (
                       <RivalRow
+                        key={lift}
                         entry={(n) => merged.get(`${s.id}|${lift}|${n}`) ?? null}
                         onSave={(n, e) => record({ entrant: s.id, lift, attempt: n, ...e })}
                       />
@@ -654,8 +694,12 @@ function AttemptRow({
         <Button
           type="button"
           size="sm"
-          variant={entry?.result === "good" ? "default" : "outline"}
-          className="h-11 w-12"
+          variant="outline"
+          className={cn(
+            "h-11 w-12",
+            entry?.result === "good" &&
+              "border-success bg-success text-white hover:bg-success/90 hover:text-white dark:bg-success dark:hover:bg-success/90",
+          )}
           disabled={val == null}
           onClick={() => save("good")}
           aria-label="Good lift"
