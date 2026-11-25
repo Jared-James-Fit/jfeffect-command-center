@@ -221,7 +221,11 @@ function Commitments({ clientId, items }: { clientId: string; items: any[] }) {
               />
               <span className="text-[14px] leading-snug">
                 {c.text}
-                <span className="text-muted-foreground"> · from {day(c.sessionDate)}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  · from {day(c.sessionDate)}
+                  {c.dueOn ? ` · due ${day(c.dueOn)}` : ""}
+                </span>
               </span>
             </li>
           ))}

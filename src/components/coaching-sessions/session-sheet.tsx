@@ -173,8 +173,11 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
             .filter(Boolean)
             .join(" · ")}
         </p>
+      </SheetHeader>
+      {/* the actions and steps take the sheet's full width (the header beside the Back pill is indented) */}
+      <div className="space-y-3">
         {!retro ? (
-          <div className="flex flex-wrap gap-2 pt-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={present} data-present>
               <MonitorPlay className="mr-1.5 h-4 w-4" /> Present
             </Button>
@@ -194,7 +197,7 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
           </div>
         ) : null}
         {!retro ? (
-          <div className="mt-3 grid grid-cols-3 rounded-lg bg-secondary p-1" role="tablist" aria-label="Meeting step">
+          <div className="grid grid-cols-3 rounded-lg bg-secondary p-1" role="tablist" aria-label="Meeting step">
             {(["before", "during", "after"] as const).map((k) => (
               <button
                 key={k}
@@ -210,7 +213,7 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
             ))}
           </div>
         ) : null}
-      </SheetHeader>
+      </div>
 
       {step === "during" && !retro && agenda ? <PresenterScript sessionId={s.id} slides={scriptSlides} /> : null}
 

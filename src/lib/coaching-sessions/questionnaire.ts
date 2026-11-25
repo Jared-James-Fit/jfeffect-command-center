@@ -161,11 +161,11 @@ export function routeAnswers(answers: Record<string, string>): RoutedAnswers {
     if (!v || k === "topics" || k === "pain_details") continue;
     switch (k) {
       case "training_feel":
-        if (v === "Great" || v === "Good") out.goingWell.push(`Training feels ${lower(v)} (their answer)`);
+        if (v === "Great" || v === "Good") out.goingWell.push(`Training feels ${lower(v)}`);
         else out.theirs.push(`Training feels: ${lower(v)}`);
         break;
       case "recovery":
-        if (v === "Sleeping and recovering well") out.goingWell.push("Sleeping and recovering well (their answer)");
+        if (v === "Sleeping and recovering well") out.goingWell.push("Sleeping and recovering well");
         else if (v !== "Mostly fine") out.theirs.push(`Sleep and recovery: ${lower(v)}`);
         break;
       case "pain": {
@@ -175,16 +175,16 @@ export function routeAnswers(answers: Record<string, string>): RoutedAnswers {
         break;
       }
       case "bodyweight":
-        out.plan.push(`Morning bodyweight: ${v} (their answer)`);
+        out.plan.push(`Morning bodyweight: ${v}`);
         break;
       case "life":
         if (!saidNothing(v)) out.theirs.push(`Coming up: ${v}`);
         break;
       case "meet_registered":
-        if (v !== "Yes") out.coach.push(`Registered for the meet: ${lower(v)} (their answer)`);
+        if (v !== "Yes") out.coach.push(`Registered for the meet: ${lower(v)}`);
         break;
       case "meet_confidence":
-        if (v === "Confident" || v === "Good") out.goingWell.push(`Feeling ${lower(v)} about the meet (their answer)`);
+        if (v === "Confident" || v === "Good") out.goingWell.push(`Feeling ${lower(v)} about the meet`);
         else out.theirs.push(`Feeling about the meet: ${lower(v)}`);
         break;
       case "meet_success":
