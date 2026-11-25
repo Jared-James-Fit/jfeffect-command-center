@@ -380,7 +380,7 @@ function RootComponent() {
             <Outlet />
             <RouteTracker />
             <AppPulse />
-            <Toaster />
+            <Toaster offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", left: "16px", right: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />

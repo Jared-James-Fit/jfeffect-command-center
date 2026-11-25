@@ -6,11 +6,9 @@ installToastSystem();
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-const TOP = "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 56px)";
-
 /**
  * The app's one toaster: a compact floating pill, top centre under the status
- * bar (clear of the keyboard, the tab bar and the content). Look: `.toaster`
+ * bar (the root passes the 72px offset; clear of the keyboard, the tab bar and the content). Look: `.toaster`
  * rules in styles.css. Behaviour (one at a time, dedupe, timing): toast-system.ts.
  */
 const Toaster = ({ ...props }: ToasterProps) => {
@@ -20,8 +18,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position="top-center"
       visibleToasts={1}
       gap={8}
-      offset={{ top: TOP }}
-      mobileOffset={{ top: TOP, left: "16px", right: "16px" }}
       icons={{
         success: <Check className="size-4 text-emerald-500" strokeWidth={2.75} />,
         error: <AlertCircle className="size-4 text-red-500" strokeWidth={2.5} />,

@@ -1074,7 +1074,7 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
    the first standalone-PWA paint, so the top never sits above the status area. */
 [data-sonner-toaster].toaster {
   @variant max-sm {
-    top: calc(max(3.5rem, env(safe-area-inset-top)) + 0.5rem) !important;
+    top: calc(max(3.5rem, env(safe-area-inset-top)) + 0.75rem) !important;
   }
 }
 
