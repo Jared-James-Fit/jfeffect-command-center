@@ -48,6 +48,10 @@ export type LoggedSet = {
   load_type: string | null;
   is_bodyweight: boolean | null;
   notes: string | null;
+  /** The set's bar speed (m/s): typed from a device, or read from its video; never one left out of analytics. */
+  velocity_mps?: number | null;
+  /** "estimated" when the video read was an estimate (≈), "manual" when corrected by hand. */
+  velocity_quality?: string | null;
 };
 
 function round(n: number, step = 0.5): number {
@@ -76,7 +80,9 @@ export function formatSet(s: LoggedSet, unit: "kg" | "lb" = "lb"): string {
   const reps = s.reps != null ? ` x ${s.reps}` : "";
   const warm = s.is_working_set === false ? " (warm-up)" : "";
   const note = s.notes?.trim() ? ` "${s.notes.trim().slice(0, 80)}"` : "";
-  return `${formatLoad(s, unit)}${reps}${effort}${warm}${note}`;
+  const v = s.velocity_mps != null && Number(s.velocity_mps) > 0 ? Number(s.velocity_mps) : null;
+  const speed = v != null ? ` | ${s.velocity_quality === "estimated" ? "≈" : ""}${v.toFixed(2)} m/s` : "";
+  return `${formatLoad(s, unit)}${reps}${effort}${speed}${warm}${note}`;
 }
 
 /** Calendar day of an instant in `tz` (YYYY-MM-DD). */

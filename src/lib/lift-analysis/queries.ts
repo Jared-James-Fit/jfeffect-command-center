@@ -275,11 +275,12 @@ export function useVelocityHistory(
       const { data, error } = await db
         .from("pl_set_video_analyses")
         .select(
-          "set_video_id, set_mcv, reps, created_at, sv:set_video_id(day_id), logged:result_id(actual_load_kg, actual_reps, completed_at, is_bodyweight,velocity_set_video_id,velocity_excluded,velocity_quality)",
+          "set_video_id, set_mcv, reps, created_at, sv:set_video_id(day_id), logged:result_id(actual_load_kg, actual_reps, completed_at, is_bodyweight,velocity_set_video_id,velocity_excluded,velocity_quality,mean_concentric_velocity_mps)",
         )
         .eq("client_id", clientId)
         .eq("exercise_id", exerciseId)
         .eq("velocity_accepted", true)
+        .eq("excluded", false)
         .not("set_mcv", "is", null)
         .order("created_at", { ascending: false })
         .limit(300);
@@ -287,7 +288,10 @@ export function useVelocityHistory(
       const out: { id: string; sample: VelocitySample }[] = [];
       for (const r of (data ?? []) as any[]) {
         const kg = Number(r.logged?.actual_load_kg);
-        if (r.logged?.velocity_excluded || r.logged?.velocity_set_video_id !== r.set_video_id || r.logged?.velocity_quality === "estimated") continue;
+        // the speed that's on the set (a measurement or an estimate since Nov 25 2026: most reads are
+        // estimates now, and leaving them out would leave most athletes with no model); never one
+        // flagged inaccurate or left out of analytics
+        if (r.logged?.velocity_excluded || r.logged?.velocity_set_video_id !== r.set_video_id) continue;
         const reps = Number(r.logged?.actual_reps ?? r.reps);
         if (!(kg > 0) || r.logged?.is_bodyweight || !(reps >= 1)) continue;
         const at = r.logged?.completed_at ?? r.created_at;
@@ -296,7 +300,7 @@ export function useVelocityHistory(
           sample: {
             loadKg: kg,
             reps,
-            mcv: Number(r.set_mcv),
+            mcv: Number(r.logged?.mean_concentric_velocity_mps ?? r.set_mcv),
             at,
             session: r.sv?.day_id ?? at.slice(0, 10),
           },

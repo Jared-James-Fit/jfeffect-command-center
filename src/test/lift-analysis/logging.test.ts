@@ -80,8 +80,8 @@ describe("the set's velocity", () => {
     );
   });
 
-  it("a load never establishes plate diameter", () => {
-    expect(loadMeansFullPlates(60)).toBe(false);
+  it("full-size 450 mm plates from 60 kg on", () => {
+    expect(loadMeansFullPlates(60)).toBe(true);
     expect(loadMeansFullPlates(40)).toBe(false);
     expect(loadMeansFullPlates(null)).toBe(false);
   });
@@ -117,13 +117,20 @@ describe("is it on the set", () => {
       logged: false,
       why: "typed",
     });
-    const reps = loggedState(a, { actual_reps: 3, actual_load_kg: 100 }, sv);
+    // one rep either way still logs (as an estimate, on the server); two off says so
+    expect(loggedState(a, { actual_reps: 3, actual_load_kg: 100 }, sv)).toMatchObject({ why: "other" });
+    const reps = loggedState(a, { actual_reps: 4, actual_load_kg: 100 }, sv);
     expect(reps).toMatchObject({ logged: false, why: "reps" });
-    expect(!reps.logged && reps.text).toContain("2 reps in the video, 3 logged");
-    expect(loggedState({ ...a,plate:{...a.plate,confirmed:false} }, { actual_reps: 2, actual_load_kg: 40 }, sv)).toMatchObject({
-      logged: false,
-      why: "light",
-    });
+    expect(!reps.logged && reps.text).toContain("2 reps in the video, 4 logged");
+    // an unconfirmed plate: a heavy load means 450 mm plates; a light one needs ranges that fit the lift
+    const unconfirmed = { ...a, plate: { ...a.plate, confirmed: false } };
+    expect(loggedState(unconfirmed, { actual_reps: 2, actual_load_kg: 100 }, sv)).toMatchObject({ why: "other" });
+    expect(
+      loggedState({ ...unconfirmed, velocity: { ...a.velocity, plateCheck: false } }, { actual_reps: 2, actual_load_kg: 40 }, sv),
+    ).toMatchObject({ logged: false, why: "light" });
+    expect(
+      loggedState({ ...unconfirmed, velocity: { ...a.velocity, plateCheck: true } }, { actual_reps: 2, actual_load_kg: 40 }, sv),
+    ).toMatchObject({ why: "other" });
     expect(loggedState(a, null, sv)).toMatchObject({ logged: false, why: "no_set" });
   });
 });

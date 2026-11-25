@@ -4,7 +4,7 @@
  * (uploader.ts, loaded only once a video is picked) writes to it, the
  * logger's set rows just read it.
  */
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 
 export type SetVideoJobState =
   /** cutting / shrinking it on the phone */
@@ -50,8 +50,30 @@ export type SetVideoJob = {
 let jobs: SetVideoJob[] = [];
 const listeners = new Set<() => void>();
 
+/**
+ * Progress alone is told at most every PROGRESS_EMIT_MS (Nov 25 2026, T14):
+ * an encode or an upload reports dozens of times a second, and every set row
+ * on screen used to re-render on each one while the next clip was being
+ * filmed or trimmed. Anything else (a state change, a finished clip) is told
+ * at once, with any progress waiting.
+ */
+export const PROGRESS_EMIT_MS = 150;
+let progressTimer: ReturnType<typeof setTimeout> | null = null;
+
 function emit() {
+  if (progressTimer != null) {
+    clearTimeout(progressTimer);
+    progressTimer = null;
+  }
   for (const l of listeners) l();
+}
+
+function emitProgress() {
+  if (progressTimer != null) return;
+  progressTimer = setTimeout(() => {
+    progressTimer = null;
+    for (const l of listeners) l();
+  }, PROGRESS_EMIT_MS);
 }
 
 export function getSetVideoJobs(): SetVideoJob[] {
@@ -74,9 +96,13 @@ export function putSetVideoJob(job: SetVideoJob) {
 export function patchSetVideoJob(id: string, patch: Partial<SetVideoJob>): SetVideoJob | null {
   const cur = jobs.find((j) => j.id === id);
   if (!cur) return null;
+  // nothing changed (the same rounded progress again): nobody is told
+  const keys = Object.keys(patch) as (keyof SetVideoJob)[];
+  if (keys.every((k) => Object.is(cur[k], patch[k]))) return cur;
   const next = { ...cur, ...patch };
   jobs = jobs.map((j) => (j.id === id ? next : j));
-  emit();
+  if (keys.every((k) => k === "progress" || Object.is(cur[k], patch[k]))) emitProgress();
+  else emit();
   return next;
 }
 
@@ -89,6 +115,38 @@ export function dropSetVideoJob(id: string) {
 /** Every set video job this session knows about (a new array only when something changed). */
 export function useSetVideoJobs(): SetVideoJob[] {
   return useSyncExternalStore(subscribeSetVideoJobs, getSetVideoJobs, getSetVideoJobs);
+}
+
+/** The same jobs, element for element. */
+export const sameJobs = (a: readonly SetVideoJob[], b: readonly SetVideoJob[]) =>
+  a.length === b.length && a.every((j, i) => j === b[i]);
+
+/**
+ * Only what one part of the screen needs from the jobs (`key` names what
+ * `select` depends on): it re-renders only when that changes, so one clip's
+ * progress re-renders its own set, never every set row of the workout.
+ */
+export function useSetVideoJobsSelect<T>(
+  key: string,
+  select: (all: SetVideoJob[]) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is,
+): T {
+  const selectRef = useRef(select);
+  selectRef.current = select;
+  const cache = useRef<{ src: SetVideoJob[]; key: string; out: T } | null>(null);
+  const get = () => {
+    const src = jobs;
+    const c = cache.current;
+    if (c && c.src === src && c.key === key) return c.out;
+    const out = selectRef.current(src);
+    if (c && c.key === key && isEqual(c.out, out)) {
+      cache.current = { src, key, out: c.out };
+      return c.out;
+    }
+    cache.current = { src, key, out };
+    return out;
+  };
+  return useSyncExternalStore(subscribeSetVideoJobs, get, get);
 }
 
 /** Still on its way (not sent, not failed). */

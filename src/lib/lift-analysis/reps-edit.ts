@@ -35,6 +35,7 @@ export function readWithout(a: LiftAnalysis, exclude: number[]): LiftAnalysis | 
     conflicts: a.track.conflicts,
     recovered: a.track.recovered,
     exclude,
+    movement: a.movement,
   });
 }
 

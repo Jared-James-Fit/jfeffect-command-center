@@ -27,7 +27,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { readInWorker as analyzeVideo } from "@/lib/lift-analysis/worker-client";
-import { analysableExercise, guideLift, repDirection } from "@/lib/lift-analysis/exercise";
+import { analysableExercise, guideLift, movementOf, repDirection } from "@/lib/lift-analysis/exercise";
 import {
   proposalSuggestions,
   saveAnalysis,
@@ -136,6 +136,7 @@ async function pump() {
               : undefined,
           dirHint: repDirection(claim.exercise_name) ?? undefined,
           lift: guideLift(claim.exercise_name),
+          movement: movementOf(claim.exercise_name),
           exclude: re?.mode === "keys" ? re.exclude : undefined,
           onProgress: (p) => setRunning(job.setVideoId, p),
           signal: abort.signal,

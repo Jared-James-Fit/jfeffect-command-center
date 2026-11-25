@@ -64,7 +64,7 @@ import {
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import { DEFAULT_PLATE, STANDARD_PLATE_MM } from "@/lib/lift-analysis/calibrate";
-import { guideLift, repDirection } from "@/lib/lift-analysis/exercise";
+import { guideLift, movementOf, repDirection } from "@/lib/lift-analysis/exercise";
 import { FOOTAGE_WORDS, type FootageIssue } from "@/lib/lift-analysis/footage";
 import {
   cm,
@@ -332,6 +332,7 @@ function Body({
       corrections: extra,
       plate: plateFor(knownPlate),
       dirHint,
+      movement: movementOf(exerciseName),
       // read again from the same keys: what the athlete took out of the reps stays out
       exclude: seed.kind === "keys" ? analysis?.exclude : undefined,
       signal: c.signal,
@@ -921,7 +922,7 @@ function ConfirmPanel({
           <span className="min-w-0 flex-1">
             Biggest plate: <span className="font-medium">{Math.round(plateMm)} mm</span>
             {!plateSet && plateMm === STANDARD_PLATE_MM && (
-              <span className="text-muted-foreground"> · not confirmed</span>
+              <span className="text-muted-foreground"> · standard</span>
             )}
           </span>
           <span className="text-muted-foreground">Change</span>
@@ -1388,7 +1389,9 @@ function SetAverage({
   return (
     <div data-set-average>
       <div className="text-[12px] text-muted-foreground">
-        {reps > 1 ? `Average velocity · all ${reps} reps` : "Mean velocity up"}
+        {a.velocity.metric === "peak"
+          ? reps > 1 ? `Average peak bar speed · all ${reps} reps` : "Peak bar speed"
+          : reps > 1 ? `Average velocity · all ${reps} reps` : "Mean velocity up"}
       </div>
       <div className="text-[32px] font-semibold leading-tight tabular-nums" data-headline-speed>
         {a.velocity.tier === "estimated" ? "≈" : ""}{a.velocity.value?.toFixed(2)} m/s

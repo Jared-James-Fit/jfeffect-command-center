@@ -30,8 +30,9 @@ import {
 import { packTrack } from "@/lib/lift-analysis/raw-track";
 import type { TrackPoint } from "@/lib/lift-analysis/track";
 import { velocityVerdict, type VelocityVerdict } from "@/lib/lift-analysis/verdict";
+import type { Movement } from "@/lib/lift-analysis/exercise";
 
-export const ENGINE_VERSION = "bar-path/6";
+export const ENGINE_VERSION = "bar-path/7";
 
 /**
  * The packed track is ~40 characters a frame once stored; past this many
@@ -131,6 +132,8 @@ export type LiftAnalysis = {
   exclude?: number[];
   /** Rises left out of the reps, and why. */
   ignored?: IgnoredRise[];
+  /** The movement it was read as (exercise.ts movementOf): what its set speed means and the range a rep travels. */
+  movement?: Movement;
 };
 
 export type AnalyzeOptions = {
@@ -152,6 +155,8 @@ export type AnalyzeOptions = {
   exclude?: number[];
   /** Keep the followed track on the read (packed) so it can be read again without the video. */
   keepRaw?: boolean;
+  /** The movement (from the exercise's name): an Olympic lift's set speed is its mean peak. */
+  movement?: Movement;
 };
 
 const round = (v: number, d: number) => {
@@ -190,7 +195,9 @@ export const VL_ESTIMATE_PTS = 7;
 
 export function analyzeTrack(points: TrackPoint[], opts: AnalyzeOptions): LiftAnalysis {
   const plate = opts.plate ?? { ...DEFAULT_PLATE, confirmed: false };
-  const first = readTrack(points, opts, plate, plate.confirmed === true);
+  // an unconfirmed plate is read as the standard 450 mm (every bumper and 20 kg / 25 kg / 45 lb plate):
+  // its speed is logged as an estimate, checked against the movement's range and the load (quality.ts)
+  const first = readTrack(points, opts, plate, true);
   const implausible =
     first.units === "mm" &&
     first.reps.some((r) => r.top - r.bottom > MAX_REP_ROM_MM || (r.peak.v ?? 0) > MAX_PEAK_M_S);
@@ -505,6 +512,7 @@ function finish(
       : {}),
     ...(opts.exclude?.length ? { exclude: opts.exclude.map((t) => round(t, 3)) } : {}),
     ...(ignored.length ? { ignored: ignored.map((g) => ({ ...g, t: round(g.t, 3) })) } : {}),
+    ...(opts.movement ? { movement: opts.movement } : {}),
   };
   return { ...out, velocity: velocityVerdict(out as LiftAnalysis) };
 }

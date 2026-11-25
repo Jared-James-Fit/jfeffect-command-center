@@ -26,6 +26,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CheckinFootageLine } from "@/components/clients/filming-accountability-card";
 import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { feedback } from "@/lib/feedback";
@@ -969,6 +970,8 @@ export function MessengerCheckinSubmissionCard({
           </div>
         );
       })()}
+
+      {role === "admin" && (data as any)?.client_id ? <CheckinFootageLine clientId={(data as any).client_id} /> : null}
 
       {analysis ? (
         <div className="mt-3 space-y-2">

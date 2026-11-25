@@ -27,6 +27,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
+import { FILM_SET_EVENT, setVideoKey } from "@/lib/set-videos/filming-reminder";
 import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
 import { SET_RECORD_MAX_SECONDS, canFilmInApp } from "@/lib/camera/film-settings";
 import { primeCamera } from "@/lib/camera/camera-prime";
@@ -43,7 +44,8 @@ import {
   jobOnSet,
   jobStatusText,
   jobsForSet,
-  useSetVideoJobs,
+  sameJobs,
+  useSetVideoJobsSelect,
   videoOnSet,
   UNLINKED_SET_VIDEO_MS,
   type SetVideoJob,
@@ -155,7 +157,12 @@ const readBackAsked = new Set<string>();
 /** A workout's set videos (one read for every row), refreshed when one of its uploads lands. */
 export function useSetVideosForDay(dayId: string, enabled: boolean) {
   const qc = useQueryClient();
-  const jobs = useSetVideoJobs();
+  // only this workout's finished clips (never another clip's progress): every set row reads this hook
+  const jobs = useSetVideoJobsSelect(
+    `day:${dayId}`,
+    (all) => all.filter((j) => j.dayId === dayId && j.state === "done" && !!j.setVideoId),
+    sameJobs,
+  );
   const query = useQuery({
     queryKey: setVideosKey(dayId),
     enabled: enabled && !!dayId,
@@ -198,13 +205,10 @@ export function useSetVideosForDay(dayId: string, enabled: boolean) {
 /** Whether this exercise has a video on any set (or one on its way): its rows get the video column even read-only. */
 export function useRowHasSetVideos(dayId: string, rowId: string, enabled: boolean): boolean {
   const { data } = useSetVideosForDay(dayId, enabled);
-  const jobs = useSetVideoJobs();
+  const sending = useSetVideoJobsSelect(`row:${rowId}`, (all) => all.some((j) => j.rowId === rowId && j.state !== "done"));
   return useMemo(
-    () =>
-      enabled &&
-      ((data ?? []).some((v) => v.row_id === rowId) ||
-        jobs.some((j) => j.rowId === rowId && j.state !== "done")),
-    [data, jobs, rowId, enabled],
+    () => enabled && ((data ?? []).some((v) => v.row_id === rowId) || sending),
+    [data, sending, rowId, enabled],
   );
 }
 
@@ -214,7 +218,9 @@ export function useRowHasSetVideos(dayId: string, rowId: string, enabled: boolea
  */
 export function useLooseWarmupClip(dayId: string, rowId: string, enabled: boolean): boolean {
   const { data } = useSetVideosForDay(dayId, enabled);
-  const jobs = useSetVideoJobs();
+  const loose = useSetVideoJobsSelect(`warm:${rowId}`, (all) =>
+    all.some((j) => j.rowId === rowId && j.setIndex === 0 && !j.resultId && j.state !== "done"),
+  );
   return useMemo(
     () =>
       enabled &&
@@ -225,8 +231,8 @@ export function useLooseWarmupClip(dayId: string, rowId: string, enabled: boolea
           !v.warmup_id &&
           Date.now() - Date.parse(v.created_at) < UNLINKED_SET_VIDEO_MS,
       ) ||
-        jobs.some((j) => j.rowId === rowId && j.setIndex === 0 && !j.resultId && j.state !== "done")),
-    [data, jobs, rowId, enabled],
+        loose),
+    [data, loose, rowId, enabled],
   );
 }
 
@@ -261,7 +267,12 @@ export function SetVideoCell(props: SetVideoCellProps) {
   const done = props.done ?? logged;
   const { user } = useAuth();
   const { data } = useSetVideosForDay(dayId, !!clientId);
-  const allJobs = useSetVideoJobs();
+  // only this set's clips: another set's upload progress never re-renders this one
+  const allJobs = useSetVideoJobsSelect(
+    `set:${rowId}:${setIndex}:${resultId ?? ""}`,
+    (all) => all.filter((j) => jobOnSet(j, { rowId, setIndex, resultId })),
+    sameJobs,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   /** Each pick mounts its own flow (keyed), and clears only itself when it's done. */
   const [picked, setPicked] = useState<{ file: File; key: number; filmedHere: boolean } | null>(null);
@@ -395,6 +406,20 @@ export function SetVideoCell(props: SetVideoCellProps) {
       () => toast.error(NO_CONNECTION),
     );
   };
+  // the filming reminder's "Let's get some footage" (filming-reminder.tsx): this set's camera, from that tap
+  const openCameraRef = useRef(openCamera);
+  openCameraRef.current = openCamera;
+  useEffect(() => {
+    if (!canAdd) return;
+    const key = setVideoKey(rowId, setIndex);
+    const on = (e: Event) => {
+      if ((e as CustomEvent<{ key: string }>).detail?.key !== key) return;
+      setTipOpen(false);
+      openCameraRef.current();
+    };
+    window.addEventListener(FILM_SET_EVENT, on);
+    return () => window.removeEventListener(FILM_SET_EVENT, on);
+  }, [canAdd, rowId, setIndex]);
   const onPicked = (f: File) => {
     // straight from the camera (not in Photos): it's offered for the phone once it's on its way
     const filmedHere = looksFilmedInApp(f);
@@ -482,6 +507,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
               aria-label={label}
               title={label}
               data-set-video={active ? "uploading" : failed ? "failed" : videos.length ? "sent" : "add"}
+              data-set-video-key={setVideoKey(rowId, setIndex)}
               className="flex h-11 w-full items-center justify-center rounded-md transition active:scale-95 sm:h-9"
             >
               {content}

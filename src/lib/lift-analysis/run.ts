@@ -18,7 +18,7 @@
  * smoothly while it runs, and stops the moment it's cancelled.
  */
 import { autoReadCheck } from "@/lib/lift-analysis/auto-check";
-import type { GuideLift } from "@/lib/lift-analysis/exercise";
+import type { GuideLift, Movement } from "@/lib/lift-analysis/exercise";
 import { analyzeTrack, type LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import type { RunProgress, RunStage } from "@/lib/lift-analysis/progress";
 import type { PlateSize } from "@/lib/lift-analysis/calibrate";
@@ -117,6 +117,8 @@ export type RunInput = {
   dirHint?: "lower_first" | "lift_first";
   /** Which lift (the exercise's name), for checking a read made on its own (auto-check.ts). */
   lift?: GuideLift;
+  /** The movement (exercise.ts movementOf): its rep range and what its set speed means. */
+  movement?: Movement;
   /** Rises the athlete said aren't reps (kept when a read is done again from its keys). */
   exclude?: number[];
   signal?: AbortSignal;
@@ -524,6 +526,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       seed: { x: main.x, y: main.y, r: R, t: main.t },
       frame: { w, h },
       dirHint: input.dirHint,
+      movement: input.movement,
       shake,
       size,
       keys,
