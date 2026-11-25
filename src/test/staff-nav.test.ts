@@ -22,7 +22,7 @@ describe("one staff app, laid out like the client app", () => {
     expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn=');
     // on Crew (its own bar) More is your profile's ☰
     expect(read("src/components/community/community-screen.tsx")).toContain("onClick={openAppMore} data-crew-more");
-    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain("items={isSelfServe ? selfServeNav : clientNav}");
+    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain("items={navForShell(isSelfServe ? selfServeNav : clientNav, native)}");
     expect(read("src/components/app-shell.tsx")).toContain('className="h-10 w-10 shrink-0 rounded-full px-0">');
   });
 

@@ -11,6 +11,7 @@ import { CancelFlow } from "@/components/billing/cancel-flow";
 import { toast } from "sonner";
 import { CreditCard, RefreshCw, ExternalLink, AlertTriangle, ShieldAlert, Info as InfoIcon } from "lucide-react";
 import { isNative } from "@/platform";
+import { goToPayment } from "@/lib/native-purchases";
 
 export const Route = createFileRoute("/_authenticated/portal/membership")({ component: BillingPage });
 
@@ -44,7 +45,7 @@ function BillingPage() {
 
   const portal = useMutation({
     mutationFn: () => portalFn({ data: { return_url: window.location.href } }),
-    onSuccess: (r) => window.location.assign(r.url),
+    onSuccess: (r) => void goToPayment(r.url),
     onError: (e: any) => toast.error(e.message),
   });
   const sync = useMutation({
@@ -64,7 +65,7 @@ function BillingPage() {
   });
   const restart = useMutation({
     mutationFn: () => restartFn({ data: { origin: window.location.origin } }),
-    onSuccess: (r: any) => { if (r?.url) window.location.assign(r.url); },
+    onSuccess: (r: any) => { if (r?.url) goToPayment(r.url); },
     onError: (e: any) => toast.error(e.message),
   });
 

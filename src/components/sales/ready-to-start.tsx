@@ -16,6 +16,7 @@ import { TAX_NOTE, intervalLabel, priceLabel, type PublicPackage } from "@/lib/c
 import { EMPTY_INTAKE, intakeError, type DirectIntake } from "@/lib/coaching-sales/direct-checkout";
 import { startDirectCoachingCheckout, type DirectCheckoutOffer } from "@/lib/coaching-sales/direct-checkout.functions";
 import { trackSite } from "@/lib/site-funnel";
+import { goToPayment } from "@/lib/native-purchases";
 
 export function StartChooser({
   pkg,
@@ -103,7 +104,7 @@ export function ReadyToStart({
     onSuccess: (r) => {
       if (r.ok) {
         trackSite("coaching_apply_step", "path:checkout");
-        window.location.assign(r.url);
+        goToPayment(r.url);
         return;
       }
       setError(r.message);

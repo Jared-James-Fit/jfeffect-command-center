@@ -1,3 +1,5 @@
+import { isNative } from "@/platform";
+import { shellHidesPayment } from "@/lib/native-purchases";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,9 @@ export function PaymentRequestCard({ att, mine, staff }: { att: SharedAttachment
   const paid = state ? state === "paid" || state === "free" || state === "renews" || state === "cancelling" : snapshotPaid;
   const ended = state === "ended";
   const coachView = staff ?? mine;
+  // the iPhone app: a client sees what it's for and whether it's paid, never an amount
+  // to pay or a Pay button (coaching is paid outside the app; native-purchases.ts)
+  const quiet = shellHidesPayment(coachView, isNative());
   const currency = (att.currency ?? "CAD").toUpperCase();
   const amount = typeof att.amount_cents === "number" ? money(att.amount_cents, currency) : null;
   const paidCents = Number(sale?.amount_paid_cents ?? 0);
@@ -76,7 +81,7 @@ export function PaymentRequestCard({ att, mine, staff }: { att: SharedAttachment
         {att.title && <div className="text-sm font-semibold leading-tight">{att.title}</div>}
         {paid && paidCents > 0 ? (
           <div className="mt-0.5 text-lg font-bold tracking-tight">{money(paidCents, currency)}</div>
-        ) : amount ? (
+        ) : amount && !quiet ? (
           <div className="mt-0.5 text-lg font-bold tracking-tight">
             {amount}<PlusTax className="text-xs font-medium" />
           </div>
@@ -88,10 +93,12 @@ export function PaymentRequestCard({ att, mine, staff }: { att: SharedAttachment
               ? "Nothing to pay"
               : coachView
                 ? "Not paid yet. It updates here once Stripe confirms."
-                : att.payment_structure ?? "Secure checkout by Stripe"}
+                : quiet
+                  ? "Not paid yet"
+                  : att.payment_structure ?? "Secure checkout by Stripe"}
         </div>
       </div>
-      {!paid && !ended && (
+      {!paid && !ended && !quiet && (
         <div className="px-3 pb-3">
           {att.payment_url ? (
             <a href={att.payment_url} target="_blank" rel="noreferrer" className="block">

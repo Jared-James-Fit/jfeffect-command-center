@@ -32,6 +32,7 @@ import appPreviewRecentPrs from "@/assets/app-preview-recent-prs.png.asset.json"
 import appPreview1rmChart from "@/assets/app-preview-1rm-chart.png.asset.json";
 import { TransformationsStrip } from "@/components/sales/transformations-strip";
 import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
+import { goToPayment } from "@/lib/native-purchases";
 
 function HeroSkeleton() {
   return (
@@ -238,7 +239,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
         codes: appliedCodes.map((c) => c.code),
       }});
       try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch { /* noop */ }
-      window.location.assign(r.url);
+      goToPayment(r.url);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't start checkout.");
       setBusy(false);

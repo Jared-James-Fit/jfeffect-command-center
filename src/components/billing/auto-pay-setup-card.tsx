@@ -5,6 +5,8 @@
  * link or a cancelled one reads "No longer needed". The coach sees where it
  * stands. The amount is what each payment comes to, tax included.
  */
+import { isNative } from "@/platform";
+import { shellHidesPayment } from "@/lib/native-purchases";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,8 +39,10 @@ export function AutoPaySetupCard({ att, staff }: { att: AutoPaySetupAttachment; 
   const status = change?.status ?? "pending";
   const done = status === "completed";
   const gone = status === "cancelled" || status === "superseded";
+  // the iPhone app: no amount or setup button for the client (paid outside the app; native-purchases.ts)
+  const quiet = shellHidesPayment(staff, isNative());
   const currency = (att.currency ?? "CAD").toUpperCase();
-  const each = typeof att.each_cents === "number"
+  const each = quiet ? null : typeof att.each_cents === "number"
     ? new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(att.each_cents / 100)
     : null;
 
@@ -64,11 +68,13 @@ export function AutoPaySetupCard({ att, staff }: { att: AutoPaySetupAttachment; 
             ? "Auto-pay is set up. Payments come out on their own."
             : gone
               ? "No longer needed."
-              : att.first_date
-                ? `First payment ${billingDay(att.first_date)}. Tax included.`
-                : "Tax included."}
+              : quiet
+                ? "Not set up yet."
+                : att.first_date
+                  ? `First payment ${billingDay(att.first_date)}. Tax included.`
+                  : "Tax included."}
         </div>
-        {!done && !gone && att.url && (
+        {!done && !gone && att.url && !quiet && (
           <a href={att.url} target="_blank" rel="noreferrer" className="mt-2.5 block">
             <Button size="sm" variant={staff ? "outline" : "default"} className="h-10 w-full">
               {staff ? "Waiting for them · open link" : "Set up auto-pay"}

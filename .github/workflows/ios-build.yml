@@ -270,47 +270,54 @@ jobs:
           print("✅ Plugins the app registers:", cfg["packageClassList"])
           PYEOF
 
-      - name: Install Pillow for icon generation
+      - name: Install Pillow for the icon and launch image
         run: python3 -m pip install --break-system-packages Pillow
 
-      - name: Set AppIcon
+      # ── App icon and launch image (always) ──────────────────────────────────
+      # `cap add ios` above regenerates the Xcode project from Capacitor's template,
+      # which carries Capacitor's own placeholder icon and launch image (the
+      # Capacitor logo). App Review rejected build 35 for placeholder icons
+      # (guideline 2.3.8), so both sets are wiped and rebuilt from AppIcon-1024.png
+      # every build (every iPhone and iPad size, the 1024 App Store icon with no
+      # alpha channel, the launch image on the app's dark background), then checked
+      # against Capacitor's placeholders: the build fails if any is left.
+      # native/ios-app/app_art.py.
+      - name: Set the app icon and launch image
         run: |
-          ICONSET="ios/App/App/Assets.xcassets/AppIcon.appiconset"
-          mkdir -p "$ICONSET"
-          # Generate all required icon sizes from the 1024x1024 source
+          python3 native/ios-app/app_art.py generate AppIcon-1024.png \
+            ios/App/App/Assets.xcassets/AppIcon.appiconset \
+            ios/App/App/Assets.xcassets/Splash.imageset
+
+      - name: Check the app icon and launch image aren't placeholders
+        run: |
+          python3 native/ios-app/app_art.py check AppIcon-1024.png \
+            ios/App/App/Assets.xcassets/AppIcon.appiconset \
+            ios/App/App/Assets.xcassets/Splash.imageset \
+            node_modules/@capacitor/cli/assets/ios-pods-template.tar.gz
+          grep -q "ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;" ios/App/App.xcodeproj/project.pbxproj \
+            || { echo "::error::The App target doesn't use the AppIcon set"; exit 1; }
+
+      # ── iPhone only, unless IOS_SUPPORT_IPAD is "true" ───────────────────────
+      # Capacitor's template builds for iPhone and iPad (TARGETED_DEVICE_FAMILY "1,2"),
+      # so App Review tested build 35 on an iPad. The app is laid out for a phone;
+      # until every main flow is tested on an iPad (and 13-inch screenshots exist),
+      # the App target is iPhone only (an iPad still runs it in iPhone compatibility
+      # mode). Set the repository variable IOS_SUPPORT_IPAD to "true" to build for
+      # iPad again. docs/APPLE_IAP_DECISION.md (iPad).
+      - name: Set the device family (iPhone only by default)
+        env:
+          IOS_SUPPORT_IPAD: ${{ vars.IOS_SUPPORT_IPAD || 'false' }}
+        run: |
           python3 << 'PYEOF'
-          from PIL import Image
-          import json, os
-          src = "AppIcon-1024.png"
-          iconset = "ios/App/App/Assets.xcassets/AppIcon.appiconset"
-          sizes = [
-            ("20x20", 1, "iphone"), ("20x20", 2, "iphone"), ("20x20", 3, "iphone"),
-            ("29x29", 1, "iphone"), ("29x29", 2, "iphone"), ("29x29", 3, "iphone"),
-            ("40x40", 2, "iphone"), ("40x40", 3, "iphone"),
-            ("60x60", 2, "iphone"), ("60x60", 3, "iphone"),
-            ("20x20", 1, "ipad"), ("20x20", 2, "ipad"),
-            ("29x29", 1, "ipad"), ("29x29", 2, "ipad"),
-            ("40x40", 1, "ipad"), ("40x40", 2, "ipad"),
-            ("76x76", 1, "ipad"), ("76x76", 2, "ipad"),
-            ("83.5x83.5", 2, "ipad"),
-            ("1024x1024", 1, "ios-marketing"),
-          ]
-          img = Image.open(src).convert("RGB")
-          images = []
-          for points, scale, idiom in sizes:
-            point_value = float(points.split("x")[0])
-            px = int(round(point_value * scale))
-            scale_label = f"{scale}x"
-            fname = f"AppIcon-{points.replace('.', '_')}@{scale_label}.png"
-            resized = img.resize((px, px), Image.LANCZOS)
-            resized.save(os.path.join(iconset, fname), "PNG")
-            images.append({"filename": fname, "idiom": idiom, "scale": scale_label, "size": points})
-          contents = {"images": images, "info": {"author": "xcode", "version": 1}}
-          with open(os.path.join(iconset, "Contents.json"), "w") as f:
-            json.dump(contents, f, indent=2)
-          print(f"✅ Generated {len(images)} icon sizes")
+          import os, re
+          path = "ios/App/App.xcodeproj/project.pbxproj"
+          c = open(path).read()
+          family = '"1,2"' if os.environ.get("IOS_SUPPORT_IPAD", "false").lower() == "true" else "1"
+          c, n = re.subn(r"TARGETED_DEVICE_FAMILY = [^;]+;", f"TARGETED_DEVICE_FAMILY = {family};", c)
+          assert n >= 2, f"TARGETED_DEVICE_FAMILY found {n} times (expected the App target's Debug and Release)"
+          open(path, "w").write(c)
+          print(f"✅ TARGETED_DEVICE_FAMILY = {family} ({'iPhone and iPad' if family != '1' else 'iPhone only'}) on {n} configurations")
           PYEOF
-          echo "✅ AppIcon set: $(ls $ICONSET | wc -l) files"
 
       # ── Apple Health (HealthKit) ────────────────────────────────────────────
       # OFF unless the repo variable ENABLE_HEALTHKIT is "true". Turn it on only after
@@ -513,6 +520,21 @@ jobs:
           if echo "$ORI" | grep -q "Landscape\|PortraitUpsideDown"; then echo "::error::The built iPhone app can turn sideways"; exit 1; fi
           echo "$ORI" | grep -q "UIInterfaceOrientationPortrait" || { echo "::error::The built iPhone app has no portrait orientation"; exit 1; }
           echo "✅ iPhone app: portrait only"
+          # And that the built app's icon is JF Effect's, not Capacitor's placeholder (2.3.8):
+          # Xcode copies the iPhone home-screen icon into the app as an optimised PNG; sips
+          # turns it back into a normal one for the check.
+          ICON=$(find "$APP" -maxdepth 1 -name 'AppIcon60x60@2x*.png' | head -1)
+          [ -n "$ICON" ] || { echo "::error::No AppIcon60x60@2x icon in the built app"; ls "$APP"; exit 1; }
+          sips -s format png "$ICON" --out "$RUNNER_TEMP/built-icon.png" >/dev/null
+          python3 native/ios-app/app_art.py check-app AppIcon-1024.png "$RUNNER_TEMP/built-icon.png" \
+            node_modules/@capacitor/cli/assets/ios-pods-template.tar.gz
+          # And the device family it was built for (iPhone only unless IOS_SUPPORT_IPAD is "true").
+          FAMILY=$(/usr/libexec/PlistBuddy -c "Print :UIDeviceFamily" "$APP/Info.plist" 2>/dev/null) || { echo "::error::UIDeviceFamily is missing from the built app"; exit 1; }
+          echo "UIDeviceFamily: $FAMILY"
+          if [ "${{ vars.IOS_SUPPORT_IPAD || 'false' }}" != "true" ] && echo "$FAMILY" | grep -qw 2; then
+            echo "::error::The built app supports iPad, but IOS_SUPPORT_IPAD isn't true"; exit 1
+          fi
+          echo "✅ Device family checked"
 
       - name: Export and Upload to TestFlight
         if: ${{ github.event_name == 'push' || inputs.upload }}

@@ -702,8 +702,9 @@ function AccountPage() {
               </div>
             </SettingsSection>
 
-            {/* ── Your plan: Free, a membership or coaching, one account (Manage plan, /portal/plan) ── */}
-            {!tierLoading && tier && (
+            {/* ── Your plan: Free, a membership or coaching, one account (Manage plan, /portal/plan);
+                 not in the iPhone app, which opens no plan or billing page (native-purchases.ts) ── */}
+            {!tierLoading && tier && !native && (
               <SettingsLink
                 to="/portal/plan"
                 icon={Layers}

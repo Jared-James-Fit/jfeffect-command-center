@@ -13,6 +13,16 @@ Guideline sources (read Nov 25 2026):
 - Jun 2026 update (1.2 UGC compliance plans, 4.3(b)): https://macrumors.com/2026/06/09/app-store-guidelines-low-quality-apps/
 - Privacy manifests: https://developer.apple.com/documentation/bundleresources/describing-data-use-in-privacy-manifests
 
+## App Review rejection of 1.0 (build 35, June 23 2026)
+
+Rejected for 2.3.8 (placeholder icons), 3.1.1 (purchase link-out to Safari via account
+registration) and 3.1.1 (digital content bought outside the app used in it, not offered as
+IAP). The first two are fixed in code (app_art.py and the icon checks in ios-build.yml;
+`src/lib/native-purchases.ts`, walked by `native-shell-routes.test.ts`). The third needs
+Jared's decision between in-app purchase and "digital paid tiers unavailable in the iOS app":
+**docs/APPLE_IAP_DECISION.md** (inventory, both options, recommendation). The build is now
+iPhone only unless `IOS_SUPPORT_IPAD` is "true".
+
 ## Score
 
 **65 / 100, and NOT READY: the critical blockers below override the score.** Submit only when
@@ -91,9 +101,9 @@ every critical blocker is closed, and only with Jared's explicit approval.
    nutrition roadmap words, Athlete Insights / Crew lesson posts that use athletes' numbers,
    competition assessments and roster extraction. Fix: filter Cleo's client look-ups by
    `ai_consent_ok_for_client`, and call `requireClientAiConsent` in each remaining writer.
-7. **iPad (2.4.1).** The build supports iPad, so App Review may test on one and iPad screenshots
-   are required. Either test every main flow on an iPad and supply 13-inch screenshots, or make the
-   app iPhone-only (`TARGETED_DEVICE_FAMILY = 1` in the workflow's pbxproj patch). Jared's call.
+7. **iPad (2.4.1). DONE: iPhone only by default.** Build 35 was reviewed on an iPad. The workflow
+   now sets `TARGETED_DEVICE_FAMILY = 1` unless the repository variable `IOS_SUPPORT_IPAD` is
+   "true" (then test every main flow on an iPad and supply 13-inch screenshots first).
 8. **Age gate (1.2.1(a)) and age rating.** Crew is open user content and private messaging. Add a
    declared date of birth (or "I'm 16 or older") at sign-up, keep under-age accounts out of Crew and
    direct messages, and answer the age-rating questionnaire as in the listing pack.
@@ -147,9 +157,10 @@ no platform check on Premium's screens. Enforced by `src/lib/native-purchases.ts
 `native-purchases.test.ts`): Your plan lists no plan that needs a purchase and prints no price for
 one the person isn't on (the refusal reads "Not available in the app", no longer "Upgrade on the
 web at jfeffect.com"), Crew promos that point at a sales page are not shown in the app, and the
-locked-feature card and credit packs already say it isn't available. Review risk accepted: a
-holder who bought on the web uses it in the app (3.1.3(b) "multiplatform services" wants the same
-product offered as IAP too); revisit if App Review raises it.
+locked-feature card and credit packs already say it isn't available. App Review raised it
+(build 35's second 3.1.1 finding): a holder who bought on the web uses it in the app. Decision
+pending: docs/APPLE_IAP_DECISION.md. Since that rejection the app also opens no sales, pricing,
+checkout or billing page at all and says nothing about buying (native-purchases.ts).
 
 Table below: the mapping as analysed before the decision (rows for membership, credit packs and
 paid programs are now "web only, hidden in the app").

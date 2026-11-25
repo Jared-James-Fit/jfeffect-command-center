@@ -73,7 +73,7 @@ export function PublicHeader({
         <BrandLink />
 
         {!focused && (
-          <nav aria-label="Main" className="hidden items-center gap-1 lg:flex" data-public-nav>
+          <nav aria-label="Main" className="hidden items-center gap-1 lg:flex" data-public-nav data-web-only>
             {PUBLIC_NAV.map((item) => (
               <NavLink key={item.key} item={item} active={active === item.key} />
             ))}
@@ -87,6 +87,7 @@ export function PublicHeader({
               "h-10 items-center whitespace-nowrap rounded-full px-3 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground",
               focused ? "inline-flex" : "hidden lg:inline-flex",
             )}
+            data-public-signin
           >
             Sign in
           </Link>
@@ -95,10 +96,14 @@ export function PublicHeader({
               choice={choice}
               className="hidden h-10 px-4 text-[15px] md:inline-flex"
               data-nav-cta={choice.href}
+              data-web-only=""
             />
           )}
+          {/* the iPhone app: no menu of sales pages, Sign in instead (data-public-signin, native-purchases.ts) */}
           {!focused && (
-            <PhoneMenu open={open} onOpenChange={setOpen} active={active} choice={choice} />
+            <span className="contents" data-web-only>
+              <PhoneMenu open={open} onOpenChange={setOpen} active={active} choice={choice} />
+            </span>
           )}
         </div>
       </div>

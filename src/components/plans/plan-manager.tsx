@@ -25,7 +25,7 @@ import { ALWAYS_KEPT, money, quoteLines, type ConfirmResult, type PlanPreview } 
 import type { PlanCard, PlanView } from "@/lib/plans/plans.functions";
 import { cn } from "@/lib/utils";
 import { isNative } from "@/platform";
-import { plansForShell, showPlanPrice } from "@/lib/native-purchases";
+import { plansForShell, showPlanPrice, goToPayment } from "@/lib/native-purchases";
 
 export type ApplyInput = { goal: string; outcome: string; timeline: string; phone?: string | null; packageSlug?: string | null };
 
@@ -691,7 +691,7 @@ function OfferCard({ view, api, who, onChanged }: { view: PlanView; api: PlanApi
         return;
       }
       if (r.result === "redirect" || r.result === "needs_payment") {
-        window.location.assign(r.url);
+        goToPayment(r.url);
         return;
       }
       if (r.result === "failed") {
@@ -842,7 +842,7 @@ export function PlanManager({ view, api, who, onChanged }: { view: PlanView; api
     switch (r.result) {
       case "redirect":
       case "needs_payment":
-        window.location.assign(r.url);
+        goToPayment(r.url);
         return;
       case "applied":
         toast.success("Your new plan is active");

@@ -52,11 +52,12 @@ export function SalesPageShell({
         {children}
       </main>
       <footer className="mt-8 border-t border-border/70 px-5 py-10 text-center text-[13px] text-muted-foreground">
+        {/* data-web-only: the iPhone app links to no sales page (native-purchases.ts) */}
         <nav aria-label="Footer" className="mb-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
           <Link to="/" className="hover:text-foreground">Home</Link>
-          <Link to="/" hash="app" className="hover:text-foreground">Free app</Link>
-          <Link to="/coaching" className="hover:text-foreground">Online coaching</Link>
-          <Link to="/about" className="hover:text-foreground">About</Link>
+          <Link to="/" hash="app" className="hover:text-foreground" data-web-only>Free app</Link>
+          <Link to="/coaching" className="hover:text-foreground" data-web-only>Online coaching</Link>
+          <Link to="/about" className="hover:text-foreground" data-web-only>About</Link>
           <Link to="/auth" className="hover:text-foreground">Sign in</Link>
           <Link to="/support" className="hover:text-foreground">Support</Link>
           <Link to="/privacy" className="hover:text-foreground">Privacy</Link>

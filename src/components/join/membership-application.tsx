@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { SOCIAL } from "@/lib/social-links";
 import { instagramHandle } from "@/lib/apply-form";
 import { trackJoin, captureSource, visitorId } from "@/lib/join-funnel";
+import { isNative } from "@/platform";
+import { joinStepsForShell } from "@/lib/native-purchases";
 import {
   submitMembershipApplication,
   type ApplyResult,
@@ -115,8 +117,13 @@ export function MembershipApplication() {
   const igRef = useRef<HTMLInputElement | null>(null);
   const phoneRef = useRef<HTMLInputElement | null>(null);
 
-  const total = MEMBER_STEPS.length;
-  const key = MEMBER_STEPS[step]!;
+  // The iPhone app asks nothing about paid coaching (native-purchases.ts): set after
+  // mount, so the server's page and the first render agree.
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNative()), []);
+  const steps = joinStepsForShell(MEMBER_STEPS, native);
+  const total = steps.length;
+  const key = steps[Math.min(step, total - 1)]!;
   const last = step === total - 1;
   const first = firstNameFrom(answers.full_name);
 
@@ -124,12 +131,12 @@ export function MembershipApplication() {
     const saved = loadSaved();
     if (saved) {
       setAnswers({ ...EMPTY_MEMBER_ANSWERS, ...saved.answers });
-      setStep(Math.max(0, Math.min(total - 1, Number(saved.step) || 0)));
+      setStep(Math.max(0, Math.min(MEMBER_STEPS.length - 1, Number(saved.step) || 0)));
       started.current = true;
     }
     captureSource();
     ready.current = true;
-  }, [total]);
+  }, []);
 
   useEffect(() => {
     if (!ready.current || result) return;
@@ -191,8 +198,10 @@ export function MembershipApplication() {
   const send = async () => {
     const missing = firstMemberProblem(answers);
     if (missing >= 0) {
-      const p = memberStepProblem(MEMBER_STEPS[missing]!, answers)!;
-      if (missing !== step) goTo(missing, -1);
+      const missingKey = MEMBER_STEPS[missing]!;
+      const p = memberStepProblem(missingKey, answers)!;
+      const at = Math.max(0, steps.indexOf(missingKey));
+      if (at !== step) goTo(at, -1);
       window.setTimeout(() => fail(p.field, p.message), 0);
       return;
     }
@@ -632,7 +641,8 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
         ))}
       </ol>
 
-      {coaching && result.bookingUrl && (
+      {/* the iPhone app offers no coaching call (a paid service; native-purchases.ts) */}
+      {coaching && result.bookingUrl && !isNative() && (
         <Surface className="mt-7 p-5 text-left" data-join-call>
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-muted">
@@ -656,7 +666,9 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
         <div className="text-[15px] font-semibold">While you wait</div>
         <div className="mt-3 flex flex-col items-center gap-3">
           <TextLink href={SOCIAL.instagram.url}>See how I train on Instagram</TextLink>
-          <TextLink to="/about">More about me</TextLink>
+          <span className="contents" data-web-only>
+            <TextLink to="/about">More about me</TextLink>
+          </span>
         </div>
       </div>
     </ResultShell>
