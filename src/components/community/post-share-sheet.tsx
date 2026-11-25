@@ -214,7 +214,7 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onInstagram 
       >
         <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30" aria-hidden />
         <SheetTitle className="sr-only">Share</SheetTitle>
-        <SheetDescription className="sr-only">Send this post to people in the crew, or share its link</SheetDescription>
+        <SheetDescription className="sr-only">{post.story ? "Send this story to people in the crew, or share its link" : "Send this post to people in the crew, or share its link"}</SheetDescription>
 
         {canSend && (
           <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
@@ -287,7 +287,8 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onInstagram 
               <AppTile label="Copy link" option="copy" onClick={copyLink}>
                 <span className="grid h-full w-full place-items-center rounded-full bg-muted text-foreground"><Link2 className="h-6 w-6 -rotate-45" /></span>
               </AppTile>
-              {canSend && (
+              {/* a story is gone in a day: there's nothing to save */}
+              {canSend && !post.story && (
                 <AppTile label={post.saved ? "Saved" : "Save"} option="save" onClick={toggleSave}>
                   <span className="grid h-full w-full place-items-center rounded-full bg-muted text-foreground">
                     <Bookmark className={cn("h-6 w-6", post.saved && "fill-current")} />
