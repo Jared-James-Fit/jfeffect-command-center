@@ -723,6 +723,7 @@ function Tile({
   progress,
   label,
   onTap,
+  onHold,
   extra = false,
 }: {
   thumb: string | null;
