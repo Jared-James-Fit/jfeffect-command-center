@@ -8,6 +8,7 @@ import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
 import { chunk, fetchAllPages } from "@/lib/supabase-paginate";
 import { inWorkoutOrder } from "@/lib/logged-set-order";
 import { cardioSetDone, isPlanCardioRow } from "@/lib/workouts/workout-cardio";
+import { titleExerciseFromRow, workoutDisplayTitle } from "@/lib/workouts/workout-title";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
@@ -1708,7 +1709,9 @@ type ProgramTree = {
 
 const SCHEDULED_INSTANCE_COLUMNS = "id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at";
 // cardio_target_id / duration_seconds: the day's cardio is its own thing (workout-cardio.ts), done any time that day
-const ESTIMATE_ROW_COLUMNS = "id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override, cardio_target_id, duration_seconds";
+// sort_order … exercises(…): what the workout is called (workout-title.ts) and its one-side / timed estimate
+const ESTIMATE_ROW_COLUMNS =
+  "id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override, cardio_target_id, duration_seconds, measurement_type, sort_order, is_optional, purpose_label, exercise_name_override, movement_family, exercises(name, movement_family, competition_lift_type, is_competition_lift, equipment, primary_muscle_group)";
 const LOGGED_SET_COLUMNS = "row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds, completed_at";
 
 /** Drops a nested embed from a row, returning [row without it, the embed]. */
@@ -1968,12 +1971,20 @@ export async function getClientWorkouts(
         d.duration_estimate_min ??
         (b as any)?.estimated_minutes ??
         (estRows.length > 0 ? estimateDayMinutes(estRows) : null);
+      // What it's called everywhere it shows: a meaningful coach name, else its focus.
+      const display_title = workoutDisplayTitle({
+        title: d.title,
+        subtitle: d.subtitle,
+        dayIndex: d.day_index,
+        exercises: [...estRows].sort((x: any, y: any) => (x.sort_order ?? 0) - (y.sort_order ?? 0)).map(titleExerciseFromRow),
+      });
       return {
         day: d,
         week: w,
         block: b,
         completion: null,
         logged_sets_count: 0,
+        display_title,
         ...(estimatedMinutes != null ? { estimated_minutes: estimatedMinutes } : {}),
       };
     });

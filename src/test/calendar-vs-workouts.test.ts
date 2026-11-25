@@ -41,7 +41,8 @@ describe("Calendar = appointments and the way in to today's workout; Workouts = 
     const exp = read("src/components/workouts/WorkoutsExperience.tsx");
     expect(exp).toContain('aria-label="Training calendar"');
     expect(exp).toContain('title="Training calendar"');
-    expect(exp).toContain('const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });');
+    // the workout's one title (workout-title.ts), never a weekday or RPE
+    expect(exp).toContain("const title = dayDisplayTitle(item);");
     expect(exp).toContain('case "upcoming": return "Upcoming";');
     expect(exp).toContain('<div className="line-clamp-2 text-lg font-semibold leading-snug">{title}</div>');
     // the strip is a calendar: it says the week's dates; block and week are the Program card's

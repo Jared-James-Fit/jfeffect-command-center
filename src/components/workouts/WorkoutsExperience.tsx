@@ -13,7 +13,7 @@ import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Activity, Download,
   RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive, BarChart3, ListChecks,
-  CalendarDays, LayoutGrid,
+  CalendarDays, LayoutGrid, Rows3,
 } from "lucide-react";
 import { FullScreenPage, useFullScreenLayer } from "@/components/full-screen-page";
 import { DeferRender } from "@/components/defer-render";
@@ -32,7 +32,7 @@ import { clientWorkoutsQuery, PAGE_CACHE_MS } from "@/lib/client-workouts-query"
 import { useArrivalClass } from "@/hooks/use-arrival";
 import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/components/workouts/workouts-skeleton";
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
-import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
+import { dayDisplayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, parseLocalDate, toLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
@@ -90,7 +90,9 @@ import {
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { SessionDot, WeekStrip } from "@/components/workouts/week-strip";
-import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
+import { WeekSplitView, readWeekView, saveWeekView, type WeekView } from "@/components/workouts/week-split-view";
+import { useWeekSplit } from "@/components/workouts/use-week-split";
+import { KIND_META, placeLabel, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
@@ -230,7 +232,7 @@ export function WorkoutsExperience({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [todayPrimaryItems.map((it) => it.day?.id).join(",")],
   );
-  const todayTitle = todayItem ? cleanDayTitle(todayItem.day?.title, todayItem.day?.day_index) : null;
+  const todayTitle = todayItem ? dayDisplayTitle(todayItem) : null;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
   // ?days=1 (after a program's workouts a week changed): the days editor, once
@@ -342,6 +344,31 @@ export function WorkoutsExperience({
   const [reportOpen, setReportOpen] = useState(false);
   const navigate = useNavigate();
 
+  // The week as a split (Mon–Sun rows, the default) or the strip with the day picked: one
+  // choice, remembered on the phone; either way the picked day's card is under it.
+  const [weekView, setWeekView] = useState<WeekView>("split");
+  useEffect(() => setWeekView(readWeekView()), []);
+  const changeWeekView = (v: WeekView) => {
+    setWeekView(v);
+    saveWeekView(v);
+  };
+  const split = useWeekSplit({
+    clientId,
+    self: mode === "self",
+    items: dayItems,
+    byDate,
+    selectedDate,
+    sessionsByDate,
+  });
+  const startItem = (item: WorkoutItem) => {
+    const cta = primaryCtaFor(item, getWorkoutStatus(item).status);
+    navigate({
+      to: "/portal/workouts/$dayId",
+      params: { dayId: item.day.id },
+      search: { ...(cta.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any,
+    });
+  };
+
   // Arriving with ?open=<date> (a coach tapping "Open … workout" on a session):
   // once the dates are resolved, show that day and, when it holds exactly one
   // workout, open it the way its card's main button would. Once per page load,
@@ -451,6 +478,10 @@ export function WorkoutsExperience({
                   <span className="ml-auto pl-3 text-xs text-muted-foreground">{daysState.label}</span>
                 </CardMenuItem>
               )}
+              {/* The week as rows (Split, the default) or the strip and one day: remembered on this phone. */}
+              <CardMenuItem onSelect={() => changeWeekView(weekView === "split" ? "day" : "split")} data-menu-week-view>
+                <Rows3 className="mr-2 h-4 w-4" /> {weekView === "split" ? "Week strip view" : "Split view"}
+              </CardMenuItem>
               <CardMenuItem
                 onSelect={() =>
                   navigate({
@@ -497,16 +528,27 @@ export function WorkoutsExperience({
               )
             ) : (
               <div className={cn("space-y-4", arrived)}>
-                <CalendarDndProvider dnd={dnd}>
-                  <WeekStrip
+                {weekView === "split" ? (
+                  <WeekSplitView
+                    week={split.week}
+                    weekStart={split.weekStart}
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
-                    byDate={byDate}
-                    dnd={dnd}
-                    sessionDays={sessionDays}
-                    flat
+                    onStart={mode === "self" ? startItem : undefined}
+                    timeActions={canReschedule ? split.timeActions : undefined}
                   />
-                </CalendarDndProvider>
+                ) : (
+                  <CalendarDndProvider dnd={dnd}>
+                    <WeekStrip
+                      selectedDate={selectedDate}
+                      onSelectDate={setSelectedDate}
+                      byDate={byDate}
+                      dnd={dnd}
+                      sessionDays={sessionDays}
+                      flat
+                    />
+                  </CalendarDndProvider>
+                )}
                 {dropAsk && (
                   <MoveWorkoutSheet
                     dayId={dropAsk.target.dayId}
@@ -751,7 +793,7 @@ function MonthGrid({
           // mark, and the day picked shows its workout under the calendar.
           const title = item
             ? formatCompactWorkoutLabel(item.day as any, item.week as any)
-              ?? cleanDayTitle(item.day?.title, item.day?.day_index)
+              ?? dayDisplayTitle(item)
             : null;
           return (
             <CalendarDayCell key={iso} iso={iso} item={item} label={title ?? format(d, "MMM d")}>
@@ -846,7 +888,7 @@ function planEntriesFrom(byDate: Map<string, WorkoutItem[]>, primary: WorkoutIte
       weekId: (it.week as any)?.id ?? null,
       blockId: it.block?.id ?? null,
       iso,
-      title: cleanDayTitle(it.day?.title, it.day?.day_index),
+      title: dayDisplayTitle(it),
       kind: mk?.kind ?? null,
       pct: mk?.kind === "progress" ? mk.pct : undefined,
       optional: !!it.day?.is_optional,
@@ -885,7 +927,7 @@ function nextWorkoutAfter(byDate: Map<string, WorkoutItem[]>, date: Date): NextW
   }
   if (!best) return null;
   const [y, m, d] = best.iso.split("-").map(Number);
-  const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(best.item.day?.title, best.item.day?.day_index) });
+  const title = dayDisplayTitle(best.item);
   return { date: new Date(y, m - 1, d), title };
 }
 
@@ -1278,7 +1320,7 @@ function SelectedDayCard({
     : status;
   // The day is already picked on the strip above and in the line under the
   // title, so the title drops its "Monday — " and the badge its weekday.
-  const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });
+  const title = dayDisplayTitle(item);
   const badgeLabel = dayCardStatusLabel(visibleStatus.status, visibleStatus.label);
   // Its status only when it's news (done, missed, in progress, review), said in the
   // day line in words: "Today" / "Upcoming" just repeat the day.
@@ -1751,7 +1793,7 @@ function DayPreviewSheet({
   item: WorkoutItem;
   date: Date;
 }) {
-  const title = cleanDayTitle(item.day?.title, item.day?.day_index);
+  const title = dayDisplayTitle(item);
   const status = getWorkoutStatus(item);
   const cta = primaryCtaFor(item, status.status);
 

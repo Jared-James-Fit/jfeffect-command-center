@@ -26,7 +26,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { isAtHomeBackupClient } from "@/lib/at-home-backup";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
-import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
+import { cleanDayTitle, dayDisplayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, parseLocalDate, toLocalISO } from "@/lib/today";
 import { WeekStrip } from "@/components/workouts/week-strip";
@@ -75,7 +75,7 @@ function dayLabel(iso: string): string {
 }
 
 function titleOf(item: WorkoutItem): string {
-  return cleanDayTitle(item.day?.title, item.day?.day_index);
+  return dayDisplayTitle(item);
 }
 
 /* ------------------------------ the bar ------------------------------ */
