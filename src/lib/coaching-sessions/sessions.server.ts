@@ -365,7 +365,8 @@ export function answersForPrep(q: any): { answers: Record<string, string>; topic
     if (!v?.text) continue;
     covered.add(k);
     if (k === "topics") continue;
-    answers[(ANSWER_WORDS as Record<string, string>)[k] ?? v.label] = v.text;
+    // by session key (routeAnswers places each), a question the form didn't seed by its label
+    answers[k in ANSWER_WORDS ? k : v.label] = v.text;
   }
   return { answers, topics: a.topics?.text ?? null, covered };
 }
