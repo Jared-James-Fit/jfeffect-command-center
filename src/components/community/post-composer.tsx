@@ -23,6 +23,8 @@ import { tagSummary, uniqueTags, withTags } from "@/lib/crew-tags";
 import { useSlideTray, type TrayItem } from "@/components/community/slide-tray";
 import { CameraRoll } from "@/components/community/camera-roll";
 import { hasNativePhotos } from "@/lib/native-photos";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { framingForCrop } from "@/lib/media/capture";
 import { PhotoFramer } from "@/components/community/photo-framer";
 import { StickerLayer, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach } from "@/components/community/post-attach";
@@ -181,6 +183,28 @@ export function PostComposer({
   const [items, setItems] = useState<StickerItem[]>([]);
   const [request, setRequest] = useState<StickerRequest>(null);
   const [tool, setTool] = useState<ComposerTool>("filters");
+  // Camera: the app's own (media/capture.ts, purpose "post": full screen, a tap for a photo, a hold to film); the
+  // photo stays whole and starts framed as its guide showed it, so it can still be moved, zoomed and turned
+  const fromCamera = (file: File, place?: { framing: ReturnType<typeof framingForCrop>; whole: false }) => {
+    if (tray.items.length >= MAX_SLIDES) return void toast.message(`A post holds ${MAX_SLIDES}`, { description: "Remove one to add another." });
+    if (!tray.items.length) setCoverLive(true);
+    // the camera roll's one at a time: the shot takes the place of the one showing
+    if (roll && !multi) for (const it of tray.items) tray.remove(it.id);
+    void tray.add([file], place);
+    setWriting(false);
+    if (step === "details" && writing) setStep("select");
+  };
+  const camera = useFilmCamera({
+    purpose: "post",
+    onClip: (f) => fromCamera(f),
+    onShot: (s) => fromCamera(s.file, { framing: framingForCrop(s.picture, s.crop, POST_ASPECTS[aspect]), whole: false }),
+    onLibrary: () => onPick("library"),
+  });
+  /** Camera opens the app's own camera where it can, the phone's otherwise; Library the phone's picker. */
+  const pick = (how: ComposerPickHow) => {
+    if (how === "camera" && camera.start()) return;
+    onPick(how);
+  };
   // the person's default filter for posts: on every new photo or clip (never one already on the post)
   const filterPrefs = useFilterDefaults(open);
   const { defaults: filterDefaults, setDefault: setFilterDefault } = filterPrefs;
@@ -537,7 +561,7 @@ export function PostComposer({
                 aspect={aspect}
                 onAspect={cycleAspect}
                 gridFlash={gridFlash}
-                onPick={onPick}
+                onPick={pick}
                 roll={roll}
                 multi={multi}
                 onMulti={setMulti}
@@ -740,6 +764,7 @@ export function PostComposer({
               );
             })()}
           {tray.trimmer}
+          {camera.element}
           <TagPeopleSheet
             open={tagging}
             onClose={() => setTagging(false)}
