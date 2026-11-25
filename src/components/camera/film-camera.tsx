@@ -160,6 +160,8 @@ export function FilmCamera({
   settingsRef.current = settings;
 
   const recording = recordingAt != null;
+  // the capture camera's hold let go before filming had started
+  const releasedEarly = useRef(false);
   const track = () => streamRef.current?.getVideoTracks()[0] ?? null;
 
   // While it's up: the phone may turn to film sideways, and nothing else on the page takes the keys.
@@ -498,6 +500,12 @@ export function FilmCamera({
     }
     recRef.current = entry;
     setRecordingAt(t0);
+    // the finger lifted while the mic was still opening: it stops as soon as it's started (too short is dropped)
+    if (releasedEarly.current) {
+      releasedEarly.current = false;
+      stopRecording(true);
+      return;
+    }
     limitTimer.current = setTimeout(() => stopRecording(true), limitSeconds * 1000);
     // the screen stays on while it films (an auto-lock would end the recording)
     try {
@@ -741,6 +749,7 @@ export function FilmCamera({
     } catch {
       /* fine */
     }
+    releasedEarly.current = false;
     const p = { t: 0, x: e.clientX, y: e.clientY, z: zoom ?? caps?.zoom?.min ?? 1, held: false };
     if (canVideo)
       p.t = window.setTimeout(() => {
@@ -768,7 +777,9 @@ export function FilmCamera({
     if (!purpose) return;
     if (p) window.clearTimeout(p.t);
     if (p?.held) {
-      if (!locked) stopRecording(true);
+      if (locked) return;
+      if (recRef.current) stopRecording(true);
+      else releasedEarly.current = true;
       return;
     }
     if (recording) {
