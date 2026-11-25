@@ -104,3 +104,56 @@ describe("AI consent is enforced on the server before data reaches a model", () 
     expect(src("src/components/ai-consent/ai-consent.tsx")).toContain("data-ai-consent-withdraw");
   });
 });
+
+describe("AI consent is asked in place, never by a popup (Nov 25 2026)", () => {
+  const ui = src("src/components/ai-consent/ai-consent.tsx");
+
+  it("has no automatic prompt, host sheet or dialog left", () => {
+    expect(ui).not.toMatch(/AiConsentPrompt|AiConsentHost|AiConsentSheet|requestAiConsent/);
+    expect(ui).not.toMatch(/from "@\/components\/ui\/(sheet|dialog|alert-dialog)"/);
+    expect(ui).not.toContain("sessionStorage");
+    expect(src("src/routes/_authenticated/portal/route.tsx")).not.toContain("AiConsent");
+    expect(src("src/routes/_authenticated/route.tsx")).not.toContain("AiConsent");
+  });
+
+  it("only a tap on Allow saves a yes; nothing is pre-ticked", () => {
+    // every write goes through set(granted) from a tap; the only literal true is the Allow answer
+    expect(ui.match(/set\(true\)/g) ?? []).toHaveLength(0);
+    expect(ui).toContain("onClick={() => void answer(true)}");
+    expect(ui).not.toMatch(/useEffect\([^)]*answer\(/);
+    expect(ui).not.toMatch(/useEffect\([\s\S]{0,200}set\(true/);
+  });
+
+  it("is never asked of staff or in View as client", () => {
+    expect(ui).toMatch(/askable = !!userId && \(role === "client" \|\| role === "member"\) && !isImpersonating/);
+    expect(ui).toMatch(/needsYes: askable &&/);
+  });
+
+  it("sits inside onboarding, compact", () => {
+    expect(src("src/components/member/member-setup-wizard.tsx")).toContain("<AiConsentChoice />");
+    expect(src("src/components/client-goals/GoalsSetupFlow.tsx")).toContain("<AiConsentChoice />");
+    const banner = src("src/components/portal/setup-checklist-banner.tsx");
+    expect(banner).toContain("AiConsentChoice");
+    // optional: never counts toward progress or brings the checklist back
+    expect(banner).toMatch(/key: "ai",[\s\S]*?optional: true/);
+  });
+
+  it("features that send data ask beside their action", () => {
+    expect(src("src/components/nutrition/DailyNutritionPanel.tsx")).toContain("<AiConsentGate");
+    for (const p of [
+      "src/components/program-import/import-start.tsx",
+      "src/components/program-import/import-review.tsx",
+      "src/components/nutrition-studio/plan-source-picker.tsx",
+      "src/components/nutrition-studio/studio-start.tsx",
+    ]) {
+      expect(src(p), p).toContain("useAiConsentInline(");
+    }
+    expect(src("src/components/pain/pain-map.tsx")).toContain("<AiConsentInline");
+  });
+
+  it("keeps the full disclosure in Account → Privacy & data", () => {
+    const panel = ui.slice(ui.indexOf("export function AiConsentPanel"));
+    expect(panel).toContain("<AiConsentDetails />");
+    expect(ui).toContain("AI_PROVIDERS.map");
+  });
+});
