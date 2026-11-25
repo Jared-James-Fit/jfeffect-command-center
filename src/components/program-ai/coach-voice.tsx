@@ -13,7 +13,7 @@ import { transcribeCoachVoiceFn } from "@/lib/program-ai/voice.functions";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
 import { VoiceMicButton, VoiceStatusLine } from "@/components/voice/voice-recorder";
 
-export function useCoachVoice(onText: (text: string) => void, feature: "program_edit" | "program_notes" = "program_edit") {
+export function useCoachVoice(onText: (text: string) => void, feature: "program_edit" | "program_notes" | "client_context" = "program_edit") {
   const hearFn = useServerFn(transcribeCoachVoiceFn);
   const voice = useVoiceDictation({
     maxMs: 120_000,

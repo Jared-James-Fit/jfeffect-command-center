@@ -34,6 +34,11 @@ export type VoiceAudience = {
   nickname?: string | null;
   /** He's OK with edgy humour (guys only). */
   edgyOk?: boolean | null;
+  /**
+   * The coach's private relationship with them (client_relationships), as a tone
+   * line (relationshipToneLine): how familiar to sound, never what to say.
+   */
+  relationship?: string | null;
 };
 
 export const VOICE_LIST_KEYS = ["everyday", "hype", "emojis", "for_guys", "for_women", "edgy", "banned"] as const;
@@ -166,6 +171,7 @@ export function buildVoicePrompt(
     const nick = audience?.nickname?.trim();
     if (nick) who += ` Their nickname is "${nick}", use it sometimes. Nobody else gets that nickname.`;
     lines.push(`AUDIENCE: ${who}`);
+    if (audience?.relationship?.trim()) lines.push(audience.relationship.trim());
   }
 
   lines.push(`NEVER: em dashes (—), semicolons${p.banned.length ? `, ${list(p.banned)}` : ""}.`);

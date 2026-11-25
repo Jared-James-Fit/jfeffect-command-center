@@ -67,6 +67,7 @@ import { ClientWorkspaceTabs, type WorkspaceTab } from "@/components/clients/cli
 import { LEGACY_WORKSPACE_TABS } from "@/components/clients/client-workspace-tab-model";
 import { TAB_VALUES, type TabValue } from "@/components/clients/client-tab-values";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 const Route = __getRouteApi("/_authenticated/admin/clients/$id");
 
 
@@ -102,6 +103,7 @@ const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const ClientPackageSnapshot = lazyDefault(() => import("@/components/billing/package-snapshot"), "ClientPackageSnapshot");
 const ClientPackageCard = lazyDefault(() => import("@/components/admin/coaching-sales/enrollments-sheet"), "ClientPackageCard");
+const PersonalContextCard = lazyDefault(() => import("@/components/client-context/personal-context"), "PersonalContextCard");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const ClientTrainingTab = lazyDefault(() => import("@/components/clients/client-training-tab"), "ClientTrainingTab");
 
@@ -995,6 +997,12 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
+          {/* Personal context: coach-only (relationship, work & lifestyle with sources, private notes, history) */}
+          <Suspense fallback={<TabFallback />}>
+            <SectionErrorBoundary label="Personal context">
+              <PersonalContextCard clientId={id} className="md:col-span-3" />
+            </SectionErrorBoundary>
+          </Suspense>
           <Suspense fallback={<TabFallback />}>
             <ClientFileNotes clientId={id} className="md:col-span-3" />
           </Suspense>

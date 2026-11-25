@@ -13,6 +13,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const COACH_HINT =
   "A strength coach giving instructions about a training program: exercises (competition squat, bench press, deadlift, RDL, Romanian deadlift, hack squat, lat pulldown, Larsen press, Spoto press, pin squat), sets, reps, RPE, RIR, percentages, back-off sets, top sets, deload, taper, peaking, accumulation, hypertrophy, block, week, day, Monday to Sunday, minutes.";
 
+/** Personal context about a client (client-context/personal-context.tsx): work, schedule, family, interests. */
+const CONTEXT_HINT =
+  "A fitness coach describing one of their clients: their job, employer, work schedule, shifts, night shifts, rotating shifts, commute, family, kids, partner, hobbies, interests, sports, competitions, how they know each other.";
+
 async function limited(userId: string): Promise<boolean> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const db = supabaseAdmin as any;
@@ -29,7 +33,7 @@ export const transcribeCoachVoiceFn = createServerFn({ method: "POST" })
     z.object({
       audio: z.string().min(16).max(6_000_000),
       mime: z.string().max(80),
-      feature: z.enum(["program_edit", "program_notes"]).default("program_edit"),
+      feature: z.enum(["program_edit", "program_notes", "client_context"]).default("program_edit"),
     }).parse(d),
   )
   .handler(async ({ data, context }): Promise<{ ok: true; text: string } | { ok: false; reason: string }> => {
@@ -43,10 +47,11 @@ export const transcribeCoachVoiceFn = createServerFn({ method: "POST" })
     const key = process.env.OPENAI_API_KEY;
     if (!key) return { ok: false, reason: "Voice isn't set up. Type it instead." };
     const started = Date.now();
+    const hint = data.feature === "client_context" ? CONTEXT_HINT : COACH_HINT;
     const { openAiTranscriber, transcribePainAudio } = await import("@/lib/pain/describe.server");
     const { recordAiCall } = await import("@/lib/ai/ai-health.server");
     try {
-      const r = await transcribePainAudio(data.audio, data.mime, [openAiTranscriber(key, "gpt-4o-mini-transcribe", COACH_HINT), openAiTranscriber(key, "whisper-1", COACH_HINT)], 45_000);
+      const r = await transcribePainAudio(data.audio, data.mime, [openAiTranscriber(key, "gpt-4o-mini-transcribe", hint), openAiTranscriber(key, "whisper-1", hint)], 45_000);
       void recordAiCall({ model: r.via, task: "coach_voice", feature: data.feature, ok: true, ms: Date.now() - started });
       return { ok: true, text: r.text };
     } catch (e: any) {

@@ -8,6 +8,8 @@
 import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 import { planCheckin, type CheckinPlan, type PlanInput, type ProgressSchedule } from "@/lib/checkin-coordination/plan";
 import { foldGaps, foldOptions, type FoldQuestion } from "@/lib/checkin-coordination/nutrition-fold";
+import { checkinProfileAsk, keyForLabel, normalizeLifestyle, type ChoiceField } from "@/lib/client-context/lifestyle";
+import { PROFILE_ASK_KEY } from "@/lib/checkin-coordination/steps";
 
 async function safe<T>(run: () => PromiseLike<{ data: T | null; error?: unknown }>, fallback: T): Promise<T> {
   try {
@@ -59,7 +61,7 @@ export async function loadPlanInput(sb: any, clientId: string, due: string, fold
   const { data: c } = await sb.from("clients").select("id, user_id, sex, bodyweight_goal_type, bodyweight_goal_date").eq("id", clientId).maybeSingle();
   if (!c) return null;
   const uid: string | null = c.user_id ?? null;
-  const [bw, preps, photos, tape, schedules, nutrition, plans, roadmap] = await Promise.all([
+  const [bw, preps, photos, tape, schedules, nutrition, plans, roadmap, lifestyle] = await Promise.all([
     uid ? safe<any[]>(() => sb.from("progress_bodyweight").select("logged_date").eq("user_id", uid).lte("logged_date", due).order("logged_date", { ascending: false }).limit(14), []) : Promise.resolve([]),
     safe<any[]>(() => sb.from("pl_preps").select("event_name, title, event_date, weight_class, archived, status").eq("client_id", clientId).gte("event_date", due).order("event_date").limit(3), []),
     uid ? safe<any[]>(() => sb.from("progress_submissions").select("submission_date").eq("user_id", uid).eq("submission_type", "photo").order("submission_date", { ascending: false }).limit(1), []) : Promise.resolve([]),
@@ -69,7 +71,10 @@ export async function loadPlanInput(sb: any, clientId: string, due: string, fold
     safe<any[]>(() => sb.from("nutrition_targets").select("phase, status, start_date").eq("client_id", clientId).neq("status", "Archived").order("start_date", { ascending: false }).limit(1), []),
     // the roadmap's follow-ups, only once the coach approved a roadmap
     safe<any>(() => sb.from("nutrition_roadmaps").select("asks, next_checkin_reason, active_revision_id").eq("client_id", clientId).maybeSingle(), null),
+    // their work & lifestyle profile: one missing answer may ride on the check-in (null when unreadable: nothing asked)
+    safe<any>(() => sb.from("client_lifestyle").select("*").eq("client_id", clientId).maybeSingle().then((r: any) => (r?.error ? r : { data: r?.data ?? {} })), null),
   ]);
+  const ask = lifestyle ? checkinProfileAsk(normalizeLifestyle(lifestyle)) : null;
   const meet = preps.find((p) => !p.archived && !/cancel/i.test(String(p.status ?? ""))) ?? null;
   return {
     due,
@@ -84,6 +89,7 @@ export async function loadPlanInput(sb: any, clientId: string, due: string, fold
     lastMeasurements: tape[0]?.measured_date ? String(tape[0].measured_date).slice(0, 10) : null,
     schedules: schedules.map((s) => ({ kind: s.kind, enabled: !!s.enabled, frequency: s.frequency, customDays: s.custom_days ?? null })) as ProgressSchedule[],
     nutritionPendingSince: nutrition.nutritionPendingSince,
+    profileAsk: ask?.options ? { field: ask.field, prompt: ask.prompt, options: ask.options } : null,
     roadmap: roadmap?.active_revision_id && Array.isArray(roadmap.asks) && roadmap.asks.length ? { asks: roadmap.asks.map(String), reason: roadmap.next_checkin_reason ?? null, sex: /^f/i.test(String(c.sex ?? "")) ? "F" : /^m/i.test(String(c.sex ?? "")) ? "M" : null } : null,
   };
 }
@@ -128,4 +134,35 @@ async function refreshNutrition(admin: any, row: { id: string; client_id: string
   const updated: CheckinPlan = { ...plan, extras: [...plan.extras.filter((e) => e.key !== "nutrition_update"), ...(next ? [next] : [])] };
   await admin.from("messenger_checkins").update({ plan: updated }).eq("id", row.id).eq("status", "pending");
   return updated;
+}
+
+/**
+ * A submitted check-in's one profile question: an answer is saved to their
+ * profile as theirs (client_reported, history kept by the database), and a skip
+ * rests it (CHECKIN_DISMISS_DAYS; two
+ * skips and the check-in never asks it again). Best-effort: the check-in itself
+ * never fails over it. Service role, after the submit handler checked the client.
+ */
+export async function applyCheckinProfileAnswer(admin: any, row: { client_id: string; plan?: CheckinPlan | null }, answers: Record<string, unknown>): Promise<void> {
+  const extra = (row.plan as CheckinPlan | null)?.extras?.find((e) => e.key === "profile");
+  if (!extra?.field) return;
+  const field = extra.field as ChoiceField;
+  try {
+    const { data: cur } = await admin.from("client_lifestyle").select("*").eq("client_id", row.client_id).maybeSingle();
+    const l = normalizeLifestyle(cur ?? {});
+    const now = new Date().toISOString();
+    const st = l.prompt_state[field] ?? {};
+    const value = keyForLabel(field, answers[PROFILE_ASK_KEY]);
+    const body: Record<string, unknown> = { last_source: "client_reported" };
+    // "Prefer not to say" is employment's own answer: stored as given, so it's never asked again
+    if (value) body[field] = value;
+    body.prompt_state = {
+      ...l.prompt_state,
+      [field]: value ? { ...st, asked_at: now } : { ...st, asked_at: now, dismissed_at: now, dismissals: (st.dismissals ?? 0) + 1 },
+    };
+    if (cur) await admin.from("client_lifestyle").update(body).eq("client_id", row.client_id);
+    else await admin.from("client_lifestyle").insert({ client_id: row.client_id, ...body });
+  } catch (e: any) {
+    console.warn("[checkin] profile answer not saved", e?.message);
+  }
 }

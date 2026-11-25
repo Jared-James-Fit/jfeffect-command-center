@@ -52,17 +52,21 @@ export async function loadCoachVoice(sb: any): Promise<VoiceProfile> {
   }
 }
 
-/** Server helper: who the reply is for (guy / girl, nickname, edgy OK). */
+/**
+ * Server helper: who the reply is for (guy / girl, nickname, edgy OK) and the
+ * coach's private relationship with them as a tone line (only readable with a
+ * staff or service-role session; RLS hides it from anyone else).
+ */
 export async function loadVoiceAudience(sb: any, clientId: string | null | undefined): Promise<VoiceAudience | null> {
   if (!clientId) return null;
   try {
-    const { data } = await sb
-      .from("clients")
-      .select("sex, voice_nickname, voice_edgy_ok")
-      .eq("id", clientId)
-      .maybeSingle();
+    const [{ data }, rel] = await Promise.all([
+      sb.from("clients").select("sex, voice_nickname, voice_edgy_ok").eq("id", clientId).maybeSingle(),
+      import("@/lib/client-context/load.server").then((m) => m.loadRelationship(sb, clientId)).catch(() => null),
+    ]);
     if (!data) return null;
-    return { sex: data.sex ?? null, nickname: data.voice_nickname ?? null, edgyOk: !!data.voice_edgy_ok };
+    const { relationshipToneLine } = await import("@/lib/client-context/lifestyle");
+    return { sex: data.sex ?? null, nickname: data.voice_nickname ?? null, edgyOk: !!data.voice_edgy_ok, relationship: relationshipToneLine(rel) };
   } catch {
     return null;
   }
