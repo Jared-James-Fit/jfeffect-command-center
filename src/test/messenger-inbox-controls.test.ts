@@ -141,7 +141,7 @@ describe("the list", () => {
   it("going back from the coach chat shows the list (compose, New group) instead of bouncing", () => {
     const pane = read("src/components/group-chats-pane.tsx");
     expect(pane).toContain("autoOpened.current = true;");
-    expect(pane).toContain("pinned.renderThread({ onBack: closeChat })");
+    expect(pane).toContain("selectedPin.renderThread({ onBack: closeChat })");
     expect(read("src/routes/_authenticated/portal/messages.tsx")).not.toContain("{onBack && (");
   });
   it("a hold that never produced a click can't swallow the next tap", () => {

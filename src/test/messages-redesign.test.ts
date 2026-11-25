@@ -62,7 +62,7 @@ describe("the coach's inbox", () => {
 
   it("puts every narrower view in one Filter menu with counts, Needs reply and Important included", () => {
     expect(page).toContain("<FilterMenu");
-    for (const g of ['"Conversations", filters: ["Reply", "Important"]', '"Forms", filters: ["Weekly", "Nutrition", "To Review", "Overdue"]', '"Training", filters: ["Pain", "Media", "Sessions", "Program"]']) {
+    for (const g of ['"Conversations", filters: ["Reply", "Important", "Support"]', '"Forms", filters: ["Weekly", "Nutrition", "To Review", "Overdue"]', '"Training", filters: ["Pain", "Media", "Sessions", "Program"]']) {
       expect(page).toContain(g);
     }
     expect(page).toContain("Clear filter");
@@ -87,10 +87,10 @@ describe("the client's inbox", () => {
     expect(pane).toContain("data-coach-chat");
     expect(pane).not.toContain("showGrid");
     expect(pane).not.toContain("PinTile");
-    expect(pane).toMatch(/<ChatListRow\s+data-coach-chat[\s\S]*?pinned\n/);
+    expect(pane).toMatch(/<ChatListRow\s+data-coach-chat=\{p === pinned \? true : undefined\}[\s\S]*?pinned\n/);
   });
   it("the coach chat is a 1:1: in All, Unread when there's something new, and 1:1 Chats; never Groups", () => {
-    expect(pane).toContain('inPrimary({ kind: "direct", unread: !!pinned.unread }, filter)');
+    expect(pane).toContain('inPrimary({ kind: "direct", unread: !!p.unread }, filter)');
   });
 });
 

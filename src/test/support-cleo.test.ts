@@ -154,7 +154,7 @@ describe("the coach's Support queue", () => {
   it("Cleo's chats stay out of the Inbox; the Support filter has its own chips", () => {
     const page = read("src/route-pages/_authenticated/admin/messages.tsx");
     expect(page).toContain('filter === "Support" ? inSupportQueue(c, supportQueue) : supportInFilter(c, filter)');
-    expect(page).toContain("SUPPORT_QUEUE_HELP[supportQueue]");
+    expect(page).toContain("SUPPORT_QUEUE_HELP[key]");
     const pane = read("src/components/support/member-support-pane.tsx");
     for (const t of ["Take over", "Return to Cleo", "Re-create", "Draft a reply", "Cleo's summary", "Next: "]) expect(pane).toContain(t);
   });

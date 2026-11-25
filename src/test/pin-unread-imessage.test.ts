@@ -23,7 +23,7 @@ describe("pinned chats are ordinary rows with a pin, like iMessage's list", () =
     const pane = readFileSync("src/components/group-chats-pane.tsx", "utf8");
     expect(pane).toContain("data-coach-chat");
     expect(pane).not.toContain("PinTile");
-    expect(pane).toContain("{showPinned && !selectMode && coachRow}");
+    expect(pane).toContain("{showPinned && !selectMode && pinRows}");
   });
 
   it("the preview says what was sent when there are no words", () => {

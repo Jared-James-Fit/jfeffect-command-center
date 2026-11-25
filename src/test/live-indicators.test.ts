@@ -22,7 +22,7 @@ describe("live indicators: one animated look across the app", () => {
 
   it("a pinned chat is a normal row: live on its photo, the unread dot and the pin on the right", () => {
     const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane).toContain("<LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>");
+    expect(pane).toContain("<LiveAvatar live={p.live} size={CHAT_ROW_AVATAR}>");
     expect(read("src/components/messages/inbox-parts.tsx")).not.toContain("PinTile");
     expect(read("src/components/messages/chat-list-row.tsx")).toContain("data-chat-pinned");
   });
