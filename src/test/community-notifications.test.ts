@@ -38,22 +38,22 @@ describe("crew activity notifications", () => {
     expect(crowdName([vicky], 1)).toBe("Vicky");
     expect(crowdName([vicky, nicole], 2)).toBe("Vicky and Nicole");
     expect(crowdName([vicky, nicole], 4)).toBe("Vicky and 3 others");
-    expect(communityNoticeText(notice({ count: 3, actors: [vicky, nicole], emojis: ["heart", "fire"] })).title).toBe("Vicky and 2 others reacted ❤️🔥 to your workout");
+    expect(communityNoticeText(notice({ count: 3, actors: [vicky, nicole], emojis: ["heart", "fire"] })).title).toBe("Vicky and 2 others liked your workout");
     // hearts read as a like; a real moment reads as what it was for
     expect(communityNoticeText(notice({ count: 2, actors: [vicky, nicole], emojis: ["heart"] })).title).toBe("Vicky and Nicole liked your workout");
-    expect(communityNoticeText(notice({ count: 3, actors: [vicky, nicole], emojis: ["heart"], win: "Belt Squat PR" })).title).toBe("Vicky and 2 others celebrated your Belt Squat PR");
-    expect(communityNoticeText(notice({ emojis: ["fire"], win: "10th session this month" })).title).toBe("Vicky celebrated your 10th session this month 🔥");
+    expect(communityNoticeText(notice({ count: 3, actors: [vicky, nicole], emojis: ["heart"], win: "Belt Squat PR" })).title).toBe("Vicky and 2 others liked your Belt Squat PR");
+    expect(communityNoticeText(notice({ emojis: ["fire"], win: "10th session this month" })).title).toBe("Vicky liked your 10th session this month");
     expect(communityNoticeText(notice({ kind: "comment", snippet: "Strong!", comment_id: "c" }))).toEqual({ title: "Vicky commented on your workout", body: "“Strong!”" });
     expect(communityNoticeText(notice({ kind: "reply", media_type: "audio", comment_id: "c" }))).toEqual({ title: "Vicky replied to your comment", body: "🎤 Voice memo" });
   });
   it("pushes: once each, claimed by whoever did it, never the comment's words", () => {
     expect(sql).toContain("WHERE n.actor_user_id = v_actor AND n.pushed_at IS NULL AND n.created_at > now() - interval '10 minutes'");
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.community_claim_pushes(uuid) TO service_role;");
-    expect(communityPushCopy(push({}))).toEqual({ title: "Vicky reacted 🔥 to your workout", body: "Tap to see it." });
-    expect(communityPushCopy(push({ others: 2 })).title).toBe("Vicky and 2 others reacted to your workout");
+    expect(communityPushCopy(push({}))).toEqual({ title: "Vicky liked your workout", body: "Tap to see it." });
+    expect(communityPushCopy(push({ others: 2 })).title).toBe("Vicky and 2 others liked your workout");
     expect(communityPushCopy(push({ emoji: "heart" }))).toEqual({ title: "Vicky liked your workout", body: "Tap to see it." });
-    expect(communityPushCopy(push({ emoji: "heart", others: 3, win: "Belt Squat PR" }))).toEqual({ title: "Vicky and 3 others celebrated your Belt Squat PR ❤️", body: "Tap to see who." });
-    expect(communityPushCopy(push({ win: "Belt Squat PR" })).title).toBe("Vicky celebrated your Belt Squat PR 🔥");
+    expect(communityPushCopy(push({ emoji: "heart", others: 3, win: "Belt Squat PR" }))).toEqual({ title: "Vicky and 3 others liked your Belt Squat PR", body: "Tap to see who." });
+    expect(communityPushCopy(push({ win: "Belt Squat PR" })).title).toBe("Vicky liked your Belt Squat PR");
     expect(communityPushCopy(push({ kind: "comment", media_type: "audio", post_kind: "lockin" })).title).toBe("Vicky left a voice memo on your lock-in");
     expect(communityPushCopy(push({ kind: "reply" })).title).toBe("Vicky replied to your comment");
   });

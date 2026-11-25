@@ -7,7 +7,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { clipFrame, type ClipFrame } from "@/lib/photo-frame";
-import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
@@ -1413,7 +1413,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
             <div className="flex-1" />
           )}
           {!focused && (
-            <button type="button" onClick={like} aria-pressed={!!mine} aria-label={mine ? "Take it back" : win ? "Celebrate" : "Like"} className="grid h-12 w-12 shrink-0 place-items-center rounded-full active:scale-90" data-story-heart>
+            <button type="button" onClick={like} aria-pressed={!!mine} aria-label={mine ? "Unlike" : "Like"} className="grid h-12 w-12 shrink-0 place-items-center rounded-full active:scale-90" data-story-heart>
               <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
                 {mine && mine !== "heart" ? <span className="text-[28px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-[30px] w-[30px]", mine && "fill-[#ef3340] text-[#ef3340]")} strokeWidth={1.8} />}
               </span>
@@ -1447,7 +1447,7 @@ function momentLine(post: CommunityPost): string {
 /**
  * After the last story: "You're all caught up", then the next good thing,
  * only what's actually there. Stories you didn't get to, a one-tap heart
- * for the moments you watched without celebrating, how your own story is
+ * for the moments you watched without liking, how your own story is
  * doing (or Add yours), and the feed posts you haven't seen. Swipe down,
  * ✕ or Back to the feed to leave.
  */
@@ -1549,7 +1549,7 @@ function StoryEndCard({
           </section>
         )}
 
-        {/* the ones you watched but didn't celebrate: one tap each */}
+        {/* the ones you watched but didn't like: one tap each */}
         {end.celebrate.length > 0 && (
           <section className="mt-7" data-story-end-love>
             <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/55">Give them some love</h3>
@@ -1644,7 +1644,7 @@ function EndLoveRow({ post, viewerIsStaff, onOpen }: { post: CommunityPost; view
         type="button"
         onClick={give}
         aria-pressed={!!mine}
-        aria-label={mine ? "Take it back" : isPulsePost(post) ? "Celebrate" : "Like"}
+        aria-label={mine ? "Unlike" : "Like"}
         className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-90", mine ? "bg-[#ef3340]/15" : "bg-white/10")}
         data-story-end-heart
       >

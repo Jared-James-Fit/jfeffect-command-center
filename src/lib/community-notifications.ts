@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { reactionEmoji, type CommunityAuthor } from "@/lib/community";
+import type { CommunityAuthor } from "@/lib/community";
 
 /** One line in the bell: a post's reactions, one comment / reply, a comment's likes, a new follower, a follow request, or a post's reposts. */
 export type CommunityNotice = {
@@ -60,11 +60,8 @@ export function communityNoticeText(n: CommunityNotice): { title: string; body: 
     : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type ? "Photo" : "";
   switch (n.kind) {
     case "reaction": {
-      // just hearts reads as a like; a PR or milestone reads as what it was for
-      const onlyHearts = n.emojis.every((e) => e === "heart");
-      const faces = onlyHearts ? "" : n.emojis.map((e) => reactionEmoji(e)).filter(Boolean).slice(0, 3).join("");
-      if (n.win) return { title: `${who} celebrated your ${n.win}${faces ? ` ${faces}` : ""}`, body: "" };
-      return { title: onlyHearts ? `${who} liked your ${thing}` : `${who} reacted ${faces} to your ${thing}`, body: "" };
+      // every reaction is a like; a PR or milestone reads as what it was for
+      return { title: `${who} liked your ${n.win ?? thing}`, body: "" };
     }
     case "comment":
       return { title: `${who} commented on your ${thing}`, body: said };

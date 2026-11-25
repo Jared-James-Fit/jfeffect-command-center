@@ -47,7 +47,7 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
     expect(card).toContain("<PulseHero post={post} stats={s} unit={unit} />");
     expect(card).not.toContain("const canProps");
     const stories = read("src/components/community/crew-stories.tsx");
-    expect(stories).toContain('aria-label={mine ? "Take it back" : isPulsePost(post) ? "Celebrate" : "Like"}');
+    expect(stories).toContain('aria-label={mine ? "Unlike" : "Like"}');
   });
 });
 
