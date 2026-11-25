@@ -155,10 +155,13 @@ export function buildSessionPrep(x: SessionPrepInput): SessionPrep {
   if (rec?.top.length) {
     const unit = x.bodyweight?.unit ?? "lb";
     const load = (kg: number) => `${Math.round((unit === "kg" ? kg : kg * 2.20462) * 2) / 2} ${unit}`;
-    for (const r of rec.top.slice(0, 2))
-      goingWell.push({ text: `All-time PR: ${r.exercise} ${load(r.loadKg)} × ${r.reps} (${day(r.date)})`, source: "record" });
+    // records lead: they're the wins the athlete remembers (the shared screen shows five lines at most)
+    const prs: PrepItem[] = rec.top
+      .slice(0, 2)
+      .map((r) => ({ text: `All-time PR: ${r.exercise} ${load(r.loadKg)} × ${r.reps} (${day(r.date)})`, source: "record" as const }));
     const more = rec.total - Math.min(2, rec.top.length);
-    if (more > 0) goingWell.push({ text: `${more} more all-time record${more === 1 ? "" : "s"} in the last 4 weeks`, source: "record" });
+    if (more > 0) prs.push({ text: `${more} more all-time record${more === 1 ? "" : "s"} in the last 4 weeks`, source: "record" });
+    goingWell.unshift(...prs);
   }
 
   // the event
