@@ -280,6 +280,10 @@ function myCachedAuthor(qc: ReturnType<typeof useQueryClient>): CommunityAuthor 
 export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
   const qc = useQueryClient();
   return useMutation({
+    // One post's likes go to the server one at a time, in the order tapped: a quick
+    // like · unlike · like can never land out of order and leave the server on the
+    // wrong answer (each call sets a state, never a toggle, so a retry is the same answer).
+    scope: { id: `community-react:${post.id}` },
     // `next` = the reaction to end up with (null removes it).
     mutationFn: async (next: ReactionKey | null) => {
       const { error } = await db.rpc("community_react", { _post_id: post.id, _emoji: next });
@@ -672,6 +676,8 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
 export function useLikeComment(postId: string) {
   const qc = useQueryClient();
   return useMutation({
+    // in tap order, like useReact
+    scope: { id: `community-like-comment:${postId}` },
     mutationFn: async ({ id, liked }: { id: string; liked: boolean }) => {
       const { error } = await db.rpc("community_like_comment", { _comment_id: id, _liked: liked });
       if (error) throw error;
