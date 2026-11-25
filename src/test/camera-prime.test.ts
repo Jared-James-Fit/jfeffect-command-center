@@ -65,7 +65,8 @@ describe("the camera asked for inside the tap that opens it", () => {
 
   it("every way into the film camera primes it, and the camera takes it on its first ask", () => {
     expect(read("src/components/workout-day/set-video-cell.tsx")).toMatch(/if \(!canFilmInApp\(\)\) return openPicker\(\);\n[^\n]*\n\s*primeCamera\(\);/);
-    expect(read("src/components/camera/use-film-camera.tsx")).toMatch(/if \(!canFilmInApp\(\)\) return false;\n[^\n]*\n\s*primeCamera\(\);/);
+    // a back-camera capture primes in the tap; a selfie one (a profile photo) isn't primed with the back camera
+    expect(read("src/components/camera/use-film-camera.tsx")).toMatch(/if \(!canFilmInApp\(\)\) return false;\n(?:[^\n]*\n){1,2}\s*if \(!purpose \|\| PURPOSES\[purpose\]\.facing === "environment"\) primeCamera\(\);/);
     const cam = read("src/components/camera/film-camera.tsx");
     expect(cam).toContain("const primed = first ? takePrimedCamera(ask) : null;");
   });

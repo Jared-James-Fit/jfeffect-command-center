@@ -9,10 +9,13 @@ import type { useSlideTray, TrayItem } from "@/components/community/slide-tray";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
   RECENTS,
+  ROLL_HOLD_MS,
+  ROLL_LIMITED_SEEN_KEY,
   ROLL_PAGE,
   ROLL_THUMB,
   RollCancelled,
   canSeePhotos,
+  limitedNotice,
   loadRollFile,
   nativePhotos,
   rollTap,
@@ -254,13 +257,14 @@ export function CameraRoll({
 
   const allPickedKeys = () => [...Object.keys(picks), ...extras.map((it) => it.id)];
 
-  const tapAsset = async (a: RollAsset) => {
+  const tapAsset = async (a: RollAsset, badge = false, forceMulti = false) => {
     const plan = rollTap({
-      multi,
+      multi: multi || forceMulti,
       picked: allPickedKeys(),
       showing: showingKey,
       key: a.id,
       max: MAX_SLIDES,
+      badge,
     });
     if (plan.kind === "focus") {
       const tid = picks[a.id];
@@ -283,7 +287,7 @@ export function CameraRoll({
     }
     feedback("tap");
     const mine = ++gen.current;
-    const single = !multi;
+    const single = !multi && !forceMulti;
     // one at a time: the tiles show the new pick at once; the old slide goes once the new one's in
     const replaceTray = single ? list.map((it) => it.id) : [];
     setPicks((p) => (single ? { [a.id]: null } : { ...p, [a.id]: null }));
@@ -346,19 +350,29 @@ export function CameraRoll({
     }
   };
 
-  const tapExtra = (it: TrayItem) => {
+  const tapExtra = (it: TrayItem, badge = false) => {
     const plan = rollTap({
       multi,
       picked: allPickedKeys(),
       showing: showingKey,
       key: it.id,
       max: MAX_SLIDES,
+      badge,
     });
     if (plan.kind === "remove" || (!multi && it.id === showing)) {
       if (plan.kind === "remove") tray.remove(it.id);
       return;
     }
     onShow(it.id);
+  };
+
+  // a hold on a tile one at a time: Select comes on with the one showing kept as 1 and this one added (Instagram's)
+  const holdAsset = (a: RollAsset) => {
+    if (multi) return;
+    feedback("press");
+    onMulti(true);
+    if (picks[a.id] !== undefined) return;
+    void tapAsset(a, false, true);
   };
 
   // Select off with several picked: the one showing stays (Instagram keeps one)
@@ -399,6 +413,18 @@ export function CameraRoll({
 
   const { expanded, ...headProps } = head;
   const seeing = canSeePhotos(access);
+  // limited access is said once (the first time), then only a quiet Manage in the head: never a nag
+  const [limitedSay] = useState(() => limitedNotice("limited", safeLocal()));
+  const limited = access === "limited" ? limitedSay : null;
+  useEffect(() => {
+    if (access !== "limited") return;
+    try {
+      safeLocal()?.setItem(ROLL_LIMITED_SEEN_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+  }, [access]);
+  const manage = () => void plugin?.manageLimited().catch(() => undefined);
   useEffect(() => onSeeing?.(seeing), [seeing, onSeeing]);
   return (
     <>
@@ -427,6 +453,17 @@ export function CameraRoll({
             </button>
           </span>
           <span className="flex shrink-0 items-center gap-1.5" data-composer-source>
+            {limited === "quiet" && (
+              <button
+                type="button"
+                onClick={manage}
+                className="h-8 rounded-full px-2 text-[13px] font-semibold text-white/70 active:opacity-60"
+                aria-label="Manage which photos JF Effect can see"
+                data-roll-manage
+              >
+                Manage
+              </button>
+            )}
             {multi && list.length + loadingCount > 0 && (
               <span
                 className="text-[13px] font-medium tabular-nums text-white/55"
@@ -459,7 +496,7 @@ export function CameraRoll({
         data-no-swipe-back
         data-camera-roll={access ?? "loading"}
       >
-        {access === "limited" && (
+        {limited === "banner" && (
           <div
             className="flex items-center justify-between gap-3 px-4 pb-2 text-[13px] text-white/70"
             data-roll-limited
@@ -467,7 +504,7 @@ export function CameraRoll({
             <span>You've allowed some of your photos.</span>
             <button
               type="button"
-              onClick={() => void plugin?.manageLimited().catch(() => undefined)}
+              onClick={manage}
               className="shrink-0 font-semibold text-white active:opacity-60"
             >
               Manage
@@ -534,7 +571,7 @@ export function CameraRoll({
             {extras.map((it) => (
               <Tile
                 key={it.id}
-                thumb={it.preview}
+                thumb={it.tile ?? it.preview}
                 video={it.kind === "video" ? (it.seconds ?? null) : null}
                 number={order.get(it.id) ?? null}
                 multi={multi}
@@ -542,7 +579,7 @@ export function CameraRoll({
                 loading={it.status === "preparing" && !it.preview}
                 progress={null}
                 label={`${it.kind === "video" ? "Clip" : "Photo"} from the camera`}
-                onTap={() => tapExtra(it)}
+                onTap={(badge) => tapExtra(it, badge)}
                 extra
               />
             ))}
@@ -561,7 +598,8 @@ export function CameraRoll({
                   loading={picked && tid === null}
                   progress={progress[a.id] ?? null}
                   label={`${a.kind === "video" ? `Video, ${tileClock(a.duration)}` : "Photo"}${picked ? ", picked" : ""}`}
-                  onTap={() => void tapAsset(a)}
+                  onTap={(badge) => void tapAsset(a, badge)}
+                  onHold={multi ? undefined : () => holdAsset(a)}
                 />
               );
             })}
@@ -685,6 +723,7 @@ function Tile({
   progress,
   label,
   onTap,
+  onHold,
   extra = false,
 }: {
   thumb: string | null;
@@ -696,14 +735,47 @@ function Tile({
   loading: boolean;
   progress: number | null;
   label: string;
-  onTap: () => void;
+  /** `badge`: the tap was on a picked tile's number (Select on): take it off at once. */
+  onTap: (badge: boolean) => void;
+  /** A hold (one at a time): Select on, this one picked. */
+  onHold?: () => void;
   extra?: boolean;
 }) {
   const isPicked = picked || extra;
+  const hold = useRef<{ t: number; x: number; y: number; fired: boolean } | null>(null);
+  const clear = () => {
+    if (hold.current) window.clearTimeout(hold.current.t);
+  };
   return (
     <button
       type="button"
-      onClick={onTap}
+      onClick={(e) => {
+        if (hold.current?.fired) {
+          hold.current = null;
+          return;
+        }
+        onTap(!!(e.target as Element).closest?.("[data-roll-badge]"));
+      }}
+      onPointerDown={(e) => {
+        if (!onHold) return;
+        clear();
+        const at = { t: 0, x: e.clientX, y: e.clientY, fired: false };
+        at.t = window.setTimeout(() => {
+          at.fired = true;
+          onHold();
+        }, ROLL_HOLD_MS);
+        hold.current = at;
+      }}
+      onPointerMove={(e) => {
+        const h = hold.current;
+        if (h && !h.fired && Math.hypot(e.clientX - h.x, e.clientY - h.y) > 10) clear();
+      }}
+      onPointerUp={clear}
+      onPointerCancel={() => {
+        clear();
+        hold.current = null;
+      }}
+      onContextMenu={(e) => onHold && e.preventDefault()}
       className="relative aspect-[3/4] select-none overflow-hidden bg-zinc-900 [-webkit-touch-callout:none] active:opacity-80"
       aria-label={label}
       aria-pressed={isPicked}
@@ -728,15 +800,25 @@ function Tile({
         </span>
       )}
       {multi && (
+        // a picked tile's number is its quick ✕: a tap on it takes it off (a bigger target than it looks)
         <span
           className={cn(
-            "pointer-events-none absolute right-1.5 top-1.5 grid h-[22px] min-w-[22px] place-items-center rounded-full border-[1.5px] border-white px-1 text-[12px] font-bold text-white shadow",
+            "absolute right-0 top-0 grid h-9 w-9 place-items-center",
+            isPicked ? "pointer-events-auto" : "pointer-events-none",
+          )}
+          data-roll-badge={isPicked ? "" : undefined}
+          aria-hidden
+        >
+        <span
+          className={cn(
+            "grid h-[22px] min-w-[22px] place-items-center rounded-full border-[1.5px] border-white px-1 text-[12px] font-bold text-white shadow",
             isPicked ? "bg-primary animate-in zoom-in-50 duration-200" : "bg-black/20",
           )}
         >
           {isPicked
             ? (number ?? (loading ? <Loader2 className="h-3 w-3 animate-spin" /> : null))
             : null}
+        </span>
         </span>
       )}
       {loading && (
@@ -755,6 +837,14 @@ function Tile({
       )}
     </button>
   );
+}
+
+function safeLocal(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function Ring({ p }: { p: number }) {

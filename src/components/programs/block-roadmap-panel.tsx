@@ -60,6 +60,7 @@ export function BlockRoadmapPanel({ blockId, bare }: { blockId: string; bare?: b
     try {
       const r = await rewriteFn({ data: { blockId } });
       if (r.outcome === "empty") toast.message("Nothing programmed in this block yet, so there's nothing to describe.");
+      else if (r.outcome === "no_consent") toast.message("This client hasn't allowed AI processing, so the notes weren't rewritten. Write them by hand, or ask them to allow it in Account → Privacy & data.");
       else toast.success("Rewrote this block's notes from the program. Your own wording was kept.");
       refresh();
     } catch (e: any) {

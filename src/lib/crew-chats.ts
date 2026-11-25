@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import type { CommunityAuthor } from "@/lib/community";
 import { directThreadsKey, friendlyError } from "@/lib/direct-chats";
+import { firstName, groupPreview } from "@/lib/group-row";
 
 const db = supabase as any;
 
@@ -29,7 +30,8 @@ export type CrewThread = {
   faces: CommunityAuthor[];
   joined: number;
   invited: number;
-  last: { body: string; created_at: string; sender_id: string | null; sender_name: string | null; card: boolean; media: boolean } | null;
+  /** The latest message; `attachments` says what was sent when there are no words. */
+  last: { body: string; created_at: string; sender_id: string | null; sender_name: string | null; card: boolean; media: boolean; attachments?: unknown } | null;
   last_at: string;
   read_at: string | null;
 };
@@ -89,9 +91,13 @@ export function crewPreview(t: CrewThread, me: string | null | undefined) {
   if (t.status === "invited") return `${t.invited_by ?? "Someone"} invited you`;
   const l = t.last;
   if (!l) return "No messages yet";
-  const text = l.body?.trim() || (l.card ? "Shared a post" : l.media ? "Sent an attachment" : "Message");
-  if (l.sender_id === me) return `You: ${text}`;
-  return l.sender_name ? `${l.sender_name}: ${text}` : text;
+  // the same line as every group: who sent it, then the words or what it was ("📷 Photo")
+  if (!l.body?.trim() && l.attachments === undefined) {
+    const text = l.card ? "Shared a post" : l.media ? "📎 Attachment" : "Message";
+    if (l.sender_id === me) return `You: ${text}`;
+    return l.sender_name ? `${firstName(l.sender_name)}: ${text}` : text;
+  }
+  return groupPreview(l, me);
 }
 
 /** "Amanda, Dwayne and 3 others". */

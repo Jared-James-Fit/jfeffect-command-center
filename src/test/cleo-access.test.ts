@@ -120,7 +120,7 @@ describe("Cleo access: the screens follow it", () => {
   it("every way in waits for useCleoAccess", () => {
     expect(read("routes/_authenticated/admin/route.tsx")).toContain("{cleoOn && <SummerAssistant />}");
     const inbox = read("route-pages/_authenticated/admin/messages.tsx");
-    expect(inbox).toContain("{cleoOn && !search && (");
+    expect(inbox).toContain("{pinnedSystem && cleoOn && (");
     expect(inbox).not.toContain('role === "admin" && !search && (\n            // Cleo');
     expect(read("components/admin/finance/finance-home.tsx")).toMatch(/\{cleoOn && <QuickAction icon=\{MessageCircle\} label=\{`Ask \$\{ASSISTANT_NAME\}`\}/);
     expect(read("components/admin/money/money-workspace.tsx")).toContain("{cleoOn && (");

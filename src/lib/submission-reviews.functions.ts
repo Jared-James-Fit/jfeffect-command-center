@@ -495,6 +495,8 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => GenerateInput.parse(d))
   .handler(async ({ data, context }) => {
     const { row } = await assertCanTouchReview(context.supabase, context.userId, data.reviewId);
+    // their answers go to OpenAI only with the client's permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(row.client_id);
     const sb = await admin();
 
     // 1. Mark review as processing

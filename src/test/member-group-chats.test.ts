@@ -61,7 +61,7 @@ describe("group chats members start: invites first, everything quiet", () => {
   it("private like DMs: coaches don't see them, can't manage them, and aren't in the people picker", () => {
     expect(sql).toContain("SELECT coalesce(public.chat_kind(_group_id), 'group') = 'group' AND (");
     expect(read("src/components/crew-chat.tsx")).toContain("members.map((m) => m.author).filter((a) => !a.is_coach && !exclude.has(a.user_id))");
-    expect(read("src/components/group-chats-pane.tsx")).toContain("useCrewThreads(!asAdmin && !isImpersonating)");
+    expect(read("src/components/group-chats-pane.tsx")).toContain("useCrewThreads(!isImpersonating)");
   });
 
   it("pushes: invites once each, messages only to people who've joined", () => {

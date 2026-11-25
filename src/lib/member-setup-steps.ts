@@ -55,6 +55,28 @@ export function setupStepsFor(m: SetupMember | null | undefined): readonly Setup
 
 const filled = (s: string | null | undefined) => !!s && s.trim().length > 0;
 
+const STEP_FIELDS: Record<SetupStep, string[]> = {
+  photo: ["avatar_url"],
+  contact: ["phone", "sms_consent"],
+  basics: ["date_of_birth", "address_line1", "emergency_contact_name", "emergency_contact_phone"],
+  goals: ["goals", "training_background"],
+  schedule: ["committed_training_days"],
+};
+
+/**
+ * The steps still to do, in order: never one whose answers are already in
+ * (a member approved from an application has their goal and experience from
+ * it, so a free member's setup is only their training days, well under a
+ * minute). Everything done: the whole list, for someone who reopens setup.
+ */
+export function openSetupSteps(m: SetupMember | null | undefined): readonly SetupStep[] {
+  const steps = setupStepsFor(m);
+  if (!m) return steps;
+  const missing = new Set(setupMissing(m));
+  const open = steps.filter((s) => STEP_FIELDS[s].some((f) => missing.has(f)));
+  return open.length ? open : steps;
+}
+
 /** What's still missing (empty = setup is done). Same rules as member_setup_complete. */
 export function setupMissing(m: SetupMember): string[] {
   const missing: string[] = [];

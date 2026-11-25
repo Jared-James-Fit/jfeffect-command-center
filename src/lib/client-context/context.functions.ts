@@ -160,6 +160,10 @@ export const extractContextFn = createServerFn({ method: "POST" })
   .inputValidator((d: { clientId: string; text: string }) => z.object({ clientId: z.string().uuid(), text: z.string().trim().min(2).max(EXTRACT_MAX_INPUT) }).parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; extraction: Extraction } | { ok: false; reason: string }> => {
     await staffOnly(context, data.clientId);
+    // the coach's notes about a client go to OpenAI only with the client's permission (5.1.2(i), src/lib/ai-consent)
+    const { clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
+    const consent = await clientAllowsAi(data.clientId);
+    if (!consent.ok) return { ok: false, reason: (await import("@/lib/ai-consent/consent")).coachConsentMessage(consent.name) };
     const sb = context.supabase as any;
     const { loadContextFacts } = await import("@/lib/client-context/load.server");
     const [{ data: client }, current, facts] = await Promise.all([

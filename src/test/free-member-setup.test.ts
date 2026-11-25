@@ -6,6 +6,7 @@ import {
   isFreeAccount,
   setupMissing,
   setupStepsFor,
+  openSetupSteps,
   setupStillOpen,
 } from "@/lib/member-setup-steps";
 
@@ -61,7 +62,17 @@ describe("a free account's setup is its training, nothing else", () => {
     );
     expect(SQL).toContain("AND array_length(m.committed_training_days, 1) >= 1");
     const wizard = readFileSync("src/components/member/member-setup-wizard.tsx", "utf8");
-    expect(wizard).toContain("const STEPS = setupStepsFor(m);");
+    // only the steps still open (setupStepsFor's, minus what's answered)
+    expect(wizard).toContain("const STEPS = openSetupSteps(m);");
+  });
+
+  it("never re-asks what the application gave: a free member approved from one is asked only their days", () => {
+    const fromApplication = { subscription_status: "Free", goals_tags: ["build_muscle"], experience_level: "beginner" };
+    expect(openSetupSteps(fromApplication)).toEqual(["schedule"]);
+    expect(openSetupSteps({ subscription_status: "Free" })).toEqual(FREE_SETUP_STEPS);
+    // all done: reopening setup shows every step
+    expect(openSetupSteps({ ...fromApplication, committed_training_days: ["mon"] })).toEqual(FREE_SETUP_STEPS);
+    expect(openSetupSteps({ subscription_status: "Active", goals: "x", experience_level: "b" })).toEqual(["photo", "contact", "basics", "schedule"]);
   });
 });
 

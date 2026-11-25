@@ -160,6 +160,9 @@ export async function processMilestone(
   };
   const state: any = m.progress ?? {};
   try {
+    // the athlete's records go to OpenAI only with their permission (5.1.2(i), src/lib/ai-consent): refused,
+    // the milestone fails with the words for the coach, no model is asked
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(m.client_id);
     const { assertProviderUp } = await import("@/lib/ai/ai-health.server");
     await assertProviderUp("openai");
     const kind = m.kind as MilestoneKind;

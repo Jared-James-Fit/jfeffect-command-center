@@ -5,10 +5,13 @@
  */
 
 export type InboxFilterKey =
-  | "Inbox" | "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Pain" | "Media" | "Sessions" | "Program" | "Archived";
+  | "Inbox" | "Reply" | "Important" | "Support" | "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Pain" | "Media" | "Sessions" | "Program" | "Archived";
 
 /** What a filter shows, one sentence each. */
 export const FILTER_HELP: Record<Exclude<InboxFilterKey, "Inbox">, string> = {
+  Reply: "A client wrote and is waiting on your answer. Swipe a chat and tap Done when it needs nothing more.",
+  Important: "Chats you marked Important or High Priority in the chat's ⋯.",
+  Support: "JF Effect Support as a queue: Needs Me (Cleo handed it to you, or you took it over), Unread, Waiting on Member, Cleo Handling, Resolved and All.",
   Weekly: "Weekly check-ins a client sent in that you haven't reviewed, and ones that are overdue.",
   Nutrition: "Nutrition Updates a client sent in that you haven't reviewed, and ones that are overdue.",
   "To Review": "Every form a client sent in that you haven't reviewed yet.",
@@ -17,7 +20,7 @@ export const FILTER_HELP: Record<Exclude<InboxFilterKey, "Inbox">, string> = {
   Media: "Photos and videos a client sent in the last 2 weeks that you haven't replied to or reacted to.",
   Sessions: "A client asked for a session and is waiting on your answer.",
   Program: "A client's upcoming workouts are missing something they need to follow them: an RPE, RIR or weight, a max a % reads, a date, or training days. Amber when it's this week.",
-  Archived: "Chats you archived, and members' Support chats you marked Done. One comes back to the Inbox when they write.",
+  Archived: "Chats you archived, and Support chats you resolved. A resolved Support chat goes back to Cleo first when they write.",
 };
 
 /** The Inbox's line: how many chats have a new message, the same number as the Messages tab. */
@@ -39,7 +42,7 @@ export const GUIDE_ROW: { title: string; body: string }[] = [
   { title: "The line under a name", body: "What's waiting on you, most important first: red is pain, amber is overdue, blue is something to review." },
   { title: "Their photo or that line", body: "Opens the Brief: everything waiting on you for that client, with a short summary." },
   { title: "Swipe a chat left", body: "Read or Unread, Done when no reply is needed, and Archive for a chat that's finished." },
-  { title: "JF member · Support", body: "A free member (no coach) writing to Support in their app. Reply right here: they get a push and read it on their Support screen." },
+  { title: "JF member · Support", body: "Someone writing to JF Effect Support from their Messages: a free member (no coach), or a coaching client asking about the app (\"Client · JF Effect Support\", apart from your coaching chat). Reply right here: they get a push and read it in their Messages." },
 ];
 
 export const GUIDE_FILTERS_NOTE = "A filter only shows while something's in it. Its number is how many clients are in it, in the colour of their line: red is pain, amber is overdue, blue is something to review.";

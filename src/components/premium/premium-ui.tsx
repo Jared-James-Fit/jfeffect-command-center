@@ -2,16 +2,17 @@
  * Premium's pieces in the app (premium.ts): whether the signed-in person has
  * it, Build with Cleo (a program drafted from their profile into the builder,
  * unsaved, everything editable) and the Cleo inbox (welcome, weekly recaps).
- * Each renders nothing for someone without Premium, which today is everyone
+ * Each is nothing for someone without Premium, which today is everyone
  * but a complimentary grant.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import type { PinnedChat } from "@/components/group-chats-pane";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { GOALS, LEVELS, type ProgramGoal, type ProgramLevel } from "@/lib/athlete-programs";
@@ -154,64 +155,62 @@ export function BuildWithCleoSheet({ open, onOpenChange }: { open: boolean; onOp
 
 /* ───────────────────────── the Cleo inbox ───────────────────────── */
 
-/** The row above a Premium member's chats, and its thread (welcome, weekly recaps). */
-export function CleoInboxRow() {
+/**
+ * A Premium member's Cleo chat, pinned in Messages after their coach and
+ * Support (welcome, weekly recaps). Null for everyone else, so the inbox is
+ * exactly as it was. `?cleo=1` (the recap's push) opens it.
+ */
+export function useCleoPin(): PinnedChat | null {
   const premium = usePremium();
   const fn = useServerFn(listMyCleoInbox);
   const readFn = useServerFn(markCleoInboxRead);
   const qc = useQueryClient();
   const inbox = useQuery({ queryKey: ["cleo-inbox"], queryFn: () => fn(), enabled: premium, staleTime: 60_000 });
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (premium && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("cleo") === "1") setOpen(true);
-  }, [premium]);
-  const items = inbox.data?.items ?? [];
-  const markRead = useMutation({
-    mutationFn: (ids: string[]) => readFn({ data: { ids } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cleo-inbox"] }),
-  });
-  useEffect(() => {
-    if (!open) return;
-    const ids = items.filter((i) => !i.read_at).map((i) => i.id);
-    if (ids.length) markRead.mutate(ids);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, items.length]);
+  const [arrival] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("cleo") === "1");
   if (!premium || !inbox.data?.premium) return null;
-  const unread = unreadCount(items);
+  const items = inbox.data.items;
   const latest = items[0];
+  return {
+    id: "cleo",
+    name: "Cleo",
+    avatarUrl: null,
+    preview: latest ? latest.title : "Your weekly recaps land here",
+    at: latest?.created_at ?? null,
+    unread: unreadCount(items) > 0,
+    searchText: `Cleo recap week ${latest?.title ?? ""}`,
+    openOnArrival: arrival,
+    markRead: async () => {
+      const ids = items.filter((i) => !i.read_at).map((i) => i.id);
+      if (!ids.length) return;
+      await readFn({ data: { ids } });
+      void qc.invalidateQueries({ queryKey: ["cleo-inbox"] });
+    },
+    renderThread: ({ onBack }) => <CleoThread items={items} onBack={onBack} />,
+  };
+}
+
+function CleoThread({ items, onBack }: { items: CleoInboxItem[]; onBack: () => void }) {
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        data-cleo-inbox
-        className="flex min-h-[64px] w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition hover:bg-secondary/40"
-      >
-        <CleoAvatar />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold">Cleo</span>
-          <span className="block truncate text-[13px] text-muted-foreground">{latest ? latest.title : "Your weekly recaps land here"}</span>
-        </span>
-        {unread > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{unread}</span>}
-      </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="mx-auto h-[88dvh] max-w-lg overflow-y-auto rounded-t-3xl pb-[max(env(safe-area-inset-bottom),1rem)]">
-          <SheetHeader className="text-left">
-            <div className="flex items-center gap-2.5">
-              <CleoAvatar size="sm" />
-              <SheetTitle>Cleo</SheetTitle>
-            </div>
-            <SheetDescription>Cleo · AI assistant. Recaps come straight from what you logged.</SheetDescription>
-          </SheetHeader>
-          <div className="mt-4 grid gap-4">
-            {items.length === 0 && <p className="text-[15px] text-muted-foreground">Nothing yet. Your first recap lands the Monday after a week of training.</p>}
-            {items.map((m) => (
-              <InboxItem key={m.id} item={m} />
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
+    <div className="flex h-full min-h-0 flex-col" data-cleo-inbox>
+      <header className="flex items-center gap-2.5 border-b border-border bg-card/80 px-3 py-2 backdrop-blur md:px-6">
+        <button type="button" onClick={onBack} aria-label="All chats" className="grid h-10 w-10 shrink-0 place-items-center rounded-full md:hidden">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <CleoAvatar size="sm" />
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold leading-tight">Cleo</div>
+          <div className="text-[12px] text-muted-foreground">AI assistant · recaps from what you logged</div>
+        </div>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6">
+        <div className="mx-auto grid max-w-lg gap-4">
+          {items.length === 0 && <p className="text-[15px] text-muted-foreground">Nothing yet. Your first recap lands the Monday after a week of training.</p>}
+          {items.map((m) => (
+            <InboxItem key={m.id} item={m} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

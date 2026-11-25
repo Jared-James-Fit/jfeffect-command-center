@@ -20,7 +20,7 @@ export const transcribeVoiceMessage = createServerFn({ method: "POST" })
     // Verify caller can access this message (RLS-scoped client)
     const { data: msg, error: mErr } = await supabase
       .from("messages")
-      .select("id, client_id, attachments, transcript, transcript_status")
+      .select("id, client_id, sender_role, attachments, transcript, transcript_status")
       .eq("id", data.messageId)
       .maybeSingle();
     if (mErr || !msg) throw new Error("Message not found or access denied");
@@ -47,6 +47,15 @@ export const transcribeVoiceMessage = createServerFn({ method: "POST" })
       return { ok: true as const, transcript: ((msg as any).transcript as string | null) ?? "" };
     }
     if (status === "processing") return { ok: false as const, status: 409 };
+
+    // The recording goes to Google (Gemini) only with the speaker's permission (5.1.2(i),
+    // src/lib/ai-consent): a client's memo needs the client's, whoever asks for the transcript;
+    // a coach's memo the caller's (staff always pass). Without it the memo stays a memo.
+    const { userAllowsAi, clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
+    const allowed = (msg as any).sender_role === "client"
+      ? (await clientAllowsAi((msg as any).client_id)).ok
+      : await userAllowsAi((context as any).userId);
+    if (!allowed) return { ok: false as const, status: 403 };
 
     // Coach chats are the coaching layer; a member's account has none.
     const { data: chatClient } = await supabaseAdmin

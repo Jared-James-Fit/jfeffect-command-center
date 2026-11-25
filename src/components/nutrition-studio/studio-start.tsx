@@ -42,6 +42,7 @@ import {
 } from "@/lib/nutrition-import/import.functions";
 import { usableTargets, type CreateAnswers } from "@/lib/nutrition-import/create";
 import { seedFromPlan, type StudioSeed } from "@/lib/nutrition-import/seed";
+import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
 
 type Mode = "import" | "cleo";
 
@@ -148,7 +149,7 @@ function StudioStart({ mode }: { mode: Mode }) {
 function CleoStart({ onStarted }: { onStarted: (id: string) => void }) {
   const targetsFn = useServerFn(getActiveMemberTargets);
   const targetsQ = useQuery({ queryKey: ["m-nutrition-targets-studio"], queryFn: () => targetsFn({}), retry: false });
-  const start = useServerFn(startMealPlanCreate);
+  const start = useAiConsentAware(useServerFn(startMealPlanCreate));
   const credits = useAiCredits();
   const setCredits = useSetCreditState();
   const [busy, setBusy] = useState(false);
@@ -263,7 +264,7 @@ function ImportState({
 }
 
 function Failed({ row, mode, onReset, reload }: { row: MealImportRow; mode: Mode; onReset: () => void; reload: () => Promise<void> }) {
-  const retry = useServerFn(retryMealPlanImport);
+  const retry = useAiConsentAware(useServerFn(retryMealPlanImport));
   const setCredits = useSetCreditState();
   const [busy, setBusy] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);

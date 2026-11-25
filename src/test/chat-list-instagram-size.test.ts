@@ -47,12 +47,15 @@ describe("chat lists are Instagram's size", () => {
   });
 
   it("filter chips are Instagram's: the one you're on is a grey fill, never the brand red", () => {
+    // one set of chips for the coach and the client (inbox-chips.tsx)
+    const chips = read("src/components/messages/inbox-chips.tsx");
+    expect(chips).toContain('on ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60"');
+    expect(chips).not.toContain("bg-primary");
     const admin = read("src/route-pages/_authenticated/admin/messages.tsx");
-    expect(admin).toContain('on ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60"');
+    expect(admin).toContain("<InboxControls");
     expect(admin).not.toContain('"bg-primary-foreground/25 text-primary-foreground"');
     const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane).toContain('filter === key ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60"');
-    expect(pane).not.toContain('filter === key ? "border-primary bg-primary');
+    expect(pane).toContain("<InboxControls");
   });
 
   it("muted shows the bell; a row holding its own button is a div acting as one", () => {
@@ -81,10 +84,11 @@ describe("chat lists are Instagram's size", () => {
     expect(admin).toContain("size={CHAT_ROW_AVATAR}");
     expect(admin).not.toContain('className="border-b border-border/60"');
     const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane.match(/<ChatListRow/g)?.length).toBe(2); // coach-run groups + the pinned coach chat
-    expect(pane).toContain("at={pinned.at}");
+    expect(pane.match(/<ChatListRow/g)?.length).toBe(1); // the fixed chats (the coach, JF Effect Support)
+    expect(read("src/components/messages/group-thread-pane.tsx")).toContain("<ChatListRow"); // coach-run groups, both inboxes
+    expect(pane).toContain("at={p.at}");
     expect(read("src/components/direct-chat.tsx").match(/<ChatListRow/g)?.length).toBe(2); // 1:1s + Requests
-    expect(read("src/components/crew-chat.tsx")).toContain("<CrewFaces faces={thread.faces} size={CHAT_ROW_AVATAR} />");
+    expect(read("src/components/crew-chat.tsx")).toContain("<CrewFaces faces={thread.faces} total={crewOthers(thread)} size={CHAT_ROW_AVATAR} />");
     // the client's pinned coach chat hands the row a time, not a formatted string
     expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain("at: coachLast?.created_at ?? null,");
   });

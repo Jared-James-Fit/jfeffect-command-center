@@ -12,7 +12,9 @@ import {
   needsDecision,
   needsFirstReply,
   sortForReview,
+  type MemberApplication,
 } from "@/lib/membership-apply";
+import { NO_FACTS, lifecycleGroup, lifecycleStage, type ApplicantFacts } from "@/lib/applications/lifecycle";
 
 export const MEMBER_APPLICATIONS_KEY = ["member-applications"] as const;
 
@@ -29,14 +31,24 @@ export function useMemberApplications() {
     refetchInterval: 60_000,
   });
   const all = sortForReview(query.data?.applications ?? []);
+  const facts = query.data?.facts ?? {};
+  const factsFor = (id: string): ApplicantFacts => facts[id] ?? NO_FACTS;
+  // where each one is on the path (lifecycle.ts), from what happened
+  const stageOf = (a: MemberApplication) => lifecycleStage(a, factsFor(a.id));
+  const group = (a: MemberApplication) => lifecycleGroup(stageOf(a));
+  const live = all.filter((a) => !a.archived_at);
   return {
     ...query,
     enabled: role === "admin",
     all,
-    pending: all.filter(needsDecision),
-    firstReply: all.filter(needsFirstReply),
-    invited: all.filter(awaitingActivation),
-    done: all.filter((a) => !needsDecision(a) && !awaitingActivation(a)),
+    factsFor,
+    stageOf,
+    pending: live.filter(needsDecision),
+    firstReply: live.filter(needsFirstReply),
+    invited: live.filter((a) => awaitingActivation(a) && group(a) === "invited"),
+    /** In the app, not training yet: setup (Onboarding) or no first workout (Ready to start). */
+    starting: live.filter((a) => group(a) === "starting"),
+    done: all.filter((a) => group(a) === "earlier"),
   };
 }
 

@@ -141,7 +141,7 @@ describe("the list", () => {
   it("going back from the coach chat shows the list (compose, New group) instead of bouncing", () => {
     const pane = read("src/components/group-chats-pane.tsx");
     expect(pane).toContain("autoOpened.current = true;");
-    expect(pane).toContain("pinned.renderThread({ onBack: closeChat })");
+    expect(pane).toContain("selectedPin.renderThread({ onBack: closeChat })");
     expect(read("src/routes/_authenticated/portal/messages.tsx")).not.toContain("{onBack && (");
   });
   it("a hold that never produced a click can't swallow the next tap", () => {
@@ -161,7 +161,7 @@ describe("live in chat means in the conversation", () => {
     expect(hook).toContain("const here = inConversation && visible;");
     expect(hook).toContain("if (hereRef.current) void channel.track(");
     expect(hook).toContain("else void ch.untrack();");
-    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('useChatPresence(selectedId, "admin", tab !== "groups" && !!selected && !selectedIsMember)');
+    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('useChatPresence(selectedId, "admin", !openGroup && !!selected && !selectedIsMember)');
     expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain('"client", coachChatOpen)');
     expect(read("src/components/group-chats-pane.tsx")).toContain("onPinnedOpenChange?.(pinnedOpen);");
   });

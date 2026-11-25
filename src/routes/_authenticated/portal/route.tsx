@@ -20,6 +20,8 @@ import { useWarmClientPages } from "@/lib/portal-page-queries";
 import { useCommunityActivity } from "@/lib/community.queries";
 import { AiCreditsReturn } from "@/components/ai-credits/ai-credits";
 import { MembershipPendingGate } from "@/components/member/membership-pending-gate";
+import { TutorialGate } from "@/components/tutorials/tutorials";
+import { AiConsentPrompt } from "@/components/ai-consent/ai-consent";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
@@ -58,10 +60,14 @@ function PortalLayout() {
             <FormPopupGate />
             <HomeScreenSetupGate />
             <LegalAcceptanceGate />
+            {/* a screen's short tutorial on its first visit, once (server-side), and the hub's replays */}
+            <TutorialGate />
             {/* lb or kg, asked until answered (lb meanwhile). */}
             <WeightUnitPrompt />
             {/* back from buying AI credits: add them now and say so */}
             <AiCreditsReturn />
+            {/* permission to send their data to AI services (OpenAI, Google), asked until answered */}
+            <AiConsentPrompt />
           </>
         )}
         {/* Previous month's League Recap — first week of each month, once. */}

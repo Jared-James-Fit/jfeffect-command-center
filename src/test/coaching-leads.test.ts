@@ -191,6 +191,6 @@ describe("wiring", () => {
     expect(APP_EVENTS.lead_ready.url("c1", devin.id)).toBe(`/admin/leads?id=${devin.id}`);
     expect(APP_EVENTS.lead_ready.category).toBe("coaching_apps");
     expect(read("src/routes/_authenticated/admin/index.tsx")).toContain("<NewLeadsCard />");
-    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('{role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}');
+    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('{role === "admin" && pinnedSystem && <LeadsInboxRow />}');
   });
 });

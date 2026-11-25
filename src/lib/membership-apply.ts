@@ -233,6 +233,8 @@ export type MemberApplication = {
   referrer: string | null;
   utm_source: string | null;
   utm_campaign: string | null;
+  /** Archived by the coach (20270527106200): kept, out of his lists. */
+  archived_at?: string | null;
 };
 
 /** Still waiting on the coach: not decided, whether or not they've been messaged yet. */

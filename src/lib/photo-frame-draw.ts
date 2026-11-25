@@ -1,5 +1,5 @@
 import { context2d, releaseCanvas } from "@/lib/canvas-memory";
-import { CENTRED, OUTPUT_WIDTH, STORY_ASPECT, cropRect, wholeRect, type Framing, type Size } from "@/lib/photo-frame";
+import { CENTRED, OUTPUT_WIDTH, STORY_ASPECT, cropRect, isTurned, turnedPlacement, wholeRect, type Framing, type Size } from "@/lib/photo-frame";
 import type { CompiledGrade } from "@/lib/media-grade";
 import { gradeCanvasInPlace } from "@/lib/media-grade-gl";
 
@@ -22,14 +22,25 @@ export function drawableSize(src: Drawable): Size {
  */
 export function framedCanvas(src: Drawable, framing: Framing, aspect: number, width = OUTPUT_WIDTH, grade?: CompiledGrade | null): HTMLCanvasElement {
   const img = drawableSize(src);
-  const r = cropRect(framing, img, aspect);
   const c = document.createElement("canvas");
   c.width = Math.max(2, Math.round(width));
   c.height = Math.max(2, Math.round(width / aspect));
   const ctx = context2d(c);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
+  if (isTurned(framing)) {
+    // turned and straightened: the photo kept whole until now, drawn turned into the frame (the editor's own numbers)
+    const t = turnedPlacement(framing, img, { w: c.width, h: c.height });
+    ctx.save();
+    ctx.translate(t.tx, t.ty);
+    ctx.rotate((t.deg * Math.PI) / 180);
+    ctx.translate(-t.ox, -t.oy);
+    ctx.drawImage(src, 0, 0, t.w, t.h);
+    ctx.restore();
+  } else {
+    const r = cropRect(framing, img, aspect);
+    ctx.drawImage(src, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
+  }
   if (grade && !grade.identity) gradeCanvasInPlace(c, grade);
   return c;
 }

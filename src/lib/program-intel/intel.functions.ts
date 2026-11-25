@@ -59,6 +59,8 @@ export const queueIntelJobFn = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => queueSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertCoach(context, data.clientId);
+    // their records go to OpenAI: only with the client's permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(data.clientId);
     // one run at a time per client: a second tap, a second device or a strategy beside a build
     // gets the run already going (the worker keeps any run of the last 2 days alive or stops it
     // with Try again, jobs.server.ts), never a second generation writing alongside it
@@ -102,6 +104,7 @@ export const retryIntelJobFn = createServerFn({ method: "POST" })
     if (!job) throw new Error("That run wasn't found.");
     await assertCoach(context, job.client_id);
     if (job.status !== "error") throw new Error("Only a failed run can be retried.");
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(job.client_id);
     // it picks up at the stage that failed
     const { error } = await sb.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id);
     if (error) throw new Error(error.message);

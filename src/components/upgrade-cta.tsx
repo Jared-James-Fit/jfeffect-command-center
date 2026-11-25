@@ -27,9 +27,9 @@ export function UpgradeCTA({
           <span className="font-medium">{title}</span>
           <span className="text-muted-foreground hidden sm:inline">— {subtitle}</span>
         </div>
-        {/* Upgrade button is web-only; on native, direct users to jfeffect.com */}
+        {/* Upgrade is web-only. The App Store build says nothing about buying elsewhere
+            (guideline 3.1.1 / 3.1.3: no calls to action for outside purchases). */}
         {!native && <Link to="/portal/plan"><Button size="sm">Upgrade</Button></Link>}
-        {native && <span className="text-xs text-muted-foreground">Available at jfeffect.com</span>}
       </div>
     );
   }

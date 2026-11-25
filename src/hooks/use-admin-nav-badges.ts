@@ -44,13 +44,33 @@ export type SupportBadgeRow = { id: string; unread_for_team: number | null; stat
  * in or a check-in card is never "new message" (staff_inbox_state leaves
  * them out); archived chats don't count (a new message reopens one).
  */
-export function messagesBadge(rows: InboxBadgeRow[], support: SupportBadgeRow[] = []): number {
+export function messagesBadge(rows: InboxBadgeRow[], support: SupportBadgeRow[] = [], groups = 0): number {
   const chats = new Set<string>();
   for (const r of rows) if (r.unread && !r.archived) chats.add(r.client_id);
   // A JF member's Support chat with a message you haven't read is a new message
   // too (it's a row in 1:1 Chats). One marked Done is reopened by a new message.
   for (const t of support) if ((t.unread_for_team ?? 0) > 0 && t.status !== "closed") chats.add(`support:${t.id}`);
-  return chats.size;
+  // Coach-run group chats with a message from someone else since I read them
+  // (the inbox's Unread chip counts the same groups).
+  return chats.size + groups;
+}
+
+/** My coach-run groups (not archived) whose latest message is someone else's, after I last read them. */
+export function unreadGroupCount(
+  memberships: { group_id: string; last_read_at: string | null }[],
+  latest: { group_id: string; created_at: string; sender_id: string | null }[],
+  me: string,
+): number {
+  const readAt = new Map(memberships.map((m) => [m.group_id, m.last_read_at]));
+  const seen = new Set<string>();
+  let n = 0;
+  for (const m of latest) {
+    if (seen.has(m.group_id) || !readAt.has(m.group_id)) continue;
+    seen.add(m.group_id);
+    const read = readAt.get(m.group_id);
+    if (m.sender_id !== me && new Date(m.created_at).getTime() > (read ? new Date(read).getTime() : 0)) n += 1;
+  }
+  return n;
 }
 
 export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
@@ -71,7 +91,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     refetchIntervalInBackground: false,
     placeholderData: (prev) => prev, // keep last known count while refetching
     queryFn: async (): Promise<AdminBadgeCounts> => {
-      const [inbox, mediaPending, supportAlerts, supportChats] = await Promise.all([
+      const [inbox, mediaPending, supportAlerts, supportChats, myGroups] = await Promise.all([
         // Per staff login: which chats have a new message from the client
         // (staff_inbox_state's `unread`: never a form sent in or a check-in card).
         (supabase as any).rpc("staff_inbox_state"),
@@ -86,9 +106,26 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
         (supabase.from("member_support_threads") as any)
           .select("id, unread_for_team, status")
           .gt("unread_for_team", 0),
+        // The coach-run groups I'm in (not archived), with when I last read each.
+        (supabase.from("chat_group_members") as any)
+          .select("group_id, last_read_at, chat_groups!inner(kind, archived)")
+          .eq("user_id", user!.id)
+          .eq("chat_groups.kind", "group")
+          .eq("chat_groups.archived", false),
       ]);
+      const memberships = (myGroups.data ?? []) as { group_id: string; last_read_at: string | null }[];
+      let groups = 0;
+      if (memberships.length) {
+        const { data: latest } = await (supabase.from("group_messages") as any)
+          .select("group_id, created_at, sender_id")
+          .in("group_id", memberships.map((m) => m.group_id))
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        groups = unreadGroupCount(memberships, latest ?? [], user!.id);
+      }
       return {
-        messages: messagesBadge((inbox.data ?? []) as InboxBadgeRow[], (supportChats.data ?? []) as SupportBadgeRow[]),
+        messages: messagesBadge((inbox.data ?? []) as InboxBadgeRow[], (supportChats.data ?? []) as SupportBadgeRow[], groups),
         checkIns: mediaPending.count ?? 0,
         supportAlerts: supportAlerts.count ?? 0,
       };
@@ -106,6 +143,8 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_alerts" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "member_support_threads" }, bump)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_messages" }, bump)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_group_members" }, bump)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [enabled, user, qc]);

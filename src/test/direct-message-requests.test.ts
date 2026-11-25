@@ -130,16 +130,18 @@ describe("the Chats list", () => {
     expect(ui).toContain("You can send more once {name} replies.");
     const pane = read("src/components/group-chats-pane.tsx");
     expect(pane).toContain("count={requestCount}");
-    expect(pane).toContain("useDirectThreads(!asAdmin && !isImpersonating)");
+    expect(pane).toContain("useDirectThreads(!isImpersonating)");
   });
   it("Messenger: one inbox (coach pinned on top, then every chat), and push links open the chat", () => {
     const page = read("src/routes/_authenticated/portal/messages.tsx");
     const pane = read("src/components/group-chats-pane.tsx");
-    expect(page).toContain("<GroupChatsPane asAdmin={false} pinned={pinned} />");
+    // the coach first (a coaching client's), then JF Effect Support, for everyone
+    expect(page).toContain("<GroupChatsPane pinned={pins} />");
+    expect(page).toContain("isSelfServe ? [supportPin] : [pinned, supportPin]");
     expect(page).not.toContain("Coach Chat");
-    // the coach is always the first pinned face (and a plain row while searching)
-    expect(pane).toContain("{showPinned && !showGrid && !selectMode && coachRow}");
-    expect(pane).toContain("name={pinned.name}");
+    // the fixed chats are always the first rows, pinned
+    expect(pane).toContain("{showPinned && !selectMode && pinRows}");
+    expect(pane).toContain("name={p.name}");
     // #group=<id> push links still land in that chat, not the coach chat.
     expect(pane).toContain('if (typeof window !== "undefined" && /group=/.test(window.location.hash)) return;');
     expect(pane).toContain("const m = window.location.hash.match(/group=([0-9a-f-]{36})/i);");

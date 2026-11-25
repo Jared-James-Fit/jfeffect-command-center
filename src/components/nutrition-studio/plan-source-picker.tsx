@@ -23,6 +23,7 @@ import { startMealPlanImport, type StartImportResult } from "@/lib/nutrition-imp
 import { MEAL_IMPORT_PRIVACY_TEXT, MEAL_IMPORT_RIGHTS_EXPLAINER, rightsTextFor } from "@/lib/nutrition-import/rights";
 import type { MealImportResult } from "@/lib/nutrition-import/types";
 import type { SourceDoc } from "@/lib/program-import/types";
+import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
 
 const COST = FEATURE_COSTS.nutrition_import;
 const BUCKET = "nutrition-imports";
@@ -93,7 +94,7 @@ export function PlanSourcePicker({
   className?: string;
 }) {
   const { user } = useAuth();
-  const start = useServerFn(startMealPlanImport);
+  const start = useAiConsentAware(useServerFn(startMealPlanImport));
   const member = audience === "member";
   const credits = useAiCredits(member);
   const setCredits = useSetCreditState();

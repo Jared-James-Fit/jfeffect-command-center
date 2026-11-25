@@ -7,11 +7,10 @@ import type { CompiledGrade } from "@/lib/media-grade";
 import {
   POST_ASPECTS,
   SCREEN_ZONES,
-  clampFraming,
   gridWindow,
   panFraming,
   pinchFraming,
-  placement,
+  framedStyle,
   snapToCentre,
   type Framing,
   type Point,
@@ -286,9 +285,8 @@ export function PhotoFramer({
     const t = setTimeout(() => setFlashing(false), 700);
     return () => clearTimeout(t);
   }, [flash]);
-  const f = clampFraming(framing, size, frame);
-  const p = placement(f, size, frame);
-  const at: React.CSSProperties = { width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` };
+  // placed (and, a turned photo, turned) by the same numbers the export draws with
+  const at: React.CSSProperties = framedStyle(video ? { ...framing, r: undefined } : framing, size, frame);
   // (a clip is never kept playing out of sight)
   const kept = showImage || (keepImage && !video);
   const graded = !!grade && kept;

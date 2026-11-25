@@ -63,6 +63,17 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
     await sb.from("coaching_sessions").update({ progress: { ...progress, [job]: state } }).eq("id", s.id);
   };
   try {
+    // the call's transcript goes to OpenAI only with the client's permission (5.1.2(i), src/lib/ai-consent):
+    // refused (or unreadable: fails closed), the job stops here, says why for the coach and asks no model
+    const { clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
+    const consent = await clientAllowsAi(s.client_id);
+    if (!consent.ok) {
+      const { coachConsentMessage } = await import("@/lib/ai-consent/consent");
+      const words = coachConsentMessage(consent.name);
+      await sb.from("coaching_sessions").update({ [col]: "failed", locked_at: null, ...(job === "analysis" ? { analysis_error: words } : {}) }).eq("id", s.id);
+      await log(sb, s, job === "analysis" ? "analysis_failed" : "brief_failed", { error: words, reason: "no_ai_consent" });
+      return "no_consent";
+    }
     const { resolveRoute } = await import("@/lib/ai/routing");
     const { readRouteOverride } = await import("@/lib/ai/route-call.server");
     const route = resolveRoute(job === "analysis" ? "session_analysis" : "session_brief", await readRouteOverride(sb), { openaiOnly: true });

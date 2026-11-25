@@ -43,12 +43,11 @@ export function markNavSeen(userId: string | undefined, route: string) {
  * Returns badge state per portal route. Only fetches data for clients.
  * Badge rules (kept minimal to avoid notification overload):
  *  - /portal/messages       — one count: unread coach messages + member 1:1s + crews
- *                             + coach groups (never a bare dot). Only what the inbox
+ *                             + coach groups + JF Effect Support replies (never a bare dot). Only what the inbox
  *                             itself shows as new: a form check is a video in the
  *                             coach chat, so retired lift-video feedback isn't counted.
  *  - /portal/workouts       — program updated since client last opened (dot)
  *  - /portal/nutrition-targets — nutrition targets updated since client last opened (dot)
- *  - /portal/support        — a JF member's Support chat: replies they haven't read (count)
  */
 export function useClientNavBadges(): Record<string, NavBadge> {
   const { user, role, viewOnly } = useAuth();
@@ -83,7 +82,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
         (supabase.from("messages") as any).select("created_at").eq("client_id", client.id).eq("sender_role", "admin").eq("is_internal_note", false).is("deleted_at", null).order("created_at", { ascending: false }).limit(50),
         (supabase.from("conversation_state") as any).select("client_last_read_at").eq("client_id", client.id).maybeSingle(),
         (supabase.from("nutrition_targets") as any).select("updated_at, last_updated_at").eq("client_id", client.id).order("updated_at", { ascending: false }).limit(5),
-        // Their own Support chat (RLS: a member reads only theirs).
+        // Their own JF Effect Support chat (RLS: only theirs, by member or client row).
         (supabase.from("member_support_threads") as any).select("unread_for_member").limit(1).maybeSingle(),
       ]);
       // Coach group chats (kind "group"); member 1:1s and crews come from their own lists.
@@ -165,6 +164,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     directThreads: waitingChatCount((directs ?? []).map((t) => ({ key: t.group_id, unread: isUnread(t, user?.id), at: t.last_at })), chatPrefs),
     crewThreads: waitingChatCount((crews ?? []).map((t) => ({ key: t.group_id, unread: isCrewUnread(t, user?.id), at: t.last_at })), chatPrefs),
     groupThreads: user ? coachGroupsWaiting(data.groupMemberships ?? [], data.groupMsgs ?? [], user.id, chatPrefs) : 0,
+    supportReplies: data.supportUnread ?? 0,
   });
   if (messagesCount > 0) result["/portal/messages"] = { count: messagesCount };
 
@@ -185,9 +185,6 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   if (nutLatest > 0 && nutLatest > nutSeen) result["/portal/nutrition-targets"] = { dot: true };
 
   if (community?.enabled && community.unseen > 0) result["/portal/community"] = { count: community.unseen };
-
-  // Support: the team replied and they haven't read it yet.
-  if ((data.supportUnread ?? 0) > 0) result["/portal/support"] = { count: data.supportUnread };
 
   return result;
 }

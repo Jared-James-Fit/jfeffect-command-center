@@ -18,6 +18,7 @@ import { discardMealPlanImport, markMealPlanImportSaved, retryMealPlanImport } f
 import { readPlanText } from "@/lib/nutrition-import/read";
 import { parseFoodWeighingRules, type ParsedDay } from "@/lib/nutrition-targets/meal-plan-parse";
 import { phaseFromPlanText } from "@/lib/nutrition-cardio";
+import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
 
 export function PlanFileImport({
   clientId,
@@ -85,7 +86,7 @@ function CoachImport({
 }) {
   const { row, loading, reload } = useMealImport(id);
   const discard = useServerFn(discardMealPlanImport);
-  const retry = useServerFn(retryMealPlanImport);
+  const retry = useAiConsentAware(useServerFn(retryMealPlanImport));
   const markSaved = useServerFn(markMealPlanImportSaved);
   const [busy, setBusy] = useState(false);
 

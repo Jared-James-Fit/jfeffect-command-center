@@ -123,7 +123,7 @@ describe("one story ring system across the app", () => {
       expect(read(f), f).toContain("<StoryAvatar");
     }
     expect(read("src/components/direct-chat.tsx")).toContain("storyUserId={leading ? null : thread.other.user_id}");
-    expect(read("src/components/group-chats-pane.tsx")).toContain("storyUserId={pinned.storyUserId}");
+    expect(read("src/components/group-chats-pane.tsx")).toContain("storyUserId={p.storyUserId}");
     expect(read("src/components/messages/chat-list-row.tsx")).toContain("<StoryRing state={story.state} size={CHAT_ROW_AVATAR}>");
   });
 
