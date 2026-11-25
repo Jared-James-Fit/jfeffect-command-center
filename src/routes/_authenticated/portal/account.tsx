@@ -77,6 +77,8 @@ import { billingDay } from "@/lib/date-range";
 import { useMyBilling } from "@/components/billing/use-my-billing";
 import { UpdateCardButton } from "@/components/billing/my-purchases-view";
 import type { MySummary } from "@/lib/my-purchases";
+import { HelpTutorialsHub } from "@/components/tutorials/tutorials";
+import { LifeBuoy } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -104,6 +106,7 @@ type SectionId =
   | "legal"
   | "billing"
   | "ai-credits"
+  | "help"
   | "deactivate";
 
 const SECTION_ALIASES: Record<string, SectionId> = {
@@ -133,6 +136,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   devices: "devices",
   password: "password",
   legal: "legal",
+  help: "help",
+  tutorials: "help",
+  "help-tutorials": "help",
   "legal-safety": "legal",
   privacy: "legal",
   billing: "billing",
@@ -657,6 +663,13 @@ function AccountPage() {
 
           {/* Account */}
           <SettingsGroup>
+            {/* Help & Tutorials: replay a tutorial, finish setup, search help, ask Cleo (support chat links here) */}
+            <SettingsSection id="help" icon={LifeBuoy} title="Help & Tutorials">
+              <SectionErrorBoundary label="Help & Tutorials">
+                <HelpTutorialsHub />
+              </SectionErrorBoundary>
+            </SettingsSection>
+
             {!native && <InstallAppRow />}
 
             <SettingsSection id="password" icon={KeyRound} title="Password">
