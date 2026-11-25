@@ -56,7 +56,7 @@ export async function escalateSupportThread(admin: Db, thread: any, esc: Escalat
   try {
     const { notifyAppEvent } = await import("@/lib/push/app-events.server");
     if (thread.client_id) {
-      await notifyAppEvent(admin, "support_message", { clientId: thread.client_id, sourceId: thread.id, actorUserId: opts.actorUserId ?? null, target: thread.id });
+      await notifyAppEvent(admin, "support_message", { clientId: thread.client_id, sourceId: `${thread.id}:handoff:${Date.parse(esc.at) || Date.now()}`, actorUserId: opts.actorUserId ?? null, target: thread.id });
     }
   } catch (e) {
     console.warn("[support] hand-off push failed", e);
