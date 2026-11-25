@@ -132,7 +132,10 @@ import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
 import { setPrItems } from "@/lib/set-pr-items";
-import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
+import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos, useSetVideosForDay } from "@/components/workout-day/set-video-cell";
+import { FilmingReminder } from "@/components/workout-day/filming-reminder";
+import { analysableExercise } from "@/lib/lift-analysis/exercise";
+import type { ReminderRow } from "@/lib/set-videos/filming-reminder";
 import { setVideoLabel } from "@/lib/set-videos/label";
 import {
   DeferredQuickSwapSheet,
@@ -2606,6 +2609,29 @@ function WorkoutDay({
     t = window.setTimeout(tryOpen, 700);
     return () => window.clearTimeout(t);
   }, [quickLogDue, quickLogOpen]);
+  // The smart filming reminder (filming-reminder.tsx): the client's own logger only, a coaching
+  // client with set videos, while the workout is open and no other intro holds the screen.
+  const filmingOn =
+    quickLogVideo && !readonly && !isImpersonating && !!client?.id && rowsLoaded && resultsLoaded &&
+    !completionPending && !completion?.completed_at && !quickLogDue && !quickLogOpen && !focusTipsOpen;
+  const { data: dayClips } = useSetVideosForDay(dayId, filmingOn);
+  const filmingRows = useMemo<ReminderRow[]>(() => {
+    if (!filmingOn) return [];
+    return (rows as any[]).map((r) => {
+      const ex = r.exercises ?? {};
+      const name = (r.exercise_name_override as string | null) || (ex.name as string | null) || "Exercise";
+      const mine = (results as any[]).filter((x) => x.row_id === r.id);
+      return {
+        rowId: r.id as string,
+        name,
+        main: !!ex.is_competition_lift || !!ex.competition_lift_type || /\b(top|main|comp|competition|primary)\b/i.test(String(r.purpose_label ?? "")),
+        sets: Math.max(1, Number(r.sets) || 1),
+        logged: mine.filter((x) => x.actual_reps != null || x.actual_load != null).map((x) => Number(x.set_index)),
+        filmed: (dayClips ?? []).filter((v) => v.row_id === r.id && (v.set_index ?? 0) > 0).map((v) => Number(v.set_index)),
+        barbell: analysableExercise(name, ex.equipment ?? null),
+      };
+    });
+  }, [filmingOn, rows, results, dayClips]);
   const closeQuickLog = useCallback(() => {
     setQuickLogOpen(false);
     if (!loggingTipsSeen && !isImpersonating) markLoggingTipsSeen();
@@ -3213,6 +3239,9 @@ function WorkoutDay({
         />
       )}
       {quickLogOpen && <QuickLogTips onClose={closeQuickLog} videoOn={quickLogVideo} unit={(rows as any[])[0] ? unitForRow((rows as any[])[0]) : unit} />}
+      {client?.id && filmingOn && !storyOpen && (
+        <FilmingReminder clientId={client.id} dayId={dayId} rows={filmingRows} enabled={filmingOn && !storyOpen} />
+      )}
 
       {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && reviewReady)) && (
         <WorkoutReviewEditor

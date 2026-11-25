@@ -27,6 +27,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
+import { FILM_SET_EVENT, setVideoKey } from "@/lib/set-videos/filming-reminder";
 import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
 import { SET_RECORD_MAX_SECONDS, canFilmInApp } from "@/lib/camera/film-settings";
 import { primeCamera } from "@/lib/camera/camera-prime";
@@ -395,6 +396,20 @@ export function SetVideoCell(props: SetVideoCellProps) {
       () => toast.error(NO_CONNECTION),
     );
   };
+  // the filming reminder's "Let's get some footage" (filming-reminder.tsx): this set's camera, from that tap
+  const openCameraRef = useRef(openCamera);
+  openCameraRef.current = openCamera;
+  useEffect(() => {
+    if (!canAdd) return;
+    const key = setVideoKey(rowId, setIndex);
+    const on = (e: Event) => {
+      if ((e as CustomEvent<{ key: string }>).detail?.key !== key) return;
+      setTipOpen(false);
+      openCameraRef.current();
+    };
+    window.addEventListener(FILM_SET_EVENT, on);
+    return () => window.removeEventListener(FILM_SET_EVENT, on);
+  }, [canAdd, rowId, setIndex]);
   const onPicked = (f: File) => {
     // straight from the camera (not in Photos): it's offered for the phone once it's on its way
     const filmedHere = looksFilmedInApp(f);
@@ -482,6 +497,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
               aria-label={label}
               title={label}
               data-set-video={active ? "uploading" : failed ? "failed" : videos.length ? "sent" : "add"}
+              data-set-video-key={setVideoKey(rowId, setIndex)}
               className="flex h-11 w-full items-center justify-center rounded-md transition active:scale-95 sm:h-9"
             >
               {content}

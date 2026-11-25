@@ -67,6 +67,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getClientSchedule, rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
 import { monthWorkoutsDone } from "@/lib/workout-peek";
 import { ClientNotesCard } from "@/components/messages/client-notes-log";
+import { FilmingAccountabilityCard } from "@/components/clients/filming-accountability-card";
 import { HealthCard, useHealthProfile } from "@/components/health/HealthCard";
 import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
 import { healthSummary } from "@/lib/health/health-profile";
@@ -141,6 +142,9 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
         </div>
         <div className="order-5 min-w-0 lg:order-none">
           <AthleteSetupCard clientId={clientId} client={client} />
+        </div>
+        <div className="order-5 min-w-0 lg:order-none">
+          <FilmingAccountabilityCard clientId={clientId} />
         </div>
         <div className="order-6 min-w-0 lg:order-none">
           <ClientNotesCard clientId={clientId} name={name} />
