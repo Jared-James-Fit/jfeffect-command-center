@@ -412,7 +412,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       conflicts,
       redistribution: red,
       brief: { sections: brief.sections, warnings: brief.warnings, chars: brief.chars, est_tokens: brief.estTokens },
-      brief_text: brief.text,
+      // their work & lifestyle (client-facing profile only: the program's notes reach the athlete)
+      brief_text: [brief.text, await import("@/lib/client-context/load.server").then((m) => m.clientContextText(admin, job.client_id, "client_facing")).catch(() => null)].filter(Boolean).join("\n\n"),
       construct_brief: { sections: compact.sections, chars: compact.chars, est_tokens: compact.estTokens, left_out: CONSTRUCT_EXCLUDE },
       construct_brief_text: compact.text,
       sources: {

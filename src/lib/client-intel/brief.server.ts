@@ -5,6 +5,10 @@
  * thing it is, in priority order:
  *
  *   CONFIRMED FACTS        their profile, schedule, meet, health on file
+ *   WORK AND LIFESTYLE     their work & lifestyle profile (client-context), the
+ *                          coach's private context facts (never quoted to the
+ *                          client) and, for the coach's own Cleo conversations,
+ *                          the relationship as tone-only context
  *   COACH INSTRUCTIONS     the coach's rules for them (program_rules), the coach's
  *                          notes, the coach's own reasons for past changes
  *   CURRENT PLANS          training block, nutrition plan, cardio plan in force
@@ -55,6 +59,11 @@ export type ClientIntelInput = {
    */
   viewer?: string | null;
   cardio?: { live: CardioPlan; ctx: PlanContext; unit: SpeedUnit; outcomes: VersionOutcome[]; read: CardioRead } | null;
+  /**
+   * The coach's private relationship with them as context (Cleo's own conversation with the coach,
+   * which drafts messages in his voice): tone only, never a coaching decision. Off for plan writing.
+   */
+  relationship?: boolean;
 };
 
 /** The whole brief as text, for a prompt. */
@@ -62,7 +71,7 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
   const { loaded, clientId } = x;
   const { input, assessment } = loaded;
   const today = assessment.today;
-  const [rules, notes, nutritionPlan, wmReviews, planEdits, proposals, recs, health, program] = await Promise.all([
+  const [rules, notes, nutritionPlan, wmReviews, planEdits, proposals, recs, health, program, life] = await Promise.all([
     safe<any[]>(() => sb.from("program_rules").select("kind, rule, client_id, expires_on, active").or(`client_id.eq.${clientId},client_id.is.null`).eq("active", true).limit(40), []),
     safe<any[]>(
       () =>
@@ -94,6 +103,7 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     safe<any[]>(() => sb.from("client_coaching_recommendations").select("created_at, headline, status, coach_note").eq("client_id", clientId).order("created_at", { ascending: false }).limit(3), []),
     loadHealthRecords(sb, clientId, { forms: false, today }).catch(() => null),
     focus !== "training" ? import("@/lib/program-context.server").then((m) => m.loadProgramContext(sb, clientId, today)).catch(() => null) : Promise.resolve(null),
+    import("@/lib/client-context/load.server").then((m) => m.clientContextText(sb, clientId, "coach", { relationship: !!x.relationship, today })).catch(() => null),
   ]);
 
   const out: string[] = [];
@@ -121,6 +131,7 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     }
   }
   out.push(`CONFIRMED FACTS:\n${facts.join("\n")}`);
+  if (life) out.push(life);
 
   // Coach instructions
   const coach: string[] = [];
@@ -249,6 +260,9 @@ export async function otherPlansForTraining(sb: any, clientId: string): Promise<
     const a = loaded.assessment;
     out.push(`Weight management: ${a.recommendation.headline}${a.checkins.poorSleep >= 2 ? " · sleep flagged on recent check-ins" : ""}${a.checkins.lowEnergy >= 2 ? " · energy flagged on recent check-ins" : ""}`);
     if (loaded.input.performance.lower) out.push(`Lower-body strength lately: ${loaded.input.performance.lower}${loaded.input.performance.detail ? ` (${clip(loaded.input.performance.detail, 160)})` : ""}`);
+    // their work & lifestyle (client-facing only: a program's notes are read by the athlete)
+    const life = await import("@/lib/client-context/load.server").then((m) => m.clientContextText(sb, clientId, "client_facing")).catch(() => null);
+    if (life) out.push(life);
     return out.length ? out.join("\n") : null;
   } catch (e: any) {
     console.warn("[client-intel] other plans unavailable", e?.message);

@@ -37,7 +37,9 @@ import {
   Watch,
   SlidersHorizontal,
   Layers,
+  Briefcase,
 } from "lucide-react";
+import { CompleteProfileCard, LifestyleForm, lifestyleSummary, useLifestyle } from "@/components/client-context/lifestyle-questions";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
@@ -92,6 +94,7 @@ type SectionId =
   | "notifications"
   | "coaching-agreement"
   | "health"
+  | "work"
   | "competition"
   | "basic-information"
   | "profile-picture"
@@ -115,6 +118,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   agreement: "coaching-agreement",
   health: "health",
   injuries: "health",
+  work: "work",
+  lifestyle: "work",
+  "work-lifestyle": "work",
   competition: "competition",
   "weight-class": "competition",
   medications: "health",
@@ -174,6 +180,8 @@ function AccountPage() {
 
   // Health & injuries: a coaching client's (their coach plans around it).
   const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
+  // Work & lifestyle: a coaching client's (their coach fits the plan around their day)
+  const { data: lifestyleData } = useLifestyle(goalsOn ? client?.id : null);
   // the classes they compete in: only for someone who competes (a meet prep, a powerlifting goal, anything on file)
   const competes = useCompetes(client?.id);
   const { data: competition } = useCompetitionProfile(competes ? client?.id : null);
@@ -465,6 +473,13 @@ function AccountPage() {
         {/* ── Only while something's missing, or the coach asked for a review ── */}
         <ProfileStatusCard missing={missing} onOpen={openSection} />
 
+        {/* Work & lifestyle: the next missing answer, right here (coaching clients only; gone once complete) */}
+        {goalsOn && client?.id && (
+          <SectionErrorBoundary label="Complete your profile">
+            <CompleteProfileCard clientId={client.id} preview={isImpersonating} />
+          </SectionErrorBoundary>
+        )}
+
         {form.info_update_requested && (
           <Card className="border-warning/40 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -527,6 +542,15 @@ function AccountPage() {
                 title="Goals & setup"
                 summary={goalsSummary(goalsStatus)}
               />
+            )}
+
+            {/* Work & lifestyle: what their coach fits training, recovery and meals around; each answer saves at once. */}
+            {goalsOn && client && (
+              <SettingsSection id="work" icon={Briefcase} title="Work & lifestyle" summary={lifestyleSummary(lifestyleData?.lifestyle)}>
+                <SectionErrorBoundary label="Work & lifestyle">
+                  <LifestyleForm clientId={client.id} preview={isImpersonating} />
+                </SectionErrorBoundary>
+              </SettingsSection>
             )}
 
             {/* Health & injuries: what their coach plans training, nutrition and supplements around. */}

@@ -697,10 +697,12 @@ async function generateAnalysis(
   const fallback = fallbackAnalysis(taskType, answers as any);
   const { classifyAiError, aiFailureWords } = await import("@/lib/ai/ai-errors");
   try {
-    const [{ data: globalCfg }, voice] = await Promise.all([
+    const [{ data: globalCfg }, voice, lifeText] = await Promise.all([
       sb.from("global_ai_config").select("*").limit(1).maybeSingle(),
-      // Jared's voice for this client (Admin → My Voice).
+      // Jared's voice for this client (Admin → My Voice), with his private relationship to them as tone only.
       voicePromptForClient(sb, clientId),
+      // their own work & lifestyle profile (client-facing only: the suggested reply is sent to them)
+      clientId ? import("@/lib/client-context/load.server").then((m) => m.clientContextText(sb, clientId, "client_facing")).catch(() => null) : Promise.resolve(null),
     ]);
     const { askRoute } = await import("@/lib/ai/route-call.server");
 
@@ -745,6 +747,7 @@ async function generateAnalysis(
       ...(programText ? ["PROGRAM CONTEXT:", programText, ""] : []),
       ...(weightText ? [weightText, ""] : []),
       ...(painText ? [painText, ""] : []),
+      ...(lifeText ? [lifeText, ""] : []),
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
@@ -861,6 +864,9 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
     if (taskType === "weekly_checkin") {
       const { foldNutritionUpdate } = await import("@/lib/checkin-coordination/nutrition-fold.server");
       nutritionSubmissionId = await foldNutritionUpdate(sb, row, data.answers as Record<string, unknown>);
+      // the one optional profile question it carried: saved to their profile, or rested when skipped
+      const { applyCheckinProfileAnswer } = await import("@/lib/checkin-coordination/plan.server");
+      await applyCheckinProfileAnswer(sb, row, data.answers as Record<string, unknown>);
     }
 
     const meta = TASK_META[taskType];

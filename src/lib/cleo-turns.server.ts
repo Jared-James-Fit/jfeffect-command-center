@@ -322,7 +322,8 @@ async function clientBrief(own: Db, userId: string, clientId: string, section: C
   const work = (async () => {
     const [{ loadWeightManagement }, { clientIntelText }] = await Promise.all([import("@/lib/weight-management/load.server"), import("@/lib/client-intel/brief.server")]);
     const loaded = await loadWeightManagement(sb, clientId);
-    return clientIntelText(sb, { clientId, loaded }, focus);
+    // the coach's own conversation (Cleo drafts in his voice here): the relationship as tone-only context
+    return clientIntelText(sb, { clientId, loaded, relationship: true }, focus);
   })();
   const text = await Promise.race([work, new Promise<null>((r) => setTimeout(() => r(null), 8_000))]).catch(() => null);
   if (text) {

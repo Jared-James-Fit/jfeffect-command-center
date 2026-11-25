@@ -16,7 +16,7 @@ import { blobToBase64, micSupported, useSummerMic, type MicTake } from "@/hooks/
 import { transcribeCoachVoiceFn } from "@/lib/program-ai/voice.functions";
 import { feedback } from "@/lib/feedback";
 
-export function useCoachVoice(onText: (text: string) => void, feature: "program_edit" | "program_notes" = "program_edit") {
+export function useCoachVoice(onText: (text: string) => void, feature: "program_edit" | "program_notes" | "client_context" = "program_edit") {
   const mic = useSummerMic({ dictate: true, maxMs: 120_000 });
   const hearFn = useServerFn(transcribeCoachVoiceFn);
   const [recording, setRecording] = useState(false);

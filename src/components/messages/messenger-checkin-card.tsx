@@ -251,6 +251,7 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     nu_supplements: "Supplements",
     nu_activity: "Training / activity",
     nu_free_meal: "Free meal",
+    profile_ask: "Profile",
     win: "Biggest win",
     help: "Help / changes",
     next_week_goal: "Next-week goal",
@@ -790,6 +791,7 @@ const EXTRA_LABEL: Record<CheckinExtra, string> = {
   measurements: "Measurements",
   nutrition_update: "Nutrition Update",
   roadmap: "Nutrition roadmap",
+  profile: "Profile question",
 };
 
 /** What this week's check-in added and what it left out, and why (the plan kept on the check-in). */

@@ -78,6 +78,21 @@ export function roadmapSteps(asks: string[], sex: "M" | "F" | null = null): Plan
     .map((q) => ({ key: q.key, type: q.type, prompt: q.prompt, helper: q.helper, options: q.options, scale: q.scale, exclusive: q.exclusive, optional: q.optional, showWhen: q.showWhen as PlanStep["showWhen"] }));
 }
 
+/** The check-in's answer key for its one profile question (the plan says which field it was). */
+export const PROFILE_ASK_KEY = "profile_ask";
+
+/** The one optional work & lifestyle question (client-context checkinProfileAsk): one tap, or Skip. */
+export function profileStep(extra: { prompt?: string; choices?: string[] }): PlanStep {
+  return {
+    key: PROFILE_ASK_KEY,
+    type: "single",
+    prompt: extra.prompt ?? "Quick one for your profile",
+    helper: "Optional, one tap. It helps your coach fit your plan around your work. Skip and it won't be asked again for a while.",
+    options: extra.choices ?? [],
+    optional: true,
+  };
+}
+
 export function addPlanSteps<T extends { key: string }>(base: T[], plan: CheckinPlan | null): Array<T | PlanStep> {
   if (!plan) return base;
   const has = (k: CheckinExtra) => plan.extras.some((e) => e.key === k);
@@ -92,6 +107,8 @@ export function addPlanSteps<T extends { key: string }>(base: T[], plan: Checkin
         out.push({ key: "measurements_added", type: "action", action: "measure", prompt: "Measurements are due", helper: "Waist matters most. Measure at the same time of day as last time.", optional: true });
       const nutrition = plan.extras.find((e) => e.key === "nutrition_update" && e.inline);
       if (nutrition) out.push(...nutritionSteps(nutrition));
+      const profile = plan.extras.find((e) => e.key === "profile" && e.choices?.length);
+      if (profile) out.push(profileStep(profile));
     }
     out.push(q);
     if (q.key === "nutrition_rating") {
