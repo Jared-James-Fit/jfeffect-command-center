@@ -176,7 +176,9 @@ describe("after a workout: the story goes up only when they share it (Nov 18 202
     expect(footer).toContain("const id = storyId;");
     expect(footer).toContain("await del.mutateAsync({ id, media_path: data?.media_path ?? null, media_thumb_path: data?.media_thumb_path ?? null, is_mine: true });");
   });
-  it("Done always closes, in every state", () => {
-    expect(footer).toContain("onClick={onDone} data-recap-done");
+  it("Done always closes, in every state (the recap's one sticky Done, Nov 25 2026)", () => {
+    const summary = read("src/components/workout-submission-summary.tsx");
+    expect(summary).toContain("onClick={close} data-recap-done");
+    expect(footer).not.toContain("data-recap-done");
   });
 });

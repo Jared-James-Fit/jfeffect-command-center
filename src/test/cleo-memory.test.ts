@@ -135,11 +135,12 @@ describe("every Cleo box: Enter sends, Shift+Enter is a new line", () => {
   });
 
   it("dictation: a live waveform and the time, cancel, done, and Try again on a take that failed", () => {
-    expect(composer).toContain("data-cleo-recording");
-    expect(composer).toContain('aria-label="Cancel recording"');
-    expect(composer).toContain('aria-label="Done: turn it into text"');
+    // the app's one recording bar (components/voice), Nov 25 2026
+    expect(composer).toContain("<VoiceRecordingBar");
+    expect(readFileSync("src/components/voice/voice-recorder.tsx", "utf8")).toContain('aria-label="Cancel recording"');
+    expect(composer).toContain('doneLabel="Done: turn it into text"');
     expect(composer).toContain("Try again");
     expect(composer).toContain("use your keyboard's microphone to dictate");
-    expect(readFileSync("src/hooks/use-summer-mic.ts", "utf8")).toContain('t.addEventListener("ended", () => finish(true), { once: true })');
+    expect(readFileSync("src/lib/voice/voice-capture.ts", "utf8")).toContain('t.addEventListener("ended", () => finish(true, "interrupted"), { once: true })');
   });
 });

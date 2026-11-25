@@ -101,10 +101,10 @@ describe("a story goes up only when they share it", () => {
     expect(quick).not.toContain("uploadPicked");
     expect(quick).not.toContain("useEarlyUpload");
   });
-  it("the recap's footer: the story row, then Create Crew Post and Done", () => {
+  it("the recap's Share sheet: the story row first, then Create Crew Post (Nov 25 2026)", () => {
     expect(recap).toContain('"Share to Story"');
-    expect(recap).toContain('{inFeed ? "Edit Crew post" : "Create Crew Post"}');
-    expect(recap.indexOf("data-recap-story=")).toBeLessThan(recap.indexOf("data-recap-crew-post"));
+    expect(recap).toContain('title={inFeed ? "Edit Crew post" : "Create Crew Post"}');
+    expect(recap.indexOf("data-recap-story=")).toBeLessThan(recap.indexOf('data="crew-post"'));
   });
 });
 

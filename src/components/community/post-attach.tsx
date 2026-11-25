@@ -140,8 +140,7 @@ export function AttachPreview({ a, dark, className }: { a: PostAttach; dark?: bo
     <div data-post-attach className={cn("flex flex-wrap items-center gap-3", className)}>
       {a.recorder.recording && (
         <RecordingBar
-          elapsed={a.recorder.elapsed}
-          levels={a.recorder.levels}
+          meter={a.recorder.meter}
           onCancel={a.recorder.cancel}
           onDone={() => void a.recorder.finish()}
           className={cn("w-full", dark && "bg-white/10 text-white")}

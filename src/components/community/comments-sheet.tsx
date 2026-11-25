@@ -427,7 +427,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
             }}
           />
           {recorder.recording ? (
-            <RecordingBar elapsed={recorder.elapsed} levels={recorder.levels} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
+            <RecordingBar meter={recorder.meter} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
           ) : (
             <>
               <UserAvatar src={me.avatar_url} name={me.name} size={32} expandable={false} className="mb-1.5" />

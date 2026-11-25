@@ -179,3 +179,5 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
 
   return { ...state, autoOn, serverCopies, posting, error, postNow: () => post_(false) };
 }
+
+export type WorkoutFilm = ReturnType<typeof useWorkoutFilm>;

@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Mic, Pause, Play, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { LiveWaveform, WaveformBars, fakePeaks, useVoiceRecorder } from "@/components/chat-shared";
+import { WaveformBars, fakePeaks, useVoiceRecorder } from "@/components/chat-shared";
+import { VoiceRecordingBar } from "@/components/voice/voice-recorder";
+import type { VoiceMeter } from "@/lib/voice/voice-capture";
+import { micErrorMessage } from "@/lib/voice/voice-meter";
 import { VOICE_MAX_SECONDS } from "@/lib/community-media";
 import { holdPlaybackSession } from "@/lib/audio-session";
 
@@ -94,51 +97,44 @@ export function VoiceMemoPlayer({ src, duration, seed = 1, className }: { src: s
 export type RecordedVoice = { blob: Blob; duration: number; url: string };
 
 /**
- * Record a voice memo: the mic button starts it, a live waveform and timer
- * show while it runs (cancel or done), and it stops itself at two minutes.
+ * Record a voice memo: the mic button starts it, the live waveform and timer
+ * show while it runs (cancel or done), and it stops itself at two minutes,
+ * keeping what was said (as it does when the app is backgrounded or a call
+ * takes the mic): the app's one recorder (chat-shared useVoiceRecorder).
  */
 export function useVoiceMemoRecorder(onDone: (v: RecordedVoice) => void) {
-  const rec = useVoiceRecorder();
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const deliver = (r: { blob: Blob; duration: number } | null) => {
+    if (!r) return;
+    if (r.duration < 0.8) return void toast.message("Hold on a little longer to record");
+    onDoneRef.current({ blob: r.blob, duration: Math.min(r.duration, VOICE_MAX_SECONDS), url: URL.createObjectURL(r.blob) });
+  };
+  const rec = useVoiceRecorder({ maxSeconds: VOICE_MAX_SECONDS, onAutoStop: deliver });
   const busy = useRef(false);
   const finish = async () => {
     if (busy.current) return;
     busy.current = true;
     try {
-      const r = await rec.stop();
-      if (!r) return;
-      if (r.duration < 0.8) return void toast.message("Hold on a little longer to record");
-      onDone({ blob: r.blob, duration: Math.min(r.duration, VOICE_MAX_SECONDS), url: URL.createObjectURL(r.blob) });
+      deliver(await rec.stop());
     } finally {
       busy.current = false;
     }
   };
-  useEffect(() => {
-    if (rec.recording && rec.elapsed >= VOICE_MAX_SECONDS) void finish();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rec.recording, rec.elapsed]);
   return {
     recording: rec.recording,
-    elapsed: rec.elapsed,
-    levels: rec.liveLevels,
-    start: () => rec.start().catch((e: any) => toast.error(e?.message ?? "Couldn't use the microphone")),
+    meter: rec.meter,
+    start: () => rec.start().catch((e: unknown) => toast.error(micErrorMessage(e))),
     finish,
     cancel: rec.cancel,
   };
 }
 
-/** While recording: the live waveform and time, with cancel and done. */
-export function RecordingBar({ elapsed, levels, onCancel, onDone, className }: { elapsed: number; levels: number[]; onCancel: () => void; onDone: () => void; className?: string }) {
+/** While recording: cancel, the time, the live waveform, done (the app's one recording bar). */
+export function RecordingBar({ meter, onCancel, onDone, className }: { meter: VoiceMeter; onCancel: () => void; onDone: () => void; className?: string }) {
   return (
-    <div data-recording className={cn("flex min-h-11 flex-1 items-center gap-2 rounded-2xl bg-muted/70 px-1.5", className)}>
-      <button type="button" onClick={onCancel} aria-label="Cancel recording" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-muted">
-        <X className="h-4 w-4" />
-      </button>
-      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
-      <span className="w-9 shrink-0 text-[12px] font-bold tabular-nums">{clock(elapsed)}</span>
-      <LiveWaveform levels={levels} />
-      <button type="button" onClick={onDone} aria-label="Done recording" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground active:scale-95">
-        <Check className="h-4 w-4" strokeWidth={3} />
-      </button>
+    <div data-recording className={cn("flex min-h-11 flex-1 items-center rounded-2xl bg-muted/70 px-1", className)}>
+      <VoiceRecordingBar meter={meter} onCancel={onCancel} onDone={onDone} doneLabel="Done recording" className="w-full" />
     </div>
   );
 }
