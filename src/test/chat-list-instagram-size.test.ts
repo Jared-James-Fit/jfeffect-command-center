@@ -82,7 +82,7 @@ describe("chat lists are Instagram's size", () => {
     expect(admin).not.toContain('className="border-b border-border/60"');
     const pane = read("src/components/group-chats-pane.tsx");
     expect(pane.match(/<ChatListRow/g)?.length).toBe(2); // coach-run groups + the pinned coach chat
-    expect(pane).toContain("at={pinned.at}");
+    expect(pane).toContain("at={p.at}");
     expect(read("src/components/direct-chat.tsx").match(/<ChatListRow/g)?.length).toBe(2); // 1:1s + Requests
     expect(read("src/components/crew-chat.tsx")).toContain("<CrewFaces faces={thread.faces} size={CHAT_ROW_AVATAR} />");
     // the client's pinned coach chat hands the row a time, not a formatted string

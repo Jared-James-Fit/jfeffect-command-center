@@ -29,7 +29,7 @@ describe("live indicators: one animated look across the app", () => {
   });
 
   it("the coach's chat row and header, the coach's inbox header, Rankings and Crew all use it", () => {
-    expect(read("src/components/group-chats-pane.tsx")).toContain("<LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>");
+    expect(read("src/components/group-chats-pane.tsx")).toContain("<LiveAvatar live={p.live} size={CHAT_ROW_AVATAR}>");
     expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain("<LiveAvatar live={coachLive} size={40} tag={false}>");
     expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain("<LiveAvatar live={selectedClientLive || isClientActive((selected as any).last_active_at)} size={40} tag={false}>");
     expect(read("src/components/community/crew-list.tsx")).toContain('<LiveAvatar live={m.live} size={44} tone="red" tag={false} className="ml-3.5">');
