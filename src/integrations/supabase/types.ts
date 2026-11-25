@@ -35973,7 +35973,7 @@ export type Database = {
         Returns: Json
       }
       get_league_week_movement: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           client_id: string
           month_start: string
@@ -35983,7 +35983,7 @@ export type Database = {
           week_start: string
         }[]
       }
-      get_league_week_spotlight: { Args: { _as_user?: string }; Returns: Json }
+      get_league_week_spotlight: { Args: { _as_user?: string; _audience?: string }; Returns: Json }
       get_membership_cleanup_job_status: {
         Args: never
         Returns: {
@@ -36028,7 +36028,7 @@ export type Database = {
         }[]
       }
       get_performance_league: {
-        Args: { _as_user?: string; _month?: string }
+        Args: { _as_user?: string; _audience?: string; _month?: string }
         Returns: {
           adherence_pct: number
           atpr_lifts: number
@@ -36149,7 +36149,7 @@ export type Database = {
         }[]
       }
       get_strength_board_all: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           abs_count: number
           abs_rank: number
@@ -36185,7 +36185,7 @@ export type Database = {
         }[]
       }
       get_strength_board_meets: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           abs_count: number
           abs_rank: number
@@ -36239,7 +36239,7 @@ export type Database = {
         }[]
       }
       get_strength_board_roster: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           avatar_url: string
           client_id: string

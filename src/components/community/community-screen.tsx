@@ -47,6 +47,9 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 import { LeagueWeekScreen } from "@/components/community/league-week-card";
 import { useLeagueWeek, useLeagueWeekSeen } from "@/lib/league-week.queries";
 import { spotlightReady } from "@/lib/league-week";
+import { ownAudience } from "@/lib/rankings-audience";
+import { useRankingsAudience } from "@/lib/use-rankings-audience";
+import { useServiceTier } from "@/lib/service-tier";
 
 /**
  * Crew opens on the feed, under one slim bar (TikTok's / Instagram's): + to
@@ -354,7 +357,10 @@ export function CommunityScreen({
   // Never on the coach's own page (their login isn't in the League); a coach viewing as a client sees the
   // client's card and records nothing.
   const weekOn = ownBar && !coach;
-  const weekQ = useLeagueWeek(weekOn);
+  // whose week: the board they last chose in Rankings, else the one they're on (a member's is Community's, since they aren't on JF Effect Athletes)
+  const { stored: storedAudience } = useRankingsAudience();
+  const { tier: weekTier } = useServiceTier();
+  const weekQ = useLeagueWeek(weekOn, ownAudience(storedAudience, weekTier));
   const week = weekQ.data ?? null;
   const weekSeen = useLeagueWeekSeen(week && !previewOnly ? week.week_start : null);
   const [weekSlot, setWeekSlot] = useState<"wait" | "show" | "skip">("wait");

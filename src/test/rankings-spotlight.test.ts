@@ -105,13 +105,13 @@ describe("Rankings spotlight: every board's podium, one at a time", () => {
     expect(hub.indexOf("<RankingsSpotlight")).toBeGreaterThan(hub.indexOf('role="tablist" aria-label="Leaderboard"'));
     expect(hub.indexOf("<RankingsSpotlight")).toBeGreaterThan(hub.indexOf("<AthleteLevelCard clientId={client.id}"));
     expect(hub).toContain('setOpened((o) => ({ n: o.n + 1, view: slide.view ?? null, previous: slide.board === "champions" }));');
-    expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />");
-    expect(hub).toContain("<AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />");
+    expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} audience={audience} />");
+    expect(hub).toContain("<AthleteLevelCard clientId={client.id} openPrevious={opened.previous} audience={audience} onShowCommunity={() => changeAudience(\"community\")} />");
     const board = read("src/components/portal/strength-board.tsx");
     expect(board).toContain("const [mode, setMode] = useState<BoardMode>(initialMode);");
     expect(board).toContain("const [picked, setDivision] = useState<Division | null>(initialDivision);");
     // never repeats the board open under it: it shows the other podiums
-    expect(hub).toContain("<RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} />");
+    expect(hub).toContain("<RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} audience={audience} />");
     const c = read("src/components/community/rankings-spotlight.tsx");
     expect(c).toContain(".filter((s) => s.key !== shownBelow)");
     expect(c).toContain('strengthSlideKey({ mode: "p4p", division })');
