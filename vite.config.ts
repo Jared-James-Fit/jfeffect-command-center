@@ -48,6 +48,13 @@ export default defineConfig({
         },
       },
     },
+    // Web workers (the set-video analysis worker, lift-analysis/worker-client.ts)
+    // are bundled as ES modules: they're created with { type: "module" } and
+    // split their code, which Vite's default "iife" worker format can't do
+    // (the production build failed on it).
+    worker: {
+      format: "es",
+    },
     resolve: {
       alias: {
         // React Email pulls in htmlparser2 → entities. Force the hoisted v4.5.0
