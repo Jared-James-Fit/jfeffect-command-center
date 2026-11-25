@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CrewPromosAdmin } from "@/components/community/crew-promos-admin";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { CalendarClock, Cake, CheckCircle2, ChevronDown, ChevronRight, Eye, Flag, Flame, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -181,6 +182,8 @@ export function AdminCommunityHub() {
 /** Manage: Needs you · Posts · Insights, the tab in the hash (so Back, pushes and old links agree). */
 function CrewManage({ counts }: { counts: Record<ManageTab, number> }) {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const routeHash = useRouterState({ select: (s) => s.location.hash });
   const tab = manageTabFromHash(`#${routeHash}`) ?? "needs";
   const setTab = (t: ManageTab) => void navigate({ to: ".", hash: `tab=${t}`, replace: true, resetScroll: false });
@@ -215,6 +218,7 @@ function CrewManage({ counts }: { counts: Record<ManageTab, number> }) {
         <>
           <WeekCard />
           <PostScoreBoard />
+          {isAdmin && <CrewPromosAdmin />}
         </>
       )}
     </div>

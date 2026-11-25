@@ -654,6 +654,14 @@ export async function createOnlineBooking(
       .eq("id", claimId);
   }
 
+  // Someone booking from the public link without an application is a lead too: the same one
+  // record every application and site checkout uses (upsertApplicantClient), never a second.
+  if (!trustedClient && result.kind === "appointment" && !opts.applicationId) {
+    await recordBookingLead(admin, { appointmentId: result.id, booker, typeName: type.name, start: result.start }).catch((e) =>
+      console.warn("[booking] lead record failed", e),
+    );
+  }
+
   // What they want to cover, kept where the coach's call prep reads it (and they can change it).
   if (included && trustedClient && result.kind === "session" && booker.notes?.trim()) {
     await admin
@@ -1077,6 +1085,54 @@ async function linkApplication(
   } catch (e) {
     console.warn("[booking] application linking failed", e);
   }
+}
+
+/**
+ * A public booking with no application behind it (the discovery call from a
+ * shared link): the person is a lead on the one client record their email or
+ * phone already has, or a new one (upsertApplicantClient: blanks filled, never
+ * overwritten). The appointment is tied to it only when the record is new, so
+ * a typed email never puts a call in someone else's app.
+ */
+async function recordBookingLead(
+  admin: Admin,
+  o: { appointmentId: string; booker: Booker; typeName: string; start: string },
+) {
+  const name = o.booker.name.trim().replace(/\s+/g, " ");
+  if (!name || !o.booker.email.trim()) return;
+  const [first, ...rest] = name.split(" ");
+  const { upsertApplicantClient } = await import("@/lib/crm.functions");
+  const lead = await upsertApplicantClient(admin as any, {
+    first_name: first ?? name,
+    last_name: rest.join(" "),
+    email: o.booker.email.trim(),
+    phone: o.booker.phone?.trim() || null,
+    source: "discovery_call",
+  });
+  if (lead.created) {
+    await admin.from("appointments").update({ client_id: lead.client_id } as any).eq("id", o.appointmentId).is("client_id", null);
+  }
+  if (!lead.is_active_client) {
+    await admin
+      .from("clients")
+      .update({ lifecycle_stage: "call_booked", call_booked: true } as any)
+      .eq("id", lead.client_id)
+      .in("lifecycle_stage", ["applicant", "lead", "qualified"]);
+  }
+  await admin
+    .from("client_crm_activities")
+    .insert({
+      client_id: lead.client_id,
+      activity_type: "call_booked",
+      title: `Booked ${o.typeName}`,
+      details: { appointment_id: o.appointmentId, starts_at: o.start, conflict: lead.conflict },
+      source: "booking_page",
+      dedupe_key: `booking:${o.appointmentId}`,
+    } as any)
+    .then(
+      () => {},
+      () => {},
+    );
 }
 
 /** A push to each admin: who booked what, and when. */

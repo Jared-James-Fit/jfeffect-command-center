@@ -196,6 +196,22 @@ function PackagesTab({ onShare }: { onShare: (slug: string) => void }) {
               <CardMenuItem onSelect={() => setConfirm({ p, live: true })}>Put on the site…</CardMenuItem>
             )
           ) : null}
+          {p.status === "active" && p.kind === "subscription" && (
+            <CardMenuItem
+              onSelect={() => {
+                const on = !p.direct_checkout;
+                const ask = on
+                  ? `Let people buy ${p.name} straight from the site (Ready to start), without a call or your approval? Checkout only opens while Stripe is set up for it.`
+                  : `Stop selling ${p.name} straight from the site? People will apply or book a call first again.`;
+                if (!window.confirm(ask)) return;
+                act.mutate(() => setState({ data: { id: p.id, direct_checkout: on } }), {
+                  onSuccess: () => toast.success(on ? `${p.name} can be bought on the site` : `${p.name} is by application again`),
+                });
+              }}
+            >
+              {p.direct_checkout ? "Stop selling without a call" : "Sell without a call…"}
+            </CardMenuItem>
+          )}
           {p.status !== "active" && (
             <CardMenuItem onSelect={() => act.mutate(() => setState({ data: { id: p.id, status: "active" } }))}>
               Set to Active (not on the site)
