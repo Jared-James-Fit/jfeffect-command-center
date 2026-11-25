@@ -45,14 +45,14 @@ const CODE: Record<Lift, string> = { squat: "SQ", bench: "BP", deadlift: "DL" };
 const LIFTS: Lift[] = ["squat", "bench", "deadlift"];
 
 const triple = (t: Array<number | null> | undefined) =>
-  (t ?? [])
-    .map((x) => (x == null ? "–" : x < 0 ? `${-x}x` : `${x}`))
-    .join("/");
+  (t ?? []).map((x) => (x == null ? "–" : x < 0 ? `${-x}x` : `${x}`)).join("/");
 
 export function meetLine(m: MeetRecord): string {
   const parts = [
     `${m.date} ${m.name ?? "Meet"}${m.federation ? ` (${m.federation})` : ""}`,
-    m.bodyweight ? `${m.bodyweight} kg bodyweight${m.weightClass ? ` in ${m.weightClass}` : ""}` : null,
+    m.bodyweight
+      ? `${m.bodyweight} kg bodyweight${m.weightClass ? ` in ${m.weightClass}` : ""}`
+      : null,
   ].filter(Boolean);
   const a = m.attempts;
   const lifts = a
@@ -107,9 +107,11 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
   }
 
   // meets, newest first
-  b.inputs.meets.slice(0, 10).forEach((m, i) =>
-    out.push({ id: `M${i + 1}`, kind: "meet", date: m.date, text: meetLine(m) }),
-  );
+  b.inputs.meets
+    .slice(0, 10)
+    .forEach((m, i) =>
+      out.push({ id: `M${i + 1}`, kind: "meet", date: m.date, text: meetLine(m) }),
+    );
   const ah = attemptPatternWords(b.inputs.history);
   if (ah.length || b.profile.patterns.length)
     out.push({
@@ -199,7 +201,9 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
       kind: "field",
       text: `The ${alt.weightClass} kg class (${alt.reason}): ${alt.lifters
         .map((l) => `${l.name} ${l.total} kg (${l.date})`)
-        .join("; ")}${alt.ourPlace != null ? `; our expected total would place about ${alt.ourPlace}` : ""}`,
+        .join(
+          "; ",
+        )}${alt.ourPlace != null ? `; our expected total would place about ${alt.ourPlace}` : ""}`,
     });
   if (b.landscape.ranked.length)
     out.push({

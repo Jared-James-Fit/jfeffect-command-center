@@ -61,6 +61,21 @@ const SECTIONS = [
 ] as const;
 type Section = (typeof SECTIONS)[number][0];
 
+/** a date inside the coming months, short: "Feb 1" (the year only when it isn't this one) */
+const shortDate = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
+  return d.toLocaleDateString("en-CA", {
+    month: "short",
+    day: "numeric",
+    ...(d.getUTCFullYear() !== new Date().getFullYear() &&
+    Math.abs(d.getTime() - Date.now()) > 120 * 864e5
+      ? { year: "numeric" as const }
+      : {}),
+    timeZone: "UTC",
+  });
+};
+
 const fmtDate = (iso: string | null | undefined) =>
   iso
     ? new Date(`${String(iso).slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", {
@@ -658,7 +673,7 @@ function Overview({
             nextMilestone
               ? nextMilestone.status === "waiting_ai" || nextMilestone.status === "generating"
                 ? `${MILESTONE_BY_KIND[nextMilestone.kind as keyof typeof MILESTONE_BY_KIND].title}: being written now`
-                : `Next: ${MILESTONE_BY_KIND[nextMilestone.kind as keyof typeof MILESTONE_BY_KIND].title}, ${fmtDate(nextMilestone.due_on)}`
+                : `Next: ${MILESTONE_BY_KIND[nextMilestone.kind as keyof typeof MILESTONE_BY_KIND].title}, ${shortDate(nextMilestone.due_on)}`
               : brief
                 ? PHASE_LABEL[brief.phase as keyof typeof PHASE_LABEL]
                 : undefined

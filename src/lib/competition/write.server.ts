@@ -200,16 +200,14 @@ export function briefForModel(
       projection_shift_since_last: b.projectionShift,
     },
     field: {
-      threats: b.landscape.ranked
-        .slice(0, 8)
-        .map((t) => ({
-          name: t.name,
-          expected: t.expected,
-          range: t.range,
-          overlaps_ours: t.overlaps,
-          level: t.level,
-          why: t.why,
-        })),
+      threats: b.landscape.ranked.slice(0, 8).map((t) => ({
+        name: t.name,
+        expected: t.expected,
+        range: t.range,
+        overlaps_ours: t.overlaps,
+        level: t.level,
+        why: t.why,
+      })),
       biggest_threat: b.landscape.biggest?.name ?? null,
       to_win: b.landscape.toWin,
       to_podium: b.landscape.toPodium,
@@ -451,7 +449,11 @@ export function proposalProblems(checks: ProposalCheck[]): string[] {
 }
 
 /** The numbers Cleo may use: the brief, the evidence, and the plan rebuilt with the calls that stood. */
-export function allowedNumbers(forModel: unknown, evidence: EvidenceItem[], adjusted: AdjustedPlan) {
+export function allowedNumbers(
+  forModel: unknown,
+  evidence: EvidenceItem[],
+  adjusted: AdjustedPlan,
+) {
   const set = numbersIn(forModel);
   numbersIn(
     evidence.map((e) => e.text),
@@ -462,7 +464,9 @@ export function allowedNumbers(forModel: unknown, evidence: EvidenceItem[], adju
       lifts: adjusted.lifts,
       total: adjusted.total,
       attempts: adjusted.attempts,
-      warmups: Object.values(adjusted.warmups).map((w) => w && { sets: w.sets.map((s) => s.kg), last: w.last.kg }),
+      warmups: Object.values(adjusted.warmups).map(
+        (w) => w && { sets: w.sets.map((s) => s.kg), last: w.last.kg },
+      ),
       landscape: {
         toWin: adjusted.landscape.toWin,
         toPodium: adjusted.landscape.toPodium,
@@ -534,7 +538,13 @@ export async function writeNarrative(
   };
   const judge = (text: string) => {
     const n = readNarrative(text);
-    if (!n) return { n: null, checks: [] as ProposalCheck[], problems: ["The answer wasn't the JSON asked for."], adjusted: null as AdjustedPlan | null };
+    if (!n)
+      return {
+        n: null,
+        checks: [] as ProposalCheck[],
+        problems: ["The answer wasn't the JSON asked for."],
+        adjusted: null as AdjustedPlan | null,
+      };
     const checks = checkProposals(b, evidence, n.proposals);
     const adjusted = applyProposals(
       b,
@@ -547,7 +557,11 @@ export async function writeNarrative(
   const first = await call("write", prompt);
   let r = judge(first.text);
   if (r.n && !r.problems.length)
-    return { narrative: r.n, model: first.model, strategy: { checks: r.checks, adjusted: r.adjusted!, evidence } };
+    return {
+      narrative: r.n,
+      model: first.model,
+      strategy: { checks: r.checks, adjusted: r.adjusted!, evidence },
+    };
   const second = await call(
     "write2",
     `${prompt}\n\nYOUR LAST ANSWER HAD PROBLEMS. Fix them and answer again with the whole JSON:\n- ${r.problems.join("\n- ")}`,
@@ -555,13 +569,16 @@ export async function writeNarrative(
   r = judge(second.text);
   if (!r.n) throw new NarrativeRejected("The assessment wasn't readable twice.");
   // calls still failing their checks are set aside (kept, with why); the words must still hold
-  const wordProblems = narrativeProblems(
-    r.n,
-    allowedNumbers(forModel, evidence, r.adjusted!),
-  );
+  const wordProblems = narrativeProblems(r.n, allowedNumbers(forModel, evidence, r.adjusted!));
   if (wordProblems.length)
-    throw new NarrativeRejected(`The write-up didn't hold to the numbers: ${wordProblems.join(" ")}`);
-  return { narrative: r.n, model: second.model, strategy: { checks: r.checks, adjusted: r.adjusted!, evidence } };
+    throw new NarrativeRejected(
+      `The write-up didn't hold to the numbers: ${wordProblems.join(" ")}`,
+    );
+  return {
+    narrative: r.n,
+    model: second.model,
+    strategy: { checks: r.checks, adjusted: r.adjusted!, evidence },
+  };
 }
 
 /** The athlete-facing version: Cleo's words plus, for a game plan, the plan itself from the engines. */
@@ -578,20 +595,18 @@ export function athleteVersion(
     kind === "game_plan" || kind === "confirm"
       ? {
           attempts: Object.fromEntries(
-            (Object.entries(att.lifts) as [Lift, (typeof att.lifts)[Lift]][]).map(
-              ([l, a]) => [
-                l,
-                a
-                  ? {
-                      opener: a.opener,
-                      second: a.second,
-                      third: a.third,
-                      conditional: a.conditional,
-                      contingencies: a.contingencies.slice(0, 3),
-                    }
-                  : null,
-              ],
-            ),
+            (Object.entries(att.lifts) as [Lift, (typeof att.lifts)[Lift]][]).map(([l, a]) => [
+              l,
+              a
+                ? {
+                    opener: a.opener,
+                    second: a.second,
+                    third: a.third,
+                    conditional: a.conditional,
+                    contingencies: a.contingencies.slice(0, 3),
+                  }
+                : null,
+            ]),
           ),
           warmups: Object.fromEntries(
             (Object.entries(warm) as [Lift, (typeof warm)[Lift]][]).map(([l, w]) => [

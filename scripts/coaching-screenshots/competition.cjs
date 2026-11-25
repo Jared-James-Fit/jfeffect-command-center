@@ -12,6 +12,8 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
+// the coach's screens are the demo coach's session, not the athlete's
+process.env.SHOT_EMAIL = process.env.SHOT_EMAIL || "coach@example.com";
 const { run } = require("./harness.cjs");
 const F = require("./fixtures.cjs");
 const { composeWebp } = require("./frame.cjs");
@@ -74,12 +76,93 @@ const coachMocks = {
   getCompetitionOverviewFn: { items: [], counts: {} },
 };
 
+// meet day, mid-meet: squat and bench done, the first deadlifts in, so the
+// deadlift each place needs is live (logged by hand, as the app does)
+const engine = FIX.assessment.internal?.engine ?? {};
+const adjusted = FIX.assessment.internal?.strategy?.adjusted ?? {};
+const field = FIX.workspace.selected.competitors ?? [];
+let n = 0;
+const entry = (entrant, lift, attempt, kg, result, rpe = null) => ({
+  id: `e${++n}`,
+  entrant,
+  lift,
+  attempt,
+  kg,
+  result,
+  rpe,
+  velocity: null,
+  note: null,
+  source: "manual",
+  logged_at: `2027-02-08T${String(15 + Math.floor(n / 12)).padStart(2, "0")}:${String((n * 4) % 60).padStart(2, "0")}:00Z`,
+  updated_at: null,
+  client_key: `k${n}`,
+});
+const [sam, liam, noah] = field.map((c) => c.id);
 const meetDay = {
-  competition: { ...FIX.workspace.selected.competition },
-  brief: FIX.workspace.selected.brief,
-  plan: FIX.assessment.internal?.strategy?.adjusted ?? null,
-  log: [],
-  competitors: FIX.workspace.selected.competitors,
+  competition: { ...FIX.workspace.selected.competition, weigh_in_kg: 73.4, status: "upcoming" },
+  athlete: "Alex",
+  log: [
+    entry("us", "squat", 1, 252.5, "good", 7),
+    entry("us", "squat", 2, 262.5, "good", 8),
+    entry("us", "squat", 3, 267.5, "no_lift", 10),
+    entry("us", "bench", 1, 165, "good", 7),
+    entry("us", "bench", 2, 170, "good", 8),
+    entry("us", "bench", 3, 172.5, "good", 9),
+    entry("us", "deadlift", 1, 280, "good", 7),
+    ...(sam
+      ? [
+          entry(sam, "squat", 1, 270, "good"),
+          entry(sam, "squat", 2, 280, "good"),
+          entry(sam, "squat", 3, 287.5, "no_lift"),
+          entry(sam, "bench", 1, 167.5, "good"),
+          entry(sam, "bench", 2, 172.5, "good"),
+          entry(sam, "bench", 3, 175, "no_lift"),
+          entry(sam, "deadlift", 1, 295, "good"),
+        ]
+      : []),
+    ...(liam
+      ? [
+          entry(liam, "squat", 1, 255, "good"),
+          entry(liam, "squat", 2, 262.5, "good"),
+          entry(liam, "squat", 3, 267.5, "good"),
+          entry(liam, "bench", 1, 160, "good"),
+          entry(liam, "bench", 2, 165, "good"),
+          entry(liam, "bench", 3, 170, "no_lift"),
+          entry(liam, "deadlift", 1, 285, "good"),
+        ]
+      : []),
+    ...(noah
+      ? [
+          entry(noah, "squat", 1, 245, "good"),
+          entry(noah, "squat", 2, 255, "good"),
+          entry(noah, "squat", 3, 260, "no_lift"),
+          entry(noah, "bench", 1, 160, "good"),
+          entry(noah, "bench", 2, 167.5, "good"),
+          entry(noah, "bench", 3, 170, "good"),
+          entry(noah, "deadlift", 1, 270, "good"),
+        ]
+      : []),
+  ],
+  field: field.map((c) => ({
+    id: c.id,
+    name: c.name,
+    bodyweight: c.bodyweight_kg ?? null,
+    projection:
+      (FIX.workspace.selected.brief?.competitors ?? []).find((x) => x.id === c.id)?.read
+        ?.projection ?? null,
+  })),
+  plan: {
+    id: ASSESSMENT_ID,
+    kind: "game_plan",
+    version: 1,
+    confirmed: true,
+    attempts: adjusted.attempts ?? engine.attempts ?? null,
+    warmups: adjusted.warmups ?? engine.warmups ?? null,
+    gameDay: engine.gameDay ?? null,
+    forecast: engine.forecast ?? null,
+    objective: "podium",
+  },
+  serverTime: "2027-02-08T17:40:00Z",
 };
 
 const common = {
@@ -139,6 +222,21 @@ const SHOTS = [
     path: `/admin/clients/${CLIENT_ID}?tab=competition&competition=${COMP_ID}&assessment=${ASSESSMENT_ID}`,
     fixtures: adminFixtures,
     serverFnMocks: coachMocks,
+  },
+  // Meet day: the command centre, mid-meet.
+  {
+    name: "app-competition-meetday",
+    path: `/admin/competition/${COMP_ID}`,
+    fixtures: adminFixtures,
+    serverFnMocks: { ...coachMocks, getMeetDayFn: meetDay, logAttemptFn: { ok: true } },
+  },
+  // Meet day further down: the standings and the deadlift each place needs.
+  {
+    name: "app-competition-meetday-standings",
+    path: `/admin/competition/${COMP_ID}`,
+    fixtures: adminFixtures,
+    serverFnMocks: { ...coachMocks, getMeetDayFn: meetDay, logAttemptFn: { ok: true } },
+    afterLoad: scrollTo("[data-meet-day-standings]", 80),
   },
   // The athlete's game plan.
   {

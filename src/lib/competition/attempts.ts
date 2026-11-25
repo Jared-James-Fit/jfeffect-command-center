@@ -132,7 +132,7 @@ export function attemptRules(input: {
   const { opener, openerConservative, noLower } = input;
   const conditional = [
     {
-      when: "Opener moves easily (RPE 7 or under, or faster than their usual opener)",
+      when: "Opener moves easily (RPE 7 or under, or faster than the usual opener)",
       then: `Second at ${aggressive[1]} kg`,
     },
     { when: "Opener is a solid RPE 8", then: `Second at ${balanced[1]} kg` },

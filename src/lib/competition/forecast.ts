@@ -180,7 +180,9 @@ export function pastCuts(
 ): PastCut[] {
   const avgAround = (day: string, half: number) => {
     const xs = logs.filter((l) => Math.abs(daysBetween(day, l.day)) <= half).map((l) => l.kg);
-    return xs.length >= 2 ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null;
+    return xs.length >= 2
+      ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10
+      : null;
   };
   const back = (date: string, days: number) => {
     const d = new Date(`${date}T12:00:00Z`);
@@ -188,10 +190,7 @@ export function pastCuts(
     return d.toISOString().slice(0, 10);
   };
   return meets
-    .filter(
-      (m) =>
-        (m.bodyweight ?? 0) > 0 && m.date <= today && daysBetween(m.date, today) <= 730,
-    )
+    .filter((m) => (m.bodyweight ?? 0) > 0 && m.date <= today && daysBetween(m.date, today) <= 730)
     .slice(0, 6)
     .map((m) => ({
       meetDate: m.date,
@@ -304,7 +303,8 @@ export function forecastMeet(input: {
       .reduce((s, c) => s + CONCERN_CUT[c.severity] * (c.lift == null ? 0.67 : 1), 0);
     if (cut > 0) basis.push(`Conservative lowered ${pct(cut)} for concerns on file`);
     const trainingMid = now * ratio;
-    const form = source === "training" ? recentForm(input.meets, lift, input.today, input.weightClass) : null;
+    const form =
+      source === "training" ? recentForm(input.meets, lift, input.today, input.weightClass) : null;
     const share = form ? formShare(daysOut, form.meets.length) : 0;
     if (form && share > 0) {
       const since = form.meets[form.meets.length - 1].date;
