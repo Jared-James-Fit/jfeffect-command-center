@@ -18,6 +18,8 @@
  * that's behind it, never full until it's done (run-eta.ts's rule).
  */
 
+import { isCoachConsentMessage } from "@/lib/ai-consent/consent";
+
 export type RewriteStepKey = "sent" | "reading" | "writing" | "checking" | "ready";
 
 export const REWRITE_STEPS: ReadonlyArray<{ key: RewriteStepKey; label: string }> = [
@@ -87,6 +89,7 @@ export type RewritePhase =
   | "second_pass"
   | "waiting_ai"
   | "failed"
+  | "no_consent"
   | "stopped";
 
 export type RewriteView = {
@@ -174,6 +177,22 @@ export function rewriteView(
   const base = { sinceAsked, error: null, retryAt: null, canRetry: false, slow: false };
   const steps = (k: RewriteStepKey) => stepsAt(k, !!live.request);
   const bar = (left: number) => Math.min(BAR_MAX, Math.max(0.03, (total - left) / total));
+
+  if (live.status === "failed" && isCoachConsentMessage(live.lastError)) {
+    // the athlete hasn't allowed AI: no attempt is used, the worker looks again every 10 minutes
+    // and carries on once they allow it (worker.server.ts), so there's no time to promise
+    return {
+      ...base,
+      phase: "no_consent",
+      step: "sent",
+      steps: steps("sent"),
+      doing: "Waiting for the athlete's permission to use AI",
+      time: null,
+      share: null,
+      error: live.lastError,
+      canRetry: true,
+    };
+  }
 
   if (live.status === "failed") {
     const stoppedAt = ms(live.updatedAt) ?? now;

@@ -156,7 +156,8 @@ export function RewriteProgressCard({
     onError: (e: any) => toast.error(e?.message ?? "Couldn't start it again"),
   });
   const def = MILESTONE_BY_KIND[live.kind as keyof typeof MILESTONE_BY_KIND];
-  const stopped = view.phase === "failed" || view.phase === "stopped";
+  const stopped =
+    view.phase === "failed" || view.phase === "stopped" || view.phase === "no_consent";
   const title = live.request
     ? `${stopped ? "Version" : "Writing version"} ${live.request.version + 1}`
     : `${stopped ? "" : "Writing "}${def?.title ?? "the assessment"}`;
@@ -261,7 +262,12 @@ export function RewriteProgressCard({
       ) : (
         <div className="mt-3 space-y-2" data-rewrite-stopped>
           <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <AlertCircle
+              className={cn(
+                "mt-0.5 h-4 w-4 shrink-0",
+                view.phase === "no_consent" ? "text-warning" : "text-destructive",
+              )}
+            />
             <div className="min-w-0">
               <p className="text-[14px] font-medium">{view.doing}</p>
               {view.error ? (
@@ -271,11 +277,13 @@ export function RewriteProgressCard({
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 pl-6">
             <span className="text-[12px] text-muted-foreground">
-              {view.retryAt && view.retryAt > now
-                ? `Tries again by itself at ${clock(view.retryAt)}`
-                : view.retryAt
-                  ? "Trying again shortly"
-                  : "Nothing more happens until you try again"}
+              {view.phase === "no_consent"
+                ? "Carries on by itself once they allow it"
+                : view.retryAt && view.retryAt > now
+                  ? `Tries again by itself at ${clock(view.retryAt)}`
+                  : view.retryAt
+                    ? "Trying again shortly"
+                    : "Nothing more happens until you try again"}
             </span>
             <Button size="sm" variant="outline" loading={go.isPending} onClick={() => go.mutate()}>
               Try again now

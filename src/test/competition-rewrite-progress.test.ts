@@ -167,7 +167,7 @@ describe("rewriteView", () => {
   });
 
   it("failed: the reason, when it tries again by itself, and Try again", () => {
-    const err = "Jared hasn't allowed their data to be sent to AI services";
+    const err = "The assessment wasn't readable twice.";
     const v = rewriteView(
       live({ status: "failed", attempts: 1, lastError: err, updatedAt: at(320), done: ["write"] }),
       T0 + 330_000,
@@ -178,6 +178,21 @@ describe("rewriteView", () => {
     expect(v.canRetry).toBe(true);
     expect(v.retryAt).toBe(T0 + 320_000 + RETRY_AFTER_MS);
     expect(v.share).toBeNull();
+  });
+
+  it("the athlete hasn't allowed AI: waiting for their permission, no time promised", () => {
+    const err =
+      "Jared hasn't allowed their data to be sent to AI services (OpenAI and Google (Gemini)), so this can't be drafted for them. Do it by hand, or ask them to allow it in Account → Privacy & data.";
+    const v = rewriteView(
+      live({ status: "failed", attempts: 0, lastError: err, done: ["write"] }),
+      T0 + 330_000,
+      typical,
+    );
+    expect(v.phase).toBe("no_consent");
+    expect(v.doing).toBe("Waiting for the athlete's permission to use AI");
+    expect(v.retryAt).toBeNull();
+    expect(v.error).toBe(err);
+    expect(v.canRetry).toBe(true);
   });
 
   it("stopped after three tries: no retry by itself, Try again still offered", () => {
