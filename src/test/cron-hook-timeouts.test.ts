@@ -46,4 +46,24 @@ describe("a scheduled hook call always says how long it waits", () => {
     expect(postCalls("select net.http_post(url := 'x', body := '{}'::jsonb) as id;")).toHaveLength(1);
     expect(postCalls("select net.http_post(url := 'x', body := jsonb_build_object('a', 1), timeout_milliseconds := 1000);")[0]).toMatch(/timeout_milliseconds/);
   });
+  it("the Nov 25 sweep gives any hook call still without a timeout 2 minutes (5 for the nightly archive), once", () => {
+    const sweep = readFileSync(`${DIR}/20270527109500_cron_hook_timeouts_sweep.sql`, "utf8");
+    expect(sweep).toContain("cron.alter_job");
+    expect(sweep).toContain("command not ilike '%timeout_milliseconds%'");
+    expect(sweep).toContain("300000");
+    expect(sweep).toContain("120000");
+  });
+  it("payment-setup-reminders and messenger-checkin-reminders are SQL only: no hook call, nothing to time out", () => {
+    for (const [file, job, fn] of [
+      ["20261007120000_payment_setup_reminders.sql", "payment-setup-reminders", "run_payment_setup_reminders"],
+      ["20260920041000_messenger_native_checkins.sql", "messenger-checkin-reminders", "run_messenger_checkin_automation"],
+    ]) {
+      const sql = readFileSync(`${DIR}/${file}`, "utf8");
+      const at = sql.indexOf(`'${job}',`);
+      expect(at, job).toBeGreaterThan(-1);
+      const schedule = sql.slice(at, at + 160);
+      expect(schedule, job).toContain(`select public.${fn}();`);
+      expect(schedule, job).not.toMatch(/net\.http_post/i);
+    }
+  });
 });
