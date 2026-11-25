@@ -51,7 +51,14 @@ export type LiftEvidence = {
   direction: "up" | "flat" | "down" | "unclear";
 };
 
-export type ConversionPoint = { lift: Lift; meetDate: string; meetKg: number; trainingKg: number };
+export type ConversionPoint = {
+  lift: Lift;
+  meetDate: string;
+  meetKg: number;
+  trainingKg: number;
+  /** the class that meet was lifted in: a cut is part of what the conversion measures */
+  weightClass?: string | null;
+};
 
 export type Concern = {
   lift: Lift | null;
@@ -202,11 +209,25 @@ export function pastCuts(
     .filter((c) => c.sameDistanceKg != null || c.fourWeeksKg != null);
 }
 
-export function conversionFor(lift: Lift, points: ConversionPoint[]): LiftForecast["conversion"] {
-  const r = points
-    .filter((p) => p.lift === lift && p.trainingKg > 0 && p.meetKg > 0)
-    .map((p) => p.meetKg / p.trainingKg);
-  if (!r.length) return { ratio: 1, meets: 0, assumed: true };
+/**
+ * How their meets compared with their training three weeks before, for this
+ * lift. A cut to make a class is part of what it measures (training at 70 kg,
+ * lifting at 65.4), so when the class being entered is known only meets in
+ * that class count: a lifter moving up a class makes no cut, and the cut's
+ * cost must not come with them. With none in the class it's 1.0, said.
+ */
+export function conversionFor(
+  lift: Lift,
+  points: ConversionPoint[],
+  weightClass?: string | null,
+): LiftForecast["conversion"] & { otherClass?: boolean } {
+  const want = classKey(weightClass);
+  const usable = points.filter((p) => p.lift === lift && p.trainingKg > 0 && p.meetKg > 0);
+  const inClass = want
+    ? usable.filter((p) => !p.weightClass || classKey(p.weightClass) === want)
+    : usable;
+  const r = inClass.map((p) => p.meetKg / p.trainingKg);
+  if (!r.length) return { ratio: 1, meets: 0, assumed: true, otherClass: usable.length > 0 };
   return {
     ratio: Math.round(Math.min(1.08, Math.max(0.92, median(r))) * 1000) / 1000,
     meets: r.length,
@@ -245,7 +266,7 @@ export function forecastMeet(input: {
   const out = {} as Record<Lift, LiftForecast | null>;
   for (const lift of LIFTS) {
     const ev = input.lifts[lift];
-    const conv = conversionFor(lift, input.conversion);
+    const conv = conversionFor(lift, input.conversion, input.weightClass);
     const basis: string[] = [];
     let now: number | null = null;
     let source: LiftForecast["source"] = "training";
@@ -280,7 +301,9 @@ export function forecastMeet(input: {
     if (source === "training")
       basis.push(
         conv.assumed
-          ? "Platform conversion assumed 1.0 (no past meets to calibrate)"
+          ? (conv as { otherClass?: boolean }).otherClass
+            ? `Platform conversion assumed 1.0: their meets to calibrate against were in another class (a different cut)`
+            : "Platform conversion assumed 1.0 (no past meets to calibrate)"
           : `Platform conversion ${conv.ratio} from ${conv.meets} meet${conv.meets === 1 ? "" : "s"}`,
       );
     let gainExp = 0;
