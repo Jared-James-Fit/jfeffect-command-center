@@ -119,7 +119,7 @@ advertising SDKs, no data brokers). All data below is **linked to the person's i
 | Purchases: Purchase History | Yes (coaching and session purchases made on the web) | App Functionality |
 | Location: Coarse Location | Yes (city-level from the network address, for usage statistics) | Analytics |
 | Usage Data: Product Interaction | Yes (pages opened, features used) | Analytics, App Functionality |
-| Diagnostics: Crash Data, Other Diagnostic Data | Yes (page errors, camera failures, device and app build) | App Functionality |
+| Diagnostics: Crash Data, Performance Data, Other Diagnostic Data | Yes (page errors, failed requests, page speed readings such as load time and tap response, camera failures, device and app build) | App Functionality |
 | Other Data | Yes (date of birth, sex, height, emergency contact) | App Functionality |
 | Financial Info: Payment Info | No (card details are entered on Stripe's pages, not in the app) | |
 | Precise Location, Contacts, Browsing History, Search History, Device ID, Advertising Data | No | |
