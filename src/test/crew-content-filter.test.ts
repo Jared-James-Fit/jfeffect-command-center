@@ -41,7 +41,19 @@ describe("Crew word filter: what gets refused", () => {
   it("names the category it matched", () => {
     expect(crewTextVerdict(say("snttbg"))).toMatchObject({ verdict: "block", category: "hate" });
     expect(crewTextVerdict(say("xlf"))).toMatchObject({ verdict: "block", category: "violence" });
-    expect(crewTextVerdict(say("cbea"))).toMatchObject({ verdict: "block", category: "sexual" });
+    expect(crewTextVerdict(say("cbeauho"))).toMatchObject({ verdict: "block", category: "sexual" });
+  });
+
+  // Nov 25 2026: checked against what people really write in a gym app before it went live. These are
+  // banter, food posts and idioms, so they're held for a look (flag), never refused.
+  it.each([
+    ["gym banter", "I'm going to kill you in this workout"],
+    ["gym banter (gonna)", "gonna kill you guys with leg day"],
+    ["an idiom", "go die trying"],
+    ["a food post", "food porn tonight"],
+    ["an idiom", say("n puvax va gur nezbe")],
+  ])("%s is held for a look, never refused", (_label, text) => {
+    expect(crewTextVerdict(text).verdict).toBe("flag");
   });
 });
 

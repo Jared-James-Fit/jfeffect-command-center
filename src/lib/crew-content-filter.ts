@@ -31,24 +31,22 @@ export type CrewTextVerdict =
 export const CREW_BLOCK_TERMS: readonly string[] = [
   "hate:avttre", "hate:avttref", "hate:avttn", "hate:avttnf", "hate:avttnm", "hate:fnaqavttre",
   "hate:snttbg", "hate:snttbgf", "hate:sntbg", "hate:snt", "hate:sntf", "hate:xvxr", "hate:xvxrf",
-  "hate:fcvp", "hate:fcvpf", "hate:puvax", "hate:puvaxf", "hate:tbbx", "hate:tbbxf", "hate:jrgonpx",
+  "hate:fcvp", "hate:fcvpf", "hate:tbbx", "hate:tbbxf", "hate:jrgonpx",
   "hate:jrgonpxf", "hate:ornare", "hate:ornaref", "hate:enturnq", "hate:enturnqf", "hate:gbjryurnq",
   "hate:gbjryurnqf", "hate:genaal", "hate:genaavrf", "hate:ergneq", "hate:ergneqf", "hate:ergneqrq",
   "hate:cnxv", "hate:cnxvf", "hate:wvtnobb", "hate:cbepu zbaxrl", "hate:urvy uvgyre", "hate:juvgr cbjre",
-  "hate:tnf gur wrjf", "sexual:cbea", "sexual:cbeab", "sexual:cbeauho", "sexual:oybjwbo", "sexual:oybjwbof",
+  "hate:tnf gur wrjf", "sexual:cbeauho", "sexual:oybjwbo", "sexual:oybjwbof",
   "sexual:unaqwbo", "sexual:unaqwbof", "sexual:phzfubg", "sexual:tnatonat", "sexual:fraq ahqrf",
   "sexual:fraq zr ahqrf", "sexual:qvpx cvp", "sexual:qvpx cvpf", "sexual:encr lbh", "sexual:v jvyy encr",
   "violence:xvyy lbhefrys", "violence:xvyy hefrys", "violence:xvyy lbhe frys", "violence:xvyy lbhefryirf",
-  "violence:xlf", "violence:tb qvr", "violence:ubcr lbh qvr", "violence:v ubcr lbh qvr",
-  "violence:v jvyy xvyy lbh", "violence:vyy xvyy lbh", "violence:vz tbvat gb xvyy lbh",
-  "violence:vz tbaan xvyy lbh", "violence:tbaan xvyy lbh", "violence:tbvat gb xvyy lbh",
-  "violence:v jvyy svaq lbh", "violence:fubbg lbh", "violence:fgno lbh", "violence:fyvg lbhe guebng",
+  "violence:xlf", "violence:ubcr lbh qvr", "violence:v ubcr lbh qvr",
+  "violence:v jvyy xvyy lbh", "violence:vyy xvyy lbh", "violence:v jvyy svaq lbh", "violence:fubbg lbh", "violence:fgno lbh", "violence:fyvg lbhe guebng",
   "violence:unat lbhefrys", "violence:arpx lbhefrys", "violence:qevax oyrnpu",
 ];
 
 /** Saved, but sent to the moderation queue (ROT13, "category:term"). */
 export const CREW_FLAG_TERMS: readonly string[] = [
-  "sexual:ahqrf", "sexual:ubeal", "sexual:chffl", "sexual:pbpx", "sexual:qvpx", "sexual:qvpxf",
+  "sexual:ahqrf", "sexual:cbea", "sexual:cbeab", "hate:puvax", "hate:puvaxf", "violence:tb qvr", "sexual:ubeal", "sexual:chffl", "sexual:pbpx", "sexual:qvpx", "sexual:qvpxf",
   "sexual:gvgf", "sexual:gvggvrf", "sexual:phz", "sexual:baylsnaf", "sexual:fyhg", "sexual:fyhgf",
   "sexual:juber", "sexual:juberf", "sexual:gubg", "sexual:zvys", "sexual:qvyqb", "sexual:frkgvat",
   "sexual:encr", "sexual:encrq", "sexual:encvfg", "harassment:phag", "harassment:phagf",
