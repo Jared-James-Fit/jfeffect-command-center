@@ -201,9 +201,15 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
       kind: "field",
       text: `The ${alt.weightClass} kg class (${alt.reason}): ${alt.lifters
         .map((l) => `${l.name} ${l.total} kg (${l.date})`)
-        .join(
-          "; ",
-        )}${alt.ourPlace != null ? `; our expected total would place about ${alt.ourPlace}` : ""}`,
+        .join("; ")}${
+        alt.ours?.own.length
+          ? `; their own totals at ${alt.weightClass} since ${alt.ours.ownSince}: ${alt.ours.own.join(", ")} kg`
+          : ""
+      }${alt.ours?.scaled != null ? `; today's expected scaled to ${alt.weightClass} kg bodyweight: about ${alt.ours.scaled} kg` : ""}${
+        alt.ourPlace != null
+          ? `; at ${alt.ours?.kg ?? "today's expected"} kg they'd place about ${alt.ourPlace} in this list`
+          : ""
+      }`,
     });
   if (b.landscape.ranked.length)
     out.push({

@@ -282,7 +282,12 @@ export function briefForModel(
       weight_class: c.weightClass,
       why_considered: c.reason,
       field: c.lifters,
-      our_expected_would_place: c.ourPlace,
+      // what they'd total there: their own meets at that class, and today's expected scaled to it
+      our_totals_at_this_class: c.ours?.own ?? [],
+      our_totals_since: c.ours?.ownSince ?? null,
+      our_expected_scaled_to_this_class: c.ours?.scaled ?? null,
+      our_estimate_here: c.ours?.kg ?? null,
+      we_would_place_about: c.ourPlace,
     })),
     bodyweight: {
       seven_day_avg: b.inputs.bodyweightAvg,

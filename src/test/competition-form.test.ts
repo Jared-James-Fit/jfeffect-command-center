@@ -183,3 +183,39 @@ describe("competitors: a trend is credited only while they're competing", () => 
     expect(r.projection!.expected).toBeGreaterThan(702.5);
   });
 });
+
+describe("another class: what they'd total there, on their own numbers", () => {
+  it("reads their own meets at that class first, and says the scaled estimate beside them", async () => {
+    const { ourAtClass } = await import("@/lib/competition/research");
+    const meets = [
+      ...MEETS,
+      meet("2024-09-14", "74", 73.6, 247.5, 175, 285),
+      meet("2024-03-10", "74", 73, 260, 170, 290),
+    ];
+    const r = ourAtClass({
+      weightClass: "74",
+      meets,
+      today: "2026-11-25",
+      expectedHere: 642.5,
+      limitHere: 66,
+    });
+    // 707.5, 707.5, 720 at 74 (2024–2025): the median, never the lifetime best
+    expect(r.own).toEqual([707.5, 707.5, 720]);
+    expect(r.kg).toBe(707.5);
+    // the 66 kg expected scaled to 74 kg bodyweight, the half power
+    expect(r.scaled).toBeGreaterThanOrEqual(677.5);
+    expect(r.scaled).toBeLessThanOrEqual(682.5);
+  });
+  it("with no meets there it's the scaled estimate, and never more than 10% either way", async () => {
+    const { ourAtClass } = await import("@/lib/competition/research");
+    const r = ourAtClass({
+      weightClass: "120+",
+      meets: MEETS,
+      today: "2026-11-25",
+      expectedHere: 600,
+      limitHere: 66,
+    });
+    expect(r.own).toEqual([]);
+    expect(r.kg).toBe(660);
+  });
+});

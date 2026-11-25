@@ -9,6 +9,7 @@
 import { planAttempts, type AttemptPlan } from "./attempts";
 import { recommendCall, type CallRecommendation } from "./call";
 import { readCompetitor, type CompetitorRead } from "./competitor";
+import { ourAtClass } from "./research";
 import {
   forecastMeet,
   type ConversionPoint,
@@ -119,6 +120,8 @@ export type ClassOption = {
   lifters: Array<{ name: string; total: number; date: string }>;
   ourPlace: number | null;
   reason: string;
+  /** what they'd total there (research.ts ourAtClass), set when the brief is built */
+  ours?: { kg: number | null; own: number[]; ownSince: string | null; scaled: number | null };
 };
 
 /** One training day of a competition lift: its most telling set, as the strength line read it. */
@@ -376,7 +379,22 @@ export function buildBrief(ctx: BriefContext): Brief {
     profile,
     missing,
     projectionShift,
-    classOptions: ctx.classOptions ?? [],
+    // another class's field, with where they'd stand there on their own numbers at that class
+    classOptions: (ctx.classOptions ?? []).map((alt) => {
+      const ours = ourAtClass({
+        weightClass: alt.weightClass,
+        meets: ctx.meets,
+        today: ctx.today,
+        expectedHere: forecast.total?.expected ?? null,
+        limitHere: ctx.athlete.classLimit,
+      });
+      return {
+        ...alt,
+        ours,
+        ourPlace:
+          ours.kg != null ? 1 + alt.lifters.filter((l) => l.total > ours.kg!).length : alt.ourPlace,
+      };
+    }),
     inputs: {
       history,
       topSingles: ctx.topSingles,
