@@ -322,6 +322,16 @@ export async function processMilestone(
         .eq("id", m.id);
       return { status: "waiting_ai" };
     }
+    // the athlete hasn't allowed AI processing: say so, use no attempt, and carry on by itself once
+    // they allow it (the cron looks again every 10 minutes: one consent check, no model call)
+    const { AiConsentError } = await import("@/lib/ai-consent/consent.server");
+    if (e instanceof AiConsentError) {
+      await sb
+        .from("competition_milestones")
+        .update({ status: "failed", attempts: Math.max(0, m.attempts - 1), last_error: e.message, locked_at: null })
+        .eq("id", m.id);
+      return { status: "no_consent" };
+    }
     const { classifyAiError, isProviderFailure, errorText } = await import("@/lib/ai/ai-errors");
     const kindOf = classifyAiError(e);
     if (isProviderFailure(kindOf)) {
