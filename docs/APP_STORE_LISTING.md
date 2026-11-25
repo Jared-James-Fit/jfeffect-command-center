@@ -188,6 +188,32 @@ working until the review is done.
 | Coaching client | Coaching client of a demo coach login, coaching agreement signed, a booked (fake) session next week | A current program block with logged sets and one filmed set video of an empty-bar lift filmed by staff; two weekly check-ins; a coach chat thread with a few messages, a photo and a voice memo; a nutrition plan |
 | Demo athletes (2 or 3, not given to Apple) | Approved members | A few Crew posts and stories with stock images so the feed isn't empty |
 
+### Steps (the data is seeded from the app; the logins are yours)
+
+1. Create the two logins yourself, with addresses you control (defaults
+   `appreview.client@jfeffect.com` and `appreview.member@jfeffect.com`; change them by editing the
+   `app_review_demo_accounts` row in `app_settings`, JSON text: `{"client_email":"…","member_email":"…"}`).
+   Nothing in the app creates a user or sets a password.
+   - Coaching client: add them as a coaching client (Admin → Clients) with a demo coach, send the
+     invite, set the password, sign the coaching agreement. Leave the AI-processing sheet unanswered.
+   - Free member: let them apply and approve them (or invite them), finish the member setup, accept
+     the membership agreement, no two-step. Leave AI processing unanswered so the reviewer sees the sheet.
+2. Make sure at least one library plan is live (Admin → Member plans); the demo copies it.
+3. Admin → Settings → **App Review demo accounts** → **Prepare App Review demo data**. For each of the
+   two logins it adds synthetic training: the coaching client gets a program, three logged workouts,
+   a completed weekly check-in and a cardio plan; the free member gets a library plan with three logged
+   workouts. It refuses (and says why) when a login doesn't exist, is on the wrong plan, or already has
+   training of its own, so a real client can't be touched. Running it twice adds nothing.
+4. Still by hand (not seeded): the chat thread with a photo and voice memo, the filmed set video, a
+   food log, a nutrition plan, the booked session, the demo athletes' Crew posts and stories, avatars.
+5. Sign in as each login on a phone and check the screens Apple will open. Put the two emails and
+   passwords in App Store Connect's Review Notes only (never in the repo).
+6. After review (or to start over): **Remove demo data** deletes exactly the rows the button added
+   (every one is listed in `app_review_demo_records`) and leaves the logins and anything else alone.
+
+Migration: `20270527109600_app_review_demo_data.sql` (the list of seeded rows and the default emails).
+Not run against a real database here, so check step 3 on staging or on the accounts before submitting.
+
 Use addresses Jared controls (for example appreview.member@jfeffect.com and
 appreview.client@jfeffect.com) so password resets work, and keep the passwords out of the repo
 (enter them only in App Store Connect). Exclude these logins from Insights if they show up there.

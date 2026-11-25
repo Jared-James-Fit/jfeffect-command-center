@@ -24,6 +24,8 @@ import { billingDay } from "@/lib/date-range";
 import { ALWAYS_KEPT, money, quoteLines, type ConfirmResult, type PlanPreview } from "@/lib/plans/plan-engine";
 import type { PlanCard, PlanView } from "@/lib/plans/plans.functions";
 import { cn } from "@/lib/utils";
+import { isNative } from "@/platform";
+import { plansForShell, showPlanPrice } from "@/lib/native-purchases";
 
 export type ApplyInput = { goal: string; outcome: string; timeline: string; phone?: string | null; packageSlug?: string | null };
 
@@ -199,7 +201,7 @@ function buttonWord(p: PlanCard, who: "client" | "admin"): string {
   }
 }
 
-function PlanOptionCard({ p, onPick, who, canChange }: { p: PlanCard; onPick: () => void; who: "client" | "admin"; canChange: boolean }) {
+function PlanOptionCard({ p, onPick, who, canChange, native }: { p: PlanCard; onPick: () => void; who: "client" | "admin"; canChange: boolean; native: boolean }) {
   const t = p.transition;
   const current = t.kind === "current" && t.blocked === "Your current plan";
   return (
@@ -212,10 +214,13 @@ function PlanOptionCard({ p, onPick, who, canChange }: { p: PlanCard; onPick: ()
           </div>
           {p.tagline ? <p className="mt-0.5 text-[14px] text-muted-foreground">{p.tagline}</p> : null}
         </div>
-        <div className="shrink-0 text-right">
-          <div className="text-base font-semibold">{p.family === "free" ? "Free" : money(p.priceCents)}</div>
-          {p.family !== "free" && <div className="text-[12px] text-muted-foreground">a month + tax</div>}
-        </div>
+        {/* the iPhone app prints no price for a plan the person isn't on (web-only purchases, native-purchases.ts) */}
+        {(p.family === "free" || showPlanPrice(p, native)) && (
+          <div className="shrink-0 text-right">
+            <div className="text-base font-semibold">{p.family === "free" ? "Free" : money(p.priceCents)}</div>
+            {p.family !== "free" && <div className="text-[12px] text-muted-foreground">a month + tax</div>}
+          </div>
+        )}
       </div>
       {!current && (p.gain.length > 0 || p.lose.length > 0) && (
         <ul className="space-y-1.5" data-plan-diff>
@@ -861,7 +866,9 @@ export function PlanManager({ view, api, who, onChanged }: { view: PlanView; api
     else setPicked(p);
   };
 
-  const others = view.options.filter((p) => !(p.transition.kind === "current" && p.transition.blocked === "Your current plan"));
+  // the iPhone app never lists a plan that needs a purchase (web only), and prints no price for one it lists
+  const native = who === "client" && isNative();
+  const others = plansForShell(view.options.filter((p) => !(p.transition.kind === "current" && p.transition.blocked === "Your current plan")), native);
   return (
     <div className="space-y-4" data-plan-manager={who}>
       <CurrentPlanCard view={view} api={api} busy={busy} who={who} onKeep={() => run(api.keep, "You're keeping your plan")} />
@@ -872,7 +879,7 @@ export function PlanManager({ view, api, who, onChanged }: { view: PlanView; api
         <div className="space-y-3">
           <h2 className="px-1 text-base font-semibold">{who === "client" ? "Other plans" : "Change their plan"}</h2>
           {others.map((p) => (
-            <PlanOptionCard key={p.slug} p={p} who={who} canChange={view.canChange} onPick={() => pick(p)} />
+            <PlanOptionCard key={p.slug} p={p} who={who} canChange={view.canChange} native={native} onPick={() => pick(p)} />
           ))}
         </div>
       )}

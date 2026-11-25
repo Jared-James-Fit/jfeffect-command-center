@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
 import { JfMembershipSettingsCard } from "@/components/admin/jf-membership-settings-card";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
+import { AppReviewDemoCard } from "@/components/admin/app-review-demo-card";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -227,6 +228,8 @@ function SettingsPage() {
          <DriveIntegrationCard />
          <ArchiveSettingsCard />
          <SignNowIntegrationCard />
+         {/* synthetic data for the App Store reviewer's two logins (admins) */}
+         {isAdmin && <AppReviewDemoCard />}
        </div>
      </>
    );
