@@ -399,6 +399,32 @@ export const assessmentActionFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** Where the competition's assessments being written stand (light: polled while one is in flight). */
+export const getRewriteProgressFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ competitionId: uuid }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { sb } = await reachCompetition(context, data.competitionId);
+    const { loadRewrites } = await import("./rewrite.server");
+    return loadRewrites(sb, data.competitionId);
+  });
+
+/** Start a stopped rewrite again now, keeping what Cleo already finished. */
+export const retryRewriteFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ competitionId: uuid, milestoneId: uuid }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { sb } = await reachCompetition(context, data.competitionId);
+    const { data: m } = await sb
+      .from("competition_milestones")
+      .select("competition_id")
+      .eq("id", data.milestoneId)
+      .maybeSingle();
+    if (!m || m.competition_id !== data.competitionId) throw new Error("That isn't this competition's");
+    const { retryRewrite } = await import("./rewrite.server");
+    return retryRewrite(sb, data.milestoneId, context.userId);
+  });
+
 export const editAthleteVersionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>

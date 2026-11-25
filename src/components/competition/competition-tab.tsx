@@ -23,6 +23,7 @@ import {
   createCompetitionFn,
   getCompetitionWorkspaceFn,
   removeResourceFn,
+  retryRewriteFn,
   runMilestoneNowFn,
   saveResultsFn,
   setCompetitionStatusFn,
@@ -40,6 +41,12 @@ import { OBJECTIVE_LABEL } from "@/lib/competition/types";
 import { ordinal } from "@/lib/competition/landscape";
 import type { CompetitorRead } from "@/lib/competition/competitor";
 import { AssessmentSheet } from "./assessment-sheet";
+import {
+  RewriteProgressCard,
+  useRewriteProgress,
+  type RewriteProgress,
+} from "./rewrite-progress";
+import { rewriteView } from "@/lib/competition/rewrite-progress";
 import { CompetitionForm, emptyCompetition, type CompetitionFormValues } from "./competition-form";
 import { CompetitionField } from "./competition-field";
 import { AttemptsView, ForecastTable, GameDayView, Kg, WarmupsView } from "./plan-views";
@@ -121,6 +128,8 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
   });
   const invalidate = () =>
     void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
+  // what Cleo is writing right now, polled lightly while it's going (rewrite-progress.tsx)
+  const rewrite = useRewriteProgress(q.data?.selected?.competition?.id, clientId, setAssessmentId);
 
   const create = useServerFn(createCompetitionFn);
   const update = useServerFn(updateCompetitionFn);
@@ -298,15 +307,25 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
       ) : null}
 
       {section === "overview" ? (
-        <Overview clientId={clientId} sel={sel} onOpen={setAssessmentId} onSection={setSection} />
+        <Overview
+          clientId={clientId}
+          sel={sel}
+          rewrite={rewrite}
+          onOpen={setAssessmentId}
+          onSection={setSection}
+        />
       ) : null}
       {section === "timeline" ? (
         <Timeline
           comp={comp}
           milestones={sel.milestones}
           assessments={assessments}
+          rewrite={rewrite}
           onOpen={setAssessmentId}
-          onRun={invalidate}
+          onRun={() => {
+            invalidate();
+            rewrite.refetch();
+          }}
         />
       ) : null}
       {section === "field" ? (
@@ -403,6 +422,8 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
       <AssessmentSheet
         assessmentId={assessmentId}
         clientId={clientId}
+        rewrite={rewrite}
+        onOpen={setAssessmentId}
         onClose={() => setAssessmentId(null)}
         newerReleased={
           !!assessmentId && !!assessments.find((a) => a.id === assessmentId)?.superseded_at
@@ -582,11 +603,13 @@ function Tile({
 function Overview({
   clientId,
   sel,
+  rewrite,
   onOpen,
   onSection,
 }: {
   clientId: string;
   sel: any;
+  rewrite: RewriteProgress;
   onOpen: (id: string) => void;
   onSection: (s: Section) => void;
 }) {
@@ -596,6 +619,10 @@ function Overview({
   const latest = assessments.find((a) => a.status !== "superseded") ?? null;
   const outstanding = assessments.filter((a) =>
     ["ready", "reviewed", "changes_requested", "approved"].includes(a.status),
+  );
+  // a version Cleo is rewriting waits on Cleo, not the coach (its card says where it is)
+  const beingRewritten = new Set(
+    (rewrite.data?.live ?? []).map((l) => l.request?.assessmentId).filter(Boolean) as string[],
   );
   const plan = assessments.find(
     (a) => (a.kind === "confirm" || a.kind === "game_plan") && a.status !== "superseded",
@@ -611,11 +638,8 @@ function Overview({
     mutationFn: () => run({ data: { competitionId: comp.id } }),
     onSuccess: (r) => {
       void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
-      toast.success(
-        r.already
-          ? "It's already being written"
-          : "Queued: Cleo writes it within a few minutes and lets you know",
-      );
+      rewrite.refetch();
+      toast.success(r.already ? "It's already being written" : "Queued for Cleo");
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't queue it"),
   });
@@ -662,9 +686,26 @@ function Overview({
     </button>
   ) : null;
 
+  // Cleo writing: the progress card takes the place of the version it replaces
+  const writing = (rewrite.data?.live ?? []) as any[];
+  const replacing = new Set(writing.map((l) => l.request?.assessmentId).filter(Boolean));
+  const progressCards = writing.map((l) => (
+    <RewriteProgressCard
+      key={l.milestoneId}
+      live={l}
+      now={rewrite.now}
+      typical={rewrite.data!.typical}
+      competitionId={comp.id}
+      onRetried={rewrite.refetch}
+      onOpenCurrent={l.request ? () => onOpen(l.request.assessmentId) : undefined}
+    />
+  ));
+  const showLatest = !!latest && !replacing.has(latest.id);
+
   return (
     <div className="space-y-4" data-competition-overview>
-      {latest && needsCoach ? latestCard : null}
+      {progressCards}
+      {showLatest && needsCoach ? latestCard : null}
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
         <Tile
           label="Countdown"
@@ -738,10 +779,10 @@ function Overview({
       </div>
 
       {latest ? (
-        needsCoach ? null : (
+        needsCoach || !showLatest ? null : (
           latestCard
         )
-      ) : (
+      ) : writing.length ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-border p-4 text-[14px]">
           <span className="text-muted-foreground">
             {nextMilestone
@@ -759,10 +800,10 @@ function Overview({
         </div>
       )}
 
-      {outstanding.length > 1 ? (
+      {outstanding.filter((a) => !beingRewritten.has(a.id)).length > 1 ? (
         <Card title="Waiting on you">
           <ul className="divide-y divide-border">
-            {outstanding.map((a) => (
+            {outstanding.filter((a) => !beingRewritten.has(a.id)).map((a) => (
               <li key={a.id}>
                 <button
                   type="button"
@@ -874,24 +915,32 @@ function Timeline({
   comp,
   milestones,
   assessments,
+  rewrite,
   onOpen,
   onRun,
 }: {
   comp: any;
   milestones: any[];
   assessments: any[];
+  rewrite: RewriteProgress;
   onOpen: (id: string) => void;
   onRun: () => void;
 }) {
   const run = useServerFn(runMilestoneNowFn);
+  const retry = useServerFn(retryRewriteFn);
   const go = useMutation({
-    mutationFn: (kind: any) => run({ data: { competitionId: comp.id, kind } }),
+    // a stopped one starts again keeping what Cleo already finished; a scheduled one is written now
+    mutationFn: async (m: { id: string; kind: any; status: string }) => {
+      if (m.status === "failed") await retry({ data: { competitionId: comp.id, milestoneId: m.id } });
+      else await run({ data: { competitionId: comp.id, kind: m.kind } });
+    },
     onSuccess: () => {
       onRun();
-      toast.success("Queued: you'll be told when it's ready");
+      toast.success("Queued for Cleo");
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't queue it"),
   });
+  const liveById = new Map((rewrite.data?.live ?? []).map((l) => [l.milestoneId, l]));
   const rows = [...milestones].sort((a, b) => String(a.due_on).localeCompare(String(b.due_on)));
   return (
     <Card
@@ -928,7 +977,12 @@ function Timeline({
                       : m.status === "skipped"
                         ? "Skipped"
                         : m.status === "generating" || m.status === "waiting_ai"
-                          ? "Being written"
+                          ? liveById.get(m.id) && rewrite.data
+                            ? (() => {
+                                const v = rewriteView(liveById.get(m.id)!, rewrite.now, rewrite.data.typical);
+                                return v.time ? `Being written · ${v.time.toLowerCase()}` : "Being written";
+                              })()
+                            : "Being written"
                           : m.status === "failed"
                             ? `Couldn't be written: ${m.last_error ?? "error"}`
                             : "Scheduled"}
@@ -939,8 +993,8 @@ function Timeline({
                   <Button
                     size="sm"
                     variant="outline"
-                    loading={go.isPending && go.variables === m.kind}
-                    onClick={() => go.mutate(m.kind)}
+                    loading={go.isPending && go.variables?.id === m.id}
+                    onClick={() => go.mutate({ id: m.id, kind: m.kind, status: m.status })}
                   >
                     {m.status === "failed" ? "Try again" : "Write now"}
                   </Button>

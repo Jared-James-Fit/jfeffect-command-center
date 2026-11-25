@@ -48,6 +48,13 @@ import { AttemptsView, ForecastTable, GameDayView, WarmupsView } from "./plan-vi
 import { StrategyCalls } from "./strategy-calls";
 import { confirmedPlan } from "@/lib/competition/proposals";
 import { cn } from "@/lib/utils";
+import {
+  RewriteProgressCard,
+  RewriteReadyRow,
+  rewriteKey,
+  type RewriteProgress,
+} from "./rewrite-progress";
+import type { LiveRewrite } from "@/lib/competition/rewrite-progress";
 
 const fmt = (iso: string | null | undefined) =>
   iso
@@ -74,11 +81,17 @@ const SECTION_TITLE: Record<string, string> = {
 export function AssessmentSheet({
   assessmentId,
   clientId,
+  rewrite,
+  onOpen,
   onClose,
   newerReleased = false,
 }: {
   assessmentId: string | null;
   clientId: string;
+  /** What Cleo is writing (the tab's one poll), for this version's rewrite. */
+  rewrite?: RewriteProgress;
+  /** Open another version in the sheet (the one a rewrite produced). */
+  onOpen?: (id: string) => void;
   onClose: () => void;
   newerReleased?: boolean;
 }) {
@@ -99,10 +112,13 @@ export function AssessmentSheet({
     enabled: !!assessmentId,
     staleTime: 15_000,
   });
+  // the request just sent, shown at once until the poll has it
+  const [justSent, setJustSent] = useState<LiveRewrite | null>(null);
   useEffect(() => {
     setView("internal");
     setChanges(null);
     setEditing(null);
+    setJustSent(null);
   }, [assessmentId]);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["competition-assessment", assessmentId] });
@@ -116,16 +132,40 @@ export function AssessmentSheet({
     }) => act({ data: { assessmentId: assessmentId!, action: x.action, note: x.note ?? null } }),
     onSuccess: (_r, x) => {
       refresh();
+      if (x.action === "request_changes") {
+        // the card below says the rest: where Cleo is and about how long is left
+        setChanges(null);
+        const a = q.data as any;
+        if (a?.milestone_id)
+          setJustSent({
+            milestoneId: a.milestone_id,
+            kind: a.kind,
+            status: "scheduled",
+            attempts: 0,
+            lastError: null,
+            why: "Changes requested",
+            updatedAt: new Date().toISOString(),
+            lockedAt: null,
+            done: [],
+            pending: null,
+            request: {
+              assessmentId: a.id,
+              version: Number(a.version ?? 1),
+              note: x.note ?? null,
+              at: new Date().toISOString(),
+            },
+          });
+        if (a?.competition_id) void qc.invalidateQueries({ queryKey: rewriteKey(a.competition_id) });
+        toast.success("Sent to Cleo");
+        return;
+      }
       toast.success(
         x.action === "review"
           ? "Marked reviewed"
-          : x.action === "request_changes"
-            ? "Cleo will write a new version with your changes"
-            : x.action === "approve"
-              ? "Approved"
-              : "Released to the athlete",
+          : x.action === "approve"
+            ? "Approved"
+            : "Released to the athlete",
       );
-      if (x.action === "request_changes") setChanges(null);
     },
     onError: (e: any) => toast.error(e?.message ?? "That didn't work"),
   });
@@ -148,7 +188,13 @@ export function AssessmentSheet({
   const strategy = a?.internal?.strategy;
   const plan = a?.internal ? confirmedPlan(a.internal) : null;
   const changed = (strategy?.adjusted?.changes ?? []).length > 0;
-  const actions = row ? coachActions(row) : [];
+  // Cleo rewriting this version: its progress, never a second request on top of it
+  const polled = rewrite?.liveFor(assessmentId) ?? null;
+  const live = polled ?? (justSent && a?.status === "changes_requested" ? justSent : null);
+  const landed = rewrite?.doneFor(assessmentId) ?? null;
+  const actions = (row ? coachActions(row) : []).filter(
+    (x) => !(x === "request_changes" && live),
+  );
   const busy = run.isPending;
 
   return (
@@ -220,6 +266,22 @@ export function AssessmentSheet({
                 </span>
               ) : null}
             </div>
+
+            {live && a.competition_id ? (
+              <RewriteProgressCard
+                live={live}
+                now={rewrite?.now ?? Date.now()}
+                typical={rewrite?.data?.typical ?? { write: 160_000, write2: 245_000 }}
+                competitionId={a.competition_id}
+                onRetried={() => rewrite?.refetch()}
+              />
+            ) : landed || (a.status === "superseded" && a.superseded_by) ? (
+              <RewriteReadyRow
+                version={landed?.version ?? null}
+                kind={a.kind}
+                onOpen={() => onOpen?.(landed?.toId ?? a.superseded_by)}
+              />
+            ) : null}
 
             <div className="inline-flex rounded-lg bg-secondary p-0.5 text-[13px]" role="tablist">
               {(["internal", "athlete"] as const).map((v) => (
