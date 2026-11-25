@@ -207,8 +207,10 @@ describe("password recovery: only a phone on the login's own records", () => {
   });
 
   it("setup and reset links refuse every team role, found exactly by email", () => {
-    const src = read("src/lib/clients.functions.ts");
+    // the guard lives in client-setup.server.ts (server only); clients.functions.ts calls it
+    const src = read("src/lib/client-setup.server.ts");
     const guard = src.slice(src.indexOf("async function assertNotPrivilegedTarget"), src.indexOf("async function claimUnlinkedLogin"));
+    expect(read("src/lib/clients.functions.ts")).toContain("assertNotPrivilegedTarget(opts)");
     expect(guard).toContain("loginForEmail");
     expect(guard).toContain("STAFF_ROLES");
     expect(guard).not.toContain("listUsers");

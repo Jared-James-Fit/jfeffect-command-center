@@ -56,7 +56,7 @@ export async function afterCoachingStart(db: Db, change: Record<string, any>): P
   let setupSent = false;
   if (!client.user_id && client.email) {
     try {
-      const { sendClientSetupEmail } = await import("@/lib/clients.functions");
+      const { sendClientSetupEmail } = await import("@/lib/client-setup.server");
       setupSent = (await sendClientSetupEmail(client.id)).sent;
     } catch (e) {
       console.warn("[coaching-sales] setup email failed", e);

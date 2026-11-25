@@ -190,7 +190,8 @@ describe("free platform hardening", () => {
   });
 
   it("a self-made login is linked by the coach's invite only after its password is replaced", () => {
-    const clients = readFileSync("src/lib/clients.functions.ts", "utf8");
+    // the setup-email helpers live in client-setup.server.ts (server only)
+    const clients = readFileSync("src/lib/client-setup.server.ts", "utf8");
     const claim = clients.slice(clients.indexOf("async function claimUnlinkedLogin"));
     expect(claim.indexOf("updateUserById(login.id, { password: secret })")).toBeLessThan(
       claim.indexOf(".update({ user_id: login.id"),

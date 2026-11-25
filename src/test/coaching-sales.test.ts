@@ -28,7 +28,7 @@ vi.mock("@/lib/push/push.server", () => ({ sendWebPushToUser: vi.fn(async (_db: 
 vi.mock("@/lib/push/app-events.server", () => ({ staffUserIdsForClient: vi.fn(async () => ["owner-user"]) }));
 vi.mock("@/lib/transactional-email.server", () => ({ sendTemplateEmail: vi.fn(async (_db: any, o: any) => (emails.push(o), { sent: true })) }));
 vi.mock("@/lib/billing-notify.server", () => ({ sendBillingAdminEmail: vi.fn(async () => undefined) }));
-vi.mock("@/lib/clients.functions", () => ({ sendClientSetupEmail: vi.fn(async (id: string) => (setupEmails.push(id), { sent: true })) }));
+vi.mock("@/lib/client-setup.server", () => ({ sendClientSetupEmail: vi.fn(async (id: string) => (setupEmails.push(id), { sent: true })) }));
 // The sale checkout itself (stripe-checkout.functions.ts, a server-function module) reduced to what
 // it sends Stripe: the price, the way back and the metadata on the session and the subscription.
 vi.mock("@/lib/stripe-checkout.functions", () => ({
