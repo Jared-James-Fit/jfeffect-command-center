@@ -120,7 +120,7 @@ export function HomeMonth({
   anchor: string;
   today: string;
   onPick: (d: string) => void;
-  /** What's on a day, in the order to show (cancelled ones left out). */
+  /** What's on a day, in the order to show (cancelled and missed ones last, crossed out). */
   names: (d: string) => HomeEntry[];
 }) {
   const days = monthGridDays(anchor);
@@ -165,7 +165,9 @@ export function HomeMonth({
                     "block truncate rounded-sm border-l-2 px-0.5 text-left text-[9px] font-semibold leading-[13px] text-foreground sm:text-[10px] sm:leading-[14px]",
                     MONTH_CHIP[r.family],
                     d < today && "opacity-55",
+                    statusMark(r.status) === "struck" && "border-dashed text-muted-foreground line-through opacity-60",
                   )}
+                  data-struck={statusMark(r.status) === "struck" || undefined}
                 >
                   {statusMark(r.status) === "done" && <Check className="mr-px inline h-[1em] w-[1em] -translate-y-px stroke-[3]" aria-hidden />}
                   <span className="hidden font-normal tabular-nums text-foreground/70 sm:inline">{r.startsAt ? `${chipTime(r.startsAt)} ` : ""}</span>
