@@ -32,10 +32,9 @@ describe("the phone top bar is a real fixed bar, so iOS never blurs it", () => {
     expect(css).toContain('html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }');
   });
 
-  it("the light / dark switch is neutral, weighing the same as the bar's other buttons", () => {
-    const toggle = read("src/components/theme-toggle.tsx");
-    expect(toggle).toContain('"bg-secondary",');
-    expect(toggle).not.toContain("oklch(0.32_0.03_275)");
-    expect(toggle).not.toContain("shadow-[inset_");
+  it("the bar has no appearance switch: search on the left and the menu on the right weigh the same", () => {
+    expect(shell).not.toContain("ThemeToggle");
+    expect(shell).toContain('<Search className="h-5 w-5" />');
+    expect(shell).toContain('<Menu className="h-5 w-5" />');
   });
 });

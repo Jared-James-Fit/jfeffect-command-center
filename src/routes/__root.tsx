@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { THEME_BOOT_SCRIPT, THEME_COLOR_SCRIPT, useThemeSync } from "@/lib/theme";
+import { THEME_BOOT_SCRIPT, THEME_COLOR, THEME_COLOR_SCRIPT, useResolvedTheme, useThemeSync } from "@/lib/theme";
 import { IOS_WEB_APP_BOOT_SCRIPT } from "@/lib/ios-edge";
 import { installShakeUndoGuard } from "@/lib/shake-undo-guard";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -38,7 +38,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 // so the install prompt can be captured before the user reaches /install.
 import "@/hooks/use-pwa-install";
 import { registerServiceWorker } from "@/lib/pwa/register-sw";
-import { initNativeShell } from "@/platform/native-init";
+import { initNativeShell, syncNativeChrome } from "@/platform/native-init";
 import { initChunkRecovery } from "@/lib/chunk-recovery";
 import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
 import { useAppFreshness } from "@/hooks/use-app-freshness";
@@ -244,7 +244,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "JF Effect is the training app built by Team Canada powerlifter Jared McIntyre: free to use, with 1:1 online coaching for strength, muscle, fat loss and powerlifting." },
       { name: "author", content: "Jared James Fit | JF Effect" },
       // the page's own colour (THEME_COLOR); THEME_COLOR_SCRIPT sets the dark one before the first frame
-      { name: "theme-color", content: "#f6f7f8" },
+      { name: "theme-color", content: THEME_COLOR.dark },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-title", content: "JF Effect" },
@@ -354,6 +354,12 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // Toasts and the native status bar follow the theme actually painted on this page (System included).
+  const paintedTheme = useResolvedTheme(useLocation().pathname);
+  const toastTheme = paintedTheme;
+  useEffect(() => {
+    void syncNativeChrome(paintedTheme);
+  }, [paintedTheme]);
   // Reopening the app picks up a newly published version (the iPhone shell has no service worker to do it).
   useAppFreshness();
 
@@ -380,7 +386,7 @@ function RootComponent() {
             <Outlet />
             <RouteTracker />
             <AppPulse />
-            <Toaster position="top-right" theme="dark" richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px", left: "16px" }} />
+            <Toaster position="top-right" theme={toastTheme} richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px", left: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />

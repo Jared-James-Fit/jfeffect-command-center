@@ -7,7 +7,6 @@ import { SignedInAppContext } from "@/components/route-pending";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { ClientProfileOverlayMount } from "@/components/clients/profile/client-profile-overlay";
 import { MemberProfileOverlayMount } from "@/components/members/member-profile-overlay";
-import { ThemeAnnouncementGate } from "@/components/whats-new/theme-announcement";
 import { ThemeAccountSync } from "@/lib/theme-account-sync";
 import { CoachingAgreementProvider } from "@/components/coaching-agreement/agreement-provider";
 import { AccountLifecycleGate } from "@/components/account/account-lifecycle";
@@ -173,7 +172,6 @@ function AuthenticatedLayout() {
         </SignedInAppContext.Provider>
         <ClientProfileOverlayMount />
         <MemberProfileOverlayMount />
-        <ThemeAnnouncementGate />
         <ThemeAccountSync />
         {/* a set video iOS cut off mid-upload carries on by itself */}
         <SetVideoResume />

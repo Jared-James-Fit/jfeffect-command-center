@@ -9,19 +9,32 @@ import { isNative, getPlatform } from "./index";
 
 let initialized = false;
 
+/** The status bar's page colours, the same as THEME_COLOR in theme.ts. */
+const NATIVE_BAR: Record<"light" | "dark", string> = { light: "#F6F7F8", dark: "#0D0D0F" };
+
+/**
+ * Keep the phone's status bar in step with the theme painted in the app:
+ * light text on a dark page, dark text on a light one. Capacitor's `Style.Dark`
+ * means "for a dark background" (light content). A no-op on the web.
+ */
+export async function syncNativeChrome(theme: "light" | "dark") {
+  if (!isNative()) return;
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: theme === "dark" ? Style.Dark : Style.Light }).catch(() => {});
+    if (getPlatform() === "android") {
+      await StatusBar.setBackgroundColor({ color: NATIVE_BAR[theme] }).catch(() => {});
+    }
+  } catch { /* plugin not installed in this build */ }
+}
+
 export async function initNativeShell() {
   if (initialized) return;
   initialized = true;
   if (!isNative()) return;
 
-  try {
-    const { StatusBar, Style } = await import("@capacitor/status-bar");
-    // Dark content on the app's dark backgrounds; safe to call early.
-    await StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
-    if (getPlatform() === "android") {
-      await StatusBar.setBackgroundColor({ color: "#0B0B0F" }).catch(() => {});
-    }
-  } catch { /* plugin not installed in this build */ }
+  // Whatever the boot script painted; the root keeps it in step afterwards.
+  await syncNativeChrome(document.documentElement.classList.contains("dark") ? "dark" : "light");
 
   try {
     const { Keyboard, KeyboardResize } = await import("@capacitor/keyboard");

@@ -38,6 +38,7 @@ import {
   SlidersHorizontal,
   Layers,
 } from "lucide-react";
+import { AppearanceSection } from "@/components/appearance-section";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
@@ -481,6 +482,9 @@ function AccountPage() {
             </div>
           </Card>
         )}
+
+        {/* Light / Dark / System, the one place appearance is chosen: a pick applies and saves at once */}
+        <Card className="p-4"><AppearanceSection /></Card>
 
         <Accordion type="multiple" value={open} onValueChange={setOpen} className="space-y-4">
           {/* Training: what people change most */}
