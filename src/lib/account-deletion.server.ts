@@ -123,6 +123,15 @@ export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutc
       if (row.attempts < 2) throw new Error(`Couldn't clear: ${Object.keys(failed).join(", ")}`);
     }
   }
+  // their analytics: visits, events, and the browsers they signed in on (bi_forget_user)
+  if (row.user_id) {
+    try {
+      const { data: gone } = await admin.rpc("bi_forget_user", { _user: row.user_id });
+      if (gone) out.removed = { ...(out.removed ?? {}), analytics_visits: Number(gone) };
+    } catch {
+      /* analytics are kept 400 days at most anyway */
+    }
+  }
   let files = 0;
   // their documents (filed by them or for them, a coach's for them too): files, then rows;
   // their own folder is also cleared below as a fallback

@@ -1,12 +1,9 @@
 /**
- * App & website (/admin/insights): how people find JF Effect, whether they use it, what they use,
- * where they are (approximately) and what it earns. One read of app_intel_report (service role,
- * after the admin check); the shaping is app-intel-model.ts.
+ * Live now, for Analytics (/admin/insights): who's in the app this minute and on which area. The
+ * tabs' reads are lib/bi/bi.functions.ts.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { shapeAppIntel, type AppIntelView } from "./app-intel-model";
 
 async function assertAdmin(context: any): Promise<void> {
   const { data } = await (context.supabase as any).rpc("has_role", {
@@ -15,17 +12,6 @@ async function assertAdmin(context: any): Promise<void> {
   });
   if (!data) throw new Error("Admins only.");
 }
-
-export const getAppIntelFn = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { days?: number }) => z.object({ days: z.number().int().min(7).max(365).optional() }).parse(d ?? {}))
-  .handler(async ({ data, context }): Promise<AppIntelView> => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: raw, error } = await (supabaseAdmin as any).rpc("app_intel_report", { _days: data.days ?? 30 });
-    if (error) throw new Error(error.message);
-    return shapeAppIntel(raw ?? {});
-  });
 
 /** Just the live count, for a light refresh every 30 seconds. */
 export const getLiveNowFn = createServerFn({ method: "POST" })

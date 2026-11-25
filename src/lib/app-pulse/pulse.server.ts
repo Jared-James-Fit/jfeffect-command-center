@@ -13,6 +13,8 @@
  *   caps a visit at 600 pages and 5 minutes of active time a beat.
  */
 import { z } from "zod";
+import { channelOf, hostOf } from "@/lib/bi/channels";
+import { BI_EVENT_NAMES, cleanEvent, EVENTS_PER_BEAT } from "@/lib/bi/events";
 import { coarsePlace } from "./pulse-rules";
 import { zonePlace } from "./tz-places";
 
@@ -35,6 +37,8 @@ const Body = z.object({
     .default([]),
   seconds: z.number().int().min(0).max(100_000).default(0),
   optOut: z.boolean().optional(),
+  // checked one by one (cleanEvent): a bad event is dropped, never the beat
+  events: z.array(z.unknown()).max(60).optional(),
   start: z
     .object({
       surface: z.enum(["site", "app", "admin"]),
@@ -48,9 +52,17 @@ const Body = z.object({
       utm_medium: text(120),
       utm_campaign: text(120),
       tz: text(60),
+      browser: z.enum(["safari", "chrome", "firefox", "edge", "samsung", "opera", "instagram", "facebook", "tiktok", "webview", "other"]).optional().nullable(),
+      touch: z
+        .object({ referrer: text(500), utm_source: text(120), utm_medium: text(120), utm_campaign: text(120), from: text(80) })
+        .optional()
+        .nullable(),
     })
     .optional(),
 });
+
+/** Browsers already tied to a login on this server instance (so a signed-in beat needs one call, not two). */
+const linked = new Set<string>();
 
 const hits = new Map<string, { at: number; n: number }>();
 function throttled(key: string, max = 120): boolean {
@@ -175,4 +187,33 @@ export async function recordPulse(request: Request): Promise<void> {
     _views: views,
     _active_seconds: parsed.seconds,
   });
+
+  // Business intelligence's extras (20270530090000): the visit's own touch, browser, the visitor's
+  // first touch and login, and the events. Only when there's something to say.
+  const events = (parsed.events ?? [])
+    .map(cleanEvent)
+    .filter((e): e is NonNullable<typeof e> => !!e && (BI_EVENT_NAMES as readonly string[]).includes(e.name))
+    .slice(0, EVENTS_PER_BEAT);
+  const linkKey = userId ? `${parsed.visitor}:${userId}` : null;
+  const needsLink = !!linkKey && !linked.has(linkKey);
+  if (!s && !events.length && !needsLink) return;
+  const t = s?.touch ?? null;
+  const touchChannel = t ? channelOf({ referrerHost: t.referrer, utmSource: t.utm_source, utmMedium: t.utm_medium, from: t.from }) : null;
+  const touchSource = t ? (t.utm_source || t.from || hostOf(t.referrer) || null) : null;
+  const { error } = await db.rpc("bi_pulse_extras", {
+    _session: parsed.session,
+    _visitor: parsed.visitor,
+    _user: userId,
+    _audience: audience,
+    _browser: s?.browser ?? null,
+    _opt_out: !!parsed.optOut,
+    _touch_channel: touchChannel,
+    _touch_source: touchSource,
+    _touch_campaign: t?.utm_campaign ?? null,
+    _events: parsed.optOut ? [] : events,
+  });
+  if (!error && linkKey) {
+    linked.add(linkKey);
+    if (linked.size > 5000) linked.clear();
+  }
 }

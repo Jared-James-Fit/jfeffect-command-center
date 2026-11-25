@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { ProgramStartOptions } from "@/components/program-import/program-start-options";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { displayExerciseName } from "@/lib/exercise-display-name";
@@ -13,7 +13,7 @@ import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Activity, Download,
   RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive, BarChart3, ListChecks,
-  CalendarDays, LayoutGrid, Rows3,
+  CalendarDays, LayoutGrid,
 } from "lucide-react";
 import { FullScreenPage, useFullScreenLayer } from "@/components/full-screen-page";
 import { DeferRender } from "@/components/defer-render";
@@ -89,8 +89,11 @@ import {
   type CalendarDnd,
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
-import { SessionDot, WeekStrip } from "@/components/workouts/week-strip";
-import { WeekSplitView, readWeekView, saveWeekView, type WeekView } from "@/components/workouts/week-split-view";
+import { SessionDot, WeekNav, WeekStrip } from "@/components/workouts/week-strip";
+import { WeekSplitView } from "@/components/workouts/week-split-view";
+import { needsReveal, weekLayoutOf, type WeekLayout } from "@/lib/workouts/week-layout";
+import { useCalendarPrefs } from "@/lib/calendar-prefs";
+import { usePovArgs } from "@/lib/client-pov-args";
 import { useWeekSplit } from "@/components/workouts/use-week-split";
 import { KIND_META, placeLabel, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
@@ -344,14 +347,34 @@ export function WorkoutsExperience({
   const [reportOpen, setReportOpen] = useState(false);
   const navigate = useNavigate();
 
-  // The week as a split (Mon–Sun rows, the default) or the strip with the day picked: one
-  // choice, remembered on the phone; either way the picked day's card is under it.
-  const [weekView, setWeekView] = useState<WeekView>("split");
-  useEffect(() => setWeekView(readWeekView()), []);
-  const changeWeekView = (v: WeekView) => {
-    setWeekView(v);
-    saveWeekView(v);
+  // The week as the horizontal Monday–Sunday calendar (the default) or the list: the toggle
+  // beside the week's arrows, remembered on their account (calendar-prefs `workoutsWeek`, so it
+  // follows them to every device); a coach, or a coach viewing as the client, keeps it to the visit.
+  // Either way the picked day's card is right under the week.
+  const pov = usePovArgs();
+  const { prefs: calendarPrefs, setPrefs: setCalendarPrefs } = useCalendarPrefs({
+    local: mode === "coach" || !!pov.viewAsClientId,
+  });
+  const weekLayout: WeekLayout = weekLayoutOf(calendarPrefs.workoutsWeek);
+  // Only a switch eases the new layout in; the first paint is the page's own arrival.
+  const [layoutSwitched, setLayoutSwitched] = useState(false);
+  const changeWeekLayout = (l: WeekLayout) => {
+    setLayoutSwitched(true);
+    setCalendarPrefs({ workoutsWeek: l });
   };
+  // The list is taller than a phone: a row tapped brings its day's card into view when it's
+  // below the fold (never otherwise, so nothing moves under the finger).
+  const dayCardRef = useRef<HTMLDivElement>(null);
+  const [revealTick, setRevealTick] = useState(0);
+  const pickFromList = (d: Date) => {
+    setSelectedDate(d);
+    setRevealTick((n) => n + 1);
+  };
+  useEffect(() => {
+    if (!revealTick) return;
+    const id = requestAnimationFrame(() => revealDayCard(dayCardRef.current));
+    return () => cancelAnimationFrame(id);
+  }, [revealTick]);
   const split = useWeekSplit({
     clientId,
     self: mode === "self",
@@ -478,10 +501,6 @@ export function WorkoutsExperience({
                   <span className="ml-auto pl-3 text-xs text-muted-foreground">{daysState.label}</span>
                 </CardMenuItem>
               )}
-              {/* The week as rows (Split, the default) or the strip and one day: remembered on this phone. */}
-              <CardMenuItem onSelect={() => changeWeekView(weekView === "split" ? "day" : "split")} data-menu-week-view>
-                <Rows3 className="mr-2 h-4 w-4" /> {weekView === "split" ? "Week strip view" : "Split view"}
-              </CardMenuItem>
               <CardMenuItem
                 onSelect={() =>
                   navigate({
@@ -528,27 +547,41 @@ export function WorkoutsExperience({
               )
             ) : (
               <div className={cn("space-y-4", arrived)}>
-                {weekView === "split" ? (
-                  <WeekSplitView
-                    week={split.week}
-                    weekStart={split.weekStart}
+                {/* One navigation for both layouts (it never moves when they switch): ‹ dates and
+                    "2 of 4 done" ›, Today, and the calendar / list toggle. Both read the same
+                    workouts (byDate) and the same picked day. */}
+                <div data-workouts-week={weekLayout}>
+                  <WeekNav
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
-                    onStart={mode === "self" ? startItem : undefined}
-                    timeActions={canReschedule ? split.timeActions : undefined}
+                    progress={split.week}
+                    layout={weekLayout}
+                    onLayout={changeWeekLayout}
                   />
-                ) : (
-                  <CalendarDndProvider dnd={dnd}>
-                    <WeekStrip
-                      selectedDate={selectedDate}
-                      onSelectDate={setSelectedDate}
-                      byDate={byDate}
-                      dnd={dnd}
-                      sessionDays={sessionDays}
-                      flat
-                    />
-                  </CalendarDndProvider>
-                )}
+                  <div key={weekLayout} className={cn(layoutSwitched && "jf-arrive", weekLayout === "list" && "mt-1.5")}>
+                    {weekLayout === "list" ? (
+                      <WeekSplitView
+                        week={split.week}
+                        selectedDate={selectedDate}
+                        onSelectDate={pickFromList}
+                        onStart={mode === "self" ? startItem : undefined}
+                        timeActions={canReschedule ? split.timeActions : undefined}
+                      />
+                    ) : (
+                      <CalendarDndProvider dnd={dnd}>
+                        <WeekStrip
+                          selectedDate={selectedDate}
+                          onSelectDate={setSelectedDate}
+                          byDate={byDate}
+                          dnd={dnd}
+                          sessionDays={sessionDays}
+                          nav={false}
+                          flat
+                        />
+                      </CalendarDndProvider>
+                    )}
+                  </div>
+                </div>
                 {dropAsk && (
                   <MoveWorkoutSheet
                     dayId={dropAsk.target.dayId}
@@ -562,6 +595,7 @@ export function WorkoutsExperience({
                 )}
                 {/* No legend under the strip: the dot, ring and check say it, and a day with a
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
+                <div ref={dayCardRef} className="scroll-mb-[calc(var(--bottom-nav-clearance,0px)+12px)] scroll-mt-[calc(var(--app-top-chrome,0px)+12px)]" data-workouts-day>
                 <SelectedDayList
                   next={nextWorkoutAfter(byDate, selectedDate)}
                   onSelectDate={setSelectedDate}
@@ -574,6 +608,7 @@ export function WorkoutsExperience({
                   mode={mode}
                   backupEnabled={isAtHomeBackupClient(clientId)}
                 />
+                </div>
               </div>
             )}
         </div>
@@ -929,6 +964,22 @@ function nextWorkoutAfter(byDate: Map<string, WorkoutItem[]>, date: Date): NextW
   const [y, m, d] = best.iso.split("-").map(Number);
   const title = dayDisplayTitle(best.item);
   return { date: new Date(y, m - 1, d), title };
+}
+
+/**
+ * Bring the list's picked day card into view, only when less than
+ * REVEAL_MIN_VISIBLE_PX of it shows above the tab bar (`needsReveal`), and
+ * no further than needed (`block: "nearest"`, its scroll margins clearing the
+ * top bar and the tab bar). A smooth glide, instant under reduced motion.
+ */
+function revealDayCard(el: HTMLElement | null) {
+  if (!el || typeof window === "undefined") return;
+  const bar = document.querySelector<HTMLElement>("[data-mobile-bottom-nav]")?.getBoundingClientRect();
+  const viewBottom = window.visualViewport?.height ?? window.innerHeight;
+  const visibleBottom = bar && bar.height > 0 ? Math.min(viewBottom, bar.top) : viewBottom;
+  if (!needsReveal(el.getBoundingClientRect().top, visibleBottom)) return;
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ block: "nearest", behavior: still ? "auto" : "smooth" });
 }
 
 function SelectedDayList({

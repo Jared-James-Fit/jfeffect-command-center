@@ -1,52 +1,32 @@
 /**
- * The week as a split (Nov 25 2026, week-split.ts): Monday to Sunday, one row
+ * The week as a list (Nov 25 2026, week-split.ts): Monday to Sunday, one row
  * a day, "✓ Deadlift & Squat · Completed · 1h 42m", "Rest Day", "Squat & Bench
- * · Suggested 12:30 PM · Est. 1h 35m". The Workouts page's default view
- * (remembered on the phone); a row picks its day, whose card shows under it.
+ * · Suggested 12:30 PM · Est. 1h 35m". The Workouts page's second layout
+ * beside the horizontal calendar (the default); `WeekNav` above it holds the
+ * arrows and the toggle, and a row picks its day, whose card shows under it.
+ * The picked day is the filled circle and today a thin ring, as on the strip.
  *
  * Suggested times are dashed and say "Suggested": the picked day's row offers
  * Confirm (writes `pl_scheduled_workouts.scheduled_time`, never the date, the
  * prescription or the order), Change and Dismiss; a confirmed time is plain.
  */
 import { useState } from "react";
-import { addWeeks, format, isSameDay } from "date-fns";
-import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { format, isSameDay } from "date-fns";
+import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { feedback } from "@/lib/feedback";
-import { localStartOfToday } from "@/lib/today";
-import { weekRangeLabel } from "@/components/workouts/week-strip";
 import type { SplitEntry, SplitWeek } from "@/lib/workouts/week-split";
 import { clockLabel, parseTimeValue, timeValue } from "@/lib/workouts/workout-time-suggest";
 import type { WorkoutItem } from "@/lib/workout-today";
 
-export type WeekView = "split" | "day";
-export const WEEK_VIEW_KEY = "jf.workouts.week-view";
-
-export function readWeekView(): WeekView {
-  try {
-    return localStorage.getItem(WEEK_VIEW_KEY) === "day" ? "day" : "split";
-  } catch {
-    return "split";
-  }
-}
-export function saveWeekView(v: WeekView) {
-  try {
-    localStorage.setItem(WEEK_VIEW_KEY, v);
-  } catch {
-    /* private mode: this visit only */
-  }
-}
-
 export function WeekSplitView({
   week,
-  weekStart,
   selectedDate,
   onSelectDate,
   onStart,
   timeActions,
 }: {
   week: SplitWeek;
-  weekStart: Date;
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   /** today's Start (shown on today's row when another day is picked, so there's never two) */
@@ -58,44 +38,8 @@ export function WeekSplitView({
     pending?: boolean;
   };
 }) {
-  const today = localStartOfToday();
   return (
     <div data-week-split>
-      <div className="mb-1 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => onSelectDate(addWeeks(selectedDate, -1))}
-          aria-label="Previous week"
-          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold tabular-nums text-foreground">{weekRangeLabel(weekStart)}</span>
-          {week.planned > 0 && (
-            <span className="text-xs tabular-nums text-muted-foreground" data-split-progress>
-              {week.done} of {week.planned} done
-            </span>
-          )}
-          {!isSameDay(selectedDate, today) && (
-            <button
-              type="button"
-              onClick={() => onSelectDate(today)}
-              className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-muted"
-            >
-              Today
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => onSelectDate(addWeeks(selectedDate, 1))}
-          aria-label="Next week"
-          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
       <ol className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70">
         {week.rows.map((row) => {
           const picked = isSameDay(row.date, selectedDate);
@@ -108,17 +52,19 @@ export function WeekSplitView({
                   feedback("tap");
                   onSelectDate(row.date);
                 }}
-                aria-current={picked ? "date" : undefined}
+                aria-pressed={picked}
+                aria-current={row.isToday ? "date" : undefined}
                 className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left"
               >
                 <div className="w-9 shrink-0 pt-0.5 text-center">
-                  <div className={cn("text-[11px] font-medium", row.isToday ? "text-foreground" : "text-muted-foreground")}>
+                  <div className={cn("text-[11px] font-medium", row.isToday || picked ? "text-foreground" : "text-muted-foreground")}>
                     {format(row.date, "EEE")}
                   </div>
                   <div
                     className={cn(
-                      "mx-auto mt-0.5 grid h-6 w-6 place-items-center rounded-full text-xs font-semibold tabular-nums",
-                      row.isToday ? "bg-foreground text-background" : "text-foreground",
+                      "mx-auto mt-0.5 grid h-6 w-6 place-items-center rounded-full text-xs font-semibold tabular-nums transition-colors",
+                      picked ? "bg-foreground text-background" : row.isToday ? "text-foreground ring-1 ring-inset ring-foreground/40" : "text-foreground",
+                      row.entries.length === 0 && !picked && "font-medium text-muted-foreground",
                     )}
                   >
                     {format(row.date, "d")}
@@ -164,7 +110,8 @@ export function WeekSplitView({
                     className="mr-3 mt-3 shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
                     data-split-start
                   >
-                    Start
+                    {/* the card's own word: a workout already under way is continued, never started over */}
+                    {row.entries.find((x) => !x.done && x.status !== "missed")?.status === "in_progress" ? "Continue" : "Start"}
                   </button>
                 )}
               </div>
