@@ -26,6 +26,12 @@ async function personFor(admin: Db, thread: any): Promise<{ tier: KbTier; firstN
   return { tier: client?.service_tier === "coaching" ? "coaching" : "self_serve", firstName: name || null, clientId: client?.id ?? null };
 }
 
+async function memberUserId(admin: Db, memberId: string | null | undefined): Promise<string | null> {
+  if (!memberId) return null;
+  const { data } = await admin.from("app_members").select("user_id").eq("id", memberId).maybeSingle();
+  return (data?.user_id as string | null) ?? null;
+}
+
 /**
  * Hand the chat to the team: Cleo says so once (unless it already did), the
  * card is saved, the team's badge lights and the team gets one push.
@@ -89,6 +95,12 @@ export async function runCleoSupportTurn(admin: Db, threadId: string, actorUserI
   const trigger = escalationTrigger(last.body);
   if (trigger) return handOff(trigger);
   if (cleoStreak(messages) >= MAX_CLEO_TURNS || isRepeat(last.body, mine.slice(0, -1))) return handOff("repeated");
+
+  // Their message goes to OpenAI only with their permission (5.1.2(i), src/lib/ai-consent). Without it, or
+  // when the answer can't be read (fails closed), no model is called: a person answers, and the member is told so.
+  const ownerId = actorUserId ?? (await memberUserId(admin, thread.member_id));
+  const { userAllowsAi } = await import("@/lib/ai-consent/consent.server");
+  if (!ownerId || !(await userAllowsAi(ownerId))) return handOff("no_ai_consent");
 
   let reply;
   try {

@@ -186,6 +186,8 @@ export const tryCoachVoiceFn = createServerFn({ method: "POST" })
       const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
       if (!(await staffCanReachClient(context.supabase, context.userId, data.clientId))) throw new Error("Client not found.");
     }
+    // a sample written for one client's tone profile reads that client's record: only with their permission
+    if (data.clientId) await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(data.clientId);
     const sb = await adminClient();
     const profile = normalizeVoiceProfile(data.profile);
     const audience = await loadVoiceAudience(sb, data.clientId ?? null);

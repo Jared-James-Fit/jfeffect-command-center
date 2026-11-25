@@ -386,8 +386,15 @@ export const draftSupportReply = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ threadId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    const { admin, thread, client } = await resolveMember(context, { threadId: data.threadId });
+    const { admin, thread, client, member } = await resolveMember(context, { threadId: data.threadId });
     if (!thread) throw new Error("That support chat is gone.");
+    // Their messages go to OpenAI only with their permission (5.1.2(i), src/lib/ai-consent): a client record's
+    // login, or the member's own login when there's no client record. Refused, the coach writes it by hand.
+    const consent = await import("@/lib/ai-consent/consent.server");
+    if (client?.id) await consent.requireClientAiConsent(client.id);
+    else if (!member?.user_id || !(await consent.userAllowsAi(member.user_id))) {
+      throw new consent.AiConsentError((await import("@/lib/ai-consent/consent")).coachConsentMessage(member?.full_name));
+    }
     const { data: rows } = await admin.from("member_support_messages")
       .select("sender_role, body").eq("thread_id", thread.id).order("created_at", { ascending: true }).limit(200);
     const { voicePromptForClient } = await import("@/lib/coach-voice.functions");

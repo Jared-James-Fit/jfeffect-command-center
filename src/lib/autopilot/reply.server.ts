@@ -91,6 +91,17 @@ export async function recreateReply(sb: Db, x: { checkinId: string; style: Reply
   const { data: row } = await sb.from("messenger_checkins").select("id, client_id, task_type, answers, ai_analysis, status").eq("id", x.checkinId).maybeSingle();
   if (!row) throw new Error("Check-in not found.");
   if (row.status !== "completed") throw new Error("This check-in hasn't been submitted.");
+  // The client's answers go to OpenAI only with their permission (5.1.2(i), src/lib/ai-consent). Without it
+  // (or when it can't be read: fails closed) no new wording is written, nothing reaches the client, and the
+  // check-in's card says why (`ai_error`, like a recap that couldn't be written).
+  const { clientAllowsAi, AiConsentError } = await import("@/lib/ai-consent/consent.server");
+  const consent = await clientAllowsAi(row.client_id);
+  if (!consent.ok) {
+    const { coachConsentMessage } = await import("@/lib/ai-consent/consent");
+    const words = coachConsentMessage(consent.name);
+    await sb.from("messenger_checkins").update({ ai_error: words, updated_at: new Date().toISOString() }).eq("id", x.checkinId);
+    throw new AiConsentError(words);
+  }
   const a = row.ai_analysis ?? {};
   const current = String(a.suggested_response ?? "").trim();
   const { data: dec } = await sb.from("autopilot_decisions").select("*").eq("checkin_id", x.checkinId).maybeSingle();

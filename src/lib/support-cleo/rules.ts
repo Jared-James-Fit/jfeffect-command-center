@@ -23,7 +23,7 @@ export const MAX_CLEO_TURNS = 4;
 export const MAX_ANSWER_CHARS = 600;
 
 export type EscalationCategory =
-  | "human_request" | "billing" | "account_security" | "coaching" | "complaint" | "repeated" | "bug" | "unsure" | "cleo_unavailable";
+  | "human_request" | "billing" | "account_security" | "coaching" | "complaint" | "repeated" | "bug" | "unsure" | "cleo_unavailable" | "no_ai_consent";
 export type Priority = "high" | "normal" | "low";
 
 export type Escalation = {
@@ -52,6 +52,7 @@ export const CATEGORY_LABEL: Record<EscalationCategory, string> = {
   bug: "Something isn't working",
   unsure: "Cleo wasn't sure",
   cleo_unavailable: "Cleo couldn't answer",
+  no_ai_consent: "AI answers are off for them",
 };
 
 const NEXT_ACTION: Record<EscalationCategory, string> = {
@@ -64,6 +65,7 @@ const NEXT_ACTION: Record<EscalationCategory, string> = {
   bug: "Check what they describe, reply with a fix or a workaround, and log the bug if it's real.",
   unsure: "Answer their question; the help answers don't cover it yet (worth adding).",
   cleo_unavailable: "Answer their question; Cleo couldn't reach its model.",
+  no_ai_consent: "Answer their question yourself: they haven't allowed their messages to be sent to AI services, so Cleo didn't read this.",
 };
 
 const PRIORITY: Record<EscalationCategory, Priority> = {
@@ -76,6 +78,7 @@ const PRIORITY: Record<EscalationCategory, Priority> = {
   bug: "normal",
   unsure: "normal",
   cleo_unavailable: "normal",
+  no_ai_consent: "normal",
 };
 
 type Rule = { category: EscalationCategory; re: RegExp };
@@ -233,6 +236,7 @@ export function handoffMessage(category: EscalationCategory, firstName?: string 
     bug: "I've passed this to the JF Effect team so they can look into it.",
     unsure: "I'm not sure about that one, so I've passed it to the JF Effect team.",
     cleo_unavailable: "I've passed this to the JF Effect team.",
+    no_ai_consent: "AI answers are switched off for your account, so a person on the JF Effect team will answer this.",
   };
   return `${hi}${what[category]} They'll reply right here, usually within a day, and you'll get a notification.`;
 }

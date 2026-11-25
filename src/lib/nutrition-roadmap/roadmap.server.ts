@@ -155,6 +155,10 @@ export async function explainActive(admin: any, clientId: string): Promise<{ sum
   const active = loaded.active;
   if (!active) return null;
   if (active.explanation?.summary) return { summary: String(active.explanation.summary), focus: String(active.explanation.focus ?? "") };
+  // the athlete's numbers go to OpenAI only with their permission (5.1.2(i), src/lib/ai-consent); without it
+  // (or when it can't be read) nobody is asked and the engine's own words stand
+  const { clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
+  if (!(await clientAllowsAi(clientId)).ok) return null;
   const { read } = buildRoadmap(loaded.ctx);
   const words = await explainRead(admin, read, { approved: true, firstName: loaded.firstName });
   if (!words) return null;
