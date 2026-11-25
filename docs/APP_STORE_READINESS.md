@@ -115,7 +115,23 @@ Client-reachable dev-only UI: none found beyond the stack trace above. Admin tes
 email / SMS) are behind staff routes; the Lovable email preview routes are server endpoints with a
 secret.
 
-## Payment mapping (no change made; needs Jared's approval)
+## Payment mapping
+
+**Decision (Jared, Nov 25 2026): Premium is web-only.** JF Effect Premium and any other digital
+product (paid membership, credit packs) is bought on the website only; there is no in-app purchase
+in the launch version. The iPhone app (the Capacitor shell, `isNative()`) never shows a purchase
+button, a price or a link to buy it, and never says where else to buy. Someone who already has
+Premium (a complimentary grant today, a web purchase later) uses it normally in the app, which has
+no platform check on Premium's screens. Enforced by `src/lib/native-purchases.ts` (tested in
+`native-purchases.test.ts`): Your plan lists no plan that needs a purchase and prints no price for
+one the person isn't on (the refusal reads "Not available in the app", no longer "Upgrade on the
+web at jfeffect.com"), Crew promos that point at a sales page are not shown in the app, and the
+locked-feature card and credit packs already say it isn't available. Review risk accepted: a
+holder who bought on the web uses it in the app (3.1.3(b) "multiplatform services" wants the same
+product offered as IAP too); revisit if App Review raises it.
+
+Table below: the mapping as analysed before the decision (rows for membership, credit packs and
+paid programs are now "web only, hidden in the app").
 
 | What is sold today (Stripe, on the web) | Apple rule | Status in the app today | Most sensible compliant structure |
 | --- | --- | --- | --- |
