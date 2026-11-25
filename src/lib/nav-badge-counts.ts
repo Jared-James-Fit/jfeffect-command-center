@@ -21,11 +21,13 @@ export type MessagesBadgeSources = {
   crewThreads: number;
   /** Coach group chats with something new. */
   groupThreads: number;
+  /** JF Effect Support replies they haven't read (members and clients alike). */
+  supportReplies?: number;
 };
 
 export function messagesBadgeCount(s: MessagesBadgeSources): number {
   const n = (v: number) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
-  return n(s.coachMessages) + n(s.directThreads) + n(s.crewThreads) + n(s.groupThreads);
+  return n(s.coachMessages) + n(s.directThreads) + n(s.crewThreads) + n(s.groupThreads) + n(s.supportReplies ?? 0);
 }
 
 /** Coach groups with a message from someone else newer than my last read. */

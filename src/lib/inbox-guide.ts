@@ -39,7 +39,7 @@ export const GUIDE_ROW: { title: string; body: string }[] = [
   { title: "The line under a name", body: "What's waiting on you, most important first: red is pain, amber is overdue, blue is something to review." },
   { title: "Their photo or that line", body: "Opens the Brief: everything waiting on you for that client, with a short summary." },
   { title: "Swipe a chat left", body: "Read or Unread, Done when no reply is needed, and Archive for a chat that's finished." },
-  { title: "JF member · Support", body: "A free member (no coach) writing to Support in their app. Reply right here: they get a push and read it on their Support screen." },
+  { title: "JF member · Support", body: "Someone writing to JF Effect Support from their Messages: a free member (no coach), or a coaching client asking about the app (\"Client · JF Effect Support\", apart from your coaching chat). Reply right here: they get a push and read it in their Messages." },
 ];
 
 export const GUIDE_FILTERS_NOTE = "A filter only shows while something's in it. Its number is how many clients are in it, in the colour of their line: red is pain, amber is overdue, blue is something to review.";

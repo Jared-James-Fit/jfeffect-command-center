@@ -50,9 +50,10 @@ import {
 } from "@/components/messages/inbox-parts";
 
 /**
- * A conversation that isn't a group (the client's chat with their coach).
- * It's always pinned first, iMessage style: it can be marked unread, but
- * never unpinned, muted or deleted.
+ * A conversation that isn't a group (the client's chat with their coach,
+ * everyone's JF Effect Support chat). Fixed chats are always pinned first, in
+ * the order given, iMessage style: one can be marked unread, but never
+ * unpinned, muted or deleted.
  */
 export type PinnedChat = {
   id: string;
@@ -75,6 +76,8 @@ export type PinnedChat = {
   markRead?: () => void | Promise<void>;
   /** Told when its conversation opens or closes (presence: "live" only while open). */
   onOpenChange?: (open: boolean) => void;
+  /** Open this chat when the inbox opens (a link or push asked for it). */
+  openOnArrival?: boolean;
 };
 
 type ChatFilter = "all" | "unread" | "groups" | "people";
@@ -96,7 +99,13 @@ type Row = {
   pinned: boolean;
 };
 
-export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?: PinnedChat }) {
+export function GroupChatsPane({ asAdmin, pinned: pinnedProp }: { asAdmin: boolean; pinned?: PinnedChat | PinnedChat[] }) {
+  const pins: PinnedChat[] = useMemo(
+    () => (Array.isArray(pinnedProp) ? pinnedProp : pinnedProp ? [pinnedProp] : []),
+    [pinnedProp],
+  );
+  // The first fixed chat (the coach, for a coaching client): it opens by itself when it's the only chat.
+  const pinned: PinnedChat | undefined = pins[0];
   const { user, role } = useAuth();
   // Coach "View as client": show the client's groups and read state.
   const { isImpersonating } = useClientImpersonation();
@@ -324,10 +333,10 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     return matches(row.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [allRows, filter, q]);
-  const showPinned = !!pinned
-    && filter !== "groups"
-    && (filter !== "unread" || !!pinned.unread)
-    && matches(pinned.searchText ?? "");
+  const shownPins = pins.filter((p) => filter !== "groups"
+    && (filter !== "unread" || !!p.unread)
+    && matches(p.searchText ?? ""));
+  const showPinned = shownPins.length > 0;
   const filterChips: Array<[ChatFilter, string]> = asAdmin
     ? [["all", "All"], ["unread", "Unread"]]
     : [["all", "All"], ["unread", "Unread"], ["groups", "Groups"], ["people", "People"]];
@@ -342,7 +351,8 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
   const listRows = showGrid ? shownRows.filter((r) => !r.pinned) : shownRows;
 
   const selected = groupRows.find((g) => g.id === selectedId);
-  const pinnedSelected = !!pinned && selectedId === pinned.id;
+  const selectedPin = pins.find((p) => p.id === selectedId);
+  const pinnedSelected = !!selectedPin;
   const anySelected = !!(selected || selectedDirect || selectedCrew || pinnedSelected || draftTo);
   const othersReady = groupsFetched
     && (directsQ.isFetched || directsQ.fetchStatus === "idle")
@@ -355,10 +365,12 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
   useEffect(() => {
     if (!pinned || autoOpened.current || selectedId || !othersReady) return;
     autoOpened.current = true;
+    const asked = pins.find((p) => p.openOnArrival);
+    if (asked) { setSelectedId(asked.id); return; }
     if (typeof window !== "undefined" && /group=/.test(window.location.hash)) return;
     const wide = typeof window !== "undefined" && window.matchMedia?.("(min-width: 768px)").matches;
-    if (!hasOtherChats || wide) setSelectedId(pinned.id);
-  }, [pinned, selectedId, othersReady, hasOtherChats]);
+    if ((!hasOtherChats && pins.length === 1) || wide) setSelectedId(pinned.id);
+  }, [pinned, pins, selectedId, othersReady, hasOtherChats]);
 
   // Opening a chat you marked unread clears the mark.
   useEffect(() => {
@@ -369,7 +381,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
   }, [selectedId]);
 
   const onPinnedOpenChange = pinned?.onOpenChange;
-  const pinnedOpen = pinnedSelected && !draftTo;
+  const pinnedOpen = !!pinned && selectedId === pinned.id && !draftTo;
   useEffect(() => {
     onPinnedOpenChange?.(pinnedOpen);
   }, [pinnedOpen, onPinnedOpenChange]);
@@ -435,19 +447,19 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     // Coach-run groups for staff have a real (permanent) delete in Select.
     canDelete: !asAdmin,
   });
-  const coachTarget: ChatMenuTarget | null = pinned ? {
-    key: pinned.id,
-    title: pinned.name,
-    avatar: <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} expandable={false} />,
-    preview: pinned.preview,
+  const pinTarget = (p: PinnedChat): ChatMenuTarget => ({
+    key: p.id,
+    title: p.name,
+    avatar: <UserAvatar src={p.avatarUrl} name={p.name} size={44} expandable={false} />,
+    preview: p.preview,
     fixed: true,
     pinned: true,
     muted: false,
-    unread: !!pinned.unread,
+    unread: !!p.unread,
     canPin: false,
     canMute: false,
     canDelete: false,
-  } : null;
+  });
 
   const save = (changes: Array<{ key: string; patch: ChatPrefPatch }>, done?: string) =>
     setPrefs.mutate(changes, {
@@ -472,9 +484,10 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     setMenu(null);
     const now = new Date().toISOString();
     if (t.fixed) {
+      const pin = pins.find((p) => p.id === t.key);
       try {
-        if (a === "unread") await pinned?.markUnread?.();
-        if (a === "read") await pinned?.markRead?.();
+        if (a === "unread") await pin?.markUnread?.();
+        if (a === "read") await pin?.markRead?.();
       } catch (e: any) {
         toast.error(e?.message ?? "That didn't save. Try again.");
       }
@@ -560,23 +573,24 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     );
   };
 
-  const coachRow = pinned && (
+  const pinRows = shownPins.map((p) => (
     <ChatListRow
-      onClick={() => openChat(pinned.id)}
-      selected={pinnedSelected}
-      unread={pinned.unread}
-      at={pinned.at}
+      key={`pin:${p.id}`}
+      onClick={() => openChat(p.id)}
+      selected={selectedId === p.id}
+      unread={p.unread}
+      at={p.at}
       avatar={
-        <LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>
-          <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={CHAT_ROW_AVATAR} expandable={false} />
+        <LiveAvatar live={p.live} size={CHAT_ROW_AVATAR}>
+          <UserAvatar src={p.avatarUrl} name={p.name} size={CHAT_ROW_AVATAR} expandable={false} />
         </LiveAvatar>
       }
-      storyUserId={pinned.storyUserId}
-      storyName={pinned.name}
-      name={pinned.name}
-      preview={pinned.preview}
+      storyUserId={p.storyUserId}
+      storyName={p.name}
+      name={p.name}
+      preview={p.preview}
     />
-  );
+  ));
 
   return (
     <div className="flex h-full min-h-0 w-full">
@@ -724,19 +738,20 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
           )}
           {showGrid && (
             <div className="flex flex-wrap items-end justify-center px-2 py-2" aria-label="Pinned chats">
-              {pinned && (
+              {pins.map((p) => (
                 <PinTile
-                  name={pinned.name}
-                  avatar={<UserAvatar src={pinned.avatarUrl} name={pinned.name} size={60} expandable={false} />}
-                  unread={!!pinned.unread}
-                  preview={pinned.unreadPreview}
-                  alone={pinnedRows.length === 0}
-                  live={pinned.live}
-                  selected={pinnedSelected}
-                  onOpen={() => openChat(pinned.id)}
-                  onHold={canEdit && coachTarget ? () => setMenu(coachTarget) : undefined}
+                  key={`pin:${p.id}`}
+                  name={p.name}
+                  avatar={<UserAvatar src={p.avatarUrl} name={p.name} size={60} expandable={false} />}
+                  unread={!!p.unread}
+                  preview={p.unreadPreview}
+                  alone={pins.length === 1 && pinnedRows.length === 0}
+                  live={p.live}
+                  selected={selectedId === p.id}
+                  onOpen={() => openChat(p.id)}
+                  onHold={canEdit ? () => setMenu(pinTarget(p)) : undefined}
                 />
-              )}
+              ))}
               {pinnedRows.map((r) => (
                 <PinTile
                   key={r.key}
@@ -744,7 +759,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                   avatar={rowAvatar(r, 60)}
                   unread={r.unread}
                   preview={r.preview}
-                  alone={!pinned && pinnedRows.length === 1}
+                  alone={pins.length === 0 && pinnedRows.length === 1}
                   muted={r.muted}
                   selected={selectedId === r.key}
                   onOpen={() => openChat(r.key)}
@@ -753,7 +768,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
               ))}
             </div>
           )}
-          {showPinned && !showGrid && !selectMode && coachRow}
+          {showPinned && !showGrid && !selectMode && pinRows}
           {listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               {filtering ? (showPinned ? "" : "No chats match.")
@@ -805,8 +820,8 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
               openChat(groupId);
             }}
           />
-        ) : pinnedSelected && pinned ? (
-          pinned.renderThread({ onBack: closeChat })
+        ) : selectedPin ? (
+          selectedPin.renderThread({ onBack: closeChat })
         ) : selectedCrew && !asAdmin ? (
           <CrewChatView key={selectedCrew.group_id} thread={selectedCrew} onBack={closeChat} />
         ) : selectedDirect && !asAdmin ? (

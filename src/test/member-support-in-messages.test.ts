@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   mergeByRecency, sortSupportChats, supportChat, supportInFilter, supportMatches, supportNewChats, supportPreview,
+  supportLineFor, supportRowFor, supportSeenLine, wantsSupportChat, type SupportMsg,
   type SupportThreadRow,
 } from "@/lib/member-support";
 
@@ -73,16 +74,16 @@ describe("each side hears when the other writes", () => {
     expect(e.body("x")).not.toMatch(/froze|bug/i);
   });
 
-  it("the team's reply pushes the member to Support", () => {
+  it("the team's reply pushes the person to the Support chat in their Messages", () => {
     const e = APP_EVENTS.support_reply;
     expect(e.to).toBe("client");
-    expect(e.url("c1", "m1")).toBe("/portal/support");
+    expect(e.url("c1", "m1")).toBe("/portal/messages?chat=support");
     expect(e.body("Coach Jared")).toBe("Coach Jared replied to your message. Tap to read it.");
   });
 
   it("the server pushes after the message is saved, and a push can't fail the send", () => {
     const fns = read("src/lib/member-support.functions.ts");
-    expect(fns).toContain('notifyAppEvent(supabaseAdmin as any, "support_message"');
+    expect(fns).toContain('notifyAppEvent(p.admin, "support_message"');
     expect(fns).toContain('notifyAppEvent(admin, "support_reply"');
     expect(fns).toContain('console.warn("[support] push to team failed"');
   });
@@ -116,15 +117,51 @@ describe("Messages wiring", () => {
     expect(comm).toContain('{ value: "support", label: "Alerts" }');
   });
 
-  it("the member's Support tab shows a count when the team replies", () => {
+  it("the Messages tab counts Support replies they haven't read", () => {
     const hook = read("src/hooks/use-client-nav-badges.ts");
-    expect(hook).toContain('result["/portal/support"] = { count: data.supportUnread }');
+    expect(hook).toContain("supportReplies: data.supportUnread ?? 0");
   });
 
   it("a coach previewing a member reads their chat and can't send as them", () => {
-    const support = read("src/routes/_authenticated/portal/support.tsx");
+    const support = read("src/components/support/support-conversation.tsx");
     expect(support).toContain("fetchAsCoach({ data: { clientId: povClient.id } })");
     expect(support).toContain("toast(PREVIEW_ONLY_MESSAGE)");
     expect(support).toContain("if (previewing || !thread?.id");
+  });
+});
+
+describe("JF Effect Support in everyone's Messages", () => {
+  const m = (o: Partial<SupportMsg>): SupportMsg => ({ id: "x", sender_role: "member", body: "Hi", created_at: "2026-11-25T10:00:00Z", ...o });
+
+  it("the row says what was said last, and a reply they haven't read lights it", () => {
+    expect(supportRowFor([], 0)).toEqual({ preview: "Questions about the app or your account", at: null, unread: false });
+    expect(supportRowFor([m({ body: "App  froze" })], 0)).toMatchObject({ preview: "You: App froze", unread: false });
+    expect(supportRowFor([m({}), m({ id: "y", sender_role: "team", body: "Fixed", read_at: null })], 0)).toMatchObject({ preview: "Fixed", unread: true });
+    expect(supportRowFor([m({}), m({ id: "y", sender_role: "team", body: "Fixed", read_at: "2026-11-25T11:00:00Z" })], 0).unread).toBe(false);
+    expect(supportRowFor([m({})], 2).unread).toBe(true);
+  });
+
+  it("Seen sits under their own last message once the team read it, never under a reply or a pending one", () => {
+    expect(supportSeenLine([m({ read_at: "t" })])?.id).toBe("x");
+    expect(supportSeenLine([m({ read_at: null })])).toBeNull();
+    expect(supportSeenLine([m({ read_at: "t" }), m({ id: "y", sender_role: "team" })])).toBeNull();
+    expect(supportSeenLine([m({ read_at: "t", pending: true })])).toBeNull();
+  });
+
+  it("a link with ?chat=support opens it, and a client's row says it isn't their coaching chat", () => {
+    expect(wantsSupportChat("?chat=support")).toBe(true);
+    expect(wantsSupportChat("?tab=groups")).toBe(false);
+    expect(wantsSupportChat(null)).toBe(false);
+    expect(supportLineFor("coaching")).toBe("Client · JF Effect Support");
+    expect(supportLineFor("self_serve")).toBe("JF member · Support");
+    expect(supportChat(row({ service_tier: "coaching" })).line).toBe("Client · JF Effect Support");
+  });
+
+  it("members have Messages (with Support pinned) and coaching clients get Support beside their coach", () => {
+    const page = read("src/routes/_authenticated/portal/messages.tsx");
+    expect(page).toContain("isSelfServe ? [supportPin] : [pinned, supportPin]");
+    const sql = read("supabase/migrations/20270527106000_support_conversation_for_everyone.sql");
+    expect(sql).toContain("CHECK (member_id IS NOT NULL OR client_id IS NOT NULL)");
+    expect(sql).toContain("USING (thread_id IN (SELECT public.support_own_thread_ids()))");
   });
 });

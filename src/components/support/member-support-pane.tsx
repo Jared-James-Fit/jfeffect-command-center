@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { listenChannel } from "@/lib/realtime-channel";
 import { getMemberSupport, replyMemberSupport, updateMemberSupport } from "@/lib/member-support.functions";
-import { SUPPORT_LINE } from "@/lib/member-support";
+import { supportLineFor, type SupportMsg } from "@/lib/member-support";
 import { UserAvatar } from "@/components/user-avatar";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { phoneLayoutNow } from "@/lib/portrait-only";
 /** Every query a support change should refresh: the open chat, the inbox's rows and the badges. */
 export const SUPPORT_REFRESH_KEYS = [["member-support"], ["staff-support-threads"], ["admin-nav-badges"]] as const;
 
-type Msg = { id: string; sender_role: string; body: string; created_at: string; pending?: boolean };
+type Msg = SupportMsg;
 
 const timeLabel = (iso: string) =>
   new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -144,7 +144,7 @@ export function MemberSupportPane({
         <div className="min-w-0 flex-1">
           <div className="truncate text-[16px] font-semibold leading-5">{name}</div>
           <div className="truncate text-[13px] leading-[18px] text-muted-foreground">
-            {SUPPORT_LINE}{done ? " · Done" : ""}
+            {supportLineFor(data?.person?.tier)}{done ? " · Done" : ""}
           </div>
         </div>
         {liveThreadId && (
@@ -177,7 +177,9 @@ export function MemberSupportPane({
           <>
             {/* Who this is, said once at the top (Instagram's header on a new chat). */}
             <div className="mx-auto mb-5 max-w-sm px-4 text-center text-[13px] leading-[18px] text-muted-foreground" data-support-intro>
-              {first} is a JF member (no coach). They write to you from Support in their app, and get a push when you reply.
+              {data?.person?.tier === "coaching"
+                ? `${first} is a coaching client. This is their JF Effect Support chat (app and account questions), separate from your coaching chat; they get a push when you reply.`
+                : `${first} is a JF member (no coach). They write to JF Effect Support in their Messages, and get a push when you reply.`}
             </div>
             {messages.length === 0 && (
               <p className="text-center text-[15px] text-muted-foreground">No messages yet. Say hi to start the chat.</p>
@@ -203,6 +205,7 @@ export function MemberSupportPane({
                       {lastOfRun && (
                         <div className={cn("mt-0.5 px-1 text-[11px] text-muted-foreground", mine && "text-right")}>
                           {m.pending ? "Sending…" : timeLabel(m.created_at)}
+                          {mine && !m.pending && m.read_at && i === messages.length - 1 ? " · Seen" : ""}
                         </div>
                       )}
                     </div>

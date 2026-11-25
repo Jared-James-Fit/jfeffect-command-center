@@ -67,7 +67,7 @@ import { MemberSupportPane, SUPPORT_REFRESH_KEYS } from "@/components/support/me
 import { useServerFn } from "@tanstack/react-start";
 import { updateMemberSupport } from "@/lib/member-support.functions";
 import {
-  SUPPORT_LINE, mergeByRecency, sortSupportChats, supportChat, supportInFilter, supportMatches, supportNewChats,
+  mergeByRecency, sortSupportChats, supportChat, supportInFilter, supportMatches, supportNewChats,
   type SupportChat, type SupportThreadRow,
 } from "@/lib/member-support";
 
@@ -1411,7 +1411,7 @@ export function MessagesInbox({
   );
 }
 
-/** A JF member's Support chat in the list: their face, the latest message, the blue dot, "JF member · Support". */
+/** A Support chat in the list: their face, the latest message, the blue dot, "JF member · Support" (or "Client · JF Effect Support"). */
 function SupportChatRow({
   chat, selected, onOpen, onAction,
 }: {
@@ -1459,7 +1459,7 @@ function SupportChatRow({
         avatar={<UserAvatar src={chat.avatar} name={chat.name} size={CHAT_ROW_AVATAR} expandable={false} />}
         name={chat.name}
         preview={chat.preview || "New message"}
-        extra={<span className="mt-0.5 block truncate text-[13px] leading-[18px] text-muted-foreground" data-support-line>{SUPPORT_LINE}</span>}
+        extra={<span className="mt-0.5 block truncate text-[13px] leading-[18px] text-muted-foreground" data-support-line>{chat.line}</span>}
         label={`${chat.name}, Support chat${unread ? ", new message" : ""}`}
       />
     </SwipeableRow>

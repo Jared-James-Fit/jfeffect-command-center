@@ -35,10 +35,18 @@ export type SupportChat = {
   unread: number;
   /** Marked Done: under Archived until they write again (which reopens it). */
   done: boolean;
+  /** The line under their name: a member's or a coaching client's Support chat. */
+  line: string;
 };
 
-/** What the member's row says under their name. */
+/** What a member's row says under their name. */
 export const SUPPORT_LINE = "JF member · Support";
+/** What a coaching client's Support row says (their coach chat is its own row). */
+export const CLIENT_SUPPORT_LINE = "Client · JF Effect Support";
+
+export function supportLineFor(tier: string | null | undefined): string {
+  return tier === "coaching" ? CLIENT_SUPPORT_LINE : SUPPORT_LINE;
+}
 
 export function supportPreview(body: string | null | undefined, senderRole: string | null | undefined): string {
   const text = (body ?? "").replace(/\s+/g, " ").trim();
@@ -57,6 +65,7 @@ export function supportChat(r: SupportThreadRow): SupportChat {
     at: r.last_at,
     unread: Math.max(0, r.unread_count ?? 0),
     done: r.status === "closed",
+    line: supportLineFor(r.service_tier),
   };
 }
 
@@ -107,4 +116,39 @@ export function sortSupportChats(chats: SupportChat[]): SupportChat[] {
 /** A member's photo for the coach: their account photo, else the one on their member record. */
 export function avatarFor(accountPhoto: string | null | undefined, memberPhoto: string | null | undefined): string | null {
   return (accountPhoto && accountPhoto.trim()) || (memberPhoto && memberPhoto.trim()) || null;
+}
+
+/* ---------- The person's side: JF Effect Support in their Messages ---------- */
+
+/** The chat's name in everyone's inbox, members and coaching clients alike. */
+export const SUPPORT_CHAT_NAME = "JF Effect Support";
+
+/** `?chat=support` (pushes, links, Help) opens the Support chat in Messages. */
+export const SUPPORT_CHAT_PATH = "/portal/messages?chat=support";
+export const SUPPORT_PIN_ID = "jf-support";
+
+export type SupportMsg = { id: string; sender_role: string; body: string; created_at: string; read_at?: string | null; pending?: boolean };
+
+/** The person's newest message, if the team has read it: where "Seen" goes (Instagram's read receipt). */
+export function supportSeenLine(messages: SupportMsg[]): SupportMsg | null {
+  const last = messages[messages.length - 1];
+  if (!last || last.sender_role !== "member" || last.pending) return null;
+  return last.read_at ? last : null;
+}
+
+/** The Support row in the person's inbox: its second line, and whether a reply waits unread. */
+export function supportRowFor(messages: SupportMsg[], unreadForMember: number | null | undefined): { preview: string; at: string | null; unread: boolean } {
+  const last = messages[messages.length - 1];
+  if (!last) return { preview: "Questions about the app or your account", at: null, unread: false };
+  const text = last.body.replace(/\s+/g, " ").trim();
+  return {
+    preview: last.sender_role === "member" ? `You: ${text}` : text,
+    at: last.created_at,
+    unread: (unreadForMember ?? 0) > 0 || messages.some((m) => m.sender_role !== "member" && !m.read_at && !m.pending),
+  };
+}
+
+/** Does a Messages link ask for the Support chat? (`?chat=support`, or the old /portal/support). */
+export function wantsSupportChat(search: string | null | undefined): boolean {
+  return new URLSearchParams(search ?? "").get("chat") === "support";
 }

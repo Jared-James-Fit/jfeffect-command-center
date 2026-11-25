@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 
 const programLibrary = readFileSync("src/route-pages/_authenticated/admin/program-library.tsx", "utf8");
 const membershipLibraryFns = readFileSync("src/lib/membership-library.functions.ts", "utf8");
-const support = readFileSync("src/routes/_authenticated/portal/support.tsx", "utf8");
+// JF Effect Support: its own screen and the same conversation in Messages
+const support = ["src/routes/_authenticated/portal/support.tsx", "src/components/support/support-conversation.tsx", "src/lib/member-support.ts"]
+  .map((f) => readFileSync(f, "utf8")).join("\n");
 const nutrition = readFileSync("src/components/nutrition/NutritionDashboard.tsx", "utf8");
 const macroCalculator = readFileSync("src/components/nutrition/MacroCalculatorDialog.tsx", "utf8");
 const memberTargets = readFileSync("src/lib/nutrition-targets/member-targets.functions.ts", "utf8");
