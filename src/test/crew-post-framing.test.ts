@@ -144,7 +144,8 @@ describe("the studio frames every slide, and what's posted is what it showed", (
     expect(tray).toContain("const focus = frameFocus(f, shape);");
     expect(tray).toContain('const poster = src ? await framedFile(src, f, shape, thumbWidth(shape), "poster.jpg", grade) : null;');
     // a photo already the post's shape and untouched (no filter) goes as it was uploaded; a slide already on the post stays as it is
-    expect(tray).toContain("if (!grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;");
+    // (still the upload as picked, and not turned)
+    expect(tray).toContain("if (!it.baked && !grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001 && !f.r) return slide;");
     expect(tray).toContain("if (it.existing || !uid) return slide;");
   });
 

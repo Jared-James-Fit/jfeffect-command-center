@@ -127,6 +127,13 @@ export function GroupMessageThread({
     onClip: (f) => void onPickFiles([f]),
     onLibrary: () => photoInputRef.current?.click(),
   });
+  // the + menu's Camera: the app's own camera (a tap for a photo, a hold for a video), the shared capture layer's chat defaults
+  const chatCamera = useFilmCamera({
+    purpose: "chat",
+    maxSeconds: videoLimit(videoContext),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1057,6 +1064,7 @@ export function GroupMessageThread({
           <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
           {trimmer.element}
           {filmCamera.element}
+        {chatCamera.element}
 
           <input ref={fileInputRef} type="file" multiple className="hidden"
             onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
@@ -1112,7 +1120,10 @@ export function GroupMessageThread({
                 disabled={sending}
                 canSendGifs={canSendGifs}
                 canSendSounds={canSendSounds}
-                onPickCamera={() => cameraInputRef.current?.click()}
+                onPickCamera={() => {
+                // where a web page can't use the camera, the phone's own, as before
+                if (!chatCamera.start()) cameraInputRef.current?.click();
+              }}
                 onPickVideo={() => {
                   // where a web page can't film, the phone's own camera, as before
                   if (!filmCamera.start()) cameraInputRef.current?.click();

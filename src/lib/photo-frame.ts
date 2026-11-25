@@ -26,7 +26,19 @@ export type Point = { x: number; y: number };
  * fills the frame (1 = fills it exactly), `cx`/`cy` the middle of the part on
  * show, as a share of the photo's width / height (0.5 / 0.5 = centred).
  */
-export type Framing = { z: number; cx: number; cy: number };
+export type Framing = {
+  z: number;
+  cx: number;
+  cy: number;
+  /**
+   * A photo turned (degrees, clockwise): quarter turns plus a straighten of up
+   * to ±45° (Nov 25 2026). Photos only; `cx`/`cy` are then shares of the photo
+   * as it stands after its quarter turns, and the zoom never lets a tilted
+   * photo leave a corner of the frame empty. Missing: not turned (every
+   * framing from before).
+   */
+  r?: number;
+};
 
 /**
  * Which part of a cropped clip or photo shows. Without `a` it's the older
@@ -54,10 +66,12 @@ export const CENTRED: Framing = { z: 1, cx: 0.5, cy: 0.5 };
 export const MAX_ZOOM = 5;
 
 /** The shapes a post can be (width / height): 9:16 fills a phone's screen in the Crew feed. */
-export const POST_ASPECTS = { full: 9 / 16, portrait: 4 / 5, square: 1, landscape: 16 / 9 } as const;
+export const POST_ASPECTS = { full: 9 / 16, portrait: 4 / 5, classic: 3 / 4, square: 1, landscape: 16 / 9 } as const;
 export type PostAspect = keyof typeof POST_ASPECTS;
-export const POST_ASPECT_ORDER: PostAspect[] = ["full", "portrait", "square", "landscape"];
-export const POST_ASPECT_LABEL: Record<PostAspect, string> = { full: "9:16", portrait: "4:5", square: "1:1", landscape: "16:9" };
+export const POST_ASPECT_ORDER: PostAspect[] = ["full", "portrait", "classic", "square", "landscape"];
+export const POST_ASPECT_LABEL: Record<PostAspect, string> = { full: "9:16", portrait: "4:5", classic: "3:4", square: "1:1", landscape: "16:9" };
+/** The shapes a post starts at from its first picture (3:4 is only ever picked by hand). */
+const START_ASPECTS: PostAspect[] = ["full", "portrait", "square", "landscape"];
 export const STORY_ASPECT = 9 / 16;
 /**
  * Where a full-screen (9:16) post is covered on its screen in the Crew feed,
@@ -233,7 +247,7 @@ export function closestAspect(w: number | null | undefined, h: number | null | u
   if (!w || !h || !(w > 0) || !(h > 0)) return "portrait";
   const own = Math.log(w / h);
   let best: PostAspect = "portrait";
-  for (const k of POST_ASPECT_ORDER) if (Math.abs(Math.log(POST_ASPECTS[k]) - own) < Math.abs(Math.log(POST_ASPECTS[best]) - own)) best = k;
+  for (const k of START_ASPECTS) if (Math.abs(Math.log(POST_ASPECTS[k]) - own) < Math.abs(Math.log(POST_ASPECTS[best]) - own)) best = k;
   return best;
 }
 
@@ -268,8 +282,88 @@ export function visibleShare(img: Size, frame: Size, z: number): Size {
   return { w: Math.min(1, frame.w / (img.w * s)), h: Math.min(1, frame.h / (img.h * s)) };
 }
 
+/* ---- turning a photo: quarter turns and straightening ----------------- */
+
+/** How many quarter turns clockwise (0–3). */
+export function quarterTurns(r: number | null | undefined): 0 | 1 | 2 | 3 {
+  return ((((Math.round(finite(r ?? 0, 0) / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3);
+}
+/** The straighten past the quarter turns, −45…45 degrees. */
+export function straightenOf(r: number | null | undefined): number {
+  const v = finite(r ?? 0, 0);
+  return v - Math.round(v / 90) * 90;
+}
+/** The photo's size as it stands after its quarter turns. */
+export function turnedSize(img: Size, r: number | null | undefined): Size {
+  return quarterTurns(r) % 2 ? { w: img.h, h: img.w } : img;
+}
+/** The box a frame needs from the photo when the photo is tilted by `deg` under it. */
+export function tiltBox(frame: Size, deg: number): Size {
+  const a = (Math.abs(deg) * Math.PI) / 180;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { w: frame.w * c + frame.h * s, h: frame.w * s + frame.h * c };
+}
+/** The least zoom at which a photo tilted by `deg` still covers the whole frame. */
+export function minTiltZoom(img: Size, frame: Size, deg: number): number {
+  if (!deg || !img.w || !img.h) return 1;
+  const box = tiltBox(frame, deg);
+  const c0 = coverScale(img, frame);
+  return Math.max(1, box.w / (img.w * c0), box.h / (img.h * c0));
+}
+/** Turn a framing a quarter clockwise (the straighten kept), centred again. */
+export function turnQuarter(f: Framing): Framing {
+  return { z: 1, cx: 0.5, cy: 0.5, r: quarterTurns(f.r) * 90 + 90 + straightenOf(f.r) };
+}
+/** Straighten to `deg` (−45…45), the quarter turns kept. */
+export function withStraighten(f: Framing, deg: number): Framing {
+  const d = clamp(finite(deg, 0), -45, 45);
+  const r = quarterTurns(f.r) * 90 + d;
+  return { ...f, r: r === 0 ? undefined : r };
+}
+/** A framing that turns the photo at all. */
+export function isTurned(f: Framing | null | undefined): boolean {
+  return !!f && !!f.r && finite(f.r, 0) % 360 !== 0;
+}
+
+/**
+ * Where the photo (as it is, never turned) goes so it shows turned and framed:
+ * its size on screen and the transform from the frame's top-left corner
+ * (transform-origin 0 0). The same numbers draw it into a canvas.
+ */
+export function turnedPlacement(f: Framing, img: Size, frame: Size): { w: number; h: number; tx: number; ty: number; deg: number; ox: number; oy: number } {
+  const c = clampFraming(f, img, frame);
+  const I = turnedSize(img, c.r);
+  const s = coverScale(I, frame) * c.z;
+  const q = quarterTurns(c.r);
+  // the point of the photo (shares of it as it is) that sits in the frame's middle
+  const [ux, uy] = q === 0 ? [c.cx, c.cy] : q === 1 ? [c.cy, 1 - c.cx] : q === 2 ? [1 - c.cx, 1 - c.cy] : [1 - c.cy, c.cx];
+  return { w: img.w * s, h: img.h * s, tx: frame.w / 2, ty: frame.h / 2, deg: finite(c.r ?? 0, 0), ox: ux * img.w * s, oy: uy * img.h * s };
+}
+
+/** CSS for a photo element inside its frame: placed, or placed and turned. */
+export function framedStyle(f: Framing, img: Size, frame: Size): { width: number; height: number; transform: string; transformOrigin?: string } {
+  if (!f.r) {
+    const p = placement(clampFraming(f, img, frame), img, frame);
+    return { width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` };
+  }
+  const t = turnedPlacement(f, img, frame);
+  return { width: t.w, height: t.h, transformOrigin: "0 0", transform: `translate3d(${t.tx}px, ${t.ty}px, 0) rotate(${t.deg}deg) translate3d(${-t.ox}px, ${-t.oy}px, 0)` };
+}
+
 /** Keep the zoom in range and the photo covering the frame (no empty edges, ever). */
 export function clampFraming(f: Framing, img: Size, frame: Size): Framing {
+  if (f.r && finite(f.r, 0) % 360 !== 0) {
+    const r = finite(f.r, 0);
+    const I = turnedSize(img, r);
+    const tilt = straightenOf(r);
+    const zmin = minTiltZoom(I, frame, tilt);
+    const z = clamp(finite(f.z, 1), zmin, Math.max(MAX_ZOOM, zmin));
+    const box = tiltBox(frame, tilt);
+    const s = coverScale(I, frame) * z;
+    const v = { w: Math.min(1, box.w / (I.w * s)), h: Math.min(1, box.h / (I.h * s)) };
+    return { z, cx: clamp(finite(f.cx, 0.5), v.w / 2, 1 - v.w / 2), cy: clamp(finite(f.cy, 0.5), v.h / 2, 1 - v.h / 2), r };
+  }
   const z = clamp(finite(f.z, 1), 1, MAX_ZOOM);
   const v = visibleShare(img, frame, z);
   return { z, cx: clamp(finite(f.cx, 0.5), v.w / 2, 1 - v.w / 2), cy: clamp(finite(f.cy, 0.5), v.h / 2, 1 - v.h / 2) };
@@ -277,6 +371,7 @@ export function clampFraming(f: Framing, img: Size, frame: Size): Framing {
 
 /** Where the photo sits on screen: its drawn size and its top-left corner inside the frame. */
 export function placement(f: Framing, img: Size, frame: Size): { w: number; h: number; x: number; y: number } {
+  if (f.r) img = turnedSize(img, f.r);
   const s = coverScale(img, frame) * f.z;
   const w = img.w * s;
   const h = img.h * s;
@@ -285,6 +380,15 @@ export function placement(f: Framing, img: Size, frame: Size): { w: number; h: n
 
 /** Drag by (dx, dy) screen px: the photo follows the finger. */
 export function panFraming(f: Framing, dx: number, dy: number, img: Size, frame: Size): Framing {
+  if (f.r) {
+    // the finger moves the tilted photo: its move read along the photo's own axes
+    const I = turnedSize(img, f.r);
+    const a = (-straightenOf(f.r) * Math.PI) / 180;
+    const rx = dx * Math.cos(a) - dy * Math.sin(a);
+    const ry = dx * Math.sin(a) + dy * Math.cos(a);
+    const s = coverScale(I, frame) * f.z;
+    return clampFraming({ z: f.z, cx: f.cx - rx / (I.w * s), cy: f.cy - ry / (I.h * s), r: f.r }, img, frame);
+  }
   const s = coverScale(img, frame) * f.z;
   return clampFraming({ z: f.z, cx: f.cx - dx / (img.w * s), cy: f.cy - dy / (img.h * s) }, img, frame);
 }
@@ -295,6 +399,11 @@ export function panFraming(f: Framing, dx: number, dy: number, img: Size, frame:
  * pinch, and moving both fingers moves the photo). Points are in frame px.
  */
 export function pinchFraming(start: Framing, m0: Point, d0: number, m: Point, d: number, img: Size, frame: Size): Framing {
+  if (start.r) {
+    // a turned photo zooms about its middle (the straighten keeps it covering)
+    const z = clamp(start.z * (d / (d0 || 1)), 1, MAX_ZOOM);
+    return panFraming(clampFraming({ ...start, z }, img, frame), m.x - m0.x, m.y - m0.y, img, frame);
+  }
   const base = coverScale(img, frame);
   const z = clamp(start.z * (d / (d0 || 1)), 1, MAX_ZOOM);
   const s0 = base * start.z;
@@ -310,6 +419,7 @@ export function pinchFraming(start: Framing, m0: Point, d0: number, m: Point, d:
  * guide can light up.
  */
 export function snapToCentre(f: Framing, img: Size, frame: Size, px = 8): { framing: Framing; v: boolean; h: boolean } {
+  if (f.r) return { framing: f, v: false, h: false };
   const vis = visibleShare(img, frame, f.z);
   const s = coverScale(img, frame) * f.z;
   const v = vis.w < 0.999 && Math.abs(f.cx - 0.5) * img.w * s <= px;
