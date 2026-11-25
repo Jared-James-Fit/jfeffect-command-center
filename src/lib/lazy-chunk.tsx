@@ -23,7 +23,8 @@ import { noteReloadReason } from "@/lib/demo-crumb";
  *  - retries the import once, quietly;
  *  - contains the failure in a small inline fallback with a working Retry
  *    (and "Update app" once Retry has failed), never the page-level screen;
- *  - nudges the app's normal "update available" prompt when the bundle is stale;
+ *  - notes a newer build is out when the bundle is stale (no prompt: the app
+ *    picks it up at its next quiet moment, app-freshness.ts);
  *  - exposes `.preload()` so callers can fetch the chunk before it is needed
  *    (on idle / touch-down), and renders a fetched chunk straight away (no
  *    Suspense fallback), so the first tap opens instantly.

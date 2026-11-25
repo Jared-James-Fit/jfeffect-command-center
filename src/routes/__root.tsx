@@ -42,7 +42,6 @@ import "@/hooks/use-pwa-install";
 import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { initNativeShell } from "@/platform/native-init";
 import { initChunkRecovery } from "@/lib/chunk-recovery";
-import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
 import { useAppFreshness } from "@/hooks/use-app-freshness";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // Side-effect import: registers durable-queue handlers for cross-feature
@@ -385,7 +384,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  // Reopening the app picks up a newly published version (the iPhone shell has no service worker to do it).
+  // Reopening the app picks up a newly published version quietly, never with a prompt (app-freshness.ts).
   useAppFreshness();
 
   useEffect(() => {
@@ -416,7 +415,6 @@ function RootComponent() {
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />
-            <PwaUpdateToast />
             {/* Single global media viewer — portalled above every overlay. */}
             <MediaViewerRoot />
             {/* Holds a phone upright where the platform allows; elsewhere it turns and keeps the phone layout (portrait-only.ts) */}

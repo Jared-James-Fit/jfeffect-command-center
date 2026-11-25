@@ -1,30 +1,34 @@
 // Guarded service-worker registration. Never registers in dev, iframe previews,
-// Lovable preview hosts, or when ?sw=off. Exposes a small subscribe API so the
-// UI can show the "Update available" toast.
-
-import { noteReloadReason } from "@/lib/demo-crumb";
+// Lovable preview hosts, or when ?sw=off. Keeps a small status (a newer build
+// is known); nothing shows it: a new build is picked up quietly by
+// app-freshness.ts, never with an "Update available" prompt.
 
 type Status = "idle" | "ready" | "update-available" | "offline-ready" | "blocked";
 
 let status: Status = "idle";
-let triggerUpdate: (() => Promise<void>) | null = null;
 const listeners = new Set<() => void>();
 
 function notify() {
   listeners.forEach((l) => l());
 }
 
-export function getSwStatus(): Status { return status; }
+export function getSwStatus(): Status {
+  return status;
+}
 export function subscribeSw(fn: () => void): () => void {
   listeners.add(fn);
-  return () => { listeners.delete(fn); };
+  return () => {
+    listeners.delete(fn);
+  };
 }
 /**
  * A lazy chunk could not be fetched even after a retry, which on a live site
  * almost always means this running bundle is older than the deployment. The
- * service worker never notices that (it only precaches icons), so surface the
- * normal "Update" prompt instead of letting the UI fail. Skipped when offline,
- * where a failed fetch says nothing about the build.
+ * service worker never notices that (it only precaches icons), so remember a
+ * newer build is out. Nothing is shown: the section says "Couldn't load this
+ * section" itself (lazy-chunk.tsx), and the app reloads at its next quiet
+ * moment (app-freshness.ts). Skipped when offline, where a failed fetch says
+ * nothing about the build.
  */
 export function flagUpdateAvailable() {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
@@ -33,16 +37,14 @@ export function flagUpdateAvailable() {
   notify();
 }
 
-export async function applyUpdate() {
-  noteReloadReason("update prompt");
-  if (triggerUpdate) await triggerUpdate();
-  else if (typeof window !== "undefined") window.location.reload();
-}
-
 function shouldRefuse(): boolean {
   if (typeof window === "undefined") return true;
   if (!import.meta.env.PROD) return true;
-  try { if (window.top !== window.self) return true; } catch { return true; }
+  try {
+    if (window.top !== window.self) return true;
+  } catch {
+    return true;
+  }
   const host = window.location.hostname;
   if (host.startsWith("id-preview--") || host.startsWith("preview--")) return true;
   if (host === "lovableproject.com" || host.endsWith(".lovableproject.com")) return true;
@@ -62,7 +64,9 @@ async function unregisterMatching() {
         await r.unregister();
       }
     }
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 /** Call once on the client (e.g. from a useEffect in __root.tsx). */
@@ -77,7 +81,11 @@ export function registerServiceWorker() {
 
   // Clear legacy JF runtime caches left by older builds before registering the current worker.
   if ("caches" in window) {
-    void caches.keys().then((keys) => Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k))));
+    void caches
+      .keys()
+      .then((keys) =>
+        Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k))),
+      );
   }
 
   // A newly deployed worker taking control never reloads the page. Every
@@ -87,38 +95,38 @@ export function registerServiceWorker() {
   // reopen, and only on screens where nothing can be lost.
 
   // Dynamic import keeps the virtual module out of SSR / Lovable preview bundles.
-  import("virtual:pwa-register").then(({ registerSW }) => {
-    const updateSW = registerSW({
-      immediate: true,
-      // The plugin reloads the page itself when a new worker activates unless
-      // this is given: never reload here (see above; app-freshness.ts does it).
-      onNeedReload() {},
-      onNeedRefresh() {
-        status = "update-available";
-        notify();
-      },
-      onOfflineReady() {
-        status = "offline-ready";
-        notify();
-      },
-      onRegisteredSW(_swUrl, registration) {
-        if (status === "idle") status = "ready";
-        notify();
-        // Check for a fresh production bundle whenever the installed PWA resumes.
-        // iOS can keep a standalone PWA process alive for hours, otherwise leaving
-        // the old JS mounted even after a new worker has activated.
-        const check = () => { if (document.visibilityState === "visible") void registration?.update(); };
-        document.addEventListener("visibilitychange", check);
-        window.setInterval(check, 60_000);
-      },
+  import("virtual:pwa-register")
+    .then(({ registerSW }) => {
+      registerSW({
+        immediate: true,
+        // The plugin reloads the page itself when a new worker activates unless
+        // this is given: never reload here (see above; app-freshness.ts does it).
+        onNeedReload() {},
+        onNeedRefresh() {
+          status = "update-available";
+          notify();
+        },
+        onOfflineReady() {
+          status = "offline-ready";
+          notify();
+        },
+        onRegisteredSW(_swUrl, registration) {
+          if (status === "idle") status = "ready";
+          notify();
+          // Check for a fresh production bundle whenever the installed PWA resumes.
+          // iOS can keep a standalone PWA process alive for hours, otherwise leaving
+          // the old JS mounted even after a new worker has activated.
+          const check = () => {
+            if (document.visibilityState === "visible") void registration?.update();
+          };
+          document.addEventListener("visibilitychange", check);
+          window.setInterval(check, 60_000);
+        },
+      });
+    })
+    .catch(() => {
+      // SW chunk missing or blocked — fall through silently.
     });
-    triggerUpdate = async () => {
-      await updateSW(true);
-      window.location.reload();
-    };
-  }).catch(() => {
-    // SW chunk missing or blocked — fall through silently.
-  });
 }
 
 /**
@@ -137,9 +145,13 @@ export async function clearAllAppCaches() {
   try {
     if ("caches" in window) {
       const keys = await caches.keys();
-      await Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k)));
+      await Promise.allSettled(
+        keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k)),
+      );
     }
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
   try {
     // Drop known JF Effect IndexedDB stores used for offline drafts.
     if ("indexedDB" in window && (indexedDB as any).databases) {
@@ -150,5 +162,7 @@ export async function clearAllAppCaches() {
         }
       }
     }
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
