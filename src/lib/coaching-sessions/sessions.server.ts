@@ -109,11 +109,27 @@ export type SessionContext = {
   registration: Record<string, string>;
 };
 
+/**
+ * The client's dated bodyweight goal in kg (clients.bodyweight_goal_*: a value
+ * in its own unit), or null. A goal to maintain has no target to plan toward.
+ */
+export function bodyweightGoalOf(c: {
+  bodyweight_goal_type?: string | null;
+  bodyweight_goal_value?: number | string | null;
+  bodyweight_goal_unit?: string | null;
+  bodyweight_goal_date?: string | null;
+}): { kg: number; date: string | null } | null {
+  const v = c.bodyweight_goal_value == null ? NaN : Number(c.bodyweight_goal_value);
+  if (!Number.isFinite(v) || v <= 0 || c.bodyweight_goal_type === "maintain") return null;
+  const kg = c.bodyweight_goal_unit === "lb" ? v / 2.20462 : v;
+  return { kg: Math.round(kg * 10) / 10, date: c.bodyweight_goal_date ?? null };
+}
+
 /** Everything a session for this client is prepared from, read with the coach's own login. */
 export async function loadSessionContext(supabase: any, clientId: string, opts: { includeTests?: boolean } = {}): Promise<SessionContext> {
   const { data: c, error } = await supabase
     .from("clients")
-    .select("id, first_name, preferred_name, timezone, bodyweight_goal_kg, bodyweight_goal_date")
+    .select("id, first_name, preferred_name, timezone, bodyweight_goal_type, bodyweight_goal_value, bodyweight_goal_unit, bodyweight_goal_date")
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -184,9 +200,7 @@ export async function loadSessionContext(supabase: any, clientId: string, opts: 
       preps,
       plan,
       longTermGoal: goal,
-      bodyweightGoal: (c as any).bodyweight_goal_kg
-        ? { kg: Number((c as any).bodyweight_goal_kg), date: (c as any).bodyweight_goal_date ?? null }
-        : null,
+      bodyweightGoal: bodyweightGoalOf(c),
       includeTests: isMine,
     }),
     commitments: (commitments as any[]).map((m) => ({
