@@ -36,6 +36,7 @@
  * understand), or the coach offers a switch the client accepts (`offerTerms`).
  */
 import { compareVersions } from "@/lib/coaching-agreement/version";
+import { NATIVE_PURCHASE_BLOCKED } from "@/lib/native-purchases";
 
 export type PlanFamily = "free" | "membership" | "coaching";
 export type PackageKindForPlans = "free" | "membership" | "subscription" | "one_time";
@@ -473,7 +474,7 @@ export function transitionFor(
     return block(tr, "Update your card first");
   }
   if (ctx.native && (tr.action === "checkout" || tr.action === "swap_now")) {
-    return block(tr, "Upgrade on the web at jfeffect.com");
+    return block(tr, NATIVE_PURCHASE_BLOCKED);
   }
   return tr;
 }

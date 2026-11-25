@@ -12,6 +12,8 @@ import { X } from "lucide-react";
 import { getMyPromos, trackPromo } from "@/lib/crew-ads/crew-ads.functions";
 import { SPONSORED_LABEL, promoFor, promoSlots, safePromoPath, type Promo } from "@/lib/crew-ads/placement";
 import { inProgressWorkoutDay } from "@/lib/workout-resume";
+import { isNative } from "@/platform";
+import { promosForShell } from "@/lib/native-purchases";
 
 const SESSION_KEY = "jf.crew-promo-session";
 
@@ -37,7 +39,8 @@ export function useCrewPromos(posts: number, enabled: boolean) {
   const session = useMemo(() => (typeof window === "undefined" ? "ssr" : visitKey()), []);
   const q = useQuery({ queryKey: ["crew-promos", session], queryFn: () => fn(), enabled, staleTime: Infinity, gcTime: Infinity });
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
-  const promos = useMemo(() => (q.data?.promos ?? []).filter((p) => !dismissed.has(p.id) && safePromoPath(p.cta_path)), [q.data, dismissed]);
+  // the iPhone app shows no promo that points at something to buy (web-only purchases, native-purchases.ts)
+  const promos = useMemo(() => promosForShell((q.data?.promos ?? []).filter((p) => !dismissed.has(p.id) && safePromoPath(p.cta_path)), isNative()), [q.data, dismissed]);
   const slots = useMemo(
     () =>
       enabled && q.data

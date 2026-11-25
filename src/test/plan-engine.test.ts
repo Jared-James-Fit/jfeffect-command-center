@@ -217,7 +217,7 @@ describe("transitions (every valid move)", () => {
     expect(transitionFor(failing, byslug("free")).available).toBe(true);
     const ending = { ...complete, status: "ending" as const };
     expect(transitionFor(ending, byslug("plus")).blocked).toBe("Keep your plan first to change it");
-    expect(transitionFor(free, byslug("plus"), { ...approved, native: true })).toMatchObject({ available: false, blocked: "Upgrade on the web at jfeffect.com" });
+    expect(transitionFor(free, byslug("plus"), { ...approved, native: true })).toMatchObject({ available: false, blocked: "Not available in the app" });
     // a downgrade or a cancel doesn't charge, so it works in the phone app too
     expect(transitionFor(complete, byslug("free"), { native: true }).available).toBe(true);
     const broken = { ...byslug("plus"), problem: "Its product has no Stripe price" };

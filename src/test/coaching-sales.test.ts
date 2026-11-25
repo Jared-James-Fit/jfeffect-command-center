@@ -117,7 +117,7 @@ describe("plans: a package sold straight skips the approval only for someone nev
     expect(transitionFor(free, to("complete"), { coaching: { state: "applied", at: "2026-11-20" } })).toMatchObject({ action: "checkout", available: true });
     expect(transitionFor(free, to("plus"), { coaching: { state: "apply" } })).toMatchObject({ action: "apply" });
     expect(transitionFor(free, to("complete"), { coaching: { state: "comeback" } })).toMatchObject({ action: "comeback" });
-    expect(transitionFor(free, to("complete"), { coaching: { state: "apply" }, native: true })).toMatchObject({ available: false, blocked: "Upgrade on the web at jfeffect.com" });
+    expect(transitionFor(free, to("complete"), { coaching: { state: "apply" }, native: true })).toMatchObject({ available: false, blocked: "Not available in the app" });
   });
 });
 
