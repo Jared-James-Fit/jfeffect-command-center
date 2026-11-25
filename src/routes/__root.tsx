@@ -9,7 +9,7 @@ import {
   QUERY_PERSIST_MAX_AGE,
   shouldPersistQuery,
 } from "@/lib/query-persister";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { PortraitLock } from "@/components/portrait-only";
 import { AppPulse } from "@/components/app-pulse";
 import { PHONE_BOOT_SCRIPT } from "@/lib/portrait-only";
@@ -380,7 +380,7 @@ function RootComponent() {
             <Outlet />
             <RouteTracker />
             <AppPulse />
-            <Toaster position="top-right" theme="dark" richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px", left: "16px" }} />
+            <Toaster offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", left: "16px", right: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />
