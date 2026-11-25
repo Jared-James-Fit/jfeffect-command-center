@@ -80,7 +80,8 @@ export async function acceptCrewRules(): Promise<void> {
  * accepted yet, shows them, and on Agree runs it once more. Any other answer
  * comes back as it was, so the screen handles it like before.
  */
-export async function withCrewRules<T extends { error: unknown }>(run: () => PromiseLike<T>): Promise<T> {
+// `= any`: callers pass `db.rpc(…)` on an untyped client, and inference from `any` would otherwise settle on the bare constraint
+export async function withCrewRules<T extends { error: unknown } = any>(run: () => PromiseLike<T>): Promise<T> {
   const first = await run();
   if (!isCrewRulesError(first.error)) return first;
   const accepted = await askCrewRules();
