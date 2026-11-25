@@ -304,7 +304,7 @@ export function cleoReadTools(ctx: ToolCtx) {
 
     training_log: tool({
       description:
-        "What a client actually lifted: logged sets (load as entered, reps, RPE/RIR, warm-ups marked) grouped by training day, with the top set's estimated 1RM. Pass `exercise` (e.g. 'high bar squat') to see only that lift, over a longer range for progress questions.",
+        "What a client actually lifted: logged sets (load as entered, reps, RPE/RIR, bar speed in m/s when a device or the set's video measured it (≈ = estimate), warm-ups marked) grouped by training day, with the top set's estimated 1RM. Pass `exercise` (e.g. 'high bar squat') to see only that lift, over a longer range for progress questions.",
       inputSchema: z.object({
         client_id: clientId,
         days: z.number().int().min(1).max(365).default(21).describe("How far back. Use 60-180 for progress on one lift."),
@@ -352,6 +352,8 @@ export function cleoReadTools(ctx: ToolCtx) {
           load_type: r.load_type ?? null,
           is_bodyweight: r.is_bodyweight ?? null,
           notes: r.notes ?? null,
+          velocity_mps: !r.velocity_excluded && r.mean_concentric_velocity_mps != null ? Number(r.mean_concentric_velocity_mps) : null,
+          velocity_quality: r.velocity_quality ?? null,
         }));
         if (!sets.length) {
           const what = exercise ? `no logged sets matching "${exercise}"` : "no logged sets";

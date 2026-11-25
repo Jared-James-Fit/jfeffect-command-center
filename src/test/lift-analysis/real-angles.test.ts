@@ -45,12 +45,18 @@ describe("the camera's angle", () => {
     const a = read(track());
     expect(velocityVerdict(withView(a, "turned", 0.82)).accepted).toBe(true);
     expect(velocityVerdict(withView(a, "turned", 0.78)).accepted).toBe(true);
-    expect(velocityVerdict(withView(a, "turned", 0.7)).reasons).toContain("camera_angle");
+    // past ~40° it's still logged, as an estimate (Nov 25 2026: slightly off is fine), up to ~53°
+    const far = velocityVerdict(withView(a, "turned", 0.7));
+    expect(far.accepted).toBe(true);
+    expect(far.tier).toBe("estimated");
+    expect(velocityVerdict(withView(a, "turned", 0.55)).reasons).toContain("camera_angle");
   });
-  it("a phone tilted up or down still has to be within ~25°", () => {
+  it("a phone tilted up or down: measured within ~25°, an estimate to ~41°", () => {
     const a = read(track());
     expect(velocityVerdict(withView(a, "tilted", 0.92)).accepted).toBe(true);
-    expect(velocityVerdict(withView(a, "tilted", 0.85)).reasons).toContain("camera_angle");
+    expect(velocityVerdict(withView(a, "tilted", 0.92)).tier).toBe("measured");
+    expect(velocityVerdict(withView(a, "tilted", 0.85)).tier).toBe("estimated");
+    expect(velocityVerdict(withView(a, "tilted", 0.7)).reasons).toContain("camera_angle");
   });
 });
 
@@ -68,11 +74,16 @@ describe("a plate hidden for a moment", () => {
     const a = read(track({ hide: [[2.8, 3.4]] }));
     expect(a.velocity.accepted).toBe(false);
   });
-  it("lost inside the set for longer than a rep takes: never logged", () => {
+  it("lost inside the set a moment longer than a rep: an estimate; much longer: never logged", () => {
     const a = read(track({ reps: 3 }));
-    const lost = {
+    const brief = {
       ...a,
       track: { keys: [], lost: [{ start: 3, end: 4.3 }], conflicts: 0 },
+    } as LiftAnalysis;
+    expect(velocityVerdict(brief).tier).toBe("estimated");
+    const lost = {
+      ...a,
+      track: { keys: [], lost: [{ start: 3, end: 5 }], conflicts: 0 },
     } as LiftAnalysis;
     expect(velocityVerdict(lost).reasons).toContain("plate_lost");
   });

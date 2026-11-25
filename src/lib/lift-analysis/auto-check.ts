@@ -12,7 +12,7 @@
  * waits for one look from the athlete, with the ring it would have used.
  */
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
-import type { GuideLift } from "@/lib/lift-analysis/exercise";
+import { MOVEMENT_ROM_MM, type GuideLift } from "@/lib/lift-analysis/exercise";
 
 /** A rep's range (mm) by lift, wide enough for every lifter, every variation. */
 export const ROM_BANDS: Record<GuideLift, [number, number]> = {
@@ -51,7 +51,8 @@ export function autoReadCheck(
   const frames = a.series.t.length || 1;
   if ((a.track?.conflicts ?? 0) > 0.05 * frames) why.push("followed two different things");
   if (!a.reps.length) why.push("no reps");
-  const [lo, hi] = ROM_BANDS[lift];
+  // the movement's own range when the read knows it (an overhead press, a row, a snatch), else the guide lift's
+  const [lo, hi] = a.movement && a.movement.kind !== "other" ? MOVEMENT_ROM_MM[a.movement.kind] : ROM_BANDS[lift];
   for (const r of a.reps) {
     const rom = r.top - r.bottom;
     if (a.units === "mm" && (rom < lo || rom > hi)) {
@@ -63,7 +64,8 @@ export function autoReadCheck(
       why.push("a press no lift has");
       break;
     }
-    if ((r.mcv.v ?? 0) > 2 || (r.peak.v ?? 0) > 3) {
+    const olympic = a.movement?.kind === "olympic";
+    if ((r.mcv.v ?? 0) > (olympic ? 2.6 : 2) || (r.peak.v ?? 0) > (olympic ? 3.4 : 3)) {
       why.push("faster than a loaded bar moves");
       break;
     }

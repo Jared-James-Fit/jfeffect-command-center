@@ -78,11 +78,11 @@ export function whyWords(why: string | undefined): string {
 const NOTE: Record<QualityNote, { title: string; tip: string }> = {
   not_calibrated: {
     title: "No plate size to measure from",
-    tip: "Confirm the biggest plate's diameter to read speed. The path and rep timing are kept without a physical scale.",
+    tip: "Speeds need the plate's own size as a ruler: film from the side with the end of the bar and its biggest plate in view.",
   },
   plate_size_assumed: {
-    title: "Legacy read used an unconfirmed diameter",
-    tip: "Confirm the plate's diameter before using this speed. A load cannot prove a plate's size.",
+    title: "Read from a standard 450 mm plate",
+    tip: "Every 20 kg, 25 kg and 45 lb plate and every bumper is 450 mm across, so the speed is logged as an estimate (≈). If the biggest plate on the bar is smaller, set its size.",
   },
   low_fps: {
     title: "Filmed at 30 fps",

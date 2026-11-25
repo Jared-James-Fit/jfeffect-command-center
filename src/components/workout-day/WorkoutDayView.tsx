@@ -479,6 +479,9 @@ function markOwnResultWrite(rowId: unknown, setIndex: unknown) {
   ownResultWrites.set(`${rowId}:${setIndex}`, now);
 }
 function isOwnResultEcho(row: any): boolean {
+  // a bar speed the server put on the set from its video is never this device's echo: it can land
+  // in the same moment as the athlete's own save (the set linking its video), and must show at once
+  if (row?.velocity_source === "video") return false;
   const t = row ? ownResultWrites.get(`${row.row_id}:${row.set_index}`) : undefined;
   return t !== undefined && Date.now() - t < 10_000;
 }

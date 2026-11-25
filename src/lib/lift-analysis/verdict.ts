@@ -11,10 +11,13 @@
  * the ones whose numbers can't be trusted that closely, so they stay off the
  * logger (still shown in the analysis, with why).
  *
- * The server re-checks what it can from the saved read (every rep complete
- * and measured, the same rep count as the reps logged on the set, never a
- * set with no reps logged yet, a load that means full-size plates) before it
- * writes anything to the logger.
+ * Since Nov 25 2026 the rule is tolerant (quality.ts SPEED_RULES): a read
+ * inside the strict limits is a measurement, one a little off (camera turned
+ * further round, an unconfirmed standard plate, a plate lost for a moment) is
+ * logged as an estimate with its margin, never dropped. The server re-checks
+ * it on the stored read (every rep complete and read, the logged reps within
+ * one of the video's, a confirmed plate, a load that means full-size plates
+ * or ranges that fit the movement at 450 mm) before it writes the set.
  */
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import { calibratedSetMean } from "./quality";
@@ -34,7 +37,7 @@ export type VelocityReason =
 
 export type VelocityVerdict = {
   accepted: boolean;
-  /** The set-average MCV (m/s, 3 decimals) when accepted. */
+  /** The set's speed (m/s, 3 decimals) when accepted: mean MCV, or mean peak for an Olympic lift (`metric`). */
   value: number | null;
   reps: number;
   /** Each rep's MCV (m/s) when it had one. */
@@ -42,6 +45,9 @@ export type VelocityVerdict = {
   reasons: VelocityReason[];
   tier?: "measured" | "estimated";
   uncertainty?: number;
+  metric?: "mcv" | "peak";
+  /** Every rep's range fits the movement at the plate size used (how an unconfirmed plate under 60 kg is trusted). */
+  plateCheck?: boolean;
 };
 
 export const ACCEPT_RULES = {
@@ -120,20 +126,29 @@ export function velocityVerdict(a: LiftAnalysis): VelocityVerdict {
   }
   const usable = calibratedSetMean(a);
   if (usable) {
-    return { accepted: true, value: usable.value, reps: reps.length, perRep, reasons: [], tier: usable.tier, uncertainty: usable.uncertainty };
+    return {
+      accepted: true,
+      value: usable.value,
+      reps: reps.length,
+      perRep,
+      reasons: [],
+      tier: usable.tier,
+      uncertainty: usable.uncertainty,
+      metric: usable.metric,
+      plateCheck: usable.plateCheck,
+    };
   }
-  if (!a.plate.confirmed) reasons.add("not_calibrated");
-  const accepted = reasons.size === 0 && perRep.every((v) => v != null) && a.plate.confirmed;
-  const value = accepted
-    ? Math.round((perRep.reduce<number>((s, v) => s + (v ?? 0), 0) / perRep.length) * 1000) / 1000
-    : null;
-  return { accepted, value, reps: reps.length, perRep, reasons: [...reasons] };
+  if (!reasons.size) reasons.add(perRep.some((v) => v == null) ? "rep_not_measured" : "scale_uncertain");
+  return { accepted: false, value: null, reps: reps.length, perRep, reasons: [...reasons] };
 }
 
-/** Legacy API retained for callers; load is never evidence of diameter. */
-export function loadMeansFullPlates(_totalKg: number | null | undefined): boolean {
-  return false;
+/** Full-size (450 mm) plates are what a load this heavy is made of: 20 kg / 45 lb plates or bigger on each side. */
+export function loadMeansFullPlates(totalKg: number | null | undefined): boolean {
+  return totalKg != null && Number.isFinite(totalKg) && totalKg >= 59.5;
 }
+
+/** A logged rep count close enough to the video's for its speed to stand (one rep either way is an estimate). */
+export const REP_COUNT_SLACK = 1;
 
 /** The set the video is on, as far as logging its speed goes. */
 export type LoggedSet = {
@@ -179,19 +194,21 @@ export function loggedState(
       why: "typed",
       text: "The set already has a velocity typed in, so it's kept.",
     };
-  if (set.actual_reps == null)
-    return { logged: false, why: "reps", text: "It goes on the set once its reps are logged." };
-  if (set.actual_reps !== v.reps)
+  if (set.actual_reps != null && Math.abs(set.actual_reps - v.reps) > REP_COUNT_SLACK)
     return {
       logged: false,
       why: "reps",
       text: `${v.reps} ${v.reps === 1 ? "rep" : "reps"} in the video, ${set.actual_reps} logged. Fix the reps and it's logged.`,
     };
-  if (!a.plate.confirmed)
+  if (
+    !a.plate.confirmed &&
+    !v.plateCheck &&
+    (set.is_bodyweight || !loadMeansFullPlates(set.actual_load_kg == null ? null : Number(set.actual_load_kg)))
+  )
     return {
       logged: false,
       why: "light",
-      text: "Confirm the plate diameter to log speed. The load never proves its size.",
+      text: "Under 60 kg the plates may be smaller than 450 mm. Set the plate size to log it.",
     };
   return { logged: false, why: "other", text: "Not on the set." };
 }
