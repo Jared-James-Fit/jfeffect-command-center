@@ -296,7 +296,7 @@ export const recreateReplyFn = createServerFn({ method: "POST" })
     try {
       return await recreateReply(sb, { checkinId: data.checkinId, style: data.style, custom: data.custom ?? null, userId: context.userId });
     } catch (e: any) {
-      if (/^(No new wording|Check-in not found|This check-in)/.test(String(e?.message))) throw e;
+      if (e?.aiConsent || /^(No new wording|Check-in not found|This check-in)/.test(String(e?.message))) throw e;
       throw new Error(`Couldn't write a new version: ${aiFailureWords(classifyAiError(e))}. The current one is kept.`);
     }
   });

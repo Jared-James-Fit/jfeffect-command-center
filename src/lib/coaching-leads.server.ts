@@ -92,6 +92,9 @@ async function writeLead(sb: any, row: Claimable, claimedAt: string, attempts: n
     const { data: app } = await sb.from("coaching_applications").select(LEAD_APP_COLUMNS).eq("id", id).maybeSingle();
     if (!app) throw new Error("Application not found");
     const lead = app as LeadApplication;
+    // a lead who is already a client with a login: their details go to OpenAI only with their permission
+    // (5.1.2(i), src/lib/ai-consent); refused, the row says why and the coach writes it by hand
+    if (lead.client_id) await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(lead.client_id);
     const booking = await leadBookingUrl(sb, lead.booking_link_slug);
 
     const { voicePromptForClient } = await import("@/lib/coach-voice.functions");
