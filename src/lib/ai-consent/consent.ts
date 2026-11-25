@@ -36,7 +36,27 @@ export const AI_CONSENT_COPY = {
   change: "You can change this any time in Account → Privacy & data.",
   allow: "Allow",
   decline: "Don't allow",
+  /** The optional, unticked box beside the Terms / Coaching Agreement (never part of agreeing to them). */
+  checkboxLead: "Allow AI features (optional).",
+  checkboxBody:
+    "Meal estimates, imports, voice-to-text and your coach's drafts send what they need to OpenAI and Google, which may process it outside Canada.",
+  checkboxNote: "Not needed to use JF Effect. Change it any time in Account → Privacy & data.",
+  /** Someone who said no, at a feature that needs it: a state, never a request. */
+  off: "AI processing is off for your account, so this isn't available.",
 } as const;
+
+/** Server-side "seen" key for the one-time in-flow request (feature_announcement_views). */
+export const AI_CONSENT_ONCE_KEY = `ai_consent_once:v${AI_CONSENT_VERSION}`;
+
+/**
+ * What a box left unticked in an agreement flow records: a yes when ticked;
+ * when unticked, a no only if there was no answer to the current wording (so
+ * they're not asked again), never over an existing answer.
+ */
+export function checkboxDecision(checked: boolean, row: AiConsentRow): boolean | null {
+  if (checked) return aiConsentAllows(row) ? null : true;
+  return aiConsentNeedsAsking(row) ? false : null;
+}
 
 export type AiConsentRow = { granted: boolean; text_version: number; decided_at?: string | null } | null | undefined;
 export type AiConsentState = "granted" | "declined" | "unasked" | "outdated";
