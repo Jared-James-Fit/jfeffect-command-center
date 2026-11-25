@@ -9,7 +9,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarClock, ChevronRight, History, Plus } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronRight, History, Plus } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,16 +19,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/loading";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import { cn } from "@/lib/utils";
-import { commitmentFn, getSessionsHomeFn, prepareSessionFn } from "@/lib/coaching-sessions/sessions.functions";
+import {
+  commitmentFn,
+  getSessionsHomeFn,
+  prepareSessionFn,
+} from "@/lib/coaching-sessions/sessions.functions";
 import { LEVEL_WORDS, type InterventionLevel } from "@/lib/coaching-sessions/prepare";
 import type { SessionEvent } from "@/lib/coaching-sessions/events";
-import { SessionSheet } from "./session-sheet";
-import { IntelRow } from "./session-after";
-import { intelligenceFn } from "@/lib/coaching-sessions/sessions.functions";
+import { MemoryPanel } from "./memory-panel";
+import { STATE_WORDS, type AppointmentState } from "@/lib/coaching-sessions/lifecycle";
 import { meetingsKey } from "./keys";
 
-
-const FORMAT_WORDS: Record<string, string> = { call: "Call", touch_base: "Touch-base", retrospective: "Added after" };
+const FORMAT_WORDS: Record<string, string> = {
+  call: "Call",
+  touch_base: "Touch-base",
+  retrospective: "Added after",
+};
 const STATUS_WORDS: Record<string, string> = {
   preparing: "Preparing",
   ready: "Ready",
@@ -45,127 +52,161 @@ const day = (iso: string | null | undefined) =>
       })
     : "";
 
-export function MeetingsWorkspace({ clientId, onOpenTab }: { clientId: string; onOpenTab?: (tab: string) => void }) {
+export function MeetingsWorkspace({
+  clientId,
+}: {
+  clientId: string;
+  onOpenTab?: (tab: string) => void;
+}) {
   const read = useServerFn(getSessionsHomeFn);
-  const q = useQuery({ queryKey: meetingsKey(clientId), queryFn: () => read({ data: { clientId } }) });
-  const [prepare, setPrepare] = useState<null | { format: "call" | "touch_base" | "retrospective" }>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const q = useQuery({
+    queryKey: meetingsKey(clientId),
+    queryFn: () => read({ data: { clientId } }),
+  });
+  const [prepare, setPrepare] = useState<null | {
+    format: "call" | "touch_base" | "retrospective";
+  }>(null);
+  const [why, setWhy] = useState(false);
+  const [showPast, setShowPast] = useState(false);
+  const open = (id: string) =>
+    navigate({ to: "/admin/meetings/$sessionId", params: { sessionId: id } });
 
   if (q.isLoading)
     return (
       <div className="space-y-3">
+        <Skeleton className="h-20 rounded-2xl" />
         <Skeleton className="h-32 rounded-2xl" />
-        <Skeleton className="h-24 rounded-2xl" />
       </div>
     );
   if (q.error || !q.data)
-    return <ErrorState error={q.error} what="this client's meetings" onRetry={() => q.refetch()} retrying={q.isFetching} />;
+    return (
+      <ErrorState
+        error={q.error}
+        what="this client's meetings"
+        onRetry={() => q.refetch()}
+        retrying={q.isFetching}
+      />
+    );
   const d = q.data;
   const level = d.intervention.level as InterventionLevel;
-  const upcoming = d.sessions.filter((s: any) => s.status === "ready" || s.status === "live" || s.status === "preparing");
+  const upcoming = d.sessions.filter(
+    (s: any) => s.status === "ready" || s.status === "live" || s.status === "preparing",
+  );
   const past = d.sessions.filter((s: any) => s.status === "done");
+  const shownPast = showPast ? past : past.slice(0, 4);
 
   return (
     <div className="space-y-4" data-meetings>
-      {/* Cleo's read: the lowest effective intervention */}
-      <section className="rounded-2xl border border-border bg-card p-4" data-meetings-read>
-        <div className="flex items-start gap-3">
-          <CleoAvatar className="h-9 w-9 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-muted-foreground">Cleo recommends</p>
-            <p className="text-[17px] font-semibold leading-snug">{LEVEL_WORDS[level]}</p>
-            {d.intervention.minutes ? (
-              <p className="text-[13px] text-muted-foreground">
-                About {d.intervention.minutes} minutes{d.intervention.timing ? ` · ${d.intervention.timing}` : ""}
+      {/* Cleo's read: the lowest effective intervention, in one line */}
+      <section className="rounded-2xl border border-border bg-card px-4 py-3" data-meetings-read>
+        <div className="flex items-center gap-3">
+          <CleoAvatar className="h-7 w-7 shrink-0" />
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left"
+            onClick={() => setWhy((v) => !v)}
+            aria-expanded={why}
+          >
+            <p className="truncate text-[15px] font-semibold">{LEVEL_WORDS[level]}</p>
+            <p className="truncate text-[12.5px] text-muted-foreground">
+              {d.intervention.minutes ? `About ${d.intervention.minutes} min · ` : ""}
+              {d.intervention.reasons[0] ?? "Nothing pressing"}
+            </p>
+          </button>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+              !why && "-rotate-90",
+            )}
+          />
+        </div>
+        {why ? (
+          <div className="mt-2 space-y-1 border-t border-border pt-2">
+            {d.intervention.reasons.map((r: string) => (
+              <p key={r} className="text-[13.5px]">
+                {r}
+              </p>
+            ))}
+            {d.intervention.coverage ? (
+              <p className="text-[12px] text-muted-foreground">{d.intervention.coverage}</p>
+            ) : null}
+            {d.missing.length ? (
+              <p className="text-[12.5px] text-muted-foreground">
+                Not on file:{" "}
+                {d.missing
+                  .map((m: any) => m.text.toLowerCase())
+                  .slice(0, 4)
+                  .join(", ")}
               </p>
             ) : null}
-            <ul className="mt-2 space-y-1 text-[14px]">
-              {d.intervention.reasons.map((r: string) => (
-                <li key={r} className="flex gap-2">
-                  <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
-                  <span>{r}</span>
-                </li>
-              ))}
-            </ul>
-            {d.intervention.coverage ? <p className="mt-2 text-[12px] text-muted-foreground">{d.intervention.coverage}</p> : null}
           </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={() => setPrepare({ format: level === "touch_base" ? "touch_base" : "call" })}>
+        ) : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            className="h-9"
+            onClick={() => setPrepare({ format: level === "touch_base" ? "touch_base" : "call" })}
+          >
             <Plus className="mr-1 h-4 w-4" /> Prepare a meeting
           </Button>
-          <Button variant="outline" onClick={() => setPrepare({ format: "retrospective" })}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9"
+            onClick={() => setPrepare({ format: "retrospective" })}
+          >
             <History className="mr-1 h-4 w-4" /> Add a past meeting
           </Button>
         </div>
-        {d.missing.length ? (
-          <p className="mt-3 text-[13px] text-muted-foreground">
-            Missing: {d.missing.map((m: any) => m.text.toLowerCase()).slice(0, 4).join(", ")}
-          </p>
-        ) : null}
       </section>
 
-      {/* Coming up, from their records */}
-      {d.events.length ? (
-        <section className="rounded-2xl border border-border bg-card p-4" data-meetings-events>
-          <h3 className="text-[16px] font-semibold">Coming up</h3>
-          <ul className="mt-2 divide-y divide-border">
-            {d.events.map((e: SessionEvent) => (
-              <li key={e.key} className="py-2.5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="min-w-0 truncate text-[15px] font-medium">{e.title}</p>
-                  <p className="shrink-0 text-[13px] tabular-nums text-muted-foreground">
-                    {e.daysOut != null ? (e.daysOut === 0 ? "Today" : `${e.daysOut} days`) : ""}
-                  </p>
-                </div>
-                <p className="text-[13px] text-muted-foreground">
-                  {[day(e.date), e.phase, e.weightClass ? `${String(e.weightClass).replace(/ ?kg$/, "")} kg` : null, e.source].filter(Boolean).join(" · ")}
-                </p>
-                {e.conflicts.map((c) => (
-                  <p key={c} className="mt-1 text-[13px] text-warning">
-                    {c}: confirm which is right
-                  </p>
-                ))}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* Open commitments, both sides */}
-      {d.commitments.length ? <Commitments clientId={clientId} items={d.commitments} /> : null}
-
-      {/* What Cleo remembers from conversations */}
-      <Remembered clientId={clientId} items={(d.intelligence as any[]).filter((i) => i.status !== "archived")} />
-
-      {/* Meetings */}
-      <section className="rounded-2xl border border-border bg-card p-4" data-meetings-list>
-        <h3 className="text-[16px] font-semibold">Meetings</h3>
+      {/* Meetings: coming up first (each opens its command centre), then the last few */}
+      <section className="rounded-2xl border border-border bg-card" data-meetings-list>
+        <h3 className="px-4 pt-3 text-[16px] font-semibold">Meetings</h3>
         {!d.sessions.length ? (
-          <p className="mt-2 text-[14px] text-muted-foreground">
-            No meetings yet. Prepare one, or add one you've already had so Cleo can remember it.
+          <p className="px-4 pb-3 pt-1 text-[14px] text-muted-foreground">
+            No meetings yet. A booked call is prepared by itself; prepare one here, or add one
+            you've already had so Cleo can remember it.
           </p>
         ) : (
           <ul className="mt-1 divide-y divide-border">
-            {[...upcoming, ...past].map((s: any) => (
+            {[...upcoming, ...shownPast].map((s: any) => (
               <li key={s.id}>
                 <button
                   type="button"
-                  onClick={() => setOpen(s.id)}
-                  className="flex w-full items-center gap-3 py-3 text-left"
+                  onClick={() => open(s.id)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
                   data-meeting-row={s.id}
                 >
                   <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px] font-medium">{s.event?.title || "General meeting"}</p>
-                    <p className="text-[13px] text-muted-foreground">
-                      {[FORMAT_WORDS[s.format], s.minutes ? `${s.minutes} min` : null, day(s.scheduled_at ?? s.created_at)].filter(Boolean).join(" · ")}
+                    <p className="truncate text-[15px] font-medium">
+                      {s.event?.title || s.appointment?.title || "General meeting"}
+                    </p>
+                    <p className="truncate text-[12.5px] text-muted-foreground">
+                      {[
+                        FORMAT_WORDS[s.format],
+                        day(s.appointment?.startsAt ?? s.scheduled_at ?? s.created_at),
+                        s.appointment?.state && s.status !== "done"
+                          ? STATE_WORDS[s.appointment.state as AppointmentState]
+                          : null,
+                        s.changedSinceReview && s.status !== "done"
+                          ? `${s.changedSinceReview} new in the plan`
+                          : null,
+                        s.openRecommendations ? `${s.openRecommendations} to act on` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
                   </div>
                   <span
                     className={cn(
                       "shrink-0 rounded-full px-2 py-0.5 text-[12px]",
-                      s.status === "done" ? "bg-muted text-muted-foreground" : "bg-secondary text-foreground",
+                      s.status === "done"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-secondary text-foreground",
                     )}
                   >
                     {STATUS_WORDS[s.status] ?? s.status}
@@ -176,7 +217,61 @@ export function MeetingsWorkspace({ clientId, onOpenTab }: { clientId: string; o
             ))}
           </ul>
         )}
+        {past.length > 4 ? (
+          <button
+            type="button"
+            className="w-full border-t border-border py-2 text-[13px] text-muted-foreground"
+            onClick={() => setShowPast((v) => !v)}
+          >
+            {showPast ? "Show fewer" : `Show all ${past.length} past meetings`}
+          </button>
+        ) : null}
       </section>
+
+      {/* Open commitments, both sides */}
+      {d.commitments.length ? <Commitments clientId={clientId} items={d.commitments} /> : null}
+
+      {/* What Cleo remembers from conversations */}
+      <MemoryPanel
+        clientId={clientId}
+        rows={(d.intelligence as any[]).filter((i) => i.status !== "archived")}
+        today={d.today}
+        onChange={() => qc.invalidateQueries({ queryKey: meetingsKey(clientId) })}
+      />
+
+      {/* Coming up, from their records */}
+      {d.events.length ? (
+        <section className="rounded-2xl border border-border bg-card p-4" data-meetings-events>
+          <h3 className="text-[15px] font-semibold">Coming up</h3>
+          <ul className="mt-1 divide-y divide-border">
+            {d.events.map((e: SessionEvent) => (
+              <li key={e.key} className="py-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="min-w-0 truncate text-[14.5px] font-medium">{e.title}</p>
+                  <p className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground">
+                    {e.daysOut != null ? (e.daysOut === 0 ? "Today" : `${e.daysOut} days`) : ""}
+                  </p>
+                </div>
+                <p className="text-[12.5px] text-muted-foreground">
+                  {[
+                    day(e.date),
+                    e.phase,
+                    e.weightClass ? `${String(e.weightClass).replace(/ ?kg$/, "")} kg` : null,
+                    e.source,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                {e.conflicts.map((c) => (
+                  <p key={c} className="mt-1 text-[12.5px] text-warning">
+                    {c}: confirm which is right
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {prepare ? (
         <PrepareSheet
@@ -187,11 +282,10 @@ export function MeetingsWorkspace({ clientId, onOpenTab }: { clientId: string; o
           onClose={() => setPrepare(null)}
           onPrepared={(id) => {
             setPrepare(null);
-            setOpen(id);
+            open(id);
           }}
         />
       ) : null}
-      {open ? <SessionSheet sessionId={open} clientId={clientId} onOpenTab={(t) => { setOpen(null); onOpenTab?.(t); }} onClose={() => setOpen(null)} /> : null}
     </div>
   );
 }
@@ -233,7 +327,10 @@ function Commitments({ clientId, items }: { clientId: string; items: any[] }) {
       </div>
     ) : null;
   return (
-    <section className="space-y-3 rounded-2xl border border-border bg-card p-4" data-meetings-commitments>
+    <section
+      className="space-y-3 rounded-2xl border border-border bg-card p-4"
+      data-meetings-commitments
+    >
       <h3 className="text-[16px] font-semibold">Still open</h3>
       {list("Theirs", theirs)}
       {list("Yours", yours)}
@@ -262,21 +359,33 @@ function PrepareSheet({
   const [eventKey, setEventKey] = useState<string>(firstAhead?.key ?? "general");
   const [custom, setCustom] = useState("");
   const [format, setFormat] = useState(initialFormat);
-  const [minutes, setMinutes] = useState<number>(initialFormat === "touch_base" ? 10 : suggestedMinutes ?? 20);
+  const [minutes, setMinutes] = useState<number>(
+    initialFormat === "touch_base" ? 10 : (suggestedMinutes ?? 20),
+  );
   const [notes, setNotes] = useState("");
   const [priorities, setPriorities] = useState("");
-  const key = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now())), []);
+  const key = useMemo(
+    () =>
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : String(Date.now()),
+    [],
+  );
   const go = useMutation({
     mutationFn: () =>
       prep({
         data: {
           clientId,
           eventKey: eventKey === "general" || eventKey === "custom" ? null : eventKey,
-          customTitle: eventKey === "custom" ? custom : eventKey === "general" ? "General meeting" : null,
+          customTitle:
+            eventKey === "custom" ? custom : eventKey === "general" ? "General meeting" : null,
           format,
           minutes: format === "retrospective" ? null : minutes,
           coachNotes: notes.trim() || null,
-          priorities: priorities.split("\n").map((p) => p.trim()).filter(Boolean),
+          priorities: priorities
+            .split("\n")
+            .map((p) => p.trim())
+            .filter(Boolean),
           key,
         },
       }),
@@ -302,16 +411,30 @@ function PrepareSheet({
   );
   return (
     <Sheet open onOpenChange={(o) => (!o ? onClose() : null)}>
-      <SheetContent side="bottom" swipeToClose className="max-h-[92svh] overflow-y-auto rounded-t-2xl sm:mx-auto sm:max-w-xl">
+      <SheetContent
+        side="bottom"
+        swipeToClose
+        className="max-h-[92svh] overflow-y-auto rounded-t-2xl sm:mx-auto sm:max-w-xl"
+      >
         <SheetHeader>
-          <SheetTitle>{format === "retrospective" ? "Add a past meeting" : "Prepare a meeting"}</SheetTitle>
+          <SheetTitle>
+            {format === "retrospective" ? "Add a past meeting" : "Prepare a meeting"}
+          </SheetTitle>
         </SheetHeader>
         <div className="mt-3 space-y-5 pb-4" data-prepare-sheet>
           <div className="space-y-2">
             <p className="text-[13px] font-medium text-muted-foreground">What it's about</p>
             {events
               .filter((e) => e.daysOut == null || e.daysOut >= 0)
-              .map((e) => choice(e.key, e.title, [day(e.date), e.phase, e.daysOut != null ? `${e.daysOut} days` : null].filter(Boolean).join(" · ")))}
+              .map((e) =>
+                choice(
+                  e.key,
+                  e.title,
+                  [day(e.date), e.phase, e.daysOut != null ? `${e.daysOut} days` : null]
+                    .filter(Boolean)
+                    .join(" · "),
+                ),
+              )}
             {choice("general", "General meeting", "A progress review or check-in, no event")}
             {choice("custom", "Something else")}
             {eventKey === "custom" ? (
@@ -335,7 +458,10 @@ function PrepareSheet({
                     setFormat(f);
                     if (f === "touch_base") setMinutes(10);
                   }}
-                  className={cn("h-11 rounded-lg border text-[14px]", format === f ? "border-foreground bg-secondary font-medium" : "border-border")}
+                  className={cn(
+                    "h-11 rounded-lg border text-[14px]",
+                    format === f ? "border-foreground bg-secondary font-medium" : "border-border",
+                  )}
                 >
                   {FORMAT_WORDS[f]}
                 </button>
@@ -351,7 +477,12 @@ function PrepareSheet({
                     key={m}
                     type="button"
                     onClick={() => setMinutes(m)}
-                    className={cn("h-10 flex-1 rounded-lg border text-[14px] tabular-nums", minutes === m ? "border-foreground bg-secondary font-medium" : "border-border")}
+                    className={cn(
+                      "h-10 flex-1 rounded-lg border text-[14px] tabular-nums",
+                      minutes === m
+                        ? "border-foreground bg-secondary font-medium"
+                        : "border-border",
+                    )}
                   >
                     {m} min
                   </button>
@@ -361,64 +492,34 @@ function PrepareSheet({
           ) : null}
           <div className="space-y-2">
             <p className="text-[13px] font-medium text-muted-foreground">Your notes (private)</p>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Concerns, context, anything Cleo should know" rows={3} />
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Concerns, context, anything Cleo should know"
+              rows={3}
+            />
           </div>
           <div className="space-y-2">
-            <p className="text-[13px] font-medium text-muted-foreground">What you want to decide (one a line, optional)</p>
-            <Textarea value={priorities} onChange={(e) => setPriorities(e.target.value)} placeholder={"Settle the openers\nAgree the taper"} rows={2} />
+            <p className="text-[13px] font-medium text-muted-foreground">
+              What you want to decide (one a line, optional)
+            </p>
+            <Textarea
+              value={priorities}
+              onChange={(e) => setPriorities(e.target.value)}
+              placeholder={"Settle the openers\nAgree the taper"}
+              rows={2}
+            />
           </div>
-          <Button className="h-12 w-full" disabled={go.isPending || (eventKey === "custom" && !custom.trim())} loading={go.isPending} onClick={() => go.mutate()}>
+          <Button
+            className="h-12 w-full"
+            disabled={go.isPending || (eventKey === "custom" && !custom.trim())}
+            loading={go.isPending}
+            onClick={() => go.mutate()}
+          >
             {format === "retrospective" ? "Add it" : "Prepare"}
           </Button>
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-/** Lasting coaching intelligence: what the coach kept from conversations (and can add, change or remove). */
-function Remembered({ clientId, items }: { clientId: string; items: any[] }) {
-  const qc = useQueryClient();
-  const act = useServerFn(intelligenceFn);
-  const [text, setText] = useState("");
-  const refresh = () => qc.invalidateQueries({ queryKey: meetingsKey(clientId) });
-  const add = useMutation({
-    mutationFn: () => act({ data: { clientId, action: "add", text: text.trim() } }),
-    onSuccess: () => {
-      setText("");
-      refresh();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
-  });
-  const kept = items.filter((i) => i.status === "confirmed");
-  const proposed = items.filter((i) => i.status === "proposed");
-  return (
-    <section className="space-y-2 rounded-2xl border border-border bg-card p-4" data-meetings-remembered>
-      <h3 className="text-[16px] font-semibold">What Cleo remembers</h3>
-      <p className="text-[13px] text-muted-foreground">
-        Kept from your conversations. Cleo uses these in their training, nutrition and cardio work; change or remove any of them.
-      </p>
-      {proposed.length ? <p className="text-[13px] text-muted-foreground">{proposed.length} from a meeting waiting for you to keep or let go.</p> : null}
-      {[...proposed, ...kept].map((i) => (
-        <IntelRow key={i.id} item={i} clientId={clientId} refresh={refresh} />
-      ))}
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (text.trim().length >= 3) add.mutate();
-        }}
-      >
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Add something worth remembering"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-[16px] sm:text-[14px]"
-        />
-        <Button type="submit" variant="outline" size="sm" className="h-10" loading={add.isPending}>
-          <Plus className="h-4 w-4" />
-        </Button>
-      </form>
-    </section>
   );
 }

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MessageThread, PriorityChip, threadMessagesQuery } from "@/components/message-thread";
 import { ClientWorkoutPeek } from "@/components/messages/client-workout-peek";
+import { MeetingStrip } from "@/components/coaching-sessions/meeting-strip";
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
@@ -1452,6 +1453,8 @@ export function MessagesInbox({
                 </DropdownMenuContent>
               </DropdownMenu>
             </header>
+            {/* Their next meeting (Prepare · Join), only when one is booked or follow-ups are open. */}
+            <MeetingStrip clientId={selected.id} variant="chat" />
             {/* What the client trained last; tap for any past or upcoming workout. */}
             <ClientWorkoutPeek clientId={selected.id} clientName={selected.full_name} />
             <MessageThread

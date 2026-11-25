@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { classLimit, EMPTY_VISUALS, slideVisuals, weekBuckets, type PresentationVisuals } from "@/lib/coaching-sessions/visuals";
 
 const sections = [
-  { key: "going_well" as const },
-  { key: "improve" as const },
-  { key: "athletes_corner" as const },
-  { key: "game_plan" as const },
-  { key: "alignment" as const },
+  { key: "recognize" as const },
+  { key: "evaluate" as const },
+  { key: "coach" as const },
+  { key: "execute" as const },
+  { key: "align" as const },
 ];
 
 describe("presentation visuals", () => {
@@ -53,7 +53,7 @@ describe("presentation visuals", () => {
     expect(m[0]).toBe("countdown");
     expect(m[1]).toBe("records");
     expect(m[2]).toBe("training"); // workouts were missed: it's what to improve
-    expect(m[4]).toBe("bodyweight"); // the class on the game plan
+    expect(m[3]).toBe("bodyweight"); // the class, beside the recommendations
     expect(Object.values(m).filter((k) => k === "training")).toHaveLength(1);
   });
 

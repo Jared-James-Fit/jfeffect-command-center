@@ -21,7 +21,8 @@ export type SessionKey =
   | "life"
   | "meet_registered"
   | "meet_confidence"
-  | "meet_success";
+  | "meet_success"
+  | "unlogged";
 
 /** Every key the seeded form carries, in the order it asks them. */
 export const SESSION_KEYS: readonly SessionKey[] = [
@@ -35,6 +36,7 @@ export const SESSION_KEYS: readonly SessionKey[] = [
   "meet_registered",
   "meet_confidence",
   "meet_success",
+  "unlogged",
 ];
 
 /** Each answer's short label, as the agenda and the coach read it. */
@@ -49,6 +51,7 @@ export const ANSWER_WORDS: Record<SessionKey, string> = {
   meet_registered: "Registered for the meet",
   meet_confidence: "Feeling about the meet",
   meet_success: "A successful meet looks like",
+  unlogged: "The unlogged workouts",
 };
 
 /** Roughly how long each takes to answer on a phone, in seconds. */
@@ -63,6 +66,7 @@ const SECONDS: Record<SessionKey, number> = {
   meet_registered: 5,
   meet_confidence: 5,
   meet_success: 30,
+  unlogged: 5,
 };
 
 export type QuestionnaireInput = {
@@ -71,43 +75,96 @@ export type QuestionnaireInput = {
   /** the last weigh-in, null when there's none */
   lastWeighIn: string | null;
   today: string;
-  event: { kind: string; daysOut: number | null } | null;
+  event: { kind: string; daysOut: number | null; title?: string | null } | null;
   /** a meet checklist already says they're registered */
   registeredKnown: boolean;
   /** what the athlete already sent for this call (their topics on the booking) */
   topicsKnown: boolean;
+  /** an unresolved pain report: its place and when it was last reported */
+  painOpen?: { label: string; since: string | null } | null;
+  /** planned workouts in the last 4 weeks with nothing logged */
+  unlogged?: number;
+  /** a bodyweight number matters for this meeting (a class to make, a dated goal) */
+  bodyweightMatters?: boolean;
 };
 
-export type Questionnaire = { keys: SessionKey[]; minutes: number; reasons: string[] };
+/**
+ * The questions worth sending, the labels that make them theirs, why, and
+ * whether sending is worth it at all (`useful`: one question that tells the
+ * coach something the records can't). Three at most, plus an optional
+ * "anything else" that's never required.
+ */
+export type Questionnaire = { keys: SessionKey[]; minutes: number; reasons: string[]; labels: Partial<Record<SessionKey, string>>; useful: boolean };
+
+/** At most this many questions that matter (the optional note is extra). */
+export const MAX_QUESTIONS = 3;
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b.slice(0, 10)}T00:00:00Z`) - Date.parse(`${a.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
+const shortDay = (iso: string) =>
+  new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" });
 
-/** Only what's missing or stale: a fresh check-in covers how they feel, a fresh weigh-in their weight. */
+/**
+ * Only what the records can't tell the coach, ranked by what it changes in the
+ * meeting: an open pain report's status, whether unlogged sessions were
+ * trained, the meet registration, how training has felt when there's no
+ * recent check-in, a weigh-in when bodyweight matters, how they feel about a
+ * close meet. Never a question the records answer, never "what do you need
+ * help with" (that's the coach's to work out), never homework.
+ */
 export function questionnaireFor(x: QuestionnaireInput): Questionnaire {
-  const keys: SessionKey[] = [];
-  const reasons: string[] = [];
-  if (!x.topicsKnown) keys.push("topics");
-  const checkinStale = !x.lastCheckin || daysBetween(x.lastCheckin, x.today) > 7;
-  if (checkinStale) {
-    keys.push("training_feel", "recovery", "pain", "pain_details", "life");
-    reasons.push(x.lastCheckin ? "Their last check-in is over a week old" : "No weekly check-in on file");
-  }
+  const picks: Array<{ key: SessionKey; why: string; label?: string; rank: number }> = [];
+  const meet = x.event?.kind === "competition" && x.event.daysOut != null && x.event.daysOut >= 0 ? x.event.daysOut : null;
+  if (x.painOpen)
+    picks.push({
+      key: "pain",
+      rank: 1,
+      why: `Their ${x.painOpen.label.toLowerCase()} was reported${x.painOpen.since ? ` on ${shortDay(x.painOpen.since)}` : ""}: how it is now changes what you recommend`,
+      label: `How's your ${x.painOpen.label.toLowerCase()} feeling now?`,
+    });
+  if ((x.unlogged ?? 0) >= 2)
+    picks.push({
+      key: "unlogged",
+      rank: 2,
+      why: `${x.unlogged} planned workouts have nothing logged: trained or not decides the conversation`,
+      label: `${x.unlogged} of your planned workouts lately have nothing logged. Did you train them?`,
+    });
+  if (meet != null && meet <= 42 && !x.registeredKnown) picks.push({ key: "meet_registered", rank: 3, why: "A meet is coming and registration isn't on file" });
+  const checkinStale = !x.lastCheckin || daysBetween(x.lastCheckin, x.today) > 10;
+  if (checkinStale)
+    picks.push({
+      key: "training_feel",
+      rank: 4,
+      why: x.lastCheckin ? `Their last check-in was ${shortDay(x.lastCheckin)}` : "No weekly check-in on file",
+      label: "How has training felt this past week?",
+    });
   const weighStale = !x.lastWeighIn || daysBetween(x.lastWeighIn, x.today) > 7;
-  if (weighStale) {
-    keys.push("bodyweight");
-    reasons.push(x.lastWeighIn ? "Their last weigh-in is over a week old" : "No weigh-in on file");
-  }
-  const meet = x.event?.kind === "competition" && x.event.daysOut != null && x.event.daysOut >= 0;
-  if (meet) {
-    if (!x.registeredKnown) keys.push("meet_registered");
-    keys.push("meet_confidence", "meet_success");
-    reasons.push("A meet is coming: how they feel about it, in their words");
+  if (weighStale && (x.bodyweightMatters || (meet != null && meet <= 56)))
+    picks.push({ key: "bodyweight", rank: 5, why: x.lastWeighIn ? `The last weigh-in was ${shortDay(x.lastWeighIn)}` : "No weigh-in on file" });
+  if (meet != null && meet <= 28) picks.push({ key: "meet_confidence", rank: 6, why: "How they feel about the meet, in their words" });
+  if (checkinStale) picks.push({ key: "life", rank: 7, why: "Anything coming up that changes the plan" });
+
+  const chosen = picks.sort((a, b) => a.rank - b.rank).slice(0, MAX_QUESTIONS);
+  const keys: SessionKey[] = chosen.map((c) => c.key);
+  if (keys.includes("pain")) keys.push("pain_details");
+  const labels: Partial<Record<SessionKey, string>> = {};
+  for (const c of chosen) if (c.label) labels[c.key] = c.label;
+  const useful = chosen.length > 0;
+  // the optional note: their own topics, never required, only alongside questions worth sending
+  if (useful && !x.topicsKnown) {
+    keys.push("topics");
+    labels.topics = "Anything else you want to make sure we cover? (optional)";
   }
   const order = new Map(SESSION_KEYS.map((k, i) => [k, i]));
-  const unique = [...new Set(keys)].sort((a, b) => order.get(a)! - order.get(b)!);
-  const seconds = unique.reduce((s, k) => s + SECONDS[k], 0);
-  return { keys: unique, minutes: Math.max(1, Math.min(3, Math.round(seconds / 60) || 1)), reasons };
+  const unique = [...new Set(keys)].sort((a, b) => (a === "topics" ? 1 : b === "topics" ? -1 : order.get(a)! - order.get(b)!));
+  const seconds = unique.reduce((s, k) => s + (k === "topics" ? 0 : SECONDS[k]), 0);
+  return {
+    keys: unique,
+    minutes: Math.max(1, Math.min(2, Math.round(seconds / 60) || 1)),
+    reasons: chosen.map((c) => c.why),
+    labels,
+    useful,
+  };
 }
 
 type Q = { id: string; validation?: unknown };
@@ -120,13 +177,21 @@ const keyOf = (q: Q): string | null => {
  * A send's questions: an assignment that names keys shows only those (and any
  * question without a key, a heading); every other assignment shows them all.
  */
-export function askedQuestions<T extends Q>(questions: T[], askKeys: unknown): T[] {
+export function askedQuestions<T extends Q>(questions: T[], askKeys: unknown, labels?: unknown): T[] {
   if (!Array.isArray(askKeys) || askKeys.length === 0) return questions;
   const ask = new Set(askKeys.map(String));
-  return questions.filter((q) => {
-    const k = keyOf(q);
-    return k == null || ask.has(k);
-  });
+  const own = labels && typeof labels === "object" ? (labels as Record<string, unknown>) : {};
+  return questions
+    .filter((q) => {
+      const k = keyOf(q);
+      return k == null || ask.has(k);
+    })
+    .map((q) => {
+      // a send can word a question for this client ("How's your left knee feeling now?")
+      const k = keyOf(q);
+      const label = k ? own[k] : null;
+      return typeof label === "string" && label.trim() ? ({ ...q, label: label.trim().slice(0, 200) } as T) : q;
+    });
 }
 
 /** The answers by session key, from a submission's answers as text. */
@@ -189,6 +254,10 @@ export function routeAnswers(answers: Record<string, string>): RoutedAnswers {
         break;
       case "meet_success":
         out.theirs.push(`A successful meet looks like: ${v}`);
+        break;
+      case "unlogged":
+        if (/^yes/i.test(v)) out.goingWell.push("Trained the sessions that weren't logged");
+        else out.theirs.push(`The unlogged workouts: ${lower(v)}`);
         break;
     }
   }

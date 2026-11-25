@@ -115,7 +115,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   // questions: the assignment's settings.ask_keys, coaching-sessions/questionnaire.ts).
   const keyed = useMemo(() => allQuestions.some((q) => typeof (q.validation as any)?.session_key === "string"), [allQuestions]);
   const { data: askKeys, isFetched: askKeysFetched } = useQuery({
-    queryKey: ["nf-assignment-ask-keys", formId, client?.id],
+    queryKey: ["nf-assignment-ask-keys-v2", formId, client?.id],
     enabled: !!client?.id && keyed,
     queryFn: async () => {
       const { data } = await (supabase as any)
@@ -124,10 +124,11 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
         .eq("form_id", formId)
         .eq("client_id", client!.id)
         .maybeSingle();
-      return ((data?.settings as any)?.ask_keys ?? null) as string[] | null;
+      const st = (data?.settings ?? {}) as any;
+      return st.ask_keys ? { keys: st.ask_keys as string[], labels: (st.ask_labels ?? null) as Record<string, string> | null } : null;
     },
   });
-  const questions = useMemo(() => askedQuestions(allQuestions, askKeys), [allQuestions, askKeys]);
+  const questions = useMemo(() => askedQuestions(allQuestions, askKeys?.keys ?? null, askKeys?.labels ?? null), [allQuestions, askKeys]);
   const waitingOnAsk = keyed && !askKeysFetched;
 
   // Questions that start from what the app already knows (form-prefill.ts): sex, height, their

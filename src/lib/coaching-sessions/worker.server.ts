@@ -28,6 +28,10 @@ function jobFor(r: any): Job | null {
 export async function runSessionWork(sb: Db, opts: { limit?: number; deadlineMs?: number } = {}) {
   const started = Date.now();
   const deadline = opts.deadlineMs ?? 80_000;
+  // every booked call has a plan the moment it's booked, and upcoming plans follow what's on file
+  const plans = await keepMeetingsReady(sb).catch((e: any) => ({ error: String(e?.message ?? e) }));
+  // a recording's parts become words (Phase 4: audio.server.ts)
+  const audio = await import("./audio.server").then((m) => m.transcribeDueParts(sb, { limit: 2, deadlineMs: Math.max(20_000, deadline - 40_000) })).catch((e: any) => ({ error: String(e?.message ?? e) }));
   const { data: rows } = await sb
     .from("coaching_sessions")
     .select("id, write_up_status, analysis_status, locked_at, attempts, updated_at")
@@ -52,7 +56,63 @@ export async function runSessionWork(sb: Db, opts: { limit?: number; deadlineMs?
     const status = await runJob(sb, s, job);
     done.push({ id: s.id, job, status });
   }
-  return done;
+  return { jobs: done, plans, audio };
+}
+
+/**
+ * Booked calls with no plan get one (three a run), and upcoming plans due a
+ * refresh are refreshed (three a run): read with the service role, after which
+ * every coach screen reads them through RLS as usual.
+ */
+export async function keepMeetingsReady(sb: Db) {
+  const { autoPrepare, refreshMeeting } = await import("./meetings.server");
+  const { isTrainingSessionType } = await import("@/lib/booking-types");
+  const now = new Date();
+  const to = new Date(now.getTime() + 14 * 86_400_000).toISOString();
+  const { data: calls } = await sb
+    .from("pt_sessions")
+    .select("id, client_id, title, session_type, starts_at, ends_at, start_time, end_time, status, clients!inner(archived, service_tier)")
+    .eq("status", "Scheduled")
+    .gt("starts_at", now.toISOString())
+    .lt("starts_at", to)
+    .order("starts_at")
+    .limit(60);
+  const wanted = ((calls ?? []) as any[]).filter((p) => !isTrainingSessionType(p.session_type) && !p.clients?.archived && p.clients?.service_tier === "coaching");
+  const { data: has } = wanted.length ? await sb.from("coaching_sessions").select("pt_session_id").in("pt_session_id", wanted.map((p) => p.id)) : { data: [] as any[] };
+  const covered = new Set(((has ?? []) as any[]).map((r) => r.pt_session_id));
+  const prepared: string[] = [];
+  for (const p of wanted.filter((x) => !covered.has(x.id)).slice(0, 3)) {
+    try {
+      const id = await autoPrepare(sb, sb, p);
+      if (id) prepared.push(id);
+    } catch (e) {
+      console.warn("[meetings] auto-prepare", p.id, e);
+    }
+  }
+  const stale = new Date(now.getTime() - 3 * 3_600_000).toISOString();
+  const { data: due } = await sb
+    .from("coaching_sessions")
+    .select("*")
+    .in("status", ["preparing", "ready"])
+    .neq("format", "retrospective")
+    .or(`prep_refreshed_at.is.null,prep_refreshed_at.lt.${stale}`)
+    // only plans still ahead (the same window coaching_sessions_due() wakes the tick for)
+    .or(`scheduled_at.is.null,and(scheduled_at.gt.${now.toISOString()},scheduled_at.lt.${new Date(now.getTime() + 8 * 86_400_000).toISOString()})`)
+    .gt("created_at", new Date(now.getTime() - 60 * 86_400_000).toISOString())
+    .order("scheduled_at", { ascending: true, nullsFirst: false })
+    .limit(6);
+  const refreshed: Array<{ id: string; changes: number }> = [];
+  for (const s of ((due ?? []) as any[]).filter((x) => !x.scheduled_at || (Date.parse(x.scheduled_at) > now.getTime() && Date.parse(x.scheduled_at) < now.getTime() + 8 * 86_400_000)).slice(0, 3)) {
+    try {
+      const r = await refreshMeeting(sb, sb, s);
+      refreshed.push({ id: s.id, changes: r.changed.length });
+    } catch (e) {
+      // a plan that can't be refreshed keeps the one it has; try again later
+      await sb.from("coaching_sessions").update({ prep_refreshed_at: now.toISOString() }).eq("id", s.id);
+      console.warn("[meetings] refresh", s.id, e);
+    }
+  }
+  return { prepared, refreshed };
 }
 
 async function runJob(sb: Db, s: any, job: Job): Promise<string> {
@@ -83,9 +143,17 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
     const route = resolveRoute(job === "analysis" ? "session_analysis" : "session_brief", await readRouteOverride(sb), { openaiOnly: true });
     if (job === "brief") {
       const brief = await writeBrief(sb, s, route, state, save);
+      // Cleo's phrasing goes onto the points it refines (never one the coach wrote or edited)
+      const { normalizeAgenda } = await import("./prepare");
+      const { data: fresh } = await sb.from("coaching_sessions").select("agenda").eq("id", s.id).maybeSingle();
+      const agenda = normalizeAgenda((fresh as any)?.agenda ?? s.agenda);
+      const say = new Map((brief.brief.phrasing ?? []).map((p) => [p.pointId, p.say]));
+      const withSay = agenda
+        ? { ...agenda, sections: agenda.sections.map((sec) => ({ ...sec, items: sec.items.map((i) => (say.has(i.id) && !i.edited && !i.custom ? { ...i, cleoSay: say.get(i.id) } : i)) })) }
+        : null;
       await sb
         .from("coaching_sessions")
-        .update({ write_up: { ...brief.brief, model: brief.model, at: new Date().toISOString() }, write_up_status: "ready", progress: dropKey(progress, job), locked_at: null })
+        .update({ write_up: { ...brief.brief, model: brief.model, at: new Date().toISOString() }, write_up_status: "ready", progress: dropKey(progress, job), locked_at: null, ...(withSay ? { agenda: withSay } : {}) })
         .eq("id", s.id);
       await log(sb, s, "brief_ready", { model: brief.model, dropped: brief.brief.dropped.length });
       return "ready";
@@ -191,7 +259,12 @@ async function analyse(sb: Db, s: any, route: any, state: CallState, save: () =>
   const { ANALYSIS_SYSTEM } = await import("./prompts.server");
   let text = "";
   let source: "transcript" | "notes" = "notes";
-  if (s.transcript_path && !s.transcript_deleted_at) {
+  if (s.recording?.transcript_ready && s.transcript_path && !s.transcript_deleted_at) {
+    const { data, error } = await sb.storage.from("coaching-transcripts").download(s.transcript_path);
+    if (error) throw new Error(`The transcript couldn't be read: ${error.message}`);
+    text = await data.text();
+    source = "transcript";
+  } else if (s.transcript_path && !s.transcript_deleted_at) {
     const { data, error } = await sb.storage.from("coaching-transcripts").download(s.transcript_path);
     if (error) throw new Error(`The transcript couldn't be read: ${error.message}`);
     text = await data.text();
@@ -202,9 +275,11 @@ async function analyse(sb: Db, s: any, route: any, state: CallState, save: () =>
   if (text.trim().length < 40) throw new Unreadable("There's too little in the notes to read");
   const t = transcriptForModel(text);
   const today = new Date().toISOString().slice(0, 10);
-  const [{ data: intel }, { data: client }] = await Promise.all([
+  const since60 = new Date(Date.now() - 60 * 86_400_000).toISOString();
+  const [{ data: intel }, { data: client }, { data: recent }] = await Promise.all([
     sb.from("client_intelligence").select("kind, text, expires_on").eq("client_id", s.client_id).eq("status", "confirmed").limit(60),
-    sb.from("clients").select("first_name, preferred_name").eq("id", s.client_id).maybeSingle(),
+    sb.from("clients").select("first_name, preferred_name, preferred_weight_unit").eq("id", s.client_id).maybeSingle(),
+    sb.from("coaching_session_recommendations").select("title, status, session_id").eq("client_id", s.client_id).neq("session_id", s.id).neq("status", "proposed").gte("created_at", since60).limit(40),
   ]);
   const known = ((intel ?? []) as any[]).filter((i) => !i.expires_on || i.expires_on >= today);
   const lines = prepLines(s.agenda, s.prep).filter((l) => l.source === "record");
@@ -223,7 +298,13 @@ async function analyse(sb: Db, s: any, route: any, state: CallState, save: () =>
   ]
     .filter(Boolean)
     .join("\n\n");
-  const ctx = { today, recordNumbers: [lines.map((l) => l.text), s.event], knownIntelligence: known.map((i) => i.text) };
+  const ctx = {
+    today,
+    recordNumbers: [lines.map((l) => l.text), s.event],
+    knownIntelligence: known.map((i) => i.text),
+    clientUnit: ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb") as "kg" | "lb",
+    recentRecommendations: ((recent ?? []) as any[]).map((r) => String(r.title)),
+  };
   // the coach's own notes are part of what may be quoted
   const quotable = source === "transcript" ? `${t.text}\n${s.live?.notes ?? ""}\n${((s.live?.decisions ?? []) as string[]).join("\n")}` : t.text;
   let r = await call(route, state, save, "analysis", ANALYSIS_SYSTEM, prompt, "session_analysis");
@@ -258,21 +339,43 @@ async function saveAnalysis(sb: Db, s: any, a: MeetingAnalysis, model: string, s
         benefit: r.benefit || null,
         tradeoffs: r.tradeoffs || null,
         affects: r.affects || null,
+        flags: r.flags ?? [],
       })),
     );
-  if (a.intelligence.length)
-    await sb.from("client_intelligence").insert(
-      a.intelligence.map((i) => ({
+  if (a.intelligence.length) {
+    // each line reviewed before the coach sees it: a duplicate is merged, a conflict flagged, a plain low-risk one kept
+    const { reviewCandidate } = await import("./memory");
+    const { data: existing } = await sb.from("client_intelligence").select("id, text, kind, status, merged_count").eq("client_id", s.client_id).eq("status", "confirmed").limit(200);
+    const kept = (existing ?? []) as any[];
+    const speakerConfirmed = s.transcript_source === "otter" || (s.recording?.speakers_confirmed === true && s.recording?.transcript_ready === true);
+    const e = s.event ?? {};
+    const rows: any[] = [];
+    for (const i of a.intelligence) {
+      const verdict = reviewCandidate({ kind: i.kind, text: i.text, quote: i.quote, speaker: i.speaker ?? "unclear" }, kept, { allowAutoKeep: true, speakerConfirmed });
+      if (verdict.action === "duplicate") {
+        const k = kept.find((x) => x.id === verdict.of);
+        if (k) await sb.from("client_intelligence").update({ merged_count: (k.merged_count ?? 1) + 1 }).eq("id", k.id);
+        continue;
+      }
+      const event = i.event && e.key && e.date ? { event_key: e.key, event_title: e.title ?? null, event_date: String(e.date).slice(0, 10) } : {};
+      rows.push({
         client_id: s.client_id,
         kind: i.kind,
         text: i.text,
         permanence: i.permanence,
         expires_on: i.expiresOn,
-        status: "proposed",
+        status: verdict.action === "auto_keep" ? "confirmed" : "proposed",
+        auto_kept: verdict.action === "auto_keep",
+        confirmed_at: verdict.action === "auto_keep" ? new Date().toISOString() : null,
+        conflicts_with: verdict.action === "conflict" ? verdict.with : null,
+        review_reason: verdict.reason,
         source_session_id: s.id,
         source_quote: i.quote,
-      })),
-    );
+        ...event,
+      });
+    }
+    if (rows.length) await sb.from("client_intelligence").insert(rows);
+  }
   const commitments = a.items.filter((i) => i.kind === "athlete_commitment" || i.kind === "coach_commitment");
   if (commitments.length)
     await sb.from("coaching_session_commitments").insert(
