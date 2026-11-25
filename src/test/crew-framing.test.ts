@@ -97,9 +97,10 @@ describe("framing a photo in its post's shape", () => {
     expect(visibleShare(shot, band, f.z).w).toBeCloseTo(390 / ((1440 * 693) / 1920), 6);
     expect(f.cx).toBe(0.5);
   });
-  it("the shape button goes 9:16 → 4:5 → 1:1 → 16:9 → 9:16 (9:16 fills a phone's screen in the Crew feed)", () => {
+  it("the shape button goes 9:16 → 4:5 → 3:4 → 1:1 → 16:9 → 9:16 (9:16 fills a phone's screen in the Crew feed)", () => {
     expect(nextAspect("full")).toBe("portrait");
-    expect(nextAspect("portrait")).toBe("square");
+    expect(nextAspect("portrait")).toBe("classic");
+    expect(nextAspect("classic")).toBe("square");
     expect(nextAspect("square")).toBe("landscape");
     expect(nextAspect("landscape")).toBe("full");
   });

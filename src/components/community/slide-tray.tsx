@@ -474,7 +474,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
           const f = clampFraming(it.framing ?? CENTRED, size, box);
           const grade = compiledFor(it.grade);
           // already the post's shape and untouched (no filter): as it was uploaded
-          if (!grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;
+          if (!grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001 && !f.r) return slide;
           const { main, thumb: small } = await framedPhoto(src, f, shape, grade);
           if (!main) return slide;
           const [path, thumb] = await Promise.all([up(main), small ? up(small).catch(() => null) : Promise.resolve(null)]);

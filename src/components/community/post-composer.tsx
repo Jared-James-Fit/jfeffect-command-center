@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   AtSign, BarChart3, Camera, Check, ChevronLeft, ChevronRight, Dumbbell, Film, Images, Loader2, Lock, Maximize2, PenLine, Play,
-  Blend, Scissors, SlidersHorizontal, Smile, Star, Type, UserRound, Users, Volume2, VolumeX, X,
+  Blend, RotateCw, Scissors, SlidersHorizontal, Smile, Star, Type, UserRound, Users, Volume2, VolumeX, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, pickerAudience, ty
 import { MAX_SLIDES } from "@/lib/community";
 import type { ComposerPickHow } from "@/components/community/composer-pick";
 import { pickMedia, releasePicked, uploadPicked } from "@/lib/community-media";
-import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, startAspect, nextAspect, placement, clampFraming, type PostAspect } from "@/lib/photo-frame";
+import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, startAspect, nextAspect, clampFraming, framedStyle, straightenOf, turnQuarter, withStraighten, type PostAspect } from "@/lib/photo-frame";
 import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
 import { canvasToBlob, cardLogo, ensureDisplayFont } from "@/lib/workout-share-card";
 import { releaseCanvas, context2d } from "@/lib/canvas-memory";
@@ -93,7 +93,7 @@ export type ComposerWorkout = {
   onChange?: () => void;
 };
 
-type ComposerTool = "filters" | "enhance" | null;
+type ComposerTool = "filters" | "enhance" | "rotate" | null;
 type Step = "select" | "edit" | "details";
 const STEPS: Step[] = ["select", "edit", "details"];
 const EASE = "cubic-bezier(0.32,0.72,0,1)";
@@ -1262,6 +1262,7 @@ function EditStep({
           </div>
         )}
         {tool === "enhance" && enhanceable(cur) && <EnhanceTool key={cur.id} tray={tray} it={cur} list={list} defaults={filterDefaults} setDefault={setFilterDefault} prefs={filterPrefs} onCompare={onCompare} onDone={() => setTool(null)} />}
+        {tool === "rotate" && cur?.kind === "image" && !cur.existing && <RotateTool key={cur.id} tray={tray} it={cur} shape={shape} />}
         {cur?.kind === "video" && tool !== "enhance" && <ClipTools tray={tray} it={cur} onCover={() => onCover(cur.id)} />}
       </div>
       <div className="shrink-0 px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
@@ -1271,6 +1272,7 @@ function EditStep({
           {onCoverSlide && filters.items.length > 1 && <Tool icon={<Blend className="h-5 w-5" />} label="Templates" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
           {onCoverSlide && <Tool icon={<Type className="h-5 w-5" />} label="Text" onClick={() => setRequest({ kind: "text", n: Date.now() })} />}
           {onCoverSlide && <Tool icon={<Smile className="h-5 w-5" />} label="Stickers" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} />}
+          {cur?.kind === "image" && !cur.existing && <Tool icon={<RotateCw className="h-5 w-5" />} label="Rotate" on={tool === "rotate"} onClick={() => setTool(tool === "rotate" ? null : "rotate")} />}
           <Tool icon={<AtSign className="h-5 w-5" />} label={tags ? `Tagged ${tags}` : "Tag"} on={tags > 0} onClick={onTag} />
           <Tool icon={<Maximize2 className="h-5 w-5" />} label={design ? `${POST_ASPECT_LABEL[aspect]}` : "Ratio"} onClick={onAspect} />
         </div>
@@ -1304,10 +1306,58 @@ function EditStep({
 function SlideView({ it, box, shape, playing, compare = false }: { it: TrayItem; box: { w: number; h: number }; shape: number; playing: boolean; compare?: boolean }) {
   if (!it.w || !it.h) return <div className="grid h-full w-full place-items-center"><Loader2 className="h-6 w-6 animate-spin text-white/60" /></div>;
   const size = { w: it.w, h: it.h };
+  // the frame's own numbers at this size: placed (and, a photo, turned) exactly as it'll be drawn
   const f = clampFraming(it.framing ?? CENTRED, size, { w: shape, h: 1 });
-  const p = placement(f, size, box);
-  const style = { position: "absolute" as const, width: p.w, height: p.h, left: p.x, top: p.y, maxWidth: "none" };
+  const style = { position: "absolute" as const, left: 0, top: 0, maxWidth: "none", ...framedStyle(it.kind === "image" ? f : { ...f, r: undefined }, size, box) };
   return <SlideMedia it={it} style={style} playing={playing} compare={compare} />;
+}
+
+/**
+ * Rotate (a photo): a quarter turn at a time and a straighten of up to ±45°, Instagram's. The photo
+ * stays whole; the turn is part of its framing and is drawn only when the post is made (the zoom
+ * never lets a corner of the frame go empty).
+ */
+function RotateTool({ tray, it, shape }: { tray: ReturnType<typeof useSlideTray>; it: TrayItem; shape: number }) {
+  const f = it.framing ?? CENTRED;
+  const tilt = Math.round(straightenOf(f.r) * 10) / 10;
+  const size = it.w && it.h ? { w: it.w, h: it.h } : null;
+  const set = (next: typeof f) => tray.setFraming(it.id, size ? clampFraming(next, size, { w: shape, h: 1 }) : next);
+  return (
+    <div className="flex items-center gap-3 px-4 pt-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-composer-rotate>
+      <button
+        type="button"
+        onClick={() => {
+          feedback("tap");
+          set(turnQuarter(f));
+        }}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 active:scale-95"
+        aria-label="Turn a quarter"
+        data-composer-turn
+      >
+        <RotateCw className="h-5 w-5" />
+      </button>
+      <input
+        type="range"
+        min={-45}
+        max={45}
+        step={0.5}
+        value={tilt}
+        onChange={(e) => set(withStraighten(f, Number(e.target.value)))}
+        className="min-w-0 flex-1 accent-white"
+        aria-label="Straighten"
+        data-composer-straighten
+      />
+      <button
+        type="button"
+        onClick={() => set(withStraighten(f, 0))}
+        className="w-12 shrink-0 text-right text-[13px] font-semibold tabular-nums text-white/80 active:opacity-60"
+        aria-label="Straighten: reset"
+      >
+        {tilt > 0 ? "+" : ""}
+        {tilt}°
+      </button>
+    </div>
+  );
 }
 
 /** A slide's photo or clip, its filter graded live over it (the same program the post bakes in). */
