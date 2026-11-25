@@ -719,7 +719,7 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
             idle={<p className="text-[12px] text-muted-foreground">Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept.</p>}
           />
           {askVoice && aiConsent.needsYes && (
-            <AiConsentInline use="turns what you say into words" via="OpenAI (or Google if OpenAI can't)" onAllowed={() => setAskVoice(false)} onDismiss={() => setAskVoice(false)} />
+            <AiConsentInline use="turns what you say into words" via="OpenAI (or Google if OpenAI can't)" onAllowed={() => setAskVoice(false)} onNo={() => setAskVoice(false)} />
           )}
           {!result && (
             <button

@@ -5,8 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, CalendarPlus, Target, FileSignature, ShieldCheck } from "lucide-react";
-import { AiConsentChoice, useMyAiConsent } from "@/components/ai-consent/ai-consent";
+import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, CalendarPlus, Target, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyCalendarSyncStatus } from "@/lib/schedule.functions";
@@ -29,17 +28,12 @@ type Props = {
    */
   whenHidden?: ReactNode;
 };
-type ItemKey = "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "ai";
+type ItemKey = "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
 export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const agreement = useCoachingAgreement();
-  // AI processing: an optional row, answered in place; like calendar sync it never brings the checklist back by itself
-  const ai = useMyAiConsent();
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiAnsweredHere, setAiAnsweredHere] = useState(false);
-  const aiRow = ai.askable && ai.loaded && (ai.unanswered || aiAnsweredHere);
   const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
@@ -75,20 +69,6 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
       { key: "calendar", label: "Sync your calendar", description: "Optional: add your sessions and workouts to Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone, optional: true },
     ];
-    if (aiRow) {
-      base.push({
-        key: "ai",
-        label: "AI features",
-        description: "Choose whether meal estimates, imports and your coach's drafts may use AI services.",
-        onClick: () => {
-          setAiAnsweredHere(true);
-          setAiOpen((o) => !o);
-        },
-        icon: ShieldCheck,
-        done: !ai.unanswered,
-        optional: true,
-      });
-    }
     // The Coaching Agreement is the one mandatory step, so it leads the list. It only
     // appears once its status has loaded and applies to this account.
     // Its words follow the agreement card's (a new version, the coach's note) so
@@ -105,7 +85,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       });
     }
     return base;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, aiRow, ai.unanswered]);
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
@@ -129,7 +109,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
             const Icon = it.icon;
             const rowClass = "flex min-h-12 w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left text-sm transition hover:bg-muted/50 active:bg-muted/60 disabled:hover:bg-transparent " + (it.done ? "opacity-60" : "");
             const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-foreground"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.optional && <Badge variant="outline" className="px-1.5 py-0 text-[11px] font-medium text-muted-foreground">Optional</Badge>}{it.done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}</div><div className="text-xs text-muted-foreground">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}</>;
-            return <li key={it.key}>{it.onClick || it.key === "agreement" ? <button type="button" className={rowClass} onClick={it.onClick} disabled={(it.done && it.key !== "ai") || !it.onClick} aria-expanded={it.key === "ai" ? aiOpen : undefined}>{inner}</button> : it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} search={it.search as any} className={rowClass}>{inner}</Link>}{it.key === "ai" && aiOpen && <AiConsentChoice className="mb-2" />}</li>;
+            return <li key={it.key}>{it.onClick || it.key === "agreement" ? <button type="button" className={rowClass} onClick={it.onClick} disabled={it.done || !it.onClick}>{inner}</button> : it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} search={it.search as any} className={rowClass}>{inner}</Link>}</li>;
           })}
         </ul>
         <div className="mt-3 flex flex-wrap gap-2">{nextItem.key === "agreement" ? <Button className="h-10" onClick={nextItem.onClick} disabled={!nextItem.onClick}>Continue setup</Button> : nextItem.sheet ? <Button className="h-10" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild className="h-10"><Link to={nextItem.to!} search={nextItem.search as any}>Continue setup</Link></Button>}</div>

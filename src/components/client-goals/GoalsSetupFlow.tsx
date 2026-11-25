@@ -34,7 +34,6 @@ import {
   EQUIPMENT_GROUPS,
   REAL_EQUIPMENT_ITEMS,
 } from "@/lib/client-goals/equipment-flow";
-import { AiConsentChoice } from "@/components/ai-consent/ai-consent";
 
 type Props = {
   clientId: string;
@@ -1051,8 +1050,6 @@ function FinalStep({ value, setField }: StepProps) {
         rows={6}
         maxLength={2000}
       />
-      {/* asked here once, compact, only while unanswered (never for a coach or "View as client") */}
-      <AiConsentChoice />
       <div className="rounded-md border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
         Tap <span className="font-semibold text-foreground">Finish</span> to save. You can update any answer later from your account.
       </div>

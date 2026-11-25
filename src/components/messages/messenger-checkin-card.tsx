@@ -1,3 +1,4 @@
+import { AiConsentOnce } from "@/components/ai-consent/ai-consent";
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -713,6 +714,9 @@ function CheckinWizard({
                 />
               )}
             </div>
+
+            {/* someone who has never answered about AI processing is asked once, here, in place; Send never waits on it */}
+            {isLast && <AiConsentOnce use="helps your coach prepare their reply from your check-in" className="mt-4" />}
 
             {isLast && nutritionWaiting && (
               <button

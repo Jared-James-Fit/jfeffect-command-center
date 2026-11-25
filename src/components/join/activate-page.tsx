@@ -16,6 +16,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SIGNUP_ACK_MISSING } from "@/lib/legal-signup";
+import { AiConsentCheckbox, recordAiConsentChoice } from "@/components/ai-consent/ai-consent";
 import { cn } from "@/lib/utils";
 import { SOCIAL } from "@/lib/social-links";
 import {
@@ -55,6 +56,8 @@ export function ActivatePage({
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
+  // optional and separate from agreeing: AI processing (src/lib/ai-consent), unticked to start
+  const [aiAllowed, setAiAllowed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
@@ -145,6 +148,8 @@ export function ActivatePage({
         email: r.email,
         password,
       });
+      // what the optional AI box said, saved with their own session (a new account has no answer yet)
+      if (!signErr) await recordAiConsentChoice(aiAllowed);
       setPhase({
         kind: "welcome",
         firstName: r.firstName,
@@ -239,6 +244,7 @@ export function ActivatePage({
               .
             </label>
           </div>
+          <AiConsentCheckbox id="signup-ai" checked={aiAllowed} onChange={setAiAllowed} className="px-1" />
           {error && <p className="text-center text-[13px] text-destructive">{error}</p>}
           <button type="submit" disabled={busy} className={BTN}>
             {busy ? (

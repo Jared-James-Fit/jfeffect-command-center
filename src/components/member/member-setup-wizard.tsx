@@ -47,7 +47,6 @@ type Step = SetupStep;
 
 import { WEEK_DAYS, SHORT_DAY } from "@/lib/training-schedule";
 import { isFreeAccount, openSetupSteps, type SetupStep } from "@/lib/member-setup-steps";
-import { AiConsentChoice } from "@/components/ai-consent/ai-consent";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { useServiceTier } from "@/lib/service-tier";
 
@@ -376,9 +375,6 @@ export function MemberSetupWizard({
             )}
           </div>
         )}
-
-        {/* the AI-processing question rides on the last step, compact; skipping it decides nothing */}
-        {stepIdx === STEPS.length - 1 && <AiConsentChoice />}
 
         {!canAdvance && (
           <p className="text-[11px] font-medium text-destructive">

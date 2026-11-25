@@ -139,7 +139,8 @@ describe("grandfathered and custom prices", () => {
 describe("the Coaching Agreement comes before buying coaching", () => {
   const tr = { kind: "start" as const, action: "checkout" as const, timing: "after_payment" as const, available: true, blocked: null, configProblem: null };
   it("3.0 is published without asking earlier signers to sign again", () => {
-    expect(AGREEMENT_VERSION).toBe("3.0");
+    // 3.1 (AI tools optional in the words) is the current text; plans still need 3.0 or later
+    expect(AGREEMENT_VERSION).toBe("3.1");
     expect(PLAN_AGREEMENT_VERSION).toBe("3.0");
     expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
   });

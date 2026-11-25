@@ -544,7 +544,11 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Service providers and storage.",
-        text: "The Coach uses trusted service providers for hosting, databases, payments, email, messaging, notifications and video, and AI tools that help the Coach’s team review your information and prepare programs, meal plans, summaries and messages. Your coach remains responsible for the coaching you receive. Some providers store or process information outside Canada (including in the United States), where it may be subject to local laws and accessible to authorities there. The Coach does not sell your personal information.",
+        text: "The Coach uses trusted service providers for hosting, databases, payments, email, messaging, notifications and video. Some providers store or process information outside Canada (including in the United States), where it may be subject to local laws and accessible to authorities there. The Coach does not sell your personal information.",
+      },
+      {
+        label: "AI tools (optional).",
+        text: "Some features send what they need to outside AI services (OpenAI and Google), for example to estimate a meal, read a program or meal plan you import, turn a voice memo into text, or help your coach prepare a draft from your records. This happens only if you give separate permission, which is never part of signing this Agreement: a box you can tick when you sign, a short request the first time a feature needs it, or Account, then Privacy & data. You can withdraw it at any time; those features then stay off, your coach does that work by hand, and the rest of the Services are unaffected. Your coach remains responsible for the coaching you receive.",
       },
       {
         label: "Your choices.",
@@ -797,7 +801,7 @@ const KEY_TERMS: { title: string; text: string }[] = [
   },
   {
     title: "Your privacy and content",
-    text: "Your health information and coaching content are used to coach you, with trusted providers and AI tools. Messages are kept as records, including ones you edit or delete. Public use of your photos or results needs your permission, which you choose when you sign.",
+    text: "Your health information and coaching content are used to coach you, with trusted providers. AI tools are used only if you allow them, separately and optionally. Messages are kept as records, including ones you edit or delete. Public use of your photos or results needs your permission, which you choose when you sign.",
   },
   {
     title: "Disputes",
@@ -824,7 +828,7 @@ const ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
   {
     id: "health",
     short: "Health disclosure and privacy consent",
-    text: "I have told the Coach about my injuries, health conditions and limits, and I will keep them updated. The Coach is not a doctor, therapist or dietitian. I consent to my health and personal information being collected and used as described in Section {{n:privacy}}, including by service providers and AI tools that may be outside Canada. (Sections {{n:health}} and {{n:privacy}})",
+    text: "I have told the Coach about my injuries, health conditions and limits, and I will keep them updated. The Coach is not a doctor, therapist or dietitian. I consent to my health and personal information being collected and used as described in Section {{n:privacy}}, including by service providers that may be outside Canada. Sending it to AI tools is a separate, optional choice. (Sections {{n:health}} and {{n:privacy}})",
   },
   {
     id: "disputes",
@@ -914,6 +918,7 @@ export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.3": "9fa2bd20456320164bed343be8199f08e7d3e5e777c53be4a0ab29a433e48a93",
   "2.4": "77fae52a80171c522cf0e2f637407855ec809f5e5299b8b7baff2ac65e97201f",
   "3.0": "21bb52730789bcdd840e40c8a207939a8a7a6e6c8dc3cd6349f579fe8d1c061b",
+  "3.1": "c7d73ed301b7329edcb997dee4fce99a574331daad212b487b14930c598f8859",
 };
 
 export function sectionNumber(id: string): number {

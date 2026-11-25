@@ -11,7 +11,7 @@ vi.mock("@/lib/client-impersonation", () => ({ useClientImpersonation: () => ({ 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({}), rpc: async () => ({ data: null, error: null }) } }));
 
 const mod = await import("@/components/ai-consent/ai-consent");
-const { AiConsentChoice, AiConsentPanel, AiConsentInline } = mod;
+const { AiConsentCheckbox, AiConsentPanel, AiConsentInline } = mod;
 // children passed positionally to createElement
 const AiConsentGate = mod.AiConsentGate as any;
 
@@ -26,7 +26,7 @@ const granted = { granted: true, text_version: AI_CONSENT_VERSION };
 const declined = { granted: false, text_version: AI_CONSENT_VERSION };
 
 describe("AI consent asked in place", () => {
-  it("a gate shows the action once allowed, the inline request until then", () => {
+  it("a gate shows the action once allowed, the one request until answered, then a quiet off line", () => {
     role = "client";
     impersonating = false;
     expect(render(createElement(AiConsentGate, { use: "estimates the meal you describe" }, action), granted)).toContain("data-action");
@@ -34,38 +34,42 @@ describe("AI consent asked in place", () => {
     expect(asked).not.toContain("data-action");
     expect(asked).toContain("data-ai-consent-inline");
     expect(asked).toContain("This estimates the meal you describe using OpenAI.");
-    // a no still needs a yes for this feature, asked in place only when they're here
-    expect(render(createElement(AiConsentGate, {}, action), declined)).toContain("data-ai-consent-inline");
+    // Allow / Don't allow, both saved, so it's asked once
+    expect(asked).toContain("data-ai-consent-allow");
+    expect(asked).toContain("data-ai-consent-decline");
+    // after a no: a state with Turn on, never the request again
+    const off = render(createElement(AiConsentGate, {}, action), declined);
+    expect(off).toContain("data-ai-consent-off");
+    expect(off).toContain("data-ai-consent-turn-on");
+    expect(off).not.toContain("data-ai-consent-decline");
+    // a wording change asks again
+    expect(render(createElement(AiConsentGate, {}, action), { granted: true, text_version: AI_CONSENT_VERSION - 1 })).toContain("data-ai-consent-inline");
   });
 
   it("staff and View as client are never asked", () => {
     role = "admin";
     expect(render(createElement(AiConsentGate, {}, action), null)).toContain("data-action");
-    expect(render(createElement(AiConsentChoice), null)).toBe("");
     role = "client";
     impersonating = true;
     expect(render(createElement(AiConsentGate, {}, action), null)).toContain("data-action");
-    expect(render(createElement(AiConsentChoice), null)).toBe("");
     impersonating = false;
   });
 
-  it("onboarding asks only while unanswered, with nothing picked", () => {
-    role = "member";
-    const html = render(createElement(AiConsentChoice), null);
-    expect(html).toContain("data-ai-consent-choice");
-    expect(html).not.toContain('aria-checked="true"');
-    expect(render(createElement(AiConsentChoice), granted)).toBe("");
-    expect(render(createElement(AiConsentChoice), declined)).toBe("");
-    // a wording change asks again
-    expect(render(createElement(AiConsentChoice), { granted: true, text_version: AI_CONSENT_VERSION - 1 })).toContain("data-ai-consent-choice");
+  it("the agreement box starts unticked, names the providers and says it's optional", () => {
+    const html = render(createElement(AiConsentCheckbox, { checked: false, onChange: () => {} }), null);
+    expect(html).toContain("data-ai-consent-checkbox");
+    expect(html).toContain('aria-checked="false"');
+    expect(html).toContain("(optional)");
+    expect(html).toContain("OpenAI and Google");
+    expect(html).toContain("outside Canada");
+    expect(html).toContain("Privacy &amp; data");
   });
 
-  it("the inline request keeps the full disclosure one tap away and can be dismissed", () => {
+  it("the in-place request keeps the full disclosure one tap away", () => {
     role = "client";
-    const html = render(createElement(AiConsentInline, { use: "reads your program", onDismiss: () => {} }), null);
+    const html = render(createElement(AiConsentInline, { use: "reads your program", onNo: () => {} }), null);
     expect(html).toContain("data-ai-consent-more");
-    expect(html).toContain("data-ai-consent-dismiss");
-    expect(html).toContain("data-ai-consent-allow");
+    expect(html).toContain("outside Canada");
   });
 
   it("Account shows every provider and the right controls", () => {
