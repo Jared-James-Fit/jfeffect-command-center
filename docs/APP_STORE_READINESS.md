@@ -40,7 +40,7 @@ every critical blocker is closed, and only with Jared's explicit approval.
    may be processed outside Canada, describe the in-app permission and how to withdraw it
    (Account → Privacy & data → AI processing), and describe deletion (30-day Recently deleted, then
    deleted; payment and session records kept by law). docs/legal/COACH_PLATFORM_DRAFTS_2026-11.md
-   section E has the redline points. Jared + counsel.
+   section E has the redline points. Jared + counsel. Drafted: migration `20270527109400_privacy_policy_service_providers.sql` saves the next Privacy Policy version as a draft with a "Service providers and AI processing" section and "Last updated: November 25, 2026"; read it in Admin → Legal, have counsel check it, then publish.
 3. **Objectionable-content filter for Crew (1.2).** Apple lists four musts for UGC apps; JF Effect
    has report, block and contact, but no method that filters objectionable material before it is
    posted. Minimum fix: a server-side word/phrase filter on posts, comments, captions, story text
