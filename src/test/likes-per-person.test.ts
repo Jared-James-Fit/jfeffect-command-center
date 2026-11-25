@@ -39,3 +39,22 @@ describe("likes belong to the person", () => {
     expect(queries).toContain("scope: { id: `community-like-comment:${postId}` }");
   });
 });
+
+// Your own post's Activity lists your own like (Nov 25 2026): it left the
+// poster out entirely, so "Likes 4" listed three people.
+describe("Activity shows your own like", () => {
+  const activity = readFileSync("supabase/migrations/20270528090000_activity_shows_your_own_like.sql", "utf8");
+  it("puts you in the list exactly when you reacted, as one person per row", () => {
+    expect(activity).toMatch(/WHERE u\.user_id IS DISTINCT FROM v_me\s+UNION\s+SELECT r\.user_id FROM r WHERE r\.user_id = v_me/);
+    expect(activity).toMatch(/'is_me', CASE WHEN pe\.user_id = v_me THEN true END/);
+    expect(activity).toMatch(/public\.community_main_account\(v\.viewer_user_id\) AS user_id/);
+    expect(activity).toMatch(/public\.community_main_account\(r\.user_id\) AS user_id/);
+    expect(activity).toMatch(/'likes', \(SELECT count\(\*\) FROM r\)/);
+  });
+  it("names you as you, with no Follow button, and refreshes after a like", async () => {
+    const { activityNote } = await import("@/lib/community");
+    expect(activityNote({ user_id: "a", name: "Jared", avatar_url: null, is_coach: true, username: "jared", reaction: "heart", is_me: true })).toBe("@jared · You");
+    expect(readFileSync("src/components/community/post-activity.tsx", "utf8")).toContain("{follow && !p.is_me && <FollowIfNot p={p} />}");
+    expect(queries).toContain('queryKey: ["community-post-activity", post.id]');
+  });
+});

@@ -310,6 +310,8 @@ export type ActivityPerson = CommunityAuthor & {
   shared_at?: string;
   share_id?: string;
   reposted_at?: string;
+  /** It's you: shown only for your own like on your own post. */
+  is_me?: boolean;
 };
 /** A post's (or story's) Activity, for the person who posted it (community_post_activity). */
 export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[] };
@@ -323,8 +325,9 @@ export function activityPeople(people: readonly ActivityPerson[], f: ActivityFil
   return [...people];
 }
 
-/** The line under someone's name, only when it says more than their photo's badge: they shared it or reposted it. */
+/** The line under someone's name, only when it says more than their photo's badge: it's you, they shared it or reposted it. */
 export function activityNote(p: ActivityPerson): string | null {
+  if (p.is_me) return p.username ? `@${p.username} · You` : "You";
   if (p.shared_at) return "Shared to their story";
   if (p.reposted_at) return "Reposted";
   return null;

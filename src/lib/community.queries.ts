@@ -324,6 +324,8 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       // loaded page of every feed after each tap cost a page's worth of posts per like.
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
       qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
+      // your own post's Activity lists your own like too
+      qc.invalidateQueries({ queryKey: ["community-post-activity", post.id] });
     },
   });
 }
