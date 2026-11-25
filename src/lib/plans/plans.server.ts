@@ -164,7 +164,10 @@ export async function loadPlanState(db: Db, clientId: string): Promise<PlanState
   const legacyMembership =
     !!member?.data?.stripe_subscription_id && /^(active|trialing|past due)/i.test(String(member?.data?.subscription_status ?? ""));
 
-  const tier: "coaching" | "self_serve" = client.service_tier === "self_serve" ? "self_serve" : "coaching";
+  // A lead (an application's or a site checkout's record: status Lead, no coach) isn't coached yet,
+  // whatever the column's default says, so it buys like a free member.
+  const lead = client.status === "Lead" && !client.assigned_coach_id;
+  const tier: "coaching" | "self_serve" = client.service_tier === "self_serve" || lead ? "self_serve" : "coaching";
   let current = currentPlanOf({
     tier,
     enrollment,
@@ -654,7 +657,17 @@ async function startCheckout(
   state: PlanState,
   target: PlanOption,
   tr: Transition,
-  opts: { actorUserId: string | null; source: "client" | "admin"; origin: string; consent?: Record<string, any>; existingChangeId?: string },
+  opts: {
+    actorUserId: string | null;
+    source: "client" | "admin";
+    origin: string;
+    consent?: Record<string, any>;
+    existingChangeId?: string;
+    /** Where Stripe sends them back, by change id (the site's Ready to start lands on its own page). */
+    returnTo?: (changeId: string, outcome: "done" | "cancelled") => string;
+    /** Extra session + subscription metadata (e.g. channel: "site"). */
+    metadata?: Record<string, string>;
+  },
 ): Promise<ConfirmResult> {
   const apiKey = stripeKeyFor(null);
   await verifyTargetPrice(db, target, apiKey);
@@ -704,9 +717,9 @@ async function startCheckout(
     const origin = opts.origin.replace(/\/+$/, "");
     const r = await createAssignmentCheckout(db, opts.actorUserId, { purchaseRecordId: saleId, origin }, {
       updateSource: "plan_change",
-      successUrl: `${origin}/portal/plan?checkout=done&change=${change.id}`,
-      cancelUrl: `${origin}/portal/plan?checkout=cancelled&change=${change.id}`,
-      metadata: { plan_change_id: change.id, kind: "plan_change" },
+      successUrl: opts.returnTo ? `${origin}${opts.returnTo(change.id, "done")}` : `${origin}/portal/plan?checkout=done&change=${change.id}`,
+      cancelUrl: opts.returnTo ? `${origin}${opts.returnTo(change.id, "cancelled")}` : `${origin}/portal/plan?checkout=cancelled&change=${change.id}`,
+      metadata: { ...(opts.metadata ?? {}), plan_change_id: change.id, kind: "plan_change" },
       // the Coaching Agreement covers coaching; a membership has its own terms (accepted in the app)
       agreementNotice: target.family === "coaching",
     });
@@ -716,6 +729,54 @@ async function startCheckout(
     await patchChange(db, change.id, { status: "failed", error: String(e?.message ?? e).slice(0, 500) });
     throw new PlanError("Checkout couldn't be opened. Nothing was charged; please try again.");
   }
+}
+
+/**
+ * "Ready to start" on the site (coaching-sales/direct-checkout): the same checkout
+ * as Manage plan's, for a package the coach sells without an approval, on the
+ * lead record the intake made. Applies only once Stripe says it's paid (the
+ * webhook's onPlanCheckoutCompleted → applyChange → afterCoachingStart).
+ */
+export async function startDirectCheckout(
+  db: Db,
+  clientId: string,
+  slug: string,
+  opts: { origin: string; consentText: string; applicationId: string | null },
+): Promise<{ url: string; changeId: string }> {
+  const state = await loadPlanState(db, clientId);
+  if (state.client.user_id || state.client.archived || ["Deactivated", "Deleted"].includes(String(state.client.status ?? ""))) {
+    // an account (or a paused one) buys from inside the app, signed in, never from a typed email
+    throw new PlanError("That email already has a JF Effect account. Sign in and pick your plan from Account → Your plan.");
+  }
+  const target = state.catalog.find((o) => o.slug === slug && o.family === "coaching") ?? null;
+  if (!target || !target.directCheckout || !target.listed) throw new PlanError("This package can't be bought on the site right now. Book a call instead.");
+  if (target.problem) {
+    await flagConfig(db, target, target.problem);
+    throw new PlanError("This package can't be bought on the site right now. Book a call instead.", true);
+  }
+  // an earlier unfinished checkout from the site steps aside (one change in flight per client)
+  if (state.open?.status === "checkout") await abandonCheckout(db, state.open, "Replaced by a new checkout from the site");
+  const fresh = state.open?.status === "checkout" ? await loadPlanState(db, clientId) : state;
+  const tr = transitionFor(fresh.current, target, { open: openChangeOf(fresh.open), coaching: fresh.access });
+  if (!tr.available || tr.action !== "checkout") {
+    throw new PlanError(
+      fresh.current.family === "coaching" || fresh.current.managed === "custom"
+        ? "You're already set up with coaching. Sign in and change your plan from Account → Your plan."
+        : fresh.access.state === "comeback" || fresh.access.state === "comeback_pending"
+          ? "Welcome back. Sign in and ask to come back from Account → Your plan."
+          : tr.blocked ?? "This package can't be bought on the site right now.",
+    );
+  }
+  const r = await startCheckout(db, fresh, target, tr, {
+    actorUserId: null,
+    source: "client",
+    origin: opts.origin,
+    consent: { consented_at: new Date().toISOString(), consent_text: opts.consentText.slice(0, 2000), note: "Ready to start on the site" },
+    returnTo: (id, outcome) => `/coaching/apply?checkout=${outcome === "done" ? "paid" : "cancelled"}&package=${encodeURIComponent(target.slug)}&change=${id}`,
+    metadata: { channel: "site", ...(opts.applicationId ? { application_id: opts.applicationId } : {}) },
+  });
+  if (r.result !== "redirect") throw new PlanError("Checkout couldn't be opened. Nothing was charged; please try again.");
+  return { url: r.url, changeId: r.changeId };
 }
 
 async function requestChange(db: Db, state: PlanState, target: PlanOption, opts: { actorUserId: string | null; source: "client" | "admin"; note?: string | null }): Promise<ConfirmResult> {
@@ -1214,6 +1275,11 @@ export async function applyChange(db: Db, changeId: string): Promise<{ applied: 
     const notice: PlanNotice = done.source === "stripe" ? "ended_in_stripe" : done.kind === "start" || done.kind === "upgrade" ? "started" : "applied";
     await notifyPlanChange(db, done, notice);
     if (done.kind === "start") await checkDuplicatePlans(db, done);
+    // someone new to coaching: their account, their record as a client, their welcome (once, here)
+    if (done.to_family === "coaching" && done.from_family !== "coaching") {
+      const { afterCoachingStart } = await import("@/lib/coaching-sales/onboarding.server");
+      await afterCoachingStart(db, done).catch((e: unknown) => console.warn("[plans] onboarding after start failed", e));
+    }
   }
   return { applied: !!done };
 }

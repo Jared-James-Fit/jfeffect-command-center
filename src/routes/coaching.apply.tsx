@@ -19,6 +19,10 @@ import {
 } from "@/lib/apply-form";
 import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
 import { getPublicPackage } from "@/lib/coaching-packages/packages.functions";
+import { getDirectCheckout } from "@/lib/coaching-sales/direct-checkout.functions";
+import { ReadyToStart, StartChooser } from "@/components/sales/ready-to-start";
+import { returnState } from "@/lib/coaching-sales/direct-checkout";
+import { returnCopy } from "@/lib/coaching-sales/onboarding";
 import { trackSite } from "@/lib/site-funnel";
 import { TAX_NOTE, intervalLabel, priceLabel, type PublicPackage } from "@/lib/coaching-packages/packages";
 import { toast } from "sonner";
@@ -103,6 +107,18 @@ function QuestionFlow() {
     staleTime: 5 * 60_000,
   });
   const pkg: PublicPackage | null = pkgQuery.data && pkgQuery.data.kind !== "free" ? pkgQuery.data : null;
+  /** "Ready to start" (buy now) beside "Want to talk first" (these questions, then a call), only where the coach sells it straight. */
+  const getDirect = useServerFn(getDirectCheckout);
+  const directQuery = useQuery({
+    queryKey: ["apply-direct", pkg?.slug ?? ""],
+    queryFn: () => getDirect({ data: { slug: pkg!.slug } }),
+    enabled: !!pkg?.directCheckout,
+    staleTime: 60_000,
+  });
+  const direct = pkg?.directCheckout && directQuery.data?.available ? directQuery.data : null;
+  const [path, setPath] = useState<"choose" | "ready" | "talk">("choose");
+  /** Back from Stripe: a note only. The account and the coaching come from the webhook, never this page. */
+  const [returned, setReturned] = useState<"paid" | "cancelled" | "none">("none");
 
   const total = APPLY_STEPS.length;
   const current = APPLY_STEPS[step]!;
@@ -125,6 +141,7 @@ function QuestionFlow() {
     }
     if (saved) setStep(Math.max(0, Math.min(total - 1, Number(saved.step) || 0)));
     sourcePage.current = clip(params.get("from") || "coaching_apply", 80);
+    setReturned(returnState(params.get("checkout")));
     const linkedPackage = (params.get("package") || "").trim().toLowerCase();
     if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(linkedPackage) && linkedPackage.length <= 48) setPackageSlug(linkedPackage);
     trackSite("coaching_apply_start", linkedPackage || "none");
@@ -251,6 +268,55 @@ function QuestionFlow() {
   const pct = Math.round(((step + 1) / total) * 100);
   const fieldCls = "h-14 rounded-2xl bg-background px-4 text-[18px] md:text-[18px]";
   const contactStep = current.key === "email" || current.key === "phone" || current.key === "instagram";
+
+  if (returned !== "none") {
+    const copy = returnCopy(returned);
+    return (
+      <SalesPageShell hideMarketingNav>
+        <Block narrow className="!py-10 md:!py-16">
+          <div className="mx-auto max-w-md text-center" data-checkout-return={returned}>
+            <CheckCircle2 className="mx-auto h-10 w-10 text-primary" aria-hidden />
+            <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em]">{copy.title}</h1>
+            <p className="mt-3 text-[16px] leading-relaxed text-muted-foreground">{copy.body}</p>
+            {returned === "cancelled" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setReturned("none");
+                  window.history.replaceState(null, "", `/coaching/apply${pkg ? `?package=${pkg.slug}` : ""}`);
+                }}
+                className="mt-6 inline-flex min-h-[48px] items-center justify-center rounded-full bg-primary px-6 text-[16px] font-semibold text-primary-foreground"
+              >
+                Start again
+              </button>
+            )}
+          </div>
+        </Block>
+      </SalesPageShell>
+    );
+  }
+
+  if (direct && pkg && path !== "talk" && !result) {
+    return (
+      <SalesPageShell hideMarketingNav>
+        <Block narrow className="!py-6 md:!py-10">
+          <div className="mx-auto max-w-md">
+            {path === "ready" ? (
+              <ReadyToStart
+                pkg={pkg}
+                offer={direct}
+                sourcePage={sourcePage.current}
+                onBack={() => setPath("choose")}
+                onTalk={() => setPath("talk")}
+              />
+            ) : (
+              <StartChooser pkg={pkg} onReady={() => setPath("ready")} onTalk={() => setPath("talk")} />
+            )}
+          </div>
+        </Block>
+      </SalesPageShell>
+    );
+  }
 
   return (
     <SalesPageShell hideMarketingNav>

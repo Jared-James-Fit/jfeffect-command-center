@@ -11,6 +11,7 @@ import { MessageThread } from "@/components/message-thread";
 import { useChatPresence } from "@/hooks/use-chat-presence";
 import { LiveAvatar, LiveMark } from "@/components/live-indicator";
 import { GroupChatsPane, type PinnedChat } from "@/components/group-chats-pane";
+import { useCleoPin } from "@/components/premium/premium-ui";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { Button } from "@/components/ui/button";
 import {
@@ -285,7 +286,10 @@ function ClientMessages() {
     renderThread: ({ onBack }) => <SupportConversation onBack={onBack} />,
   };
   // a member has no coach chat; wait for the tier rather than flash the coach's row
-  const pins: PinnedChat[] = tierLoading ? [] : isSelfServe ? [supportPin] : [pinned, supportPin];
+  // a Premium member's Cleo (weekly recaps) after them; nobody else has it
+  const cleoPin = useCleoPin();
+  const basePins: PinnedChat[] = tierLoading ? [] : isSelfServe ? [supportPin] : [pinned, supportPin];
+  const pins: PinnedChat[] = cleoPin && !tierLoading ? [...basePins, cleoPin] : basePins;
 
   return (
     <div
