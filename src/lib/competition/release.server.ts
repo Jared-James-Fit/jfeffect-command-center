@@ -106,6 +106,20 @@ export async function requestChanges(sb: Db, id: string, userId: string, note: s
   const a = await getAssessment(sb, id);
   if (a.status === "released" || a.status === "superseded")
     throw new Error("This version is already released: changes are made on a new version");
+  if (a.milestone_id) {
+    // a version Cleo is already writing finishes first: restarting it would throw away the answer
+    // in flight (and a run mid-write would save it over the new request)
+    const { data: m } = await sb
+      .from("competition_milestones")
+      .select("status, last_error")
+      .eq("id", a.milestone_id)
+      .maybeSingle();
+    const providerWait = m?.status === "waiting_ai" && /^Waiting for AI/i.test(m?.last_error ?? "");
+    if (m && (m.status === "generating" || (m.status === "waiting_ai" && !providerWait)))
+      throw new Error(
+        "Cleo is already writing a new version. Ask for more changes on it once it's ready.",
+      );
+  }
   const now = new Date().toISOString();
   await sb
     .from("competition_assessments")
@@ -127,6 +141,7 @@ export async function requestChanges(sb: Db, id: string, userId: string, note: s
         attempts: 0,
         progress: null,
         last_error: null,
+        locked_at: null,
         why: "Changes requested",
       })
       .eq("id", a.milestone_id);
