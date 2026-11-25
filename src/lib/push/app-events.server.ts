@@ -108,7 +108,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: () => "💬 JF Effect Support",
     // `n` is whoever answered ("Coach Jared"), so they know a person read it.
     body: (n) => `${n} replied to your message. Tap to read it.`,
-    url: () => "/portal/support", rateMinutes: 10,
+    url: () => "/portal/messages?chat=support", rateMinutes: 10,
   },
   // A client asked for a session from their Schedule; the request card is in their chat.
   session_requested: {

@@ -22,7 +22,8 @@ describe("one athlete record, the service tier decides the coach's layer", () =>
   });
 
   it("members are sent home from the coach's screens, and a lapsed member can still fix billing", () => {
-    expect(isCoachingOnlyPath("/portal/messages")).toBe(true);
+    // Messages isn't the coach's: everyone's inbox has JF Effect Support (the coach chat in it is coaching-only)
+    expect(isCoachingOnlyPath("/portal/messages")).toBe(false);
     expect(isCoachingOnlyPath("/portal/check-ins/abc")).toBe(true);
     expect(isCoachingOnlyPath("/portal/agreements")).toBe(true);
     expect(isCoachingOnlyPath("/portal/workouts")).toBe(false);
@@ -32,11 +33,12 @@ describe("one athlete record, the service tier decides the coach's layer", () =>
     expect(isLapsedMemberPath("/portal/workouts")).toBe(false);
   });
 
-  it("members get the same app with Crew first, Support in Messages' place", () => {
+  it("members get the same app with Crew first, and Messages (with JF Effect Support) where Support was", () => {
     const paths = selfServeNav.map((i) => i.to);
-    expect(paths).toEqual(expect.arrayContaining(["/portal", "/portal/workouts", "/portal/programs", "/portal/community", "/portal/support", "/portal/membership", "/portal/nutrition-targets"]));
+    expect(paths).toEqual(expect.arrayContaining(["/portal", "/portal/workouts", "/portal/programs", "/portal/community", "/portal/messages", "/portal/membership", "/portal/nutrition-targets"]));
+    expect(paths).not.toContain("/portal/support");
     expect(paths.some((p) => isCoachingOnlyPath(p))).toBe(false);
-    expect(selfServeBottomNav.map((i) => i.to)).toEqual(["/portal/community", "/portal", "/portal/workouts", "/portal/support", "/portal/nutrition-targets"]);
+    expect(selfServeBottomNav.map((i) => i.to)).toEqual(["/portal/community", "/portal", "/portal/workouts", "/portal/messages", "/portal/nutrition-targets"]);
   });
 });
 

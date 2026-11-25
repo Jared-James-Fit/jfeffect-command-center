@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract" | "session_brief" | "session_analysis";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract" | "session_brief" | "session_analysis" | "support_answer";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -182,6 +182,14 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    */
   session_brief: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
   session_analysis: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 24_000, strongOnly: false },
+  /**
+   * Cleo as JF Effect Support's first line (support-cleo/, Nov 25 2026): a short answer from the
+   * support knowledge base (src/content/support-kb.ts) or a hand-off to the team, as JSON that code
+   * checks before anyone reads it (parseCleoReply, cleanAnswer: only knowledge-base links, short).
+   * Someone is waiting in the chat, so the quick writer first at low effort, GPT-5.5 behind it.
+   * Never a coaching decision (those are handed off); OpenAI key only.
+   */
+  support_answer: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 3_000, strongOnly: false },
 };
 
 /**

@@ -42,8 +42,8 @@ export function tierAllows(tier: ServiceTier, key: EntitlementKey): boolean {
 }
 
 /** Portal paths that belong to the coaching service; a member is sent home from them. */
+// Messages isn't one: everyone's inbox has JF Effect Support; the coach chat in it is coaching-only.
 export const COACHING_ONLY_PATHS = [
-  "/portal/messages",
   "/portal/check-ins",
   "/portal/check-in",
   "/portal/agreements",

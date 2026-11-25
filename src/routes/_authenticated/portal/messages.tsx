@@ -35,6 +35,11 @@ import { markRead, markUnread } from "@/lib/messages";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { messagePreviewText } from "@/lib/message-preview";
+import { useServiceTier } from "@/lib/service-tier";
+import { useServerFn } from "@tanstack/react-start";
+import { markMyThreadRead } from "@/lib/member-support.functions";
+import { SUPPORT_CHAT_NAME, SUPPORT_PIN_ID, supportRowFor, wantsSupportChat } from "@/lib/member-support";
+import { SupportConversation, useSupportConversation } from "@/components/support/support-conversation";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
@@ -42,8 +47,21 @@ export const Route = createFileRoute("/_authenticated/portal/messages")({
 
 type CoachLast = { body: string | null; sender_role: string; created_at: string; read_by_client_at: string | null; attachments: any[] | null };
 
+/** The JF logo as a full link (the avatar reads a bare path as a stored photo). */
+const supportFace = () => (typeof window !== "undefined" ? new URL("/icon-192.png", window.location.origin).href : null);
+
+/**
+ * Everyone's inbox: a coaching client's coach chat pinned first, then
+ * JF Effect Support (members and clients alike; a member has no coach chat,
+ * so Support is their first), then their own pins, groups and 1:1s.
+ * `?chat=support` (the Support push, Help, old Support links) opens Support.
+ */
 function ClientMessages() {
   const portalUserId = usePortalUserId();
+  const { isSelfServe, loading: tierLoading } = useServiceTier();
+  const support = useSupportConversation();
+  const markSupportRead = useServerFn(markMyThreadRead);
+  const [openSupport] = useState(() => typeof window !== "undefined" && wantsSupportChat(window.location.search));
   const [confirm, setConfirm] = useState<null | "call" | "sms">(null);
   const qc = useQueryClient();
 
@@ -249,6 +267,28 @@ function ClientMessages() {
     ),
   };
 
+  const supportRow = supportRowFor(support.messages, support.thread?.unread_for_member);
+  const supportPin: PinnedChat = {
+    id: SUPPORT_PIN_ID,
+    name: SUPPORT_CHAT_NAME,
+    avatarUrl: supportFace(),
+    preview: supportRow.preview,
+    at: supportRow.at,
+    unread: supportRow.unread,
+    unreadPreview: supportRow.unread ? supportRow.preview : null,
+    searchText: `${SUPPORT_CHAT_NAME} help support app account question bug ${support.messages[support.messages.length - 1]?.body ?? ""}`,
+    openOnArrival: openSupport,
+    markRead: async () => {
+      if (support.previewing) return;
+      await markSupportRead();
+      qc.invalidateQueries({ queryKey: support.key });
+      qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+    },
+    renderThread: ({ onBack }) => <SupportConversation onBack={onBack} />,
+  };
+  // a member has no coach chat; wait for the tier rather than flash the coach's row
+  const pins: PinnedChat[] = tierLoading ? [] : isSelfServe ? [supportPin] : [pinned, supportPin];
+
   return (
     <div
       className="phone-column fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
@@ -272,7 +312,7 @@ function ClientMessages() {
           straight into it, and back still shows the list (compose, New group). */}
       <div className="min-h-0 flex-1">
         <GroupChatErrorBoundary>
-          <GroupChatsPane asAdmin={false} pinned={pinned} />
+          <GroupChatsPane asAdmin={false} pinned={pins} />
         </GroupChatErrorBoundary>
       </div>
 

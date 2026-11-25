@@ -26,8 +26,8 @@ describe("the bottom bar opens on Crew, far left (Nov 21 2026)", () => {
     ]);
   });
 
-  it("members: the same, Support in Messages' place", () => {
-    expect(selfServeBottomNav.map((i) => i.label)).toEqual(["Crew", "Home", "Workouts", "Support", "Nutrition"]);
+  it("members: the same tabs; their Messages holds JF Effect Support", () => {
+    expect(selfServeBottomNav.map((i) => i.label)).toEqual(["Crew", "Home", "Workouts", "Messages", "Nutrition"]);
   });
 
   it("coaches and admins: Crew, Dashboard, Clients, Messages, Tasks", () => {
@@ -51,7 +51,7 @@ describe("the bottom bar opens on Crew, far left (Nov 21 2026)", () => {
     );
     expect(STAFF_BAR.map((i) => i.to).sort()).toEqual(["/admin", "/admin/clients", "/admin/community", "/admin/messages", "/admin/tasks"]);
     const badges = read("src/hooks/use-client-nav-badges.ts");
-    for (const to of ["/portal/community", "/portal/messages", "/portal/workouts", "/portal/nutrition-targets", "/portal/support"]) expect(badges).toContain(`result["${to}"]`);
+    for (const to of ["/portal/community", "/portal/messages", "/portal/workouts", "/portal/nutrition-targets"]) expect(badges).toContain(`result["${to}"]`);
     expect(badges).toContain('map["/admin/community"]');
     // Workouts keeps lighting on programs and plans; members' too
     expect(clientBottomNav.find((i) => i.label === "Workouts")?.activeOn).toContain("/portal/programs");

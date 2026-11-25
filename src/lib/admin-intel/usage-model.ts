@@ -67,6 +67,7 @@ const AI_AREA: Record<string, AreaKey> = {
   exercise_identify: "clients",
   pain_describe: "clients",
   pain_transcribe: "clients",
+  support_answer: "clients",
   // Crew
   post_write: "crew",
   daily_visual: "crew",

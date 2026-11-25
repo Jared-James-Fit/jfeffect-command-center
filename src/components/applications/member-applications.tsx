@@ -25,6 +25,12 @@ import {
   Send,
   UserCheck,
   X,
+  Archive,
+  ArchiveRestore,
+  BellRing,
+  ClipboardList,
+  ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,8 +53,14 @@ import {
   reopenMemberApplication,
   resendMemberInvite,
   updateMemberApplication,
+  archiveMemberApplication,
   type ApproveResult,
 } from "@/lib/membership-applications.functions";
+import { replyMemberSupport } from "@/lib/member-support.functions";
+import {
+  LIFECYCLE, NO_FACTS, applicantActions, applicantConcerns, lifecycleStage, stageLabel,
+  type ApplicantFacts, type LifecycleStage,
+} from "@/lib/applications/lifecycle";
 import {
   COACHING_INTEREST,
   MEMBER_STEPS,
@@ -93,8 +105,15 @@ async function copyText(text: string): Promise<boolean> {
 const ago = (iso: string | null | undefined) =>
   iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "";
 
-function StageChip({ app }: { app: MemberApplication }) {
-  const s = applicationStage(app);
+const STAGE_TONE: Record<LifecycleStage, "new" | "warn" | "done" | "muted"> = {
+  new: "new", awaiting_review: "warn", awaiting_response: "muted", approved: "done", awaiting_payment: "warn",
+  onboarding: "muted", ready: "muted", active: "done", archived: "muted",
+};
+
+/** Where they are on the path (lifecycle.ts), from what happened. */
+function StageChip({ app, facts = NO_FACTS }: { app: MemberApplication; facts?: ApplicantFacts }) {
+  const stage = lifecycleStage(app, facts);
+  const s = { label: stageLabel(stage), tone: STAGE_TONE[stage] };
   return (
     <span
       className={cn(
@@ -110,7 +129,7 @@ function StageChip({ app }: { app: MemberApplication }) {
   );
 }
 
-function ApplicationRow({ app, onOpen }: { app: MemberApplication; onOpen: () => void }) {
+function ApplicationRow({ app, onOpen, facts }: { app: MemberApplication; onOpen: () => void; facts?: ApplicantFacts }) {
   const coaching = app.coaching_interest === "yes" || app.coaching_interest === "maybe";
   return (
     <button
@@ -131,7 +150,7 @@ function ApplicationRow({ app, onOpen }: { app: MemberApplication; onOpen: () =>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-[16px] font-semibold">{app.full_name}</span>
-          <StageChip app={app} />
+          <StageChip app={app} facts={facts} />
         </span>
         <span className="mt-0.5 block truncate text-[14px] text-muted-foreground">
           {applicationLine(app)}
@@ -177,7 +196,7 @@ function Section({
 }
 
 export function MemberApplicationsPanel({ focusId }: { focusId?: string }) {
-  const { isLoading, enabled, pending, invited, done, all } = useMemberApplications();
+  const { isLoading, enabled, pending, invited, starting, done, all, factsFor } = useMemberApplications();
   const [openId, setOpenId] = useState<string | null>(focusId ?? null);
   const [showEarlier, setShowEarlier] = useState(false);
   useEffect(() => {
@@ -207,14 +226,21 @@ export function MemberApplicationsPanel({ focusId }: { focusId?: string }) {
           ) : (
             <Section title="Waiting on you" count={pending.length}>
               {pending.map((a) => (
-                <ApplicationRow key={a.id} app={a} onOpen={() => setOpenId(a.id)} />
+                <ApplicationRow key={a.id} app={a} facts={factsFor(a.id)} onOpen={() => setOpenId(a.id)} />
               ))}
             </Section>
           )}
           {invited.length > 0 && (
             <Section title="Approved, not in yet" count={invited.length}>
               {invited.map((a) => (
-                <ApplicationRow key={a.id} app={a} onOpen={() => setOpenId(a.id)} />
+                <ApplicationRow key={a.id} app={a} facts={factsFor(a.id)} onOpen={() => setOpenId(a.id)} />
+              ))}
+            </Section>
+          )}
+          {starting.length > 0 && (
+            <Section title="Getting started" count={starting.length}>
+              {starting.map((a) => (
+                <ApplicationRow key={a.id} app={a} facts={factsFor(a.id)} onOpen={() => setOpenId(a.id)} />
               ))}
             </Section>
           )}
@@ -235,7 +261,7 @@ export function MemberApplicationsPanel({ focusId }: { focusId?: string }) {
               {showEarlier && (
                 <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
                   {done.map((a) => (
-                    <ApplicationRow key={a.id} app={a} onOpen={() => setOpenId(a.id)} />
+                    <ApplicationRow key={a.id} app={a} facts={factsFor(a.id)} onOpen={() => setOpenId(a.id)} />
                   ))}
                 </div>
               )}
@@ -244,7 +270,7 @@ export function MemberApplicationsPanel({ focusId }: { focusId?: string }) {
         </>
       )}
       <FunnelCard />
-      <ApplicationSheet app={open} onClose={() => setOpenId(null)} />
+      <ApplicationSheet app={open} facts={open ? factsFor(open.id) : NO_FACTS} onClose={() => setOpenId(null)} />
     </div>
   );
 }
@@ -376,9 +402,11 @@ function Answer({ label, value }: { label: string; value: React.ReactNode }) {
 
 function ApplicationSheet({
   app,
+  facts = NO_FACTS,
   onClose,
 }: {
   app: MemberApplication | null;
+  facts?: ApplicantFacts;
   onClose: () => void;
 }) {
   const actions = useApplicationActions(app?.id ?? null);
@@ -423,6 +451,10 @@ function ApplicationSheet({
   const profile = instagramProfileUrl(app.instagram);
   const tel = dialable(app.phone);
   const stage = applicationStage(app);
+  const lifecycle = lifecycleStage(app, facts);
+  const concerns = applicantConcerns(app, facts);
+  const quick = applicantActions(app, facts);
+  const clientId = facts.clientId ?? app.client_id;
   const pending = app.status === "pending";
   const waitingToJoin = awaitingActivation(app);
   const markMessaged = () => {
@@ -482,7 +514,7 @@ function ApplicationSheet({
             <div className="min-w-0 flex-1">
               <SheetTitle className="flex items-center gap-2 text-[18px] font-semibold">
                 <span className="truncate">{app.full_name}</span>
-                <StageChip app={app} />
+                <StageChip app={app} facts={facts} />
               </SheetTitle>
               <SheetDescription className="text-[13px]">
                 Applied {ago(app.created_at)}
@@ -498,6 +530,42 @@ function ApplicationSheet({
         </SheetHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 pb-[max(env(safe-area-inset-bottom),1.25rem)]">
+          {/* Where they are on the path, read from what happened */}
+          <ol className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]" aria-label="Where they are" data-application-lifecycle={lifecycle}>
+            {LIFECYCLE.filter((st) => st.key !== "awaiting_payment" || lifecycle === "awaiting_payment").map((st) => {
+              const at = LIFECYCLE.findIndex((x) => x.key === lifecycle);
+              const idx = LIFECYCLE.findIndex((x) => x.key === st.key);
+              return (
+                <li
+                  key={st.key}
+                  aria-current={st.key === lifecycle ? "step" : undefined}
+                  className={cn(
+                    "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    st.key === lifecycle ? "bg-foreground text-background" : idx < at && lifecycle !== "archived" ? "bg-secondary text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {st.label}
+                </li>
+              );
+            })}
+          </ol>
+
+          {/* Cleo's read: what's missing and what to watch (code, from their answers and what happened) */}
+          {concerns.length > 0 && (
+            <div className="rounded-2xl border border-border bg-secondary/30 p-3" data-applicant-concerns>
+              <div className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5" /> Cleo's read
+              </div>
+              <ul className="list-disc space-y-0.5 pl-5 text-[14px] leading-5">
+                {concerns.map((c) => <li key={c}>{c}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Quick actions: only the ones that do something where they are
+              (Approve and Resend invitation are this sheet's own buttons below, once each) */}
+          <QuickActions app={app} first={first} clientId={clientId} quick={quick.filter((q) => q !== "approve" && q !== "resend")} />
+
           {/* Their answers */}
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
             <Answer label="Goal" value={goalLabelOf(app.goal)} />
@@ -925,5 +993,83 @@ function FunnelCard() {
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * One applicant's quick actions: Message (their Support chat in Messages),
+ * Review intake / Open client (their profile), Start onboarding (a setup
+ * reminder in their Support chat, sent by you), Archive. lifecycle.ts decides
+ * which apply; Approve and Resend invitation are the sheet's own buttons.
+ */
+function QuickActions({
+  app, first, clientId, quick,
+}: {
+  app: MemberApplication;
+  first: string;
+  clientId: string | null;
+  quick: ReturnType<typeof applicantActions>;
+}) {
+  const qc = useQueryClient();
+  const archive = useServerFn(archiveMemberApplication);
+  const reply = useServerFn(replyMemberSupport);
+  const [working, setWorking] = useState<string | null>(null);
+  const run = async (key: string, fn: () => Promise<unknown>, ok: string) => {
+    setWorking(key);
+    try {
+      await fn();
+      toast.success(ok);
+      await qc.invalidateQueries({ queryKey: MEMBER_APPLICATIONS_KEY });
+    } catch (e: any) {
+      toast.error(e?.message ?? "That didn't work. Try again.");
+    } finally {
+      setWorking(null);
+    }
+  };
+  if (!quick.length) return null;
+  const btn = "h-9 px-3 text-[13px]";
+  return (
+    <div className="flex flex-wrap gap-1.5" data-applicant-actions>
+      {quick.includes("message") && clientId && (
+        <Button asChild variant="secondary" className={btn} data-quick="message">
+          <Link to="/admin/communication" search={{ tab: "messages", client: clientId } as any}><MessageSquare className="mr-1.5 h-4 w-4" /> Message</Link>
+        </Button>
+      )}
+      {quick.includes("review_intake") && clientId && (
+        <Button asChild variant="secondary" className={btn} data-quick="review_intake">
+          <Link to="/admin/clients/$id" params={{ id: clientId }}><ClipboardList className="mr-1.5 h-4 w-4" /> Review intake</Link>
+        </Button>
+      )}
+      {quick.includes("start_onboarding") && clientId && (
+        <Button
+          variant="secondary"
+          className={btn}
+          disabled={working === "onboarding"}
+          onClick={() => void run(
+            "onboarding",
+            () => reply({ data: { clientId, body: `Hi ${first}! One quick step left to finish setting up: open the app and pick the days you train. It takes under a minute.` } }),
+            `Setup reminder sent to ${first} in their Support chat`,
+          )}
+          data-quick="start_onboarding"
+        >
+          <BellRing className="mr-1.5 h-4 w-4" /> Start onboarding
+        </Button>
+      )}
+      {quick.includes("archive") && (
+        <Button variant="ghost" className={btn} disabled={working === "archive"} onClick={() => void run("archive", () => archive({ data: { id: app.id, archived: true } }), "Archived. It's kept under Earlier.")} data-quick="archive">
+          <Archive className="mr-1.5 h-4 w-4" /> Archive
+        </Button>
+      )}
+      {quick.includes("unarchive") && (
+        <Button variant="ghost" className={btn} disabled={working === "archive"} onClick={() => void run("archive", () => archive({ data: { id: app.id, archived: false } }), "Back in your lists")} data-quick="unarchive">
+          <ArchiveRestore className="mr-1.5 h-4 w-4" /> Unarchive
+        </Button>
+      )}
+      {quick.includes("open_client") && clientId && (
+        <Button asChild variant="ghost" className={btn} data-quick="open_client">
+          <Link to="/admin/clients/$id" params={{ id: clientId }}><ExternalLink className="mr-1.5 h-4 w-4" /> Open client</Link>
+        </Button>
+      )}
+    </div>
   );
 }

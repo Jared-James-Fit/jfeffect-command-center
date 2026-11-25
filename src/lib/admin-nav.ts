@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, CreditCard, Package, Dumbbell, Calendar,
   Settings, Apple, MessageCircle, BookOpen,
-  Activity, Wrench, HelpCircle, Trophy, UsersRound, Target, Camera,
+  Activity, Wrench, Trophy, UsersRound, Target, Camera,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -54,7 +54,8 @@ export const clientBottomNav: NavItem[] = [
 
 // JF Membership (self-serve) in the portal: the same app as coaching clients,
 // minus the coach (Messages, Check-Ins, Agreements, Goals & Setup, Purchases),
-// plus what a member manages themselves: plans, support, their membership.
+// plus what a member manages themselves: plans, their membership. Their
+// Messages is JF Effect Support plus their own 1:1s and crews.
 export const selfServeNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
@@ -65,18 +66,20 @@ export const selfServeNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","community","members","posts"] },
   { to: "/challenges", label: "Challenges", icon: Trophy, keywords: ["challenge","competition","event","bench 225","leaderboard","compete","prize","winnipeg 225"] },
-  { to: "/portal/support", label: "Support", icon: HelpCircle, keywords: ["help","support","question","bug","contact"] },
+  // JF Effect Support is a chat in Messages (members have no coach chat; Support is theirs)
+  { to: "/portal/messages", label: "Messages", icon: MessageCircle, keywords: ["messages","chats","help","support","question","bug","contact","jf effect support"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/tools", label: "Tools", icon: Wrench, keywords: ["calculator","1rm","macro","plate","water","sleep"] },
   { to: "/portal/membership", label: "Membership", icon: CreditCard, keywords: ["billing","subscription","payment","cancel","hold","plan","upgrade"] },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
-// Members' bottom tabs: the clients' order, Support in Messages' place.
+// Members' bottom tabs: the clients' own. Messages holds JF Effect Support
+// (pinned first: members have no coach chat) and their 1:1s and crews.
 export const selfServeBottomNav: NavItem[] = [
   { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity, activeOn: WORKOUTS_AREA },
-  { to: "/portal/support", label: "Support", icon: HelpCircle },
+  { to: "/portal/messages", label: "Messages", icon: MessageCircle, activeOn: ["/portal/support"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];
