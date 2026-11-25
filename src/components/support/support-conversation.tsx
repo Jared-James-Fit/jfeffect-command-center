@@ -178,7 +178,7 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
               const mine = m.sender_role === "member";
               const cleo = m.sender_role === "cleo";
               const next = messages[i + 1];
-              const lastOfRun = !next || (next.sender_role === "member") !== mine
+              const lastOfRun = !next || next.sender_role !== m.sender_role
                 || new Date(next.created_at).getTime() - new Date(m.created_at).getTime() > 10 * 60_000;
               return (
                 <li key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")} data-support-message={mine ? "mine" : "theirs"}>

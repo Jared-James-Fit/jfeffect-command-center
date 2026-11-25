@@ -60,7 +60,7 @@ describe("the inbox explains itself", () => {
       if (f !== "Inbox") expect(FILTER_HELP[f as keyof typeof FILTER_HELP], f).toBeTruthy();
     }
     expect(page).toContain("data-filter-help={filter}");
-    expect(page).toContain("{filterHelp(filter, newChats)}");
+    expect(page).toContain("filterHelp(filter, newChats)}");
   });
 
   it("the Inbox line and chip carry the badge's number", () => {

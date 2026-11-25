@@ -32,6 +32,9 @@ describe("a member's Support chat is a row in the coach's 1:1 Chats", () => {
     expect(supportInFilter(open, "Archived")).toBe(false);
     expect(supportInFilter(done, "Inbox")).toBe(false);
     expect(supportInFilter(done, "Archived")).toBe(true);
+    // Cleo's chats are under Support → Cleo Handling, never in the Inbox
+    expect(supportInFilter(supportChat(row({ handler: "cleo" })), "Inbox")).toBe(false);
+    expect(supportChat(row({ last_body: "Try Account", last_sender_role: "cleo" })).preview).toBe("Cleo: Try Account");
     for (const f of ["Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions"]) expect(supportInFilter(open, f)).toBe(false);
   });
 

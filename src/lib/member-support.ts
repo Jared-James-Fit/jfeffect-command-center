@@ -5,6 +5,7 @@
  * side src/lib/member-support.functions.ts.
  */
 import { newestFirst, timeOf } from "@/lib/recency";
+import type { Escalation } from "@/lib/support-cleo/rules";
 
 /** One row of `staff_support_threads()`. */
 export type SupportThreadRow = {
@@ -22,6 +23,12 @@ export type SupportThreadRow = {
   last_sender_role: string | null;
   last_at: string | null;
   ticket_number: number | null;
+  /** Who answers it: Cleo first, or a person (20270527106100). Absent before that migration. */
+  handler?: string | null;
+  escalation?: Escalation | null;
+  escalated_at?: string | null;
+  owner_user_id?: string | null;
+  resolved_by?: string | null;
 };
 
 export type SupportChat = {
@@ -37,6 +44,11 @@ export type SupportChat = {
   done: boolean;
   /** The line under their name: a member's or a coaching client's Support chat. */
   line: string;
+  /** "cleo" or "human" (a person has it). */
+  handler: string | null;
+  escalation: Escalation | null;
+  lastSenderRole: string | null;
+  ownerUserId: string | null;
 };
 
 /** What a member's row says under their name. */
@@ -51,6 +63,7 @@ export function supportLineFor(tier: string | null | undefined): string {
 export function supportPreview(body: string | null | undefined, senderRole: string | null | undefined): string {
   const text = (body ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "";
+  if (senderRole === "cleo") return `Cleo: ${text}`;
   return senderRole && senderRole !== "member" ? `You: ${text}` : text;
 }
 
@@ -66,13 +79,22 @@ export function supportChat(r: SupportThreadRow): SupportChat {
     unread: Math.max(0, r.unread_count ?? 0),
     done: r.status === "closed",
     line: supportLineFor(r.service_tier),
+    handler: r.handler ?? null,
+    escalation: r.escalation ?? null,
+    lastSenderRole: r.last_sender_role ?? null,
+    ownerUserId: r.owner_user_id ?? null,
   };
 }
 
-/** Which inbox filters show a support chat: the Inbox while it's open, Archived once it's done. */
+/**
+ * Which inbox filters show a support chat: the Inbox while it's open and a
+ * person has it (Cleo's chats are only under Support → Cleo Handling, so they
+ * never clutter the Inbox), Archived once it's done. The Support filter has
+ * its own chips (support-cleo/queue.ts).
+ */
 export function supportInFilter(c: SupportChat, filter: string): boolean {
   if (filter === "Archived") return c.done;
-  if (filter === "Inbox") return !c.done;
+  if (filter === "Inbox") return !c.done && c.handler !== "cleo";
   return false;
 }
 

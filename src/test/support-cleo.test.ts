@@ -128,3 +128,34 @@ describe("Cleo support wiring", () => {
     expect(fns.slice(fns.indexOf("export const draftSupportReply"))).not.toContain("member_support_messages\").insert");
   });
 });
+
+describe("the coach's Support queue", () => {
+  it("Needs Me is a person's chat waiting on us; Cleo's chats sit apart and never count", async () => {
+    const { supportQueueState, inSupportQueue, supportQueueCounts, supportStateLine, SUPPORT_QUEUE_DEFAULT, SUPPORT_QUEUE_FILTERS } = await import("@/lib/support-cleo/queue");
+    expect(SUPPORT_QUEUE_DEFAULT).toBe("needs_me");
+    expect(SUPPORT_QUEUE_FILTERS.map(([, l]) => l)).toEqual(["Needs Me", "Unread", "Waiting on Member", "Cleo Handling", "Resolved", "All"]);
+    const c = (o: object) => ({ done: false, handler: "human", lastSenderRole: "member", unread: 0, ...o });
+    expect(supportQueueState(c({}))).toBe("needs_me");
+    // Cleo's hand-off message is ours to answer
+    expect(supportQueueState(c({ lastSenderRole: "cleo" }))).toBe("needs_me");
+    expect(supportQueueState(c({ lastSenderRole: "team" }))).toBe("waiting");
+    expect(supportQueueState(c({ handler: "cleo" }))).toBe("cleo");
+    expect(supportQueueState(c({ done: true, handler: "cleo" }))).toBe("resolved");
+    // a chat from before Cleo (no handler on record) is a person's
+    expect(supportQueueState(c({ handler: null }))).toBe("needs_me");
+    expect(inSupportQueue(c({ unread: 2 }), "unread")).toBe(true);
+    expect(inSupportQueue(c({ unread: 2, done: true }), "unread")).toBe(false);
+    const counts = supportQueueCounts([c({}), c({ handler: "cleo" }), c({ lastSenderRole: "team" }), c({ done: true }), c({ unread: 1 })]);
+    expect(counts).toEqual({ needs_me: 2, unread: 1, waiting: 1, cleo: 1, resolved: 1, all: 5 });
+    expect(supportStateLine({ ...c({}), escalation: { category: "billing", priority: "high" } as any })).toBe("Needs you · Billing or refund · High");
+    expect(supportStateLine(c({ handler: "cleo" }))).toBe("Cleo handling");
+  });
+
+  it("Cleo's chats stay out of the Inbox; the Support filter has its own chips", () => {
+    const page = read("src/route-pages/_authenticated/admin/messages.tsx");
+    expect(page).toContain('filter === "Support" ? inSupportQueue(c, supportQueue) : supportInFilter(c, filter)');
+    expect(page).toContain("SUPPORT_QUEUE_HELP[supportQueue]");
+    const pane = read("src/components/support/member-support-pane.tsx");
+    for (const t of ["Take over", "Return to Cleo", "Re-create", "Draft a reply", "Cleo's summary", "Next: "]) expect(pane).toContain(t);
+  });
+});

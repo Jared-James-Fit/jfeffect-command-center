@@ -70,6 +70,10 @@ import {
   mergeByRecency, sortSupportChats, supportChat, supportInFilter, supportMatches, supportNewChats,
   type SupportChat, type SupportThreadRow,
 } from "@/lib/member-support";
+import {
+  SUPPORT_QUEUE_DEFAULT, SUPPORT_QUEUE_FILTERS, SUPPORT_QUEUE_HELP, inSupportQueue, supportQueueCounts, supportStateLine,
+  type SupportQueueFilter,
+} from "@/lib/support-cleo/queue";
 
 type StaffInboxRow = {
   client_id: string;
@@ -160,7 +164,8 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
 // name, blue dot, the line under it), so they aren't filters; the Messages
 // tab's badge and the Inbox chip count new messages only (messagesBadge). Inbox is "everything"; Archived is the way back to archived
 // chats. Every chip but Inbox shows only while something's in it.
-const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;
+// Support: JF Effect Support as its own queue (Needs Me first), shown while anyone has written to Support.
+const FILTERS = ["Inbox", "Support", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 const FILTER_LABEL: Partial<Record<Filter, string>> = {
   Weekly: "Weekly check-ins",
@@ -179,7 +184,7 @@ const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));
  * Archived doesn't, so a number only ever means "this is waiting on you".
  */
 const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info">> = {
-  Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info", Program: "warn",
+  Support: "info", Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info", Program: "warn",
 };
 const BADGE_STYLE = {
   urgent: "bg-red-500 text-white",
@@ -210,6 +215,8 @@ function inFilter(it: FilterRow, filter: Filter): boolean {
     case "Weekly": case "Nutrition": case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions": case "Program":
       return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
     case "Archived": return status === "archived";
+    // Support's rows are Support chats only (supportQueue)
+    case "Support": return false;
     default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
   }
 }
@@ -234,6 +241,8 @@ export function MessagesInbox({
   const clientPov = useClientImpersonation();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("Inbox");
+  // Support's own chips: Needs Me first.
+  const [supportQueue, setSupportQueue] = useState<SupportQueueFilter>(SUPPORT_QUEUE_DEFAULT);
   const [briefFor, setBriefFor] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
@@ -717,8 +726,11 @@ export function MessagesInbox({
     // Support chats marked Done sit under Archived.
     const doneSupport = supportChats.filter((c) => c.done).length;
     if (doneSupport) counts.Archived = (counts.Archived ?? 0) + doneSupport;
+    // Support's number is the chats that need you (its chip shows while there's any Support chat).
+    counts.Support = supportQueueCounts(supportChats).needs_me;
     return counts;
   }, [allRows, supportChats]);
+  const supportCounts = useMemo(() => supportQueueCounts(supportChats), [supportChats]);
 
   // The Inbox chip's number: chats with a new message, the same chats and the
   // same number as the Messages tab's badge (messagesBadge).
@@ -730,8 +742,9 @@ export function MessagesInbox({
 
   // Members' Support chats this filter shows, then one list with the coach chats, newest first.
   const supportVisible = useMemo(
-    () => supportChats.filter((c) => supportMatches(c, search) && supportInFilter(c, filter)),
-    [supportChats, search, filter],
+    () => supportChats.filter((c) => supportMatches(c, search)
+      && (filter === "Support" ? inSupportQueue(c, supportQueue) : supportInFilter(c, filter))),
+    [supportChats, search, filter, supportQueue],
   );
   const listRows = useMemo(
     () => mergeByRecency(
@@ -802,7 +815,7 @@ export function MessagesInbox({
     setSupportId(null);
     navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
   };
-  const supportAction = async (threadId: string, patch: { status?: "open" | "closed"; read?: boolean }, ok: string) => {
+  const supportAction = async (threadId: string, patch: { status?: "open" | "closed"; read?: boolean; handler?: "cleo" | "human" }, ok: string) => {
     try {
       await updateSupport({ data: { threadId, ...patch } });
       SUPPORT_REFRESH_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [...k] }));
@@ -945,7 +958,7 @@ export function MessagesInbox({
             )}
           </div>
           <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => {
+            {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f || (f === "Support" && supportChats.length > 0)).map((f) => {
               const n = f === "Inbox" ? newChats : FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;
               const on = filter === f;
               const label = FILTER_LABEL[f] ?? f;
@@ -980,9 +993,34 @@ export function MessagesInbox({
               );
             })}
           </div>
+          {filter === "Support" && (
+            <div className="mt-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Support queue">
+              {SUPPORT_QUEUE_FILTERS.map(([key, label]) => {
+                const on = supportQueue === key;
+                const n = key === "needs_me" || key === "unread" ? supportCounts[key] : 0;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setSupportQueue(key)}
+                    data-support-queue={key}
+                    className={cn(
+                      "inline-flex h-7 shrink-0 items-center rounded-full border px-3 text-[13px] font-semibold transition",
+                      on ? "border-transparent bg-foreground text-background" : "border-border bg-background text-foreground hover:bg-secondary/60",
+                    )}
+                  >
+                    {label}
+                    {n > 0 && <span className="ml-1 tabular-nums opacity-80">{badgeNumber(n)}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* What the filter you're on shows, in a sentence (the ? has them all). */}
           <p className="mt-0.5 text-[13px] leading-[18px] text-muted-foreground" data-filter-help={filter}>
-            {filterHelp(filter, newChats)}
+            {filter === "Support" ? SUPPORT_QUEUE_HELP[supportQueue] : filterHelp(filter, newChats)}
           </p>
           {formFilterSummary && (
             <Link
@@ -1069,7 +1107,9 @@ export function MessagesInbox({
           ) : listRows.length === 0 && clientsState === "error" ? (
             <ErrorState error={clientsQ.error} what="your conversations" onRetry={() => clientsQ.refetch()} retrying={clientsQ.isFetching} className="m-4" />
           ) : listRows.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              {filter === "Support" && supportQueue === "needs_me" ? "Nothing needs you in Support. Cleo hands chats to you here." : "No conversations."}
+            </div>
           ) : listRows.map((row) => row.kind === "support" ? (
             <SupportChatRow
               key={`support:${row.item.threadId}`}
@@ -1418,9 +1458,10 @@ function SupportChatRow({
   chat: SupportChat;
   selected: boolean;
   onOpen: () => void;
-  onAction: (threadId: string, patch: { status?: "open" | "closed"; read?: boolean }, ok: string) => Promise<void>;
+  onAction: (threadId: string, patch: { status?: "open" | "closed"; read?: boolean; handler?: "cleo" | "human" }, ok: string) => Promise<void>;
 }) {
   const unread = chat.unread > 0;
+  const state = supportStateLine(chat);
   return (
     <SwipeableRow
       actions={[
@@ -1444,7 +1485,7 @@ function SupportChatRow({
               label: "Done",
               color: "primary" as const,
               icon: <Check className="h-4 w-4" />,
-              onSelect: () => onAction(chat.threadId, { status: "closed" }, "Done. It comes back if they write again."),
+              onSelect: () => onAction(chat.threadId, { status: "closed" }, "Resolved. If they write again, Cleo answers first."),
             },
       ]}
     >
@@ -1459,7 +1500,7 @@ function SupportChatRow({
         avatar={<UserAvatar src={chat.avatar} name={chat.name} size={CHAT_ROW_AVATAR} expandable={false} />}
         name={chat.name}
         preview={chat.preview || "New message"}
-        extra={<span className="mt-0.5 block truncate text-[13px] leading-[18px] text-muted-foreground" data-support-line>{chat.line}</span>}
+        extra={<span className="mt-0.5 block truncate text-[13px] leading-[18px] text-muted-foreground" data-support-line>{chat.line} · <span data-support-state>{state}</span></span>}
         label={`${chat.name}, Support chat${unread ? ", new message" : ""}`}
       />
     </SwipeableRow>
