@@ -30,7 +30,7 @@ import {
   BellRing,
   ClipboardList,
   ExternalLink,
-  Sparkles,
+  ListChecks,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -554,7 +554,7 @@ function ApplicationSheet({
           {concerns.length > 0 && (
             <div className="rounded-2xl border border-border bg-secondary/30 p-3" data-applicant-concerns>
               <div className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5" /> Cleo's read
+                <ListChecks className="h-3.5 w-3.5" /> Cleo's read
               </div>
               <ul className="list-disc space-y-0.5 pl-5 text-[14px] leading-5">
                 {concerns.map((c) => <li key={c}>{c}</li>)}

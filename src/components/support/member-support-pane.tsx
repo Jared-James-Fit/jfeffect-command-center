@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUp, Bot, ChevronLeft, Hand, Loader2, MoreHorizontal, RefreshCw, Sparkles, Wand2 } from "lucide-react";
+import { ArrowUp, ChevronLeft, Hand, Loader2, MessageCircle, MoreHorizontal, PenLine, RefreshCw, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { listenChannel } from "@/lib/realtime-channel";
@@ -216,7 +216,7 @@ export function MemberSupportPane({
               <div className="mx-auto mb-4 max-w-md rounded-2xl border border-border bg-card p-3 text-[14px] leading-5" data-support-escalation={escalation?.category ?? "cleo"}>
                 {cleoHasIt ? (
                   <div className="flex items-start gap-2">
-                    <Bot className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold">Cleo is handling this</div>
                       <p className="text-muted-foreground">Cleo answers from the help answers and hands it to you if it can't. You won't be notified unless it does.</p>
@@ -249,11 +249,11 @@ export function MemberSupportPane({
                   ) : (
                     <>
                       <Button size="sm" variant="secondary" className="h-8" onClick={() => void draft()} disabled={drafting} data-support-draft>
-                        {drafting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : drafted ? <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
+                        {drafting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : drafted ? <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> : <PenLine className="mr-1.5 h-3.5 w-3.5" />}
                         {drafted ? "Re-create" : "Draft a reply"}
                       </Button>
                       <Button size="sm" variant="ghost" className="h-8" onClick={() => change({ handler: "cleo" }, "Back with Cleo. It answers their next message.")} data-support-return>
-                        <Bot className="mr-1.5 h-3.5 w-3.5" /> Return to Cleo
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Return to Cleo
                       </Button>
                     </>
                   )}
@@ -263,7 +263,7 @@ export function MemberSupportPane({
             {thread && !done && !escalation && !cleoHasIt && state === "needs_me" && (
               <div className="mx-auto mb-4 flex max-w-md justify-center">
                 <Button size="sm" variant="secondary" className="h-8" onClick={() => void draft()} disabled={drafting} data-support-draft>
-                  {drafting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : drafted ? <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
+                  {drafting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : drafted ? <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> : <PenLine className="mr-1.5 h-3.5 w-3.5" />}
                   {drafted ? "Re-create" : "Draft a reply"}
                 </Button>
               </div>
@@ -294,7 +294,7 @@ export function MemberSupportPane({
                       </div>
                       {lastOfRun && (
                         <div className={cn("mt-0.5 flex items-center gap-1 px-1 text-[11px] text-muted-foreground", mine && "justify-end")}>
-                          {cleo && <Sparkles className="h-3 w-3" aria-hidden />}
+                          {cleo && <MessageCircle className="h-3 w-3" aria-hidden />}
                           {m.pending ? "Sending…" : `${cleo ? `${CLEO_SUPPORT_LABEL} · ` : ""}${timeLabel(m.created_at)}`}
                           {mine && !m.pending && m.read_at && i === messages.length - 1 ? " · Seen" : ""}
                         </div>

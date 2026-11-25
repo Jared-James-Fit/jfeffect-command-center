@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { ArrowUp, ChevronLeft, LifeBuoy, Loader2, Sparkles, UserRound } from "lucide-react";
+import { ArrowUp, ChevronLeft, LifeBuoy, Loader2, MessageCircle, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { askForPerson, getMemberSupport, getMySupportThread, markMyThreadRead, sendSupportMessage } from "@/lib/member-support.functions";
@@ -196,7 +196,7 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
                     </div>
                     {lastOfRun && (
                       <div className={cn("mt-0.5 flex items-center gap-1 px-1 text-[11px] text-muted-foreground", mine && "justify-end")}>
-                        {cleo && <Sparkles className="h-3 w-3" aria-hidden />}
+                        {cleo && <MessageCircle className="h-3 w-3" aria-hidden />}
                         {m.pending ? "Sending…" : `${mine ? "" : cleo ? `${CLEO_SUPPORT_LABEL} · ` : "JF Effect · "}${timeLabel(m.created_at)}`}
                         {!m.pending && seen && seen.id === m.id ? " · Seen" : ""}
                       </div>
@@ -209,7 +209,7 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
         )}
         {busy && cleoFirst && !previewing && (
           <div className="mt-1 flex items-center gap-1.5 px-1 text-[13px] text-muted-foreground" data-support-cleo-typing>
-            <Sparkles className="h-3.5 w-3.5" aria-hidden /> Cleo is typing…
+            <MessageCircle className="h-3.5 w-3.5" aria-hidden /> Cleo is typing…
           </div>
         )}
         <div ref={endRef} />

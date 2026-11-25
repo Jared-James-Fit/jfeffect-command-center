@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, ChevronRight, LifeBuoy, PlayCircle, Search, Sparkles } from "lucide-react";
+import { Check, ChevronRight, LifeBuoy, ListChecks, PlayCircle, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -189,12 +189,12 @@ export function HelpTutorialsHub() {
       <section className="grid gap-2">
         {setupOpen && (
           <Button variant="secondary" className="justify-start" onClick={() => setWizard(true)} data-help-resume-setup>
-            <Sparkles className="mr-2 h-4 w-4" /> Finish setting up
+            <ListChecks className="mr-2 h-4 w-4" /> Finish setting up
           </Button>
         )}
         {tier === "coaching" && (
           <Button asChild variant="secondary" className="justify-start" data-help-resume-setup>
-            <Link to="/portal/goals-setup"><Sparkles className="mr-2 h-4 w-4" /> Goals & Setup</Link>
+            <Link to="/portal/goals-setup"><ListChecks className="mr-2 h-4 w-4" /> Goals & Setup</Link>
           </Button>
         )}
         <Button asChild variant="secondary" className="justify-start" data-help-ask-cleo>
