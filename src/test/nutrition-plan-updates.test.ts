@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+// the client's permission to send their data to AI services (src/lib/ai-consent): allowed unless a test says not
+const consent = vi.hoisted(() => ({ ok: true }));
+vi.mock("@/lib/ai-consent/consent.server", () => ({ clientAllowsAi: async () => ({ ok: consent.ok, name: "Sam" }) }));
 import { readFileSync } from "node:fs";
 import {
   MEAL_PLAN_PROMPT,
@@ -66,6 +69,19 @@ describe("coach updates to a written nutrition plan", () => {
     let threw = false;
     await queueNutritionRevision(empty.sb, SUB, "anything").catch(() => (threw = true));
     expect(threw).toBe(true);
+  });
+
+  it("a client who hasn't allowed AI processing gets no draft, and the coach reads why", async () => {
+    const { sb, plan } = db({ status: "pending", meal_plan_text: "x", revise_instructions: "4 meals", revisions: [{ at: OLD, instructions: "a" }] });
+    consent.ok = false;
+    try {
+      const r = await queueNutritionPlan(sb, SUB, { fresh: true });
+      expect(r.status).toBe("error");
+      expect(plan().status).toBe("error");
+      expect(String(plan().error)).toContain("Sam hasn't allowed");
+    } finally {
+      consent.ok = true;
+    }
   });
 
   it("a stuck update is re-queued as the same update; only Regenerate replaces it", async () => {

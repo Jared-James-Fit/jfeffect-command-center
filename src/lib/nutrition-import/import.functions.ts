@@ -138,6 +138,8 @@ export const startMealPlanImport = createServerFn({ method: "POST" })
     // AI: a member's is taken now and settled when the read finishes (given back if it fails); a coach's is never charged
     let useId: string | null = null;
     if (data.audience === "member") {
+      // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
+      await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(ctx.userId);
       const { data: use, error: useError } = await sb.rpc("ai_credits_use", { _user: ctx.userId, _feature: "nutrition_import", _ref: null });
       if (useError) throw new Error(`Couldn't check your credits: ${useError.message}`);
       if (!use?.ok) return { ok: false, reason: "out_of_credits", credits: (use?.state ?? null) as CreditState | null };
@@ -224,6 +226,8 @@ export const startMealPlanCreate = createServerFn({ method: "POST" })
     const sb = await admin();
     if ((await countToday(sb, ctx.userId, "create")) >= MEAL_DRAFTS_PER_DAY)
       return { ok: false, reason: "too_many", message: `That's ${MEAL_DRAFTS_PER_DAY} drafts today. Try again tomorrow.` };
+    // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(ctx.userId);
     const { data: use, error: useError } = await sb.rpc("ai_credits_use", { _user: ctx.userId, _feature: "nutrition_create", _ref: null });
     if (useError) throw new Error(`Couldn't check your credits: ${useError.message}`);
     if (!use?.ok) return { ok: false, reason: "out_of_credits", credits: (use?.state ?? null) as CreditState | null };
@@ -285,6 +289,8 @@ async function ownImport(sb: any, id: string, userId: string): Promise<OwnRow> {
 async function takeCredits(sb: any, imp: OwnRow, userId: string) {
   if (imp.audience !== "member") return { ok: true as const, useId: null };
   const feature = imp.kind === "create" ? "nutrition_create" : "nutrition_import";
+  // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
+  await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
   const { data: use, error } = await sb.rpc("ai_credits_use", { _user: userId, _feature: feature, _ref: `${feature}:${imp.id}` });
   if (error) throw new Error(`Couldn't check your credits: ${error.message}`);
   if (!use?.ok) return { ok: false as const, credits: (use?.state ?? null) as CreditState | null };

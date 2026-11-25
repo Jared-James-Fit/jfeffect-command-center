@@ -20,6 +20,7 @@ import { useWarmClientPages } from "@/lib/portal-page-queries";
 import { useCommunityActivity } from "@/lib/community.queries";
 import { AiCreditsReturn } from "@/components/ai-credits/ai-credits";
 import { MembershipPendingGate } from "@/components/member/membership-pending-gate";
+import { AiConsentPrompt } from "@/components/ai-consent/ai-consent";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
@@ -62,6 +63,8 @@ function PortalLayout() {
             <WeightUnitPrompt />
             {/* back from buying AI credits: add them now and say so */}
             <AiCreditsReturn />
+            {/* permission to send their data to AI services (OpenAI, Google), asked until answered */}
+            <AiConsentPrompt />
           </>
         )}
         {/* Previous month's League Recap — first week of each month, once. */}

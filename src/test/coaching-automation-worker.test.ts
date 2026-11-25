@@ -36,6 +36,8 @@ vi.mock("@/lib/ai/route-call.server", () => ({
   },
 }));
 vi.mock("@/lib/cleo-capabilities.server", () => ({ userHasFeature: async () => true }));
+// every client here has allowed AI processing (src/lib/ai-consent; the refusal is tested in ai-consent.test.ts)
+vi.mock("@/lib/ai-consent/consent.server", () => ({ requireClientAiConsent: async () => undefined, clientAllowsAi: async () => ({ ok: true, name: null }) }));
 vi.mock("@/lib/coach-voice.functions", () => ({ voicePromptForClient: async () => "HOW IT SOUNDS: Jared's voice" }));
 vi.mock("@/lib/push/push.server", () => ({ sendWebPushToUser: async (_a: any, _u: string, p: { title: string }) => void pushes.push(p.title) }));
 vi.mock("@/lib/push/message-push.server", () => ({ pushNewMessage: async () => undefined }));

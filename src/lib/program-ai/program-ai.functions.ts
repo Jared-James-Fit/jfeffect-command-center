@@ -44,6 +44,9 @@ export const askProgramAiFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const sb = context.supabase as any;
     await assertCanEdit(sb, context.userId, data.target);
+    // a client's program (or a template personalised for one) goes to OpenAI only with their permission (5.1.2(i))
+    const aboutClient = data.target.kind === "client" ? data.target.clientId : data.target.personalizeClientId ?? null;
+    if (aboutClient) await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(aboutClient);
     let parentId: string | null = null;
     if (data.threadId) {
       const { data: last } = await sb

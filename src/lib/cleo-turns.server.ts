@@ -537,6 +537,16 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
     await fail("That conversation is gone.");
     return { ok: false, status: "failed", reason: "no chat" };
   }
+  // A client's conversation sends their records to OpenAI: only with their permission (5.1.2(i),
+  // src/lib/ai-consent). Refused, the answer says why and nothing reaches the model.
+  if (chat.client_id) {
+    const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
+    const consent = await clientAllowsAi(chat.client_id);
+    if (!consent.ok) {
+      await fail(coachConsentMessage(consent.name));
+      return { ok: false, status: "failed", reason: "no AI consent" };
+    }
+  }
   let questionRow: ChatMessage | null = null;
   if (row.reply_to) {
     const { data } = await own.from("summer_messages").select(`${MESSAGE_COLS}`).eq("id", row.reply_to).maybeSingle();

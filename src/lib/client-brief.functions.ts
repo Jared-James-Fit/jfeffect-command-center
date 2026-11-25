@@ -104,6 +104,8 @@ export const getClientBriefAi = createServerFn({ method: "POST" })
       .maybeSingle();
     if (clientError) throw clientError;
     if (!client) throw new Error("Client not found");
+    // their messages go to OpenAI only with the client's permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(data.clientId);
     const firstName = (client.first_name || client.full_name || "Client").trim().split(/\s+/)[0];
 
     const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
