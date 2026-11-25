@@ -12,7 +12,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Loader2, Lock, Sparkles } from "lucide-react";
+import { ChevronDown, ListChecks, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -158,7 +158,7 @@ function AddContext({ clientId, hasRelationship, onSaved }: { clientId: string; 
     return (
       <div className="space-y-3 rounded-xl border border-border p-3" data-context-confirm>
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <Sparkles className="h-4 w-4" /> Cleo read this. Tick what's right.
+          <ListChecks className="h-4 w-4" /> Cleo read this. Tick what's right.
         </div>
         <ul className="space-y-2 text-sm">
           {result.profile.map((p) => (
@@ -211,7 +211,7 @@ function AddContext({ clientId, hasRelationship, onSaved }: { clientId: string; 
           Save as a note
         </Button>
         <Button type="button" size="sm" className="min-h-11" disabled={busy || text.trim().length < 2} onClick={() => read.mutate()}>
-          {read.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1 h-4 w-4" />}Read with Cleo
+          {read.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ListChecks className="mr-1 h-4 w-4" />}Read with Cleo
         </Button>
       </div>
     </div>
