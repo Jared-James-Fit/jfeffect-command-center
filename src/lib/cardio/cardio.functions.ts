@@ -93,6 +93,7 @@ export const askCardioCleoFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }): Promise<CardioProposal> => {
     await assertReach(context.supabase, context.userId, data.clientId);
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(data.clientId);
     const { askCardioCleo } = await import("@/lib/cardio/cleo.server");
     return askCardioCleo(await admin(), { ...data, userId: context.userId });
   });

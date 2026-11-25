@@ -982,6 +982,17 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
  * and offer Try again. The ai-health tick redoes failed recaps once AI answers again. Server only.
  */
 export async function recapCheckin(sb: any, row: any): Promise<{ status: "ready" | "failed"; failure: RecapFailure | null }> {
+  // The check-in and the client's records go to OpenAI only with their permission (5.1.2(i),
+  // src/lib/ai-consent): without it there's no recap, and the coach's card says why.
+  const { clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
+  const consent = await clientAllowsAi(row.client_id);
+  if (!consent.ok) {
+    const { coachConsentMessage } = await import("@/lib/ai-consent/consent");
+    const failure: RecapFailure = { kind: "consent", words: coachConsentMessage(consent.name) };
+    const patch = row.ai_status === "ready" ? { ai_error: failure.words } : { ai_status: "failed", ai_error: failure.words };
+    await sb.from("messenger_checkins").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", row.id);
+    return { status: "failed", failure };
+  }
   const taskType = row.task_type as MessengerCheckinTaskType;
   const { data: occurrence } = row.occurrence_id
     ? await sb.from("client_task_occurrences").select("due_local_date, client_tz").eq("id", row.occurrence_id).maybeSingle()

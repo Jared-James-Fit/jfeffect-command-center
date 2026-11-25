@@ -51,6 +51,7 @@ import { healthStoreProvider } from "@/platform/health";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DeactivateAccountPanel, DeleteAccountPanel, useLifecycleStatus } from "@/components/account/account-lifecycle";
+import { AiConsentPanel } from "@/components/ai-consent/ai-consent";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS, SOCIAL_PLATFORMS } from "@/lib/social-handles";
@@ -687,6 +688,14 @@ function AccountPage() {
                 <SectionErrorBoundary label="Legal & Safety">
                   <ClientLegalSafety bare />
                 </SectionErrorBoundary>
+              )}
+              {/* AI processing: the person's own permission (OpenAI, Google), so never in "View as client" */}
+              {!isImpersonating && (
+                <div className="mt-5 border-t border-border pt-5">
+                  <SectionErrorBoundary label="AI processing">
+                    <AiConsentPanel />
+                  </SectionErrorBoundary>
+                </div>
               )}
               <div className={cn(!isImpersonating && "mt-5 border-t border-border pt-5")} id="delete-account">
                 <DeleteAccountPanel />

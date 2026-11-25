@@ -72,6 +72,7 @@ import {
 import { isPlanMealLogged } from "@/lib/food-log-plan";
 import { FOOD_LOG_KEY, targetFromDashboard, useFoodLogDay, useFoodLogPlan, useLogFood, type MealToLog } from "./food-log-context";
 import { MACRO_COLOR } from "./macro-palette";
+import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
 
 const kcal = (v: number) => Math.round(v).toLocaleString("en-CA");
 const grams = (v: number) => `${Math.round(v)} g`;
@@ -527,7 +528,7 @@ function LogFoodSheet({
   onLogged: () => void;
 }) {
   const removePreset = usePovFn(useServerFn(deletePreset));
-  const parse = useServerFn(parseMealFromText);
+  const parse = useAiConsentAware(useServerFn(parseMealFromText));
   const qc = useQueryClient();
 
   const [quick, setQuick] = useState<MacroDraft>({ name: "", calories: "", protein: "", carbs: "", fat: "" });

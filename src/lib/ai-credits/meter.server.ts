@@ -11,9 +11,13 @@
  * can't both run on the last credit) and given back if the call throws, a
  * failed or unreadable answer included. The model, tokens and estimated
  * cost are kept on the use, so the coach sees what the AI really costs.
+ * Nothing runs without the person's permission to send their data to AI
+ * services (requireOwnAiConsent, src/lib/ai-consent): refused, it throws the
+ * consent error the app turns into the question (withAiConsent).
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { estimateCost, type ModelUsage } from "@/lib/ai/model-client.server";
+import { requireOwnAiConsent } from "@/lib/ai-consent/consent.server";
 import type { AiFeature, CreditState } from "./packs";
 
 type Run<T> = () => Promise<{ value: T; model?: string | null; usage?: ModelUsage | null }>;
@@ -63,6 +67,8 @@ export async function withAiCredits<T>(
   run: Run<T>,
   ref?: string,
 ): Promise<MeteredResult<T>> {
+  // their data goes to an outside AI service: only with their permission (5.1.2(i)), before any credit is taken
+  await requireOwnAiConsent(userId);
   const { data, error } = await (supabaseAdmin as any).rpc("ai_credits_use", {
     _user: userId,
     _feature: feature,

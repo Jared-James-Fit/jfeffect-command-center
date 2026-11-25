@@ -158,6 +158,28 @@ jobs:
           echo "✅ All placeholder web assets created"
 
 
+      # ── App privacy manifest (always) ───────────────────────────────────────
+      # Apple requires a PrivacyInfo.xcprivacy in the app at upload. `cap add ios`
+      # regenerates the project without one (and `rm -rf ios` above deletes
+      # anything kept under ios/), so the committed native/ios-app copy is put in
+      # the App folder and added to the App target's Resources here, every build,
+      # with the xcodeproj gem CocoaPods brought in. Checked in the built app below.
+      - name: Add the app privacy manifest
+        run: |
+          cp native/ios-app/PrivacyInfo.xcprivacy ios/App/App/PrivacyInfo.xcprivacy
+          plutil -lint ios/App/App/PrivacyInfo.xcprivacy
+          ruby -rxcodeproj -e '
+            project = Xcodeproj::Project.open("ios/App/App.xcodeproj")
+            target = project.targets.find { |t| t.name == "App" } or abort("App target not found")
+            group = project.main_group.children.find { |g| g.respond_to?(:path) && g.path == "App" } or abort("App group not found")
+            ref = group.files.find { |f| f.path == "PrivacyInfo.xcprivacy" } || group.new_reference("PrivacyInfo.xcprivacy")
+            unless target.resources_build_phase.files_references.include?(ref)
+              target.resources_build_phase.add_file_reference(ref, true)
+            end
+            project.save
+            puts "✅ PrivacyInfo.xcprivacy in the App target resources"
+          '
+
       - name: Patch Info.plist for encryption compliance
         run: |
           # Add ITSAppUsesNonExemptEncryption=false to avoid App Store compliance questions
@@ -315,7 +337,8 @@ jobs:
           with open(info, "rb") as f:
               pl = plistlib.load(f)
           pl["NSHealthShareUsageDescription"] = "JF Effect reads your sleep, heart rate, HRV, steps and active energy so your coach can program around your recovery."
-          pl["NSHealthUpdateUsageDescription"] = "JF Effect does not write to Apple Health. This permission is listed because the health library supports it."
+          # The app only reads; the health library links Apple Health's write calls, so the key must exist.
+          pl["NSHealthUpdateUsageDescription"] = "JF Effect doesn't save anything to Apple Health. It only reads the sleep, heart rate, HRV, steps and active energy you choose to share, so your coach can plan around your recovery."
           # (camera / microphone / photos are set for every build in their own step)
           with open(info, "wb") as f:
               plistlib.dump(pl, f)
@@ -479,6 +502,10 @@ jobs:
           grep -q '"JfPhotosPlugin"' "$APP/capacitor.config.json" || { echo "::error::JfPhotosPlugin is not on the app's plugin list"; exit 1; }
           ls -d "$APP/Frameworks/JfPhotos.framework" >/dev/null 2>&1 || { echo "::error::JfPhotos.framework is not in the app"; exit 1; }
           echo "✅ Camera roll plugin linked"
+          # And the app's own privacy manifest (Apple rejects an upload without one).
+          [ -f "$APP/PrivacyInfo.xcprivacy" ] || { echo "::error::PrivacyInfo.xcprivacy is not in the built app"; exit 1; }
+          plutil -lint "$APP/PrivacyInfo.xcprivacy" || { echo "::error::The built app's PrivacyInfo.xcprivacy isn't a valid plist"; exit 1; }
+          echo "✅ Privacy manifest in the app"
           # And that the iPhone app going to TestFlight is portrait only (Capacitor's
           # CAPBridgeViewController reads this list for supportedInterfaceOrientations).
           ORI=$(/usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations" "$APP/Info.plist" 2>/dev/null) || { echo "::error::UISupportedInterfaceOrientations is missing from the built app"; exit 1; }

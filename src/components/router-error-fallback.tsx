@@ -164,6 +164,9 @@ export function RouterErrorFallback({ error, reset }: Props) {
             ? "The page couldn't load. This is usually a temporary network hiccup."
             : "Please try again in a moment."}
         </p>
+        {/* The message, open, for a screenshot to support; the stack trace only in
+            development (it's already in the error report, `_stack`): code on screen reads
+            as an unfinished app to App Review (guideline 2.1). */}
         {error?.message && (
           <details open className="mt-3 rounded-md border border-border bg-muted/30 p-2 text-left text-[11px] text-muted-foreground">
             <summary className="cursor-pointer select-none font-medium">
@@ -171,7 +174,7 @@ export function RouterErrorFallback({ error, reset }: Props) {
             </summary>
             <pre className="mt-2 whitespace-pre-wrap break-words">
               {error.message}
-              {error.stack ? `\n\n${error.stack}` : ""}
+              {import.meta.env.DEV && error.stack ? `\n\n${error.stack}` : ""}
             </pre>
           </details>
         )}

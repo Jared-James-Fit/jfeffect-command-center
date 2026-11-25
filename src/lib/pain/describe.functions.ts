@@ -9,7 +9,8 @@
  * Never metered with AI credits on purpose: reporting pain must never cost
  * anything or stop because credits ran out. Held to 20 a login per 10
  * minutes and 60 a day each (`_challenge_rate_ok`, refused when it can't be
- * asked), and only for an athlete with an account or staff. Nothing is stored here:
+ * asked), and only for an athlete with an account or staff, who has allowed AI
+ * processing (src/lib/ai-consent; staff always). Nothing is stored here:
  * what they said reaches their review only once they confirm it there.
  */
 import { createServerFn } from "@tanstack/react-start";
@@ -55,6 +56,8 @@ export const readPainDescriptionFn = createServerFn({ method: "POST" })
     const { userId } = context as { userId: string };
     if (!(await mayReport((context as any).supabase, userId))) return { ok: false, reason: "unavailable" };
     if (await limited(userId, "pain_describe")) return { ok: false, reason: "busy" };
+    // the description goes to OpenAI only with their permission (5.1.2(i)); without it the app's own reading stands
+    if (!(await (await import("@/lib/ai-consent/consent.server")).userAllowsAi(userId))) return { ok: false, reason: "unavailable" };
     try {
       const { readDescription } = await import("@/lib/pain/describe.server");
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -79,6 +82,8 @@ export const transcribePainVoiceFn = createServerFn({ method: "POST" })
     const { userId } = context as { userId: string };
     if (!(await mayReport((context as any).supabase, userId))) return { ok: false, reason: "Voice is for reporting pain from your account." };
     if (await limited(userId, "pain_voice")) return { ok: false, reason: "That's a lot of recordings in a few minutes. Type it for now, or try again shortly." };
+    if (!(await (await import("@/lib/ai-consent/consent.server")).userAllowsAi(userId)))
+      return { ok: false, reason: "Voice is turned into text by OpenAI or Google, which you haven't allowed (Account → Privacy & data). Type it instead." };
     try {
       const { transcribePainAudio } = await import("@/lib/pain/describe.server");
       const r = await transcribePainAudio(data.audio, data.mime);

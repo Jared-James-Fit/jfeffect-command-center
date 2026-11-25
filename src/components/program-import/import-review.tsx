@@ -41,6 +41,7 @@ import type { ImportFlag } from "@/lib/program-import/types";
 import { useProgramEditor } from "@/components/athlete-programs/use-program-editor";
 import { tagLatestVersion } from "@/lib/program-history-queries";
 import { ProgramWorkbench, type WorkbenchReviewApi } from "@/components/athlete-programs/workbench/program-workbench";
+import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
 
 const COST = FEATURE_COSTS.program_import;
 
@@ -191,7 +192,7 @@ function Reading({ row }: { row: ImportRow }) {
 function Failed({ row }: { row: ImportRow }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const retry = useServerFn(retryProgramImport);
+  const retry = useAiConsentAware(useServerFn(retryProgramImport));
   const setCredits = useSetCreditState();
   const discard = useDiscard(row.id);
   const [busy, setBusy] = useState(false);
@@ -351,7 +352,7 @@ function NothingFound({ row }: { row: ImportRow }) {
 
 function useReread(row: ImportRow) {
   const qc = useQueryClient();
-  const reread = useServerFn(rereadProgramImport);
+  const reread = useAiConsentAware(useServerFn(rereadProgramImport));
   const setCredits = useSetCreditState();
   const [busy, setBusy] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);

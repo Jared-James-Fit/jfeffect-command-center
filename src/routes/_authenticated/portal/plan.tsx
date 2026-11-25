@@ -187,7 +187,7 @@ function PlanPage() {
             <PlanManager view={q.data} api={api} who="client" onChanged={refresh} />
             {native && (
               <p className="px-1 text-center text-[13px] text-muted-foreground" data-plan-native-note>
-                Upgrades are made on the web at jfeffect.com. Switching down, moving to the free app or keeping your plan works here.
+                Upgrades aren't available in the app. Switching down, moving to the free app or keeping your plan works here.
               </p>
             )}
           </>

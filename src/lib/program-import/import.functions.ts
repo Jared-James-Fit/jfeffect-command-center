@@ -107,6 +107,8 @@ export const startProgramImport = createServerFn({ method: "POST" })
     }
 
     // AI: taken now, settled when the read finishes (given back if it fails)
+    // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
     const { data: use, error: useError } = await sb.rpc("ai_credits_use", { _user: userId, _feature: "program_import", _ref: null });
     if (useError) throw new Error(`Couldn't check your credits: ${useError.message}`);
     if (!use?.ok) return { ok: false, reason: "out_of_credits", credits: (use?.state ?? null) as CreditState | null, partial: !!parsed && parsed.exercises > 0 };
@@ -145,6 +147,8 @@ export const retryProgramImport = createServerFn({ method: "POST" })
     const imp = await ownImport(sb, data.id, userId);
     if (imp.status !== "failed") return { ok: true as const };
     if (imp.files_deleted_at) return { ok: false as const, message: "Its file was deleted. Start a new import." };
+    // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
     const { data: use, error } = await sb.rpc("ai_credits_use", { _user: userId, _feature: "program_import", _ref: `program_import:${imp.id}` });
     if (error) throw new Error(`Couldn't check your credits: ${error.message}`);
     if (!use?.ok)
@@ -166,6 +170,8 @@ export const rereadProgramImport = createServerFn({ method: "POST" })
     const sb = supabaseAdmin as any;
     const imp = await ownImport(sb, data.id, userId);
     if (imp.status !== "ready" || imp.method !== "parsed") return { ok: false as const, message: "This import can't be read again." };
+    // what they sent goes to OpenAI: only with their permission (5.1.2(i), src/lib/ai-consent)
+    await (await import("@/lib/ai-consent/consent.server")).requireOwnAiConsent(userId);
     const { data: use, error } = await sb.rpc("ai_credits_use", { _user: userId, _feature: "program_import", _ref: `program_import:${imp.id}` });
     if (error) throw new Error(`Couldn't check your credits: ${error.message}`);
     if (!use?.ok)

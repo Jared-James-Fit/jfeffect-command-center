@@ -17,6 +17,7 @@ import { importKeys } from "@/lib/program-import/queries";
 import { OpenImports } from "./open-imports";
 import { ImportSteps } from "./import-steps";
 import type { SourceDoc } from "@/lib/program-import/types";
+import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
 
 const COST = FEATURE_COSTS.program_import;
 const MAX_LOCAL_BYTES = 15 * 1024 * 1024;
@@ -76,7 +77,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const start = useServerFn(startProgramImport);
+  const start = useAiConsentAware(useServerFn(startProgramImport));
   const credits = useAiCredits();
   const setCredits = useSetCreditState();
 
