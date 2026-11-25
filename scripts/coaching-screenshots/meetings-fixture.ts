@@ -170,7 +170,7 @@ const rec = (id: string, area: string, kind: string, title: string, current: str
   current_text: current,
   proposed_text: proposed,
   reason,
-  evidence: quotes,
+  evidence: quotes.map((quote) => ({ quote })),
   benefit,
   tradeoffs,
   affects,

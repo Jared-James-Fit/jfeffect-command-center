@@ -30,6 +30,7 @@ import { handOffToCleo } from "@/lib/cleo-handoff";
 import { queueComposerInsert } from "@/lib/composer-insert";
 import { meetingsKey, sessionKey } from "./keys";
 import { isCoachConsentMessage } from "@/lib/ai-consent/consent";
+import { billingDay } from "@/lib/date-range";
 
 const AREA_WORDS: Record<string, string> = {
   training: "Training",
@@ -396,7 +397,7 @@ function ItemGroup({ title, items, hint }: { title: string; items: AnalysisItem[
               <span className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground">{BASIS_WORDS[i.basis]}</span>
               <span>
                 {i.text}
-                {i.due ? <span className="text-muted-foreground"> · by {i.due}</span> : null}
+                {i.due ? <span className="text-muted-foreground"> · by {billingDay(i.due)}</span> : null}
               </span>
             </div>
             <QuoteLine q={i.quote} speaker={i.speaker} />
@@ -448,7 +449,7 @@ function ProposedCommitments({ sessionId, items, refresh }: { sessionId: string;
           <p className="text-[14px]">
             <span className="text-muted-foreground">{c.owner === "athlete" ? "Them: " : "You: "}</span>
             {c.text}
-            {c.due_on ? <span className="text-muted-foreground"> · by {c.due_on}</span> : null}
+            {c.due_on ? <span className="text-muted-foreground"> · by {billingDay(c.due_on)}</span> : null}
           </p>
           {c.source_quote ? <QuoteLine q={c.source_quote} /> : null}
           <div className="mt-2 flex gap-2">

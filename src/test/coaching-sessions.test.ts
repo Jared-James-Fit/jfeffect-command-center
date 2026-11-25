@@ -258,7 +258,7 @@ describe("pre-call answers land where they belong", () => {
     });
     const going = prep.goingWell.map((i) => i.text);
     const theirs = prep.athleteNeeds.map((i) => i.text);
-    expect(going).toContain("Training feels good (their answer)");
+    expect(going).toContain("Training feels good");
     expect(theirs).toEqual([
       "Physically: something minor (Left knee achy after high-bar days)",
       "Coming up: Exams Monday and Wednesday",
@@ -266,7 +266,7 @@ describe("pre-call answers land where they belong", () => {
       "A successful meet looks like: Go 9 for 9",
     ]);
     expect(theirs.some((t) => /recovery|Mostly fine/i.test(t))).toBe(false);
-    expect(prep.coachNeeds.map((i) => i.text)).toContain("Registered for the meet: not yet (their answer)");
+    expect(prep.coachNeeds.map((i) => i.text)).toContain("Registered for the meet: not yet");
     // every line is the athlete's own, so the shared screen can show it
     expect(prep.athleteNeeds.every((i) => i.source === "athlete")).toBe(true);
   });
