@@ -11,7 +11,7 @@ import { RefreshCw } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, MonitorPlay, Plus, Send, X } from "lucide-react";
+import { Check, MonitorPlay, Plus, ScrollText, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -30,7 +30,7 @@ import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import { ANSWER_WORDS } from "@/lib/coaching-sessions/questionnaire";
 import { SessionAfter } from "./session-after";
 import { PresenterScript } from "./presenter-script";
-import { buildPresenterScript } from "@/lib/coaching-sessions/script";
+import { buildPresenterScript, openScriptWindow, scriptInputFrom } from "@/lib/coaching-sessions/script";
 import type { Agenda, PrepItem } from "@/lib/coaching-sessions/prepare";
 import { draftGamePlan, gamePlanMessage, type GamePlan } from "@/lib/coaching-sessions/presentation";
 import { meetingsKey, sessionKey } from "./keys";
@@ -139,19 +139,10 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
   });
 
-  const scriptSlides = useMemo(
-    () =>
-      buildPresenterScript({
-        agenda,
-        brief: s.write_up ?? null,
-        firstName: data.firstName ?? (data.clientName ? String(data.clientName).split(" ")[0] : null),
-        eventTitle: s.event?.title ?? null,
-        daysOut: s.event?.daysOut ?? null,
-        phase: s.event?.phase ?? null,
-        missing: s.prep?.missing ?? [],
-      }),
-    [agenda, s.write_up, s.event, s.prep, data.firstName, data.clientName],
-  );
+  const scriptSlides = useMemo(() => buildPresenterScript(scriptInputFrom(data)), [data]);
+  const openScript = () => {
+    if (!openScriptWindow(s.id)) toast.error("Your browser blocked the script window. Allow pop-ups for jfeffect.com and try again.");
+  };
 
   const present = () => {
     const url = `/admin/meetings/${s.id}/present`;
@@ -181,6 +172,11 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
             <Button onClick={present} data-present>
               <MonitorPlay className="mr-1.5 h-4 w-4" /> Present
             </Button>
+            {agenda ? (
+              <Button variant="outline" onClick={openScript} data-open-script>
+                <ScrollText className="mr-1.5 h-4 w-4" /> Script window
+              </Button>
+            ) : null}
             {s.status !== "done" ? (
               <Button
                 variant="outline"

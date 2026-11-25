@@ -128,6 +128,15 @@ export const getPresentationFn = createServerFn({ method: "POST" })
     return ops.getPresentation(callerOf(context), data);
   });
 
+/** The shared screen's pictures: the athlete's own records only (workouts, weigh-ins, records, the meet's date). */
+export const getPresentationVisualsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ sessionId: uuid }).parse(d))
+  .handler(async ({ data, context }) => {
+    const ops = await import("./sessions.ops.server");
+    return ops.getPresentationVisuals(callerOf(context), data);
+  });
+
 /* ------------------------------------------------------------------ */
 /* Before the call                                                     */
 

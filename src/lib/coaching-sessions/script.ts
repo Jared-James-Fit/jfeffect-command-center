@@ -128,7 +128,15 @@ export function buildPresenterScript(x: ScriptInput): ScriptSlide[] {
       pause = "Let them summarise their part in their own words. Add each one under commitments.";
     }
 
-    slides.push({ key: sec.key, title: sec.title, minutes: sec.minutes, say, ask, pause, transition });
+    // the same question from the brief and the defaults is asked once
+    const seen = new Set<string>();
+    const asks = ask.filter((q) => {
+      const k = q.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    slides.push({ key: sec.key, title: sec.title, minutes: sec.minutes, say, ask: asks, pause, transition });
   });
 
   return slides;
@@ -147,3 +155,31 @@ export function slideText(s: ScriptSlide): string {
 /** The channel the shared screen and the coach's script talk on (same browser, same origin). */
 export const presentChannel = (sessionId: string) => `jf-present-${sessionId}`;
 export type PresentMessage = { type: "slide"; index: number } | { type: "go"; index: number } | { type: "hello" };
+
+/**
+ * The coach's script in a window of its own (Nov 25 2026), so only the slides
+ * window is ever shared. Falls back to this tab when the browser blocks it.
+ */
+export function openScriptWindow(sessionId: string): boolean {
+  const url = `/admin/meetings/${sessionId}/script`;
+  const w = window.open(url, `jf-script-${sessionId}`, "popup,width=560,height=860");
+  if (w) {
+    w.opener = null;
+    return true;
+  }
+  return false;
+}
+
+/** The script's input from a session read (getSessionFn), the same for the sheet and the script window. */
+export function scriptInputFrom(data: any): ScriptInput {
+  const s = data?.session ?? {};
+  return {
+    agenda: s.agenda ?? null,
+    brief: s.write_up ?? null,
+    firstName: data?.firstName ?? (data?.clientName ? String(data.clientName).split(" ")[0] : null),
+    eventTitle: s.event?.title ?? null,
+    daysOut: s.event?.daysOut ?? null,
+    phase: s.event?.phase ?? null,
+    missing: s.prep?.missing ?? [],
+  };
+}

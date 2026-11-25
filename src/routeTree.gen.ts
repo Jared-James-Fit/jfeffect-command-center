@@ -334,6 +334,7 @@ import { Route as AuthenticatedAdminClientsIdScheduleRouteImport } from './route
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
 import { Route as AuthenticatedAdminMeetingsSessionIdPresentRouteImport } from './routes/_authenticated/admin/meetings.$sessionId.present'
+import { Route as AuthenticatedAdminMeetingsSessionIdScriptRouteImport } from './routes/_authenticated/admin/meetings.$sessionId.script'
 import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport } from './routes/_authenticated/admin/settings_.notifications.coaching-applications'
 import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
@@ -2213,6 +2214,12 @@ const AuthenticatedAdminMeetingsSessionIdPresentRoute =
     path: '/meetings/$sessionId/present',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMeetingsSessionIdScriptRoute =
+  AuthenticatedAdminMeetingsSessionIdScriptRouteImport.update({
+    id: '/meetings/$sessionId/script',
+    path: '/meetings/$sessionId/script',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute =
   AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport.update({
     id: '/review/$submissionId',
@@ -2569,6 +2576,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
+  '/admin/meetings/$sessionId/script': typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -2896,6 +2904,7 @@ export interface FileRoutesByTo {
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
+  '/admin/meetings/$sessionId/script': typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -3229,6 +3238,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/_authenticated/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
+  '/_authenticated/admin/meetings/$sessionId/script': typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
   '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/_authenticated/admin/settings_/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/_authenticated/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -3562,6 +3572,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
     | '/admin/meetings/$sessionId/present'
+    | '/admin/meetings/$sessionId/script'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
@@ -3889,6 +3900,7 @@ export interface FileRouteTypes {
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
     | '/admin/meetings/$sessionId/present'
+    | '/admin/meetings/$sessionId/script'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
@@ -4221,6 +4233,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/clients/$id/schedule'
     | '/_authenticated/admin/crm/contacts/$id'
     | '/_authenticated/admin/meetings/$sessionId/present'
+    | '/_authenticated/admin/meetings/$sessionId/script'
     | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
     | '/_authenticated/admin/settings_/notifications/coaching-applications'
     | '/_authenticated/m/forms/$assignmentId/complete'
@@ -6626,6 +6639,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMeetingsSessionIdPresentRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/meetings/$sessionId/script': {
+      id: '/_authenticated/admin/meetings/$sessionId/script'
+      path: '/meetings/$sessionId/script'
+      fullPath: '/admin/meetings/$sessionId/script'
+      preLoaderRoute: typeof AuthenticatedAdminMeetingsSessionIdScriptRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/nutrition-dashboard/review/$submissionId': {
       id: '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
       path: '/review/$submissionId'
@@ -6946,6 +6966,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientProgramsClientIdNextProgramRoute: typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
   AuthenticatedAdminMeetingsSessionIdPresentRoute: typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
+  AuthenticatedAdminMeetingsSessionIdScriptRoute: typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   AuthenticatedAdminChallengesIdIndexRoute: typeof AuthenticatedAdminChallengesIdIndexRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
@@ -7124,6 +7145,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
     AuthenticatedAdminMeetingsSessionIdPresentRoute:
       AuthenticatedAdminMeetingsSessionIdPresentRoute,
+    AuthenticatedAdminMeetingsSessionIdScriptRoute:
+      AuthenticatedAdminMeetingsSessionIdScriptRoute,
     AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
       AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,
     AuthenticatedAdminChallengesIdIndexRoute:
