@@ -175,10 +175,35 @@ export const saveCardioPlanFn = createServerFn({ method: "POST" })
     if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
     const s = await server();
     const loaded = await (await loader()).loadWeightManagement(context.supabase, data.clientId);
+    // The Cardio tab manages their cardio (it published what's in force or scheduled): the step goes on its
+    // draft for the coach to review and publish there, never straight onto the live plan beside its versions.
+    const { data: rows } = await context.supabase.from("cardio_targets").select("*").eq("client_id", data.clientId);
+    const { cardioTabOwns } = await import("@/lib/nutrition-cardio-sync");
+    if (cardioTabOwns((rows ?? []) as any[], loaded.assessment.today)) {
+      const { assertStaffReachesClient } = await import("@/lib/staff-client-access.server");
+      await assertStaffReachesClient(context.supabase, context.userId, data.clientId);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { loadCardioWorkspace } = await import("@/lib/cardio/workspace.server");
+      const { saveCardioDraft } = await import("@/lib/cardio/publish.server");
+      const { withWeightStep } = await import("@/lib/cardio/plan");
+      const view = await loadCardioWorkspace(supabaseAdmin, data.clientId);
+      const base = view.draft?.plan ?? view.pending?.plan ?? view.live;
+      const next = withWeightStep(base, data.plan, view.ctx);
+      await saveCardioDraft(supabaseAdmin, {
+        clientId: data.clientId,
+        userId: context.userId,
+        sessions: next.sessions,
+        effectiveDate: view.draft?.effectiveDate ?? null,
+        note: "From the weight-management read",
+        baseHash: view.draft?.baseHash ?? view.baseHash,
+      });
+      await recordDecision(context, data.clientId, loaded.assessment, data.reviewId ?? null, "approved", [{ kind: "cardio_draft", plan: data.plan }], data.note ?? null);
+      return { ok: true, changed: 0, drafted: true };
+    }
     const treadmill = loaded.assessment.cardio.modality === "treadmill" || !!data.switchToTreadmill;
     const applied = await s.writeCardioPlan(context.supabase, { clientId: data.clientId, refs: loaded.refs, plan: data.plan, treadmill, today: loaded.assessment.today });
     await recordDecision(context, data.clientId, loaded.assessment, data.reviewId ?? null, "approved", applied, data.note ?? null);
-    return { ok: true, changed: applied.length };
+    return { ok: true, changed: applied.length, drafted: false };
   });
 
 /** The engine's water target (day off, and how much more a training day is), as the coach's. */

@@ -181,3 +181,19 @@ export function scaleToWeekly(plan: CardioPlan, ctx: PlanContext, target: number
     sessions: plan.sessions.map((s) => (s.enabled ? { ...s, minutes: Math.max(5, Math.round((s.minutes * f) / 5) * 5) } : s)),
   };
 }
+
+/**
+ * A logged session's details, only what they logged (speed is stored in mph, like the plan; distance in its
+ * own unit) and an energy number marked as an estimate.
+ */
+export function loggedDetails(s: { minutes: number | null; rpe: number | null; heartRate: number | null; incline: number | null; speed: number | null; distance: number | null; distanceUnit: string | null; calories: number | null }): string[] {
+  return [
+    s.minutes != null ? `${s.minutes} min` : null,
+    s.rpe != null ? `RPE ${s.rpe}` : null,
+    s.heartRate != null ? `avg ${s.heartRate} bpm` : null,
+    s.speed != null ? `${s.speed} mph` : null,
+    s.incline != null ? `${s.incline}%` : null,
+    s.distance != null ? `${s.distance} ${s.distanceUnit ?? "km"}` : null,
+    s.calories != null ? `~${s.calories} kcal (estimate)` : null,
+  ].filter((x): x is string => !!x);
+}

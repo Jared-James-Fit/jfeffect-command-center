@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { loggedDetails } from "@/lib/cardio/overview";
 import {
   cleanPlan,
   daysWords,
@@ -14,6 +15,7 @@ import {
   weekSchedule,
   weekdaysFor,
   withModality,
+  withWeightStep,
   type PlanContext,
 } from "@/lib/cardio/plan";
 import { modalityOf, netKcalPerMin } from "@/lib/cardio/modalities";
@@ -261,5 +263,45 @@ describe("cardio overview", () => {
     const scaled = scaleToWeekly({ sessions: [{ ...newSession("treadmill_incline", "non_training", ctx), minutes: 30 }] }, ctx, 60);
     expect(scaled.sessions[0].minutes).toBe(20);
     for (const t of CARDIO_TEMPLATES) expect(planProblems({ sessions: t.sessions(ctx) }, ctx).filter((p) => p.level === "error")).toEqual([]);
+  });
+});
+
+describe("a logged session's details", () => {
+  it("shows only what was logged, speed and distance included, and marks energy as an estimate", () => {
+    const none = { minutes: null, rpe: null, heartRate: null, incline: null, speed: null, distance: null, distanceUnit: null, calories: null };
+    expect(loggedDetails(none)).toEqual([]);
+    expect(loggedDetails({ ...none, minutes: 30, heartRate: 128, speed: 3.2, incline: 6, distance: 2.6, distanceUnit: "km", calories: 210 })).toEqual([
+      "30 min",
+      "avg 128 bpm",
+      "3.2 mph",
+      "6%",
+      "2.6 km",
+      "~210 kcal (estimate)",
+    ]);
+  });
+});
+
+describe("the weight-management step on a Cardio tab plan", () => {
+  it("changes the training-day and day-off sessions on the draft, adds a missing one as an incline walk, keeps the rest", () => {
+    const after = { ...newSession("treadmill_incline", "training", ctx), key: "t", minutes: 10 };
+    const bike = { ...newSession("bike", "weekdays", ctx), key: "b", weekdays: ["Saturday" as const] };
+    const next = withWeightStep(
+      { sessions: [after, bike] },
+      { trainingDay: { minutes: 15, speedMph: 3.1, inclinePct: 4, perWeek: 4, weekdays: [] }, restDay: { minutes: 30, speedMph: 3.2, inclinePct: 6, perWeek: 2, weekdays: ["Wednesday", "Sunday"] } },
+      ctx,
+    );
+    expect(next.sessions.map((s) => s.key).slice(0, 2)).toEqual(["t", "b"]);
+    expect(next.sessions[0]).toMatchObject({ minutes: 15, speedMinMph: 3.1, speedMaxMph: 3.1, incline: 4, days: "training" });
+    expect(next.sessions[1]).toEqual(bike);
+    expect(next.sessions[2]).toMatchObject({ modality: "treadmill_incline", days: "non_training", weekdays: ["Wednesday", "Sunday"], minutes: 30, incline: 6 });
+    expect(planProblems(next, ctx).filter((p) => p.level === "error")).toEqual([]);
+  });
+
+  it("takes off a session the step drops, and another kind keeps its own settings", () => {
+    const bikeOff = { ...newSession("bike", "non_training", ctx), key: "r" };
+    const after = { ...newSession("treadmill_incline", "training", ctx), key: "t" };
+    const next = withWeightStep({ sessions: [after, bikeOff] }, { trainingDay: null, restDay: { minutes: 40, speedMph: 3, inclinePct: 5, perWeek: 3, weekdays: ["Wednesday", "Saturday", "Sunday"] } }, ctx);
+    expect(next.sessions).toHaveLength(1);
+    expect(next.sessions[0]).toMatchObject({ key: "r", modality: "bike", minutes: 40, speedMinMph: bikeOff.speedMinMph, incline: bikeOff.incline });
   });
 });
