@@ -36,7 +36,7 @@ describe("viewing as a team member: the server refuses anything but reads", () =
 
   it("every server call carries the mark while previewing, and the guard runs on all of them", () => {
     const start = read("src/start.ts");
-    expect(start).toContain("functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard]");
+    expect(start).toContain("functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, nativeAppMark]");
     expect(start).toContain("getTeamPreview() ? { [PREVIEW_HEADER]: \"1\" } : {}");
     expect(start).toContain("!isPreviewSafeFn(serverFnMeta?.name)");
   });

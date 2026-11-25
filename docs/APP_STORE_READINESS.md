@@ -18,9 +18,10 @@ Guideline sources (read Nov 25 2026):
 Rejected for 2.3.8 (placeholder icons), 3.1.1 (purchase link-out to Safari via account
 registration) and 3.1.1 (digital content bought outside the app used in it, not offered as
 IAP). The first two are fixed in code (app_art.py and the icon checks in ios-build.yml;
-`src/lib/native-purchases.ts`, walked by `native-shell-routes.test.ts`). The third needs
-Jared's decision between in-app purchase and "digital paid tiers unavailable in the iOS app":
-**docs/APPLE_IAP_DECISION.md** (inventory, both options, recommendation). The build is now
+`src/lib/native-purchases.ts`, walked by `native-shell-routes.test.ts`). The third is fixed by
+option B, Jared's choice on Nov 25 2026: in the iOS app nothing digital bought outside the app is
+unlocked, and self-serve members get the free app while coaching clients keep everything
+(**docs/APPLE_IAP_DECISION.md**, section 5; `native-option-b.test.ts`). The build is now
 iPhone only unless `IOS_SUPPORT_IPAD` is "true".
 
 ## Score
@@ -30,7 +31,7 @@ every critical blocker is closed, and only with Jared's explicit approval.
 
 | Category | Score | Why |
 | --- | --- | --- |
-| Payments & business model (3.1.1, 3.1.3) | 14 / 20 | Nothing is sold or pointed to in the app (fixed today: three screens named jfeffect.com as the place to pay). 1:1 coaching fits 3.1.3(d), in-person training 3.1.3(e). Open: web-bought AI credit packs and any future paid membership are digital and used in the app (3.1.1 / 3.1.3(b)). |
+| Payments & business model (3.1.1, 3.1.3) | 14 / 20 | Nothing is sold or pointed to in the app (fixed today: three screens named jfeffect.com as the place to pay). 1:1 coaching fits 3.1.3(d), in-person training 3.1.3(e). Option B (Nov 25 2026): web-bought digital extras (credit packs, Premium, paid membership access) are neither shown nor usable in the app for self-serve members, enforced on the server too. |
 | Privacy & data (5.1.1, 5.1.2, 5.1.3) | 14 / 20 | Built today: explicit, server-enforced, revocable consent before data goes to OpenAI / Google; privacy manifest now actually in the build. Already there: in-app account deletion. Open: migration not applied yet, privacy policy must name the AI providers, some coach-side AI paths not yet gated. |
 | Minimum functionality / native value (4.2, 2.5.2, 2.5.19) | 8 / 15 | The app is the live website in a web view. Native parts: its own camera-roll plugin, camera and microphone, Apple Health (off by default), portrait lock. No native push, no offline screen. Website changes reach the app without review. |
 | User-generated content & safety (1.2, 1.2.1(a), 1.4.1) | 8 / 10 | Built today: a server-side word filter on every Crew post, story, comment, bio and message request; Report on every post, story, comment and profile with Block in the same sheet; auto-hide after 3 reports; a staff queue with Remove / Keep / Warn / Suspend and a 24-hour clock; one-time Community rules; contact email in Help; blocks now also hide comments, opened posts and Rankings. Membership is approval-gated. Open: migration not applied yet, photos and clips are report-based (no image screening), no declared-age gate. |
@@ -152,14 +153,16 @@ secret.
 product (paid membership, credit packs) is bought on the website only; there is no in-app purchase
 in the launch version. The iPhone app (the Capacitor shell, `isNative()`) never shows a purchase
 button, a price or a link to buy it, and never says where else to buy. Someone who already has
-Premium (a complimentary grant today, a web purchase later) uses it normally in the app, which has
-no platform check on Premium's screens. Enforced by `src/lib/native-purchases.ts` (tested in
+Premium, credits or a paid membership gets the free app in iOS unless they're a coaching client
+or staff (option B, below). Enforced by `src/lib/native-purchases.ts` (tested in
 `native-purchases.test.ts`): Your plan lists no plan that needs a purchase and prints no price for
 one the person isn't on (the refusal reads "Not available in the app", no longer "Upgrade on the
 web at jfeffect.com"), Crew promos that point at a sales page are not shown in the app, and the
 locked-feature card and credit packs already say it isn't available. App Review raised it
-(build 35's second 3.1.1 finding): a holder who bought on the web uses it in the app. Decision
-pending: docs/APPLE_IAP_DECISION.md. Since that rejection the app also opens no sales, pricing,
+(build 35's second 3.1.1 finding): a holder who bought on the web used it in the app. Jared chose
+option B: `digitalPaidAllowed` (native-purchases.ts) keeps Premium, paid access keys and bought
+credits off for self-serve members in the app, on the screens and on the server
+(docs/APPLE_IAP_DECISION.md, section 5). Since that rejection the app also opens no sales, pricing,
 checkout or billing page at all and says nothing about buying (native-purchases.ts).
 
 Table below: the mapping as analysed before the decision (rows for membership, credit packs and
@@ -171,7 +174,7 @@ paid programs are now "web only, hidden in the app").
 | In-person personal training packages (Selkirk) | 3.1.3(e) Goods and Services Outside of the App: must NOT use in-app purchase | Not sold in the app | Keep Stripe. Could even be sold in the app later with Apple Pay / card entry, no IAP. |
 | 1:1 calls (General Call, Discovery Call) | 3.1.3(d) | Booked on the web | Keep as is. |
 | Self-serve paid membership (`membership` package kind; none sold yet) | 3.1.1: unlocking features or content needs in-app purchase; 3.1.3(b) lets web purchases be used in the app only if also offered as IAP | Not sold | Before selling it to anyone who uses the iPhone app: add it as an auto-renewable IAP at the same price (Apple Small Business Program: 15%), or keep it web-only and accept rejection risk. Decision for Jared. |
-| AI credit packs (100 / 300 / 1,000, web only) | 3.1.1 consumables; 3.1.3(b) | Not sold in the app ("Purchases aren't available in the app"); web-bought credits work in the app | Lowest effort: leave as is (risk is App Review noticing extra credits used in the app). Compliant: add consumable IAPs for the packs on iOS. Decision for Jared. |
+| AI credit packs (100 / 300 / 1,000, web only) | 3.1.1 consumables; 3.1.3(b) | Not sold in the app; a self-serve member in the app spends and sees only the month's free credits (option B) | Done: option B. Consumable IAPs only if in-app sales are wanted later (option A). |
 | Coach platform subscription for independent coaches (decided, not built) | B2B; closest fit 3.1.3(c) is for organisations' employees, so not a clean fit | Not built | Sell on the web only; the app stays a free client with no purchase or mention of price. Re-check before launch. |
 | Paid programs or plans as digital products (if ever sold) | 3.1.1 | None sold | IAP, or web-only and not unlockable in the iOS app. |
 

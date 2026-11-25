@@ -56,13 +56,14 @@ describe("AI consent is enforced on the server before data reaches a model", () 
   it("the metered features (meal estimates) check it before taking a credit", () => {
     const s = src("src/lib/ai-credits/meter.server.ts");
     expect(s.indexOf("requireOwnAiConsent(userId)")).toBeGreaterThan(-1);
-    expect(s.indexOf("requireOwnAiConsent(userId)")).toBeLessThan(s.indexOf('rpc("ai_credits_use"'));
+    // every credit is taken by spendAiCredits (option B's native check, native-purchases.ts)
+    expect(s.indexOf("requireOwnAiConsent(userId)")).toBeLessThan(s.indexOf("await spendAiCredits(userId, feature, ref, allowed)"));
   });
 
   it("imports check it before every credit they take", () => {
     for (const p of ["src/lib/program-import/import.functions.ts", "src/lib/nutrition-import/import.functions.ts"]) {
       const s = src(p);
-      const uses = s.split('rpc("ai_credits_use"').length - 1;
+      const uses = s.split(".spendAiCredits(").length - 1;
       expect(uses).toBeGreaterThan(0);
       expect(s.split("requireOwnAiConsent(").length - 1).toBe(uses);
     }

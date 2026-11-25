@@ -1,7 +1,9 @@
 /**
  * Premium (premium.ts): whether the signed-in person has it, the admin's
- * complimentary grant, and the Cleo inbox. No purchase path: Premium is sold
- * only once the App Store decision is made.
+ * complimentary grant, and the Cleo inbox. No purchase path in the app. In the
+ * iPhone app a self-serve member never has Premium, whatever they hold
+ * (option B, native-purchases.ts: nothing digital bought outside the app is
+ * unlocked in it); coaching clients and staff keep it, the web is unchanged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -13,11 +15,18 @@ async function assertAdmin(supabase: any, userId: string) {
   if (!data) throw new Error("Only the owner can grant Premium.");
 }
 
+/** Option B: Premium is off for a self-serve member's requests from the iPhone app. */
+async function premiumAllowedHere(userId: string): Promise<boolean> {
+  const { digitalPaidAllowedFor } = await import("@/lib/native-purchases.server");
+  return digitalPaidAllowedFor(userId);
+}
+
 /** The signed-in person's own Premium (my_premium(): never anyone else's). */
 export const getMyPremium = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ premium: boolean }> => {
-    const { supabase } = context as any;
+    const { supabase, userId } = context as any;
+    if (!(await premiumAllowedHere(userId))) return { premium: false };
     const { data, error } = await supabase.rpc("my_premium");
     if (error) return { premium: false };
     return { premium: data === true };
@@ -61,6 +70,7 @@ export const listMyCleoInbox = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ premium: boolean; items: CleoInboxItem[] }> => {
     const { supabase, userId } = context as any;
+    if (!(await premiumAllowedHere(userId))) return { premium: false, items: [] };
     const { data: premium } = await supabase.rpc("my_premium");
     if (premium !== true) return { premium: false, items: [] };
     const { data, error } = await supabase
