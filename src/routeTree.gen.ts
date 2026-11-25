@@ -28,10 +28,10 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SelkirkRouteImport } from './routes/selkirk'
-import { Route as SupportRouteImport } from './routes/support'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as WelcomeRouteImport } from './routes/welcome'
@@ -334,8 +334,10 @@ import { Route as AuthenticatedAdminClientsIdProgressRouteImport } from './route
 import { Route as AuthenticatedAdminClientsIdScheduleRouteImport } from './routes/_authenticated/admin/clients.$id.schedule'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
 import { Route as AuthenticatedAdminCrmContactsIdRouteImport } from './routes/_authenticated/admin/crm.contacts.$id'
+import { Route as AuthenticatedAdminMeetingsSessionIdIndexRouteImport } from './routes/_authenticated/admin/meetings.$sessionId.index'
 import { Route as AuthenticatedAdminMeetingsSessionIdPresentRouteImport } from './routes/_authenticated/admin/meetings.$sessionId.present'
 import { Route as AuthenticatedAdminMeetingsSessionIdScriptRouteImport } from './routes/_authenticated/admin/meetings.$sessionId.script'
+import { Route as AuthenticatedAdminMeetingsByBookingPtSessionIdRouteImport } from './routes/_authenticated/admin/meetings.by-booking.$ptSessionId'
 import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImport } from './routes/_authenticated/admin/nutrition-dashboard.review.$submissionId'
 import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport } from './routes/_authenticated/admin/settings_.notifications.coaching-applications'
 import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
@@ -436,11 +438,6 @@ const SelkirkRoute = SelkirkRouteImport.update({
   path: '/selkirk',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SupportRoute = SupportRouteImport.update({
-  id: '/support',
-  path: '/support',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -454,6 +451,11 @@ const SitemapRoute = SitemapRouteImport.update({
 const StaffSetupRoute = StaffSetupRouteImport.update({
   id: '/staff-setup',
   path: '/staff-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -2214,6 +2216,12 @@ const AuthenticatedAdminCrmContactsIdRoute =
     path: '/crm/contacts/$id',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminMeetingsSessionIdIndexRoute =
+  AuthenticatedAdminMeetingsSessionIdIndexRouteImport.update({
+    id: '/meetings/$sessionId/',
+    path: '/meetings/$sessionId/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMeetingsSessionIdPresentRoute =
   AuthenticatedAdminMeetingsSessionIdPresentRouteImport.update({
     id: '/meetings/$sessionId/present',
@@ -2224,6 +2232,12 @@ const AuthenticatedAdminMeetingsSessionIdScriptRoute =
   AuthenticatedAdminMeetingsSessionIdScriptRouteImport.update({
     id: '/meetings/$sessionId/script',
     path: '/meetings/$sessionId/script',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminMeetingsByBookingPtSessionIdRoute =
+  AuthenticatedAdminMeetingsByBookingPtSessionIdRouteImport.update({
+    id: '/meetings/by-booking/$ptSessionId',
+    path: '/meetings/by-booking/$ptSessionId',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute =
@@ -2278,10 +2292,10 @@ export interface FileRoutesByFullPath {
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/selkirk': typeof SelkirkRoute
-  '/support': typeof SupportRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/welcome': typeof WelcomeRoute
@@ -2584,6 +2598,7 @@ export interface FileRoutesByFullPath {
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   '/admin/meetings/$sessionId/script': typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
+  '/admin/meetings/by-booking/$ptSessionId': typeof AuthenticatedAdminMeetingsByBookingPtSessionIdRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -2591,6 +2606,7 @@ export interface FileRoutesByFullPath {
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/challenges/$id/': typeof AuthenticatedAdminChallengesIdIndexRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
+  '/admin/meetings/$sessionId/': typeof AuthenticatedAdminMeetingsSessionIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -2611,10 +2627,10 @@ export interface FileRoutesByTo {
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/selkirk': typeof SelkirkRoute
-  '/support': typeof SupportRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/welcome': typeof WelcomeRoute
@@ -2913,6 +2929,7 @@ export interface FileRoutesByTo {
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   '/admin/meetings/$sessionId/script': typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
+  '/admin/meetings/by-booking/$ptSessionId': typeof AuthenticatedAdminMeetingsByBookingPtSessionIdRoute
   '/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -2920,6 +2937,7 @@ export interface FileRoutesByTo {
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdIndexRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
+  '/admin/meetings/$sessionId': typeof AuthenticatedAdminMeetingsSessionIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -2942,10 +2960,10 @@ export interface FileRoutesById {
   '/recover': typeof RecoverRoute
   '/reset-password': typeof ResetPasswordRoute
   '/selkirk': typeof SelkirkRoute
-  '/support': typeof SupportRoute
   '/setup': typeof SetupRoute
   '/sitemap': typeof SitemapRoute
   '/staff-setup': typeof StaffSetupRoute
+  '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/welcome': typeof WelcomeRoute
@@ -3248,6 +3266,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
   '/_authenticated/admin/meetings/$sessionId/present': typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   '/_authenticated/admin/meetings/$sessionId/script': typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
+  '/_authenticated/admin/meetings/by-booking/$ptSessionId': typeof AuthenticatedAdminMeetingsByBookingPtSessionIdRoute
   '/_authenticated/admin/nutrition-dashboard/review/$submissionId': typeof AuthenticatedAdminNutritionDashboardReviewSubmissionIdRoute
   '/_authenticated/admin/settings_/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/_authenticated/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
@@ -3255,6 +3274,7 @@ export interface FileRoutesById {
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/_authenticated/admin/challenges/$id/': typeof AuthenticatedAdminChallengesIdIndexRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
+  '/_authenticated/admin/meetings/$sessionId/': typeof AuthenticatedAdminMeetingsSessionIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -3277,10 +3297,10 @@ export interface FileRouteTypes {
     | '/recover'
     | '/reset-password'
     | '/selkirk'
-    | '/support'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/support'
     | '/terms'
     | '/unsubscribe'
     | '/welcome'
@@ -3583,6 +3603,7 @@ export interface FileRouteTypes {
     | '/admin/crm/contacts/$id'
     | '/admin/meetings/$sessionId/present'
     | '/admin/meetings/$sessionId/script'
+    | '/admin/meetings/by-booking/$ptSessionId'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
@@ -3590,6 +3611,7 @@ export interface FileRouteTypes {
     | '/api/public/wearables/oura/callback'
     | '/admin/challenges/$id/'
     | '/admin/crm/contacts/'
+    | '/admin/meetings/$sessionId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -3610,10 +3632,10 @@ export interface FileRouteTypes {
     | '/recover'
     | '/reset-password'
     | '/selkirk'
-    | '/support'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/support'
     | '/terms'
     | '/unsubscribe'
     | '/welcome'
@@ -3912,6 +3934,7 @@ export interface FileRouteTypes {
     | '/admin/crm/contacts/$id'
     | '/admin/meetings/$sessionId/present'
     | '/admin/meetings/$sessionId/script'
+    | '/admin/meetings/by-booking/$ptSessionId'
     | '/admin/nutrition-dashboard/review/$submissionId'
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
@@ -3919,6 +3942,7 @@ export interface FileRouteTypes {
     | '/api/public/wearables/oura/callback'
     | '/admin/challenges/$id'
     | '/admin/crm/contacts'
+    | '/admin/meetings/$sessionId'
   id:
     | '__root__'
     | '/'
@@ -3940,10 +3964,10 @@ export interface FileRouteTypes {
     | '/recover'
     | '/reset-password'
     | '/selkirk'
-    | '/support'
     | '/setup'
     | '/sitemap'
     | '/staff-setup'
+    | '/support'
     | '/terms'
     | '/unsubscribe'
     | '/welcome'
@@ -4246,6 +4270,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/crm/contacts/$id'
     | '/_authenticated/admin/meetings/$sessionId/present'
     | '/_authenticated/admin/meetings/$sessionId/script'
+    | '/_authenticated/admin/meetings/by-booking/$ptSessionId'
     | '/_authenticated/admin/nutrition-dashboard/review/$submissionId'
     | '/_authenticated/admin/settings_/notifications/coaching-applications'
     | '/_authenticated/m/forms/$assignmentId/complete'
@@ -4253,6 +4278,7 @@ export interface FileRouteTypes {
     | '/api/public/wearables/oura/callback'
     | '/_authenticated/admin/challenges/$id/'
     | '/_authenticated/admin/crm/contacts/'
+    | '/_authenticated/admin/meetings/$sessionId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -4275,10 +4301,10 @@ export interface RootRouteChildren {
   RecoverRoute: typeof RecoverRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SelkirkRoute: typeof SelkirkRoute
-  SupportRoute: typeof SupportRoute
   SetupRoute: typeof SetupRoute
   SitemapRoute: typeof SitemapRoute
   StaffSetupRoute: typeof StaffSetupRoute
+  SupportRoute: typeof SupportRoute
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   WelcomeRoute: typeof WelcomeRoute
@@ -4510,13 +4536,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SelkirkRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/support': {
-      id: '/support'
-      path: '/support'
-      fullPath: '/support'
-      preLoaderRoute: typeof SupportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/setup': {
       id: '/setup'
       path: '/setup'
@@ -4536,6 +4555,13 @@ declare module '@tanstack/react-router' {
       path: '/staff-setup'
       fullPath: '/staff-setup'
       preLoaderRoute: typeof StaffSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -6652,6 +6678,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCrmContactsIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/meetings/$sessionId/': {
+      id: '/_authenticated/admin/meetings/$sessionId/'
+      path: '/meetings/$sessionId'
+      fullPath: '/admin/meetings/$sessionId/'
+      preLoaderRoute: typeof AuthenticatedAdminMeetingsSessionIdIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/meetings/$sessionId/present': {
       id: '/_authenticated/admin/meetings/$sessionId/present'
       path: '/meetings/$sessionId/present'
@@ -6664,6 +6697,13 @@ declare module '@tanstack/react-router' {
       path: '/meetings/$sessionId/script'
       fullPath: '/admin/meetings/$sessionId/script'
       preLoaderRoute: typeof AuthenticatedAdminMeetingsSessionIdScriptRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/meetings/by-booking/$ptSessionId': {
+      id: '/_authenticated/admin/meetings/by-booking/$ptSessionId'
+      path: '/meetings/by-booking/$ptSessionId'
+      fullPath: '/admin/meetings/by-booking/$ptSessionId'
+      preLoaderRoute: typeof AuthenticatedAdminMeetingsByBookingPtSessionIdRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/nutrition-dashboard/review/$submissionId': {
@@ -6987,9 +7027,11 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
   AuthenticatedAdminMeetingsSessionIdPresentRoute: typeof AuthenticatedAdminMeetingsSessionIdPresentRoute
   AuthenticatedAdminMeetingsSessionIdScriptRoute: typeof AuthenticatedAdminMeetingsSessionIdScriptRoute
+  AuthenticatedAdminMeetingsByBookingPtSessionIdRoute: typeof AuthenticatedAdminMeetingsByBookingPtSessionIdRoute
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   AuthenticatedAdminChallengesIdIndexRoute: typeof AuthenticatedAdminChallengesIdIndexRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
+  AuthenticatedAdminMeetingsSessionIdIndexRoute: typeof AuthenticatedAdminMeetingsSessionIdIndexRoute
 }
 
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
@@ -7167,12 +7209,16 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminMeetingsSessionIdPresentRoute,
     AuthenticatedAdminMeetingsSessionIdScriptRoute:
       AuthenticatedAdminMeetingsSessionIdScriptRoute,
+    AuthenticatedAdminMeetingsByBookingPtSessionIdRoute:
+      AuthenticatedAdminMeetingsByBookingPtSessionIdRoute,
     AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
       AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,
     AuthenticatedAdminChallengesIdIndexRoute:
       AuthenticatedAdminChallengesIdIndexRoute,
     AuthenticatedAdminCrmContactsIndexRoute:
       AuthenticatedAdminCrmContactsIndexRoute,
+    AuthenticatedAdminMeetingsSessionIdIndexRoute:
+      AuthenticatedAdminMeetingsSessionIdIndexRoute,
   }
 
 const AuthenticatedAdminRouteRouteWithChildren =
@@ -7403,10 +7449,10 @@ const rootRouteChildren: RootRouteChildren = {
   RecoverRoute: RecoverRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SelkirkRoute: SelkirkRoute,
-  SupportRoute: SupportRoute,
   SetupRoute: SetupRoute,
   SitemapRoute: SitemapRoute,
   StaffSetupRoute: StaffSetupRoute,
+  SupportRoute: SupportRoute,
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   WelcomeRoute: WelcomeRoute,

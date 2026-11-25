@@ -22,17 +22,20 @@ const call = (over: Partial<ReminderEvent> = {}): ReminderEvent => ({
 const pt = (over: Partial<ReminderEvent> = {}) => call({ kind: "pt", ...over });
 
 describe("which reminder goes, and when", () => {
-  it("a client's call: a day before, an hour before, ten minutes before", () => {
+  it("a client's call: a day before (unless the day-before message went), then 15 minutes before", () => {
     expect(dueReminder(call(), "client", at(24 * 60 + 1))).toBeNull();
     expect(dueReminder(call(), "client", at(24 * 60))?.slot).toBe("24h");
-    expect(dueReminder(call(), "client", at(60))?.slot).toBe("1h");
-    expect(dueReminder(call(), "client", at(10))).toMatchObject({ slot: "10m", urgent: true });
+    expect(dueReminder(call(), "client", at(60))).toBeNull();
+    expect(dueReminder(call(), "client", at(15))).toMatchObject({ slot: "15m", urgent: true });
     expect(dueReminder(call(), "client", at(0))).toBeNull();
+    // the confirmation and preparation message is the day-before reminder
+    expect(dueReminder(call({ dayBeforeSent: true }), "client", at(24 * 60))).toBeNull();
+    expect(dueReminder(call({ dayBeforeSent: true }), "client", at(15))?.slot).toBe("15m");
   });
 
-  it("the coach: ten minutes before a call, fifteen before training; a client's training a day and an hour before", () => {
+  it("the coach: fifteen minutes before a call or training; a client's training a day and an hour before", () => {
     expect(dueReminder(call(), "coach", at(60))).toBeNull();
-    expect(dueReminder(call(), "coach", at(10))?.slot).toBe("10m");
+    expect(dueReminder(call(), "coach", at(15))?.slot).toBe("15m");
     expect(dueReminder(pt(), "coach", at(15))?.slot).toBe("15m");
     expect(dueReminder(pt(), "client", at(24 * 60))?.slot).toBe("24h");
     expect(dueReminder(pt(), "client", at(60))?.slot).toBe("1h");
@@ -40,38 +43,42 @@ describe("which reminder goes, and when", () => {
   });
 
   it("a cancelled one gets nothing; a moved one gets fresh keys", () => {
-    expect(dueReminder(call({ status: "Cancelled" }), "client", at(10))).toBeNull();
+    expect(dueReminder(call({ status: "Cancelled" }), "client", at(15))).toBeNull();
     const moved = call({ startsAt: "2026-11-27T22:00:00Z" });
-    expect(reminderKey(call(), "1h", "client")).not.toBe(reminderKey(moved, "1h", "client"));
+    expect(reminderKey(call(), "15m", "client")).not.toBe(reminderKey(moved, "15m", "client"));
   });
 
   it("a late booking only gets the reminders still ahead of it", () => {
     const late = call({ arrangedAt: at(90).toISOString() });
     expect(dueReminder(late, "client", at(24 * 60 - 1))).toBeNull();
-    expect(dueReminder(late, "client", at(60))?.slot).toBe("1h");
-    const veryLate = call({ arrangedAt: at(30).toISOString() });
+    expect(dueReminder(late, "client", at(15))?.slot).toBe("15m");
+    const latePt = pt({ arrangedAt: at(90).toISOString() });
+    expect(dueReminder(latePt, "client", at(60))?.slot).toBe("1h");
+    const veryLate = pt({ arrangedAt: at(30).toISOString() });
     expect(dueReminder(veryLate, "client", at(59))).toBeNull();
-    expect(dueReminder(veryLate, "client", at(10))?.slot).toBe("10m");
+    const veryLateCall = call({ arrangedAt: at(10).toISOString() });
+    expect(dueReminder(veryLateCall, "client", at(9))).toBeNull();
   });
 
   it("after a missed tick, only the nearest one goes, and a stale one never", () => {
-    expect(dueReminder(call(), "client", at(9))?.slot).toBe("10m");
-    expect(dueReminder(call(), "client", at(30))).toBeNull(); // the hour-before is 30 min stale
+    expect(dueReminder(call(), "client", at(9))?.slot).toBe("15m");
+    expect(dueReminder(call(), "client", at(5))).toBeNull(); // the 15-minute one is 10 min stale
+    expect(dueReminder(pt(), "client", at(30))).toBeNull(); // training's hour-before is 30 min stale
   });
 
   it("the day-before one waits out quiet hours; the short ones don't", () => {
     const quiet = { on: true, start: 22, end: 7 };
     expect(dueReminder(call(), "client", at(24 * 60), { quiet, localHour: 23 })).toBeNull();
     expect(dueReminder(call(), "client", at(24 * 60 - 8 * 60), { quiet, localHour: 7 })?.slot).toBe("24h");
-    expect(dueReminder(call(), "client", at(60), { quiet, localHour: 23 })?.slot).toBe("1h");
+    expect(dueReminder(call(), "client", at(15), { quiet, localHour: 23 })?.slot).toBe("15m");
     // never "a day before" once it's under three hours away
     expect(dueReminder(call(), "client", at(150), { quiet, localHour: 12 })).toBeNull();
   });
 
   it("each person's own choices, and training's day-before push stays quiet once the evening text went", () => {
-    expect(dueReminder(call(), "client", at(60), { prefs: { hour: false } })).toBeNull();
-    expect(dueReminder(call(), "client", at(10), { prefs: { hour: false } })?.slot).toBe("10m");
-    expect(dueReminder(call(), "coach", at(10), { prefs: { soon: false } })).toBeNull();
+    expect(dueReminder(pt(), "client", at(60), { prefs: { hour: false } })).toBeNull();
+    expect(dueReminder(call(), "client", at(15), { prefs: { hour: false } })?.slot).toBe("15m");
+    expect(dueReminder(call(), "coach", at(15), { prefs: { soon: false } })).toBeNull();
     expect(dueReminder(pt({ textSent: true }), "client", at(24 * 60))).toBeNull();
     expect(readSlotPrefs({ day: false, hour: "no", soon: true })).toEqual({ day: false });
     expect(readSlotPrefs(null)).toEqual({});
@@ -82,10 +89,10 @@ describe("what they say", () => {
   const base = { when: "3:00 PM", day: "tomorrow", title: "General Call", otherName: "Jared", location: null, joinUrl: "https://meet.google.com/abc" };
   it("the client's call reminders, the last one to join", () => {
     expect(reminderCopy({ ...base, kind: "call", audience: "client", slot: "24h" }).title).toBe("Call tomorrow at 3:00 PM");
-    expect(reminderCopy({ ...base, kind: "call", audience: "client", slot: "10m" })).toEqual({ title: "Your call starts in 10 minutes", body: "Tap to join." });
+    expect(reminderCopy({ ...base, kind: "call", audience: "client", slot: "15m" })).toEqual({ title: "Your call starts in 15 minutes", body: "Tap to join." });
   });
   it("the coach's, with who it is", () => {
-    expect(reminderCopy({ ...base, kind: "call", audience: "coach", slot: "10m", otherName: "Sam Lifter" }).title).toBe("Sam Lifter in 10 min");
+    expect(reminderCopy({ ...base, kind: "call", audience: "coach", slot: "15m", otherName: "Sam Lifter" })).toEqual({ title: "Sam Lifter in 15 min", body: "General Call at 3:00 PM. Tap to open the meeting and join." });
     expect(reminderCopy({ ...base, kind: "pt", audience: "coach", slot: "15m", otherName: "Sam", title: "PT Session", location: "800 Main St, Selkirk" }).body).toBe("PT Session · 3:00 PM · 800 Main St");
   });
   it("training", () => {

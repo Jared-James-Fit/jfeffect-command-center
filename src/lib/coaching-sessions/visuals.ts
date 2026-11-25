@@ -69,10 +69,10 @@ export function classLimit(label: string | null | undefined): number | null {
 /**
  * Which picture each slide shows (slide 0 is the title; slide i+1 is section
  * i). One picture per slide at most, and each picture once: the countdown on
- * the title, the records on what's going well, the training weeks on what to
- * improve when workouts were missed (else on what's going well when they
- * weren't), the weigh-ins on the game plan when there's a class to make or
- * enough of them to read.
+ * the title, the records on Recognize, the training weeks on Evaluate when
+ * workouts went unlogged (else on Recognize when they didn't), the weigh-ins
+ * on Evaluate when there's a class to make, else on Coach or Execute when
+ * there are enough of them to read.
  */
 export function slideVisuals(sections: Array<{ key: SectionKey }>, v: PresentationVisuals): Record<number, VisualKind> {
   const out: Record<number, VisualKind> = {};
@@ -90,15 +90,15 @@ export function slideVisuals(sections: Array<{ key: SectionKey }>, v: Presentati
   give(0, "countdown", hasCountdown);
   sections.forEach((s, i) => {
     const slide = i + 1;
-    if (s.key === "going_well") {
+    if (s.key === "recognize") {
       give(slide, "records", v.records.length > 0);
       give(slide, "training", !!training && consistent);
     }
-    if (s.key === "improve") {
+    if (s.key === "evaluate") {
       give(slide, "training", !!training && !consistent);
       give(slide, "bodyweight", bw && !!v.bodyweight?.limit);
     }
-    if (s.key === "game_plan") {
+    if (s.key === "coach" || s.key === "execute") {
       give(slide, "bodyweight", bw);
     }
   });

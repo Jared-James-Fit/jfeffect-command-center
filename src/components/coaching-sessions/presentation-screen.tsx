@@ -109,7 +109,7 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
               {section.title}
             </h1>
             <p className="mt-3 text-[18px] text-muted-foreground sm:text-[22px]">{section.prompt}</p>
-            {section.key === "game_plan" && d.agreed.length ? (
+            {section.key === "execute" && d.agreed.length ? (
               <ul className="mt-8 space-y-3">
                 {d.agreed.map((a) => (
                   <li key={a} className="text-[20px] leading-snug sm:text-[26px]">
@@ -142,7 +142,7 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
             </h1>
             <p className="mt-4 text-[20px] text-muted-foreground sm:text-[24px]">
               {d.firstName ? `${d.firstName}, ` : ""}
-              {d.minutes ? `${d.minutes} minutes` : "a few minutes"}: what's going well, where we improve, your corner, and our plan.
+              {d.objective ?? (d.minutes ? `${d.minutes} minutes on what's working, what's next and your plan.` : "What's working, what's next and your plan.")}
             </p>
           </div>
         )}

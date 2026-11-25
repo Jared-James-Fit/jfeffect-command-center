@@ -87,6 +87,7 @@ const RoadmapCoachCard = lazyDefault(() => import("@/components/nutrition-roadma
 const CardioWorkspace = lazyDefault(() => import("@/components/cardio/cardio-workspace"), "CardioWorkspace");
 const CompetitionWorkspace = lazyDefault(() => import("@/components/competition/competition-tab"), "CompetitionWorkspace");
 const MeetingsWorkspace = lazyDefault(() => import("@/components/coaching-sessions/meetings-tab"), "MeetingsWorkspace");
+const MeetingStrip = lazyDefault(() => import("@/components/coaching-sessions/meeting-strip"), "MeetingStrip");
 const NutritionCleoDock = lazyDefault(() => import("@/components/nutrition/nutrition-cleo-dock"), "NutritionCleoDock");
 const NutritionQualityCard = lazyDefault(() => import("@/components/nutrition/NutritionQualityCard"), "NutritionQualityCard");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
@@ -677,6 +678,12 @@ export function ClientProfileWorkspace({
         source={form.deactivation_source}
         onReactivate={() => setReactivateOpen(true)}
       />
+      {/* the next meeting (Prepare · Join · Manage), only when there is one */}
+      {form.service_tier !== "self_serve" ? (
+        <Suspense fallback={null}>
+          <MeetingStrip clientId={id} className="mb-3" />
+        </Suspense>
+      ) : null}
       {/*
         The workspace nav MUST stay directly under the client header.
         Previously this Tabs root was `flex flex-col` with the nav at `order-1`

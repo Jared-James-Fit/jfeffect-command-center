@@ -7,8 +7,10 @@
  * Which reminders (on top of what already happens when something is booked:
  * the chat card or the booking page, Google's invite with the Meet link, the
  * coach's "booked" push, and the evening-before text for training):
- *   call, client:  a day before, an hour before, 10 minutes before (Join)
- *   call, coach:   10 minutes before (their profile and the Join link); the
+ *   call, client:  a day before (unless the day-before chat message went:
+ *                  the confirmation and preparation, automation.server.ts),
+ *                  15 minutes before (Join)
+ *   call, coach:   15 minutes before (the meeting and the Join link); the
  *                  day's and tomorrow's calls are the coach's summaries
  *   training, client: a day before (unless the evening-before text went), an hour before
  *   training, coach:  15 minutes before; the day's sessions are in the morning summary
@@ -34,8 +36,8 @@ export const SLOT_GRACE_MINUTES: Record<ReminderSlot, number> = { "24h": 12 * 60
 export const DAY_BEFORE_MIN_LEAD_MINUTES = 3 * 60;
 
 export const SLOTS: Record<`${ReminderKind}:${ReminderAudience}`, ReminderSlot[]> = {
-  "call:client": ["24h", "1h", "10m"],
-  "call:coach": ["10m"],
+  "call:client": ["24h", "15m"],
+  "call:coach": ["15m"],
   "pt:client": ["24h", "1h"],
   "pt:coach": ["15m"],
 };
@@ -56,6 +58,8 @@ export type ReminderEvent = {
   arrangedAt: string | null;
   /** Training: the evening-before text already went, so no day-before push. */
   textSent?: boolean;
+  /** A call: the day-before chat message (confirm, prepare) already went, so no day-before push. */
+  dayBeforeSent?: boolean;
 };
 
 export type DueReminder = { slot: ReminderSlot; key: string; urgent: boolean };
@@ -95,6 +99,7 @@ export function dueReminder(
     if (arranged != null && arranged > at) continue; // booked or moved after this one's moment
     if (opts.prefs && opts.prefs[PREF_OF[slot]] === false) continue;
     if (slot === "24h" && e.kind === "pt" && audience === "client" && e.textSent) continue;
+    if (slot === "24h" && e.kind === "call" && audience === "client" && e.dayBeforeSent) continue;
     if (pick == null || SLOT_MINUTES[slot] < SLOT_MINUTES[pick]) pick = slot;
   }
   if (!pick) return null;
@@ -126,13 +131,13 @@ export function reminderCopy(i: ReminderCopyInput): { title: string; body: strin
     const who = (i.otherName ?? "").trim() || (i.kind === "call" ? "Your call" : "Your session");
     const mins = SLOT_MINUTES[i.slot];
     return i.kind === "call"
-      ? { title: `${who} in ${mins} min`, body: `${what} at ${i.when}. ${i.joinUrl ? "Tap for their profile; Join is in the calendar." : "Tap for their profile."}` }
+      ? { title: `${who} in ${mins} min`, body: `${what} at ${i.when}. Tap to open the meeting${i.joinUrl ? " and join" : ""}.` }
       : { title: `${who} in ${mins} min`, body: [what, i.when, where].filter(Boolean).join(" · ") };
   }
   if (i.kind === "call") {
     if (i.slot === "24h") return { title: `Call ${i.day} at ${i.when}`, body: `${what}${i.otherName ? ` with ${i.otherName}` : ""}. Need to move it? Tap to see it.` };
     if (i.slot === "1h") return { title: "Your call starts in 1 hour", body: `${what} at ${i.when}.` };
-    return { title: "Your call starts in 10 minutes", body: i.joinUrl ? "Tap to join." : `${what} at ${i.when}.` };
+    return { title: `Your call starts in ${SLOT_MINUTES[i.slot]} minutes`, body: i.joinUrl ? "Tap to join." : `${what} at ${i.when}.` };
   }
   if (i.slot === "24h") return { title: `Training ${i.day} at ${i.when}`, body: [what, where].filter(Boolean).join(" · ") };
   return { title: "Training in 1 hour", body: [i.when, where].filter(Boolean).join(" · ") };

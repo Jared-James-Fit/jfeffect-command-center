@@ -35,7 +35,7 @@ export async function runSessionReminders(admin: Admin, now: Date = new Date()):
   const [{ data: sessions, error: sErr }, { data: appts, error: aErr }] = await Promise.all([
     db
       .from("pt_sessions")
-      .select("id, client_id, title, status, starts_at, timezone, time_set_at, created_at, location, meet_link, session_type, reminder_24h_sent_at, visible_to_client, reminders_enabled")
+      .select("id, client_id, title, status, starts_at, timezone, time_set_at, created_at, location, meet_link, session_type, reminder_24h_sent_at, visible_to_client, reminders_enabled, confirmation_requested_at")
       .eq("status", "Scheduled")
       .gt("starts_at", from)
       .lt("starts_at", to)
@@ -74,7 +74,8 @@ export async function runSessionReminders(admin: Admin, now: Date = new Date()):
       recipients.push({ userId: c.user_id, audience: "client", url: "/portal/calendar", otherName: coach?.full_name?.split(" ")[0] ?? null, tz });
     }
     if (coach?.user_id) {
-      recipients.push({ userId: coach.user_id, audience: "coach", url: `/admin/clients/${c.id}`, otherName: c.full_name ?? c.first_name ?? null, tz });
+      // a call opens its meeting (prepared the moment it was booked); a session the client's profile
+      recipients.push({ userId: coach.user_id, audience: "coach", url: kind === "call" ? `/admin/meetings/by-booking/${s.id}` : `/admin/clients/${c.id}`, otherName: c.full_name ?? c.first_name ?? null, tz });
     }
     rows.push({
       source: "pt_session",
@@ -84,6 +85,7 @@ export async function runSessionReminders(admin: Admin, now: Date = new Date()):
       startsAt: s.starts_at,
       arrangedAt: s.time_set_at ?? s.created_at ?? null,
       textSent: !!s.reminder_24h_sent_at,
+      dayBeforeSent: !!s.confirmation_requested_at,
       tz,
       title: s.title ?? null,
       location: s.location ?? null,
@@ -155,7 +157,7 @@ export async function runSessionReminders(admin: Admin, now: Date = new Date()):
         joinUrl: r.joinUrl,
       });
       // the client's last one opens the call itself; everything else opens the app
-      const url = rec.audience === "client" && r.kind === "call" && due.slot === "10m" && r.joinUrl ? r.joinUrl : rec.url;
+      const url = rec.audience === "client" && r.kind === "call" && (due.slot === "10m" || due.slot === "15m") && r.joinUrl ? r.joinUrl : rec.url;
       const res = await sendWebPushToUser(
         admin,
         rec.userId,

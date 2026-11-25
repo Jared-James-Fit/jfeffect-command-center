@@ -50,18 +50,46 @@ added afterwards). Cleo prepares, organizes and remembers; the coach decides.
 - `buildSessionPrep` — from `buildCallPrep`'s facts plus the event: what's going
   well, where to improve, what the coach needs from the athlete, what the
   athlete needs from the coach, what's missing, decisions to make, milestones.
-- `planAgenda` — 15–30 minutes in five sections (going well, improve,
-  athlete's corner, game plan, alignment); the athlete's corner and their
-  topics get 25–35% of the time.
+- `planAgenda` — coach-led, 15–30 minutes: Connect, Recognize, Evaluate,
+  Coach, Execute, Align (stages with nothing in them drop out). Every talking
+  point has an id, what it rests on (`basis`: verified record, client
+  reported, coach observed, Cleo's interpretation, unknown), whether it goes
+  on the shared screen (`share`), its status (open / addressed / skipped) and
+  how it's said (`say`, the coach's edit first, then Cleo's checked
+  refinement `cleoSay`). Clarifications are kept apart (`agenda.clarify`) and
+  asked only where they're evaluated. Plans from before (v1) read through
+  `normalizeAgenda`.
+- `mergeAgenda` / `agendaChanges` / `applyAgendaOp` — a refresh never loses the
+  coach's work: edited, skipped, moved and custom points stay; new points
+  carry `addedAt` so the command centre can say what's new since the coach
+  last looked (`coach_reviewed_at`); points the records no longer support are
+  dropped only if the coach never touched them. Edits are ops applied on the
+  server to the plan on file.
 - `recommendIntervention` — the lowest effective intervention: nothing, a
   message, an information request, a resource, a 5–10 minute touch-base or a
   15–30 minute call, with why; meaningful decisions earn a call, the final week
   before a meet avoids one, an existing booking is respected, and an included
   call is said apart from a General Call.
-- `questionnaireFor` — only what's missing or stale (a fresh check-in covers
-  how they feel, a fresh weigh-in their weight, a meet adds how they feel
-  about it), sent as the "Before our call" form with `settings.ask_keys`;
-  1–3 minutes.
+- `questionnaireFor` — at most three targeted questions (open pain, unlogged
+  workouts, registration, a stale check-in or weigh-in, how they feel about a
+  meet), personalized labels in `settings.ask_labels`, plus an optional note
+  only alongside them; nothing when the records cover it. Under 2 minutes.
+  Sent with the day-before confirmation, or by the coach's tap. The plan never
+  depends on the answers.
+- `meetingReadiness` (lifecycle.ts) — confirmation, the client's prep, the
+  coach's prep, what's left to clarify, how to join; ready means the plan
+  exists, never that the client answered.
+- `ambiguousLoads` (units.ts) — a load said with no unit, or in the unit they
+  don't train in, is flagged on recommendations and in the outcome before it
+  feeds attempts or loads.
+- `reviewCandidate` / `memoryBoard` (memory.ts) — a memory from a meeting is a
+  duplicate (merged), a conflict (shown beside the line it contradicts), kept
+  by itself only when it's a low-risk goal, preference or achievement said
+  plainly by the client with the speaker confirmed and auto-keep allowed, else
+  waits for the coach. Temporary and event lines go outdated by date.
+- `coverageRead` (coverage.ts) — while a consented recording is transcribed,
+  points that sound covered and important ones not heard yet (suggested,
+  never marked).
 - `checkBrief` — Cleo's pre-call brief only organizes the prep: focus points
   cite prep lines that exist; nothing carries a number the prep doesn't.
 - `checkAnalysis` — every extracted item must quote the transcript
@@ -70,6 +98,64 @@ added afterwards). Cleo prepares, organizes and remembers; the coach decides.
   intelligence the coach already confirmed isn't proposed again; what's
   dropped is listed for the coach.
 
+## The meeting command centre
+
+`/admin/meetings/$sessionId` (command-centre.tsx), reached from the client's
+profile strip (`MeetingStrip`), the strip at the top of their coach chat,
+Home's Meetings card (`MeetingsDashboardCard`, `meetingsBoard`), the Meetings
+tab and the coach's 15-minute push (`/admin/meetings/by-booking/$ptSessionId`,
+which prepares the meeting if it isn't yet). Three stages:
+
+- Prepare: readiness strip, what's new since last look, the objective and
+  outcome, clarifications, the plan (`PlanEditor`: edit, skip, reorder, move,
+  add, hide from the screen), client prep, Cleo's brief, private notes. Start
+  meeting.
+- Connect: Join (15 minutes before to the end), Present and Script windows
+  (one `presentChannel`; the script reports its slide so the plan highlights
+  the stage), the timer, the recorder, the plan in meeting mode (mark
+  addressed, what sounds covered), notes, decisions, commitments. End meeting.
+- Execute (session-after.tsx): what Cleo did and what's still the coach's,
+  the outcome (feedback, to improve, decided, their part, your part,
+  objectives, wins, still open, floated), recommendations whose status never
+  claims more than happened (Suggested · Needs review · Approved, not applied
+  yet · Applied · Kept as is · Later · Dismissed; Mark applied only after
+  applying it in the tab's own editor), commitments, memories, the optional
+  recap, speakers to name, the transcript (edit a line), deletion.
+
+## Appointments
+
+A booked call (a non-training `pt_session`) has one state both sides see
+(`appointmentState`): scheduled, awaiting confirmation, confirmed (they
+confirmed, booked it themselves, or asked for the time it moved to),
+change requested, cancelled, completed, no-show. The day before (24h, until
+3h before; never for a late booking, a call they chose, or a client without
+the app) `runMeetingAutomation` sends one message in their coach chat: the
+`session_confirm` card (Confirm through `pt_session_confirm`, Change time /
+Can't make it through `ClientSessionSheet`, the session staying booked until
+the coach answers) and, when they'd help, the pre-meeting questions as a form
+card. That message is the client's day-before reminder; both sides get a push
+15 minutes before (the client's opens Join, the coach's the meeting). A move
+clears both stamps (`tg_pt_session_confirmation`), so a moved call is
+confirmed afresh and its reminders follow the new time.
+
+## Recording
+
+`MeetingRecorder` (recorder.tsx) on the one recorder library
+(`startMeetingCapture`, meeting-capture.ts): the device's microphone (in the
+room, or a call on speaker) or, on desktop Chrome and Edge, a call in another
+tab with its audio (getDisplayMedia, mixed with the mic). A web page can't
+capture another app's audio, so a Zoom or Meet app call, or one on a phone, is
+added afterwards as a transcript (Otter or any file). Consent is ticked first
+and names the participants; retention is chosen (30 / 90 / 365 days or until
+deleted). It records in 5-minute parts, each kept on the device
+(IndexedDB) until the server has it, uploaded to the private
+`coaching-recordings` bucket through a signed URL, and transcribed by the
+tick with OpenAI's diarizing model (`gpt-4o-transcribe-diarize`, voice
+samples from the first part so labels hold across parts; whisper-1 without
+speakers as the fallback), so the transcript builds near-live. Speakers stay
+"Speaker A/B" until the coach names them; nothing uncertain is attributed and
+no emotion is inferred. True word-by-word live captions are not built.
+
 ## Background work
 
 `coaching-sessions-tick` (pg_cron every minute, only while
@@ -77,7 +163,12 @@ added afterwards). Cleo prepares, organizes and remembers; the coach decides.
 writes Cleo's brief (route `session_brief`) or reads the meeting (route
 `session_analysis`) through `stagedCall` on the OpenAI key only, parks while a
 model is still thinking, and waits without using an attempt while OpenAI is
-down; then removes raw transcripts past their retention date.
+down; keeps booked calls prepared (`keepMeetingsReady`: a meeting for every
+booked coaching call in the next 14 days, plans refreshed when the records
+change, at most every 3 hours); transcribes recording parts
+(`transcribeDueParts`); then removes raw transcripts and audio past their
+retention date. The 5-minute `appointment-reminders` tick runs
+`runMeetingAutomation` before the reminders.
 
 ## Where an approved change goes
 

@@ -7,6 +7,7 @@ import React, { createContext, Fragment, useCallback, useContext, useEffect, use
 import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { SessionChangeCard } from "@/components/schedule/session-change-card";
 import { SessionBookedCard } from "@/components/schedule/session-booked-card";
+import { SessionConfirmCard } from "@/components/schedule/session-confirm-card";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -577,6 +578,9 @@ function AttachmentView({
   }
   if (att.kind === "session_booked" && att.session_ids?.length) {
     return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} bookedByClient={att.booked_by === "client"} />;
+  }
+  if (att.kind === "session_confirm" && att.pt_session_id) {
+    return <SessionConfirmCard ptSessionId={att.pt_session_id} staff={role !== "client"} clientId={clientId} askConfirm={att.ask_confirm !== false} />;
   }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;
@@ -2492,7 +2496,7 @@ export function MessageThread({
                   </>
                 ) : (
                   // A session request's (or workout note's) card says it all; its text is for inbox previews.
-                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || a?.kind === "workout_note" || formCardSaysIt(m.body, a)) && renderBodyWithMeet(m.body, mine)
+                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || (a?.kind === "session_confirm" && !m.attachments?.some((x: any) => x?.kind === "form_request")) || a?.kind === "workout_note" || formCardSaysIt(m.body, a)) && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.some((a) => a !== replyCard) && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>

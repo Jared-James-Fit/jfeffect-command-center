@@ -6,29 +6,33 @@
  * a question. The brief only organizes what's on file, so it never adds a fact.
  */
 import { numbersIn, ungroundedNumbers } from "@/lib/competition/grounding";
-import type { Agenda, PrepItem, SectionKey, SessionPrep } from "./prepare";
+import { normalizeAgenda, SECTION_KEYS, type Agenda, type PrepItem, type SectionKey, type SessionPrep } from "./prepare";
 
 export type BriefQuestion = { text: string; why: string; section: SectionKey };
 export type SessionBrief = {
   summary: string;
   focus: Array<{ text: string; refs: string[] }>;
+  /** clarifying questions only (two at most): the meeting is led, not an interview */
   questions: BriefQuestion[];
+  /** Cleo's spoken phrasing for talking points, by point id (checked: nothing new) */
+  phrasing?: Array<{ pointId: string; say: string }>;
   listenFor: string[];
   avoid: string[];
   /** what code took out, and why (the coach can see it was checked) */
   dropped: string[];
 };
 
-export type PrepLine = { id: string; section: SectionKey | "missing"; source: PrepItem["source"]; text: string };
+export type PrepLine = { id: string; section: SectionKey | "missing"; source: PrepItem["source"]; text: string; pointId?: string; basis?: string };
 
-const SECTIONS: SectionKey[] = ["going_well", "improve", "athletes_corner", "game_plan", "alignment"];
-
-/** The prep as numbered lines (P1, P2…), the agenda's sections first, then what's missing. */
-export function prepLines(agenda: Agenda | null | undefined, prep: SessionPrep | null | undefined): PrepLine[] {
+/** The prep as numbered lines (P1, P2…), the plan's stages first (skipped points left out), then what's missing. */
+export function prepLines(raw: Agenda | null | undefined | unknown, prep: SessionPrep | null | undefined): PrepLine[] {
+  const agenda = normalizeAgenda(raw);
   const out: PrepLine[] = [];
   let n = 0;
   for (const s of agenda?.sections ?? [])
-    for (const i of s.items) out.push({ id: `P${++n}`, section: s.key, source: i.source, text: i.text });
+    for (const i of s.items)
+      if (i.status !== "skipped") out.push({ id: `P${++n}`, section: s.key, source: i.source, text: i.text, pointId: i.id, basis: i.basis });
+  for (const c of agenda?.clarify ?? []) out.push({ id: `P${++n}`, section: "evaluate", source: c.source, text: `Unclear: ${c.text}`, pointId: c.id, basis: "unknown" });
   for (const m of prep?.missing ?? []) out.push({ id: `P${++n}`, section: "missing", source: m.source, text: m.text });
   return out;
 }
@@ -83,10 +87,21 @@ export function checkBrief(text: string, lines: PrepLine[], extra: unknown = nul
     .map((q: any) => ({
       text: clip(q?.text, 240),
       why: clip(q?.why, 240),
-      section: (SECTIONS.includes(q?.section) ? q.section : "athletes_corner") as SectionKey,
+      section: (SECTION_KEYS.includes(q?.section) ? q.section : "evaluate") as SectionKey,
     }))
     .filter((q) => q.text.endsWith("?") && clean(`${q.text} ${q.why}`, "A question") != null)
-    .slice(0, 6);
+    .slice(0, 2);
+  // spoken phrasing for a talking point: it must name a line that is a point, and add no number
+  const byId = new Map(lines.filter((l) => l.pointId).map((l) => [l.id, l]));
+  const phrasing = list(raw.phrasing ?? raw.say)
+    .map((p: any) => ({ ref: String(p?.ref ?? ""), say: clip(p?.say ?? p?.text, 320) }))
+    .filter((p) => {
+      const line = byId.get(p.ref);
+      if (!line || !p.say) return false;
+      return clean(p.say, `Phrasing for ${p.ref}`) != null;
+    })
+    .map((p) => ({ pointId: byId.get(p.ref)!.pointId!, say: p.say }))
+    .slice(0, 24);
   const listenFor = list(raw.listen_for ?? raw.listenFor)
     .map((s) => clip(s, 200))
     .filter((s) => s && clean(s, "Listen for") != null)
@@ -95,6 +110,6 @@ export function checkBrief(text: string, lines: PrepLine[], extra: unknown = nul
     .map((s) => clip(s, 200))
     .filter((s) => s && clean(s, "Avoid") != null)
     .slice(0, 3);
-  if (!summary && !focus.length && !questions.length) return null;
-  return { summary, focus, questions, listenFor, avoid, dropped };
+  if (!summary && !focus.length && !questions.length && !phrasing.length) return null;
+  return { summary, focus, questions, phrasing, listenFor, avoid, dropped };
 }

@@ -25,6 +25,7 @@ import { ErrorState, OfflineState } from "@/components/loading";
 import { combineQueryViews, queryView } from "@/lib/loading/load-state";
 import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 import { NewLeadsCard } from "@/components/leads/new-leads-card";
+import { MeetingsDashboardCard } from "@/components/coaching-sessions/meetings-dashboard-card";
 import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
 import { MeetReadinessCard } from "@/components/forms/meet-readiness-card";
 import { CompetitionsCard } from "@/components/competition/competitions-card";
@@ -284,6 +285,11 @@ function AdminDashboard() {
         <SectionErrorBoundary label="Schedule">
           <ChangeRequestsCard />
           <DashboardScheduleCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- MEETINGS: the week's meetings and the ones that still need you after (hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Meetings">
+          <MeetingsDashboardCard />
         </SectionErrorBoundary>
 
         {/* ---------------- CHECK-INS: what clients sent that's waiting on a review (hidden when none) ---------------- */}

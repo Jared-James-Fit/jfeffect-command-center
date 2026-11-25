@@ -39,11 +39,14 @@ export function PresenterScript({
   sessionId,
   slides,
   variant = "card",
+  onSlide,
 }: {
   sessionId: string;
   slides: ScriptSlide[];
   /** "window": the script's own full window (large type, ← → move the slides) */
   variant?: "card" | "window";
+  /** the slide on screen changed (the command centre follows the stage) */
+  onSlide?: (index: number) => void;
 }) {
   const big = variant === "window";
   const [index, setIndex] = useState(0);
@@ -52,6 +55,11 @@ export function PresenterScript({
   const [since, setSince] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
   const chan = useRef<BroadcastChannel | null>(null);
+  const onSlideRef = useRef(onSlide);
+  onSlideRef.current = onSlide;
+  useEffect(() => {
+    onSlideRef.current?.(index);
+  }, [index]);
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;

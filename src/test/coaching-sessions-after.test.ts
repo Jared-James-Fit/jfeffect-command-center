@@ -9,21 +9,48 @@ const TODAY = "2026-11-25";
 
 describe("pre-call questions ask only what's missing", () => {
   const meet = { kind: "competition", daysOut: 10 };
-  it("a fresh check-in and weigh-in leave only their topics and the meet", () => {
+  it("a fresh check-in near a meet asks only how they feel about it, plus an optional note", () => {
     const q = questionnaireFor({ today: TODAY, lastCheckin: "2026-11-22", lastWeighIn: "2026-11-24", event: meet, registeredKnown: true, topicsKnown: false });
-    expect(q.keys).toEqual(["topics", "meet_confidence", "meet_success"]);
-    expect(q.minutes).toBeLessThanOrEqual(3);
+    expect(q.keys).toEqual(["meet_confidence", "topics"]);
+    expect(q.labels.topics).toMatch(/optional/);
+    expect(q.minutes).toBeLessThanOrEqual(2);
+    expect(q.useful).toBe(true);
   });
-  it("nothing on file asks how training and recovery feel, and their weight", () => {
+  it("nothing on file asks at most three short things, never an open-ended interview", () => {
     const q = questionnaireFor({ today: TODAY, lastCheckin: null, lastWeighIn: null, event: null, registeredKnown: false, topicsKnown: false });
-    expect(q.keys).toEqual(["topics", "training_feel", "recovery", "pain", "pain_details", "bodyweight", "life"]);
-    expect(q.minutes).toBeGreaterThanOrEqual(1);
-    expect(q.minutes).toBeLessThanOrEqual(3);
+    expect(q.keys.filter((k) => k !== "topics").length).toBeLessThanOrEqual(3);
+    expect(q.keys).toContain("training_feel");
+    expect(q.minutes).toBeLessThanOrEqual(2);
     expect(q.reasons.join(" ")).toMatch(/No weekly check-in/);
+    expect(Object.values(q.labels).join(" ")).not.toMatch(/what do you need help with/i);
   });
-  it("registration is asked only while it's unknown; topics only when they haven't sent any", () => {
+  it("registration is asked only while it's unknown; no optional note when they already sent topics", () => {
     const q = questionnaireFor({ today: TODAY, lastCheckin: "2026-11-24", lastWeighIn: "2026-11-24", event: meet, registeredKnown: false, topicsKnown: true });
-    expect(q.keys).toEqual(["meet_registered", "meet_confidence", "meet_success"]);
+    expect(q.keys).toEqual(["meet_registered", "meet_confidence"]);
+  });
+  it("everything fresh and nothing coming up: no questions at all, the plan works from the records", () => {
+    const q = questionnaireFor({ today: TODAY, lastCheckin: "2026-11-24", lastWeighIn: "2026-11-24", event: null, registeredKnown: false, topicsKnown: false });
+    expect(q.keys).toEqual([]);
+    expect(q.useful).toBe(false);
+  });
+  it("open pain and unlogged workouts come first, personalized", () => {
+    const q = questionnaireFor({
+      today: TODAY,
+      lastCheckin: null,
+      lastWeighIn: null,
+      event: meet,
+      registeredKnown: false,
+      topicsKnown: true,
+      painOpen: { label: "Left knee", since: "2026-11-20" },
+      unlogged: 3,
+    } as any);
+    expect(q.keys).toEqual(expect.arrayContaining(["pain", "unlogged"]));
+    expect(q.reasons[0]).toMatch(/knee/);
+    expect(q.labels.pain).toBe("How's your left knee feeling now?");
+    expect(q.labels.unlogged).toMatch(/3 of your planned workouts/);
+    // pain's details ride with it; three questions at most besides
+    expect(q.keys).toContain("pain_details");
+    expect(q.keys.filter((k) => k !== "pain_details" && k !== "topics").length).toBeLessThanOrEqual(3);
   });
   it("a send's keys filter the form; a heading with no key always shows; no keys means every question", () => {
     const qs = [{ id: "a", validation: { session_key: "topics" } }, { id: "b", validation: { session_key: "bodyweight" } }, { id: "h", validation: {} }];
@@ -32,7 +59,9 @@ describe("pre-call questions ask only what's missing", () => {
     expect(askedQuestions(qs, []).map((q) => q.id)).toEqual(["a", "b", "h"]);
   });
   it("the seeded form carries every key the code asks for, under the fixed id", () => {
-    const sql = readFileSync("supabase/migrations/20270528110000_pre_call_questions.sql", "utf8");
+    const sql =
+      readFileSync("supabase/migrations/20270528110000_pre_call_questions.sql", "utf8") +
+      readFileSync("supabase/migrations/20270529110000_meeting_command_centre.sql", "utf8");
     expect(sql).toContain(PRE_CALL_FORM_ID);
     for (const k of SESSION_KEYS) expect(sql).toContain(`"session_key":"${k}"`);
   });
