@@ -239,7 +239,7 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
       const e = merged.get(`${entrant}|${l}|${n}`);
       return { kg: e?.kg ?? null, result: e?.result ?? null };
     });
-  const bestMade = (entrant: string, l: Lift): number | null => {
+  const bestOf = (entrant: string, l: Lift): number | null => {
     const made = attemptsOf(entrant, l)
       .filter((x) => x.result === "good" && x.kg != null)
       .map((x) => x.kg as number);
@@ -424,10 +424,10 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
               <div className="mt-3 rounded-xl bg-muted/60 p-3" data-lift-done>
                 <p className="text-[12px] text-muted-foreground">{LIFT_LABEL[lift]} done</p>
                 <p className="text-[26px] font-semibold tabular-nums leading-tight">
-                  {bestMade("us", lift) != null ? `${bestMade("us", lift)} kg` : "No lift made"}
-                  {bestMade("us", lift) != null ? (
+                  {bestOf("us", lift) != null ? `${bestOf("us", lift)} kg` : "No lift made"}
+                  {bestOf("us", lift) != null ? (
                     <span className="ml-2 text-[14px] font-normal text-muted-foreground">
-                      {toLb(bestMade("us", lift)!)} lb
+                      {toLb(bestOf("us", lift)!)} lb
                     </span>
                   ) : null}
                 </p>

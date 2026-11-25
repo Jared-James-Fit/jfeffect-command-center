@@ -14,6 +14,9 @@ describe("meet-day rows never carry one lift's weights into another", () => {
   it("keys the rivals' rows by lift", () => {
     expect(src).toMatch(/<RivalRow\s+key=\{lift\}/);
   });
+  it("never shadows the scenario module's bestMade (the final total read it)", () => {
+    expect(src).not.toMatch(/const bestMade =/);
+  });
   it("a made lift is green, never the brand red", () => {
     expect(src).not.toMatch(/result === "good" \? "default"/);
     expect(src).toMatch(/border-success bg-success/);

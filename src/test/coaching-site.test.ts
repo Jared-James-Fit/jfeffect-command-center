@@ -1,6 +1,12 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SITE_EVENTS, cleanStep, deviceClass, rate, readCoachingFunnel } from "@/lib/site-funnel-rules";
+import {
+  SITE_EVENTS,
+  cleanStep,
+  deviceClass,
+  rate,
+  readCoachingFunnel,
+} from "@/lib/site-funnel-rules";
 import { FUNNEL_EVENTS } from "@/lib/membership-apply";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -46,8 +52,12 @@ describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
     for (const e of [...FUNNEL_EVENTS, ...SITE_EVENTS]) expect(STEPS_MIGRATION).toContain(`'${e}'`);
     expect(MIGRATION).toContain("device IN ('phone', 'tablet', 'desktop')");
     // the funnel is read only by the server after an admin check
-    expect(MIGRATION).toContain("REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;");
-    expect(STEPS_MIGRATION).toContain("REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;");
+    expect(MIGRATION).toContain(
+      "REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;",
+    );
+    expect(STEPS_MIGRATION).toContain(
+      "REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;",
+    );
     const fns = read("src/lib/site-funnel.functions.ts");
     expect(fns).toContain('rpc("has_role", { _user_id: ctx.userId, _role: "admin" })');
     expect(fns).toContain('onConflict: "visitor_id,event,step,day", ignoreDuplicates: true');
@@ -68,7 +78,9 @@ describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
     expect(apply).toContain('trackSite("coaching_apply_step"');
     expect(apply).toContain('trackSite("coaching_apply_submit"');
     expect(read("src/routes/coaching.index.tsx")).toContain('trackSite("coaching_view")');
-    expect(read("src/components/sales/coaching-packages.tsx")).toContain('trackSite("package_select", pkg.slug)');
+    expect(read("src/components/sales/coaching-packages.tsx")).toContain(
+      'trackSite("package_select", pkg.slug)',
+    );
   });
 });
 
@@ -77,7 +89,10 @@ describe("the launch keeps every safeguard on the packages", () => {
     expect(MIGRATION).toContain("WHERE slug = 'nutrition' AND status = 'draft'");
     expect(MIGRATION).toContain("WHERE slug = 'plus' AND status = 'draft'");
     expect(MIGRATION).not.toMatch(/is_public\s*=\s*true|status\s*=\s*'active'\s*,/);
-    const complete = MIGRATION.slice(MIGRATION.indexOf("WHERE slug = 'nutrition'"), MIGRATION.indexOf("WHERE slug = 'complete'"));
+    const complete = MIGRATION.slice(
+      MIGRATION.indexOf("WHERE slug = 'nutrition'"),
+      MIGRATION.indexOf("WHERE slug = 'complete'"),
+    );
     expect(complete).not.toContain("price_cents");
     for (const [slug, cents, mins] of [
       ["technique-review", 7900, 30],
@@ -85,25 +100,39 @@ describe("the launch keeps every safeguard on the packages", () => {
       ["nutrition-review", 9900, 45],
       ["competition-strategy", 17900, 60],
     ] as const) {
-      expect(MIGRATION).toMatch(new RegExp(`price_cents = ${cents}, call_minutes = ${mins}, sort_order = \\d+\\nWHERE slug = '${slug}' AND status = 'draft'`));
+      expect(MIGRATION).toMatch(
+        new RegExp(
+          `price_cents = ${cents}, call_minutes = ${mins}, sort_order = \\d+\\nWHERE slug = '${slug}' AND status = 'draft'`,
+        ),
+      );
     }
   });
 
   it("Plus is Complete plus exactly two 30-minute calls, nothing else", () => {
-    const plus = MIGRATION.slice(MIGRATION.indexOf("tagline = 'Complete coaching, plus time with me on video.'"), MIGRATION.indexOf("WHERE slug = 'plus'"));
-    expect(plus).toContain("'Everything in Complete Online Coaching',\n    'Two private 30-minute video calls each billing month'\n  ],");
+    const plus = MIGRATION.slice(
+      MIGRATION.indexOf("tagline = 'Complete coaching, plus time with me on video.'"),
+      MIGRATION.indexOf("WHERE slug = 'plus'"),
+    );
+    expect(plus).toContain(
+      "'Everything in Complete Online Coaching',\n    'Two private 30-minute video calls each billing month'\n  ],",
+    );
     expect(plus).toContain("included_calls = 2");
     expect(plus).toContain("call_cancel_hours = 24");
     expect(plus).not.toMatch(/priority|strategy review|extra check/i);
   });
 
   it("puts the four $130 subscribers on Complete by association only, never their billing", () => {
-    const part = MIGRATION.slice(MIGRATION.indexOf("INSERT INTO public.coaching_package_enrollments"), MIGRATION.indexOf("-- 4. The site's steps"));
+    const part = MIGRATION.slice(
+      MIGRATION.indexOf("INSERT INTO public.coaching_package_enrollments"),
+      MIGRATION.indexOf("-- 4. The site's steps"),
+    );
     expect(part.match(/'[0-9a-f-]{36}'/g)?.length).toBe(5); // four sales and the $130 product
     expect(part).toContain("stripe_subscription_status = 'active'");
     expect(part).toContain("contracted_price_cents");
     expect(part).toContain("NOT EXISTS");
-    expect(MIGRATION).not.toMatch(/UPDATE public\.(purchase_records|coaching_products|payment_ledger)/);
+    expect(MIGRATION).not.toMatch(
+      /UPDATE public\.(purchase_records|coaching_products|payment_ledger)/,
+    );
     expect(MIGRATION).not.toMatch(/DELETE FROM/);
   });
 });
@@ -124,14 +153,23 @@ describe("the public site's app screens are current (Nov 23 2026)", () => {
   });
 
   it("each screen is made by the capture scripts, from the app itself", () => {
-    const scripts = read("scripts/coaching-screenshots/landing.cjs") + read("scripts/coaching-screenshots/run.cjs");
+    const scripts =
+      read("scripts/coaching-screenshots/landing.cjs") +
+      read("scripts/coaching-screenshots/run.cjs") +
+      read("scripts/coaching-screenshots/competition.cjs");
     for (const dir of ["landing", "coaching"]) {
       // the 390 / 585 px widths are made from each capture (scripts/landing/resize-shots.py), never captured
-      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp") && !/-(390|585|1280)\.webp$/.test(x))) {
+      for (const f of readdirSync(`src/assets/${dir}`).filter(
+        (x) => x.startsWith("app-") && x.endsWith(".webp") && !/-(390|585|1280)\.webp$/.test(x),
+      )) {
         expect(scripts, f).toContain(`name: "${f.replace(".webp", "")}"`);
         // a computer screen's smaller width is 1280 px; a phone screen's 390 and 585
         const widths = f.endsWith("-desktop.webp") ? [1280] : [390, 585];
-        for (const w of widths) expect(existsSync(`src/assets/${dir}/${f.replace(".webp", `-${w}.webp`)}`), `${f} at ${w} px: run scripts/landing/resize-shots.py`).toBe(true);
+        for (const w of widths)
+          expect(
+            existsSync(`src/assets/${dir}/${f.replace(".webp", `-${w}.webp`)}`),
+            `${f} at ${w} px: run scripts/landing/resize-shots.py`,
+          ).toBe(true);
       }
     }
   });
@@ -146,7 +184,9 @@ describe("the public site's app screens are current (Nov 23 2026)", () => {
 describe("Coaching Plus calls say their rules where they're used", () => {
   it("the client sees the 24-hour rule when they ask to cancel an included call", () => {
     const sheet = read("src/components/schedule/client-session-sheet.tsx");
-    expect(sheet).toContain("<IncludedCallCancelNote sessionId={session.id} startsAt={startsAt} />");
+    expect(sheet).toContain(
+      "<IncludedCallCancelNote sessionId={session.id} startsAt={startsAt} />",
+    );
     const card = read("src/components/portal/included-calls-card.tsx");
     expect(card).toContain("A later cancel");
     expect(card).toContain("If I move or cancel a call, it never counts.");
