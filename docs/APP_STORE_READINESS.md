@@ -15,7 +15,7 @@ Guideline sources (read Nov 25 2026):
 
 ## Score
 
-**63 / 100, and NOT READY: the critical blockers below override the score.** Submit only when
+**65 / 100, and NOT READY: the critical blockers below override the score.** Submit only when
 every critical blocker is closed, and only with Jared's explicit approval.
 
 | Category | Score | Why |
@@ -23,7 +23,7 @@ every critical blocker is closed, and only with Jared's explicit approval.
 | Payments & business model (3.1.1, 3.1.3) | 14 / 20 | Nothing is sold or pointed to in the app (fixed today: three screens named jfeffect.com as the place to pay). 1:1 coaching fits 3.1.3(d), in-person training 3.1.3(e). Open: web-bought AI credit packs and any future paid membership are digital and used in the app (3.1.1 / 3.1.3(b)). |
 | Privacy & data (5.1.1, 5.1.2, 5.1.3) | 14 / 20 | Built today: explicit, server-enforced, revocable consent before data goes to OpenAI / Google; privacy manifest now actually in the build. Already there: in-app account deletion. Open: migration not applied yet, privacy policy must name the AI providers, some coach-side AI paths not yet gated. |
 | Minimum functionality / native value (4.2, 2.5.2, 2.5.19) | 8 / 15 | The app is the live website in a web view. Native parts: its own camera-roll plugin, camera and microphone, Apple Health (off by default), portrait lock. No native push, no offline screen. Website changes reach the app without review. |
-| User-generated content & safety (1.2, 1.2.1(a), 1.4.1) | 6 / 10 | Report, block, staff review queue and published contact exist; membership is approval-gated. No automatic objectionable-content filter; no declared-age gate. |
+| User-generated content & safety (1.2, 1.2.1(a), 1.4.1) | 8 / 10 | Built today: a server-side word filter on every Crew post, story, comment, bio and message request; Report on every post, story, comment and profile with Block in the same sheet; auto-hide after 3 reports; a staff queue with Remove / Keep / Warn / Suspend and a 24-hour clock; one-time Community rules; contact email in Help; blocks now also hide comments, opened posts and Rankings. Membership is approval-gated. Open: migration not applied yet, photos and clips are report-based (no image screening), no declared-age gate. |
 | Stability & completeness (2.1) | 6 / 10 | Large vitest suite, CI web build; on-device regression not done here. Blank screen with no network. Stack traces were shown to users on a failed page (fixed today). |
 | Build, signing, SDK (2.5, 2.4.1) | 8 / 10 | Xcode 26 / iOS 26 SDK, manual signing, purpose strings checked in the built app, export-compliance key, build number from the run. iPad is a supported device family by default (template `TARGETED_DEVICE_FAMILY = "1,2"`) but the app is phone-first. |
 | Metadata & review readiness (2.1, 2.3) | 5 / 10 | Listing pack drafted (docs/APP_STORE_LISTING.md). No reviewer demo accounts, screenshots or public support page yet. |
@@ -41,12 +41,33 @@ every critical blocker is closed, and only with Jared's explicit approval.
    (Account → Privacy & data → AI processing), and describe deletion (30-day Recently deleted, then
    deleted; payment and session records kept by law). docs/legal/COACH_PLATFORM_DRAFTS_2026-11.md
    section E has the redline points. Jared + counsel.
-3. **Objectionable-content filter for Crew (1.2).** Apple lists four musts for UGC apps; JF Effect
-   has report, block and contact, but no method that filters objectionable material before it is
-   posted. Minimum fix: a server-side word/phrase filter on posts, comments, captions, story text
-   and chat messages that holds a match for staff review (reuse `community_reports` and the coach's
-   Crew "Needs you" queue), plus image screening for posted media if feasible. Also have the
-   one-page moderation plan ready (June 2026 change: Apple may ask for a compliance plan).
+3. **~~Objectionable-content filter for Crew (1.2).~~ RESOLVED in code (Nov 25 2026); apply
+   `20270527109000_crew_ugc_safety.sql` before the code deploys** (the queue's actions and the
+   rules prompt call its functions; old builds' Report and Remove / Dismiss keep working). What
+   Apple's four musts now map to:
+   - *Filter before posting:* `crew_text_verdict` (same lists and steps as
+     `src/lib/crew-content-filter.ts`, tested for parity) runs in database triggers on every Crew
+     post / story caption, quote and sticker text, comment, bio and message request. Slurs, sexual
+     content and threats are refused with a neutral message; borderline words (insults, sexual
+     spam, possible threats, self-harm) are saved and flagged into the queue. Case, accents,
+     l33t, stretched, spaced or dotted letters and zero-width characters can't get round it;
+     whole words only. Photos and clips are report-based (no image screening).
+   - *Report with a timely response:* Report on every post, story, comment and profile (⋯),
+     reasons (spam, harassment, hate, sexual content, violence, self-harm, dangerous advice,
+     other), a confirmation, and Block from the same sheet. What you report disappears for you at
+     once; 3 independent reports (configurable, 2 to 20) hide it for everyone until staff decide.
+     Staff get a push (held through quiet hours) and work it in Crew → Manage → Needs you →
+     Reports: Remove, Keep, Warn, Suspend posting (1 / 7 / 30 days), each item showing its
+     24-hour response clock; every action is logged (`community_moderation_actions`).
+   - *Block abusive users:* Block on profiles, posts, stories and in the report sheet; it hides
+     both people's posts, stories, comments, opened posts, profiles, messages and Rankings rows
+     from each other.
+   - *Published contact:* support@jfeffect.com in Account → Help & Tutorials and in the
+     Community rules, which everyone accepts once (zero tolerance) before a first post or comment.
+   - *Moderation plan for App Review (June 2026), proposed, Jared to confirm:* the four points
+     above, plus: every report answered within 24 hours by Jared or staff (the queue shows the
+     clock), a removal can't be undone by its author, and repeat offenders are warned, then
+     suspended, then removed from Crew.
 4. **Reviewer access (2.1).** Membership needs Jared's approval, so App Review cannot sign up and
    get in. Create the two demo accounts in docs/APP_STORE_LISTING.md (synthetic data only), make
    sure they are approved, not two-step, and say so in the Review Notes.
@@ -173,7 +194,8 @@ Sign in, sign out, password reset; cold start lands on Crew; AI-processing promp
 allow, change in Account); log a workout in list and Focus view, PR celebration, rest timer
 sound; film a set (camera and microphone prompts, upload, velocity view); New post from the
 camera roll (photo prompt, limited access, Manage); story with sticker; Crew like, comment,
-report, block; coach chat text, photo and voice memo; meal estimate (consent prompt if not
+report (post, story, comment, profile) and block; Community rules on a first post; a refused
+word and a flagged one; staff Remove / Keep / Warn / Suspend; coach chat text, photo and voice memo; meal estimate (consent prompt if not
 allowed) and food log; program import; pain map; Account: Your plan (upgrade says not available in
 the app), Credits (no packs), Privacy & data (AI processing, Delete my account up to the confirm
 step), Deactivate; portrait lock while rotating; no network at launch and mid-session; dark and

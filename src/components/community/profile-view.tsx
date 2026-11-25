@@ -11,10 +11,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import { CloseFriendsButton, FollowButton, FollowCounts, FollowRequestBanner, FollowRequestsButton, FollowsYouTag } from "@/components/community/follow-button";
 import { followLabel, useFollowState } from "@/lib/community-social";
 import { disciplineLabel, followedByLabel } from "@/lib/community-discover";
-import { useBlockPerson } from "@/lib/direct-chats";
+import { BlockConfirmSheet } from "@/components/community/block-person-sheet";
+import { ReportSheet } from "@/components/community/report-sheet";
 import { ProfileEditSheet } from "@/components/community/profile-edit";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
-import { useQueryClient } from "@tanstack/react-query";
 import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
 import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
@@ -382,9 +382,11 @@ function ProfileFacts({ disciplines, gym }: { disciplines?: string[]; gym?: stri
   );
 }
 
-/** Someone else's profile: ••• with Block. */
+/** Someone else's profile: ••• with Report and Block. */
 function ProfileMore({ author }: { author: CommunityAuthor }) {
   const [open, setOpen] = useState(false);
+  // mounted on first tap
+  const [reporting, setReporting] = useState<boolean | null>(null);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="grid h-9 w-10 shrink-0 place-items-center rounded-lg bg-muted active:bg-muted/70" aria-label={`More for ${author.name}`} data-profile-more>
@@ -397,19 +399,27 @@ function ProfileMore({ author }: { author: CommunityAuthor }) {
             <SheetTitle className="truncate text-[14px] font-bold">{author.name}</SheetTitle>
             <SheetDescription className="sr-only">Options for {author.name}</SheetDescription>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              window.setTimeout(() => setReporting(true), 120);
+            }}
+            className="flex min-h-[52px] w-full items-center px-5 text-left text-[15px] font-semibold text-destructive active:bg-muted"
+            data-report-profile
+          >
+            Report
+          </button>
           <BlockButton author={author} blocked={false} variant="row" onDone={() => setOpen(false)} />
           <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
         </SheetContent>
       </Sheet>
+      {reporting !== null && <ReportSheet kind="profile" targetId={author.user_id} author={author} open={reporting} onOpenChange={setReporting} />}
     </>
   );
 }
 
-/**
- * Block or unblock, with a confirm. A block works both ways and quietly: they
- * can't find you, see your posts or stories, follow or message you (and you
- * won't see theirs). They aren't told. Coaches can't be blocked.
- */
+/** Block or unblock, with a confirm (BlockConfirmSheet). Coaches can't be blocked. */
 function BlockButton({ author, blocked, variant = "button", className, onDone }: {
   author: CommunityAuthor;
   blocked: boolean;
@@ -418,23 +428,6 @@ function BlockButton({ author, blocked, variant = "button", className, onDone }:
   onDone?: () => void;
 }) {
   const [ask, setAsk] = useState(false);
-  const block = useBlockPerson();
-  const qc = useQueryClient();
-  const run = () =>
-    block.mutate(
-      { userId: author.user_id, blocked: !blocked },
-      {
-        onSuccess: () => {
-          toast(blocked ? `${author.name} is unblocked` : `Blocked ${author.name}`);
-          // who you can see, find and follow all change with it
-          for (const key of ["community-profile", "community-feed", "community-members", "community-suggestions", "community-people-search", "community-follows", "community-follow-list"]) {
-            void qc.invalidateQueries({ queryKey: [key] });
-          }
-          onDone?.();
-        },
-        onError: (e: any) => toast.error(e?.message ?? "That didn't work. Try again."),
-      },
-    );
   return (
     <>
       {variant === "row" ? (
@@ -446,31 +439,7 @@ function BlockButton({ author, blocked, variant = "button", className, onDone }:
           Unblock
         </button>
       )}
-      <Sheet open={ask} onOpenChange={setAsk}>
-        <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]">
-          <div className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
-            <UserAvatar src={author.avatar_url} name={author.name} size={64} expandable={false} />
-            <SheetTitle className="mt-3 text-[16px] font-bold">{blocked ? `Unblock ${author.name}?` : `Block ${author.name}?`}</SheetTitle>
-            <SheetDescription className="mt-1 text-[13px] leading-snug">
-              {blocked
-                ? "They'll be able to find you, see your posts and message you again, and follows between you work again."
-                : "They won't be able to find you, see your posts or stories, follow you or message you, and you won't see theirs. They won't be told."}
-            </SheetDescription>
-          </div>
-          <div className="border-t border-border/60">
-            <button
-              type="button"
-              disabled={block.isPending}
-              onClick={() => { setAsk(false); run(); }}
-              className={cn("h-12 w-full text-[14px] font-bold active:bg-muted", !blocked && "text-destructive")}
-              data-block-confirm
-            >
-              {blocked ? "Unblock" : "Block"}
-            </button>
-            <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
-          </div>
-        </SheetContent>
-      </Sheet>
+      <BlockConfirmSheet author={author} blocked={blocked} open={ask} onOpenChange={setAsk} onDone={onDone} />
     </>
   );
 }

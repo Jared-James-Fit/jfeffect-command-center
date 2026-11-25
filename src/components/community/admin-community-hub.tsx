@@ -270,8 +270,8 @@ function NeedsYou({ onGo }: { onGo: (t: ManageTab) => void }) {
         {reportCount > 0 && (
           <Row
             icon={<Flag className="h-4 w-4" />}
-            title={`${reportCount} ${reportCount === 1 ? "report" : "reports"} from the crew`}
-            sub="Remove it or dismiss it"
+            title={`${reportCount} ${reportCount === 1 ? "report" : "reports"} to review`}
+            sub="Reported or flagged · answer within 24 hours"
             hot
             onClick={() => setShowReports(true)}
           />

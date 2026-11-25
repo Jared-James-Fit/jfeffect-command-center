@@ -12,7 +12,7 @@ import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
 import { StoryViewersPanel } from "@/components/community/post-activity";
-import { StoryMenuSheet } from "@/components/community/story-menu";
+import { StoryMenuSheet, StoryOthersMenuSheet } from "@/components/community/story-menu";
 import { CommentsSheet, PostShareSheet } from "@/components/community/lazy-sheets";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
@@ -383,6 +383,8 @@ function StoryViewer({
   // someone else's story, swiped up: its comments (a story with no post of its own to open); your ⋯ menu the same way
   const [askComments, setAskComments] = useState(0);
   const [askMenu, setAskMenu] = useState(0);
+  // someone else's story: ⋯ with Report and Block (never for a coach, never in View as client)
+  const [othersMenu, setOthersMenu] = useState(false);
   // Swipe down to close, as on Instagram: the story follows the finger (shrinking, the feed showing
   // through behind it); let go far enough down, or flick, and it slides away, else it springs back.
   const [drag, setDrag] = useState<{ y: number; settle: boolean } | null>(null);
@@ -786,7 +788,12 @@ function StoryViewer({
                   <MoreHorizontal className="h-6 w-6" />
                 </button>
               )}
-              <button type="button" onClick={close} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10", !(post.is_mine && !isImpersonating) && "ml-auto")} aria-label="Close">
+              {!post.is_mine && !isImpersonating && !viewerIsStaff && (
+                <button type="button" onClick={() => setOthersMenu(true)} className="ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10" aria-label="More" data-story-others-more>
+                  <MoreHorizontal className="h-6 w-6" />
+                </button>
+              )}
+              <button type="button" onClick={close} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10", (isImpersonating || (!post.is_mine && viewerIsStaff)) && "ml-auto")} aria-label="Close">
                 <X className="h-6 w-6" />
               </button>
             </div>
@@ -821,6 +828,17 @@ function StoryViewer({
               onViewFeedPost={onOpenPost}
             />
           ) : (
+            <>
+            {!isImpersonating && !viewerIsStaff && (
+              <StoryOthersMenuSheet
+                post={post}
+                open={othersMenu}
+                onClose={() => setOthersMenu(false)}
+                onHold={setComposing}
+                // reported or blocked: it's gone from this phone, so the viewer closes
+                onGone={close}
+              />
+            )}
             <StoryBar
               post={post}
               viewerIsStaff={viewerIsStaff}
@@ -839,6 +857,7 @@ function StoryViewer({
                   : undefined
               }
             />
+            </>
           )}
         </div>
         </>

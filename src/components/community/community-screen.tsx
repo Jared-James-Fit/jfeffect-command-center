@@ -22,6 +22,7 @@ import { ShareWorkoutButton } from "@/components/community/share-workout-picker"
 import { useSwipeToCreate } from "@/components/community/swipe-to-create";
 import { StoryHostProvider, StoryRail } from "@/components/community/crew-stories";
 import { StoryReplyHost } from "@/components/community/story-reply-host";
+import { CrewWarningNotice } from "@/components/community/crew-rules-sheet";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { DiscoverPage } from "@/components/community/discover";
 import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
@@ -1009,6 +1010,8 @@ export function CommunityScreen({
       {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} unit={unit} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
+      {/* a warning from the team, shown once (members only) */}
+      {!previewOnly && !viewerIsStaff && <CrewWarningNotice />}
       {detailUsed && (
         <Suspense fallback={null}>
           <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} at={detailAt?.id === detailId ? detailAt.at : undefined} />

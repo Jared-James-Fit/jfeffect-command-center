@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { GlobalStoryHost } from "@/components/community/global-story-host";
+import { CrewRulesHost } from "@/components/community/crew-rules-sheet";
 import { Link, useRouterState, useNavigate, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -1062,6 +1063,8 @@ export function AppShell({
           {!pageBar && <DualAccountSwitcher />}
           {/* story rings on photos outside Crew (Messages, chat lists): the crew's stories already on the phone */}
           <ShellPageContext.Provider value><GlobalStoryHost>{children}</GlobalStoryHost></ShellPageContext.Provider>
+          {/* the one-time Crew community rules, asked by the first post or comment (withCrewRules) */}
+          <CrewRulesHost />
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}

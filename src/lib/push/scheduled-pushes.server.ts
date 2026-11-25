@@ -4,6 +4,7 @@
 //   2. one morning game plan per person (8am local, only if something's due)
 //   3. monthly recap ready (the 1st, 9am local, only if they played)
 //   4. Cleo's weekly recap for Premium members (Monday 9am local, premium/weekly-recap.server.ts)
+//   5. Crew items waiting for review that nobody was told about (crew-reports.server.ts)
 import { digestLines, weighInDue } from "@/lib/checkin-coordination/plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLIENT_VIEW_HOME } from "@/lib/client-home";
@@ -35,6 +36,13 @@ export function digestBody(parts: Array<string | null | undefined | false>): str
 export async function runPushTick(admin: SupabaseClient, now = new Date()) {
   const db = admin as any;
   const queue = await deliverQueuedPushes(admin);
+  // Crew items waiting for review that nobody was told about yet (word-filter flags; a report whose push didn't go)
+  try {
+    const { notifyWaitingCrewReports } = await import("@/lib/push/crew-reports.server");
+    await notifyWaitingCrewReports(admin, now);
+  } catch (e) {
+    console.warn("[push-tick] crew reports failed", e);
+  }
   // Cleo's weekly recap for Premium members (Monday 9am local; nobody until Premium is granted)
   let cleoRecaps = 0;
   try {

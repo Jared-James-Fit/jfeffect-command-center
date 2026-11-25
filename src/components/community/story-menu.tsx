@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, LayoutGrid, Loader2, Sticker as StickerIcon } from "lucide-react";
+import { Ban, ChevronRight, Flag, LayoutGrid, Loader2, Sticker as StickerIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -9,6 +9,8 @@ import { PREVIEW_ONLY_MESSAGE, type CommunityPost } from "@/lib/community";
 import { storyFeedVerdict } from "@/lib/story-feed";
 import { useShareStoryToFeed } from "@/lib/story-feed.queries";
 import { feedback } from "@/lib/feedback";
+import { ReportSheet } from "@/components/community/report-sheet";
+import { BlockConfirmSheet } from "@/components/community/block-person-sheet";
 
 /**
  * The ⋯ on your own story (Instagram's): the things you do with the story
@@ -111,6 +113,60 @@ export function StoryMenuSheet({ post, open, onClose, onEditSticker, onViewFeedP
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+}
+
+/**
+ * The ⋯ on someone else's story: Report (the reason sheet, with Block after
+ * it) or Block straight away (never a coach). The story waits while any of
+ * it is open; `onGone` moves on once it's reported or the person blocked.
+ */
+export function StoryOthersMenuSheet({ post, open, onClose, onHold, onGone }: {
+  post: CommunityPost;
+  open: boolean;
+  onClose: () => void;
+  onHold: (on: boolean) => void;
+  onGone: () => void;
+}) {
+  const [reporting, setReporting] = useState<boolean | null>(null);
+  const [blocking, setBlocking] = useState<boolean | null>(null);
+  useEffect(() => {
+    onHold(open || !!reporting || !!blocking);
+  }, [open, reporting, blocking, onHold]);
+  const first = post.author.name.split(" ")[0];
+  const row = "flex w-full items-center gap-3.5 rounded-2xl px-3 py-3 text-left text-destructive active:bg-muted";
+  const then = (fn: () => void) => () => {
+    onClose();
+    window.setTimeout(fn, 120);
+  };
+  return (
+    <>
+      <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+        <SheetContent side="bottom" swipeToClose hideCloseButton overlayClassName="bg-black/40" className="mx-auto max-w-lg gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),12px)]" data-story-others-menu>
+          <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30" aria-hidden />
+          <SheetTitle className="sr-only">{`${post.author.name}'s story`}</SheetTitle>
+          <SheetDescription className="sr-only">{`Report this story or block ${post.author.name}`}</SheetDescription>
+          <ul className="px-2 pb-1 pt-3">
+            <li>
+              <button type="button" onClick={then(() => setReporting(true))} className={row} data-story-report>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted"><Flag className="h-5 w-5" /></span>
+                <span className="block text-[15px] font-semibold">Report</span>
+              </button>
+            </li>
+            {!post.author.is_coach && (
+              <li>
+                <button type="button" onClick={then(() => setBlocking(true))} className={row} data-story-block>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted"><Ban className="h-5 w-5" /></span>
+                  <span className="block text-[15px] font-semibold">Block {first}</span>
+                </button>
+              </li>
+            )}
+          </ul>
+        </SheetContent>
+      </Sheet>
+      {reporting !== null && <ReportSheet kind="story" targetId={post.id} author={post.author} open={reporting} onOpenChange={setReporting} onReported={onGone} />}
+      {blocking !== null && <BlockConfirmSheet author={post.author} blocked={false} open={blocking} onOpenChange={setBlocking} onDone={onGone} />}
     </>
   );
 }
