@@ -7,7 +7,8 @@
  * place that captures: the set videos (its own flow, unchanged), and, through
  * `CaptureCamera`, New post, chat, progress and check-in photos and profile
  * photos, each with its purpose's defaults (`PURPOSES`). The story camera
- * (ShareStudio) keeps its live filters and reads the same defaults.
+ * (ShareStudio) stays its own camera, for its live filters; its 9:16 is the
+ * story's default here too.
  *
  * What a camera captures and what a post shows are separate: the capture
  * ratio (`CaptureRatio`) is the guide on the viewfinder and the framing the

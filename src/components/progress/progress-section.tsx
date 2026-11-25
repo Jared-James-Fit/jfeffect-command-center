@@ -1004,6 +1004,14 @@ function AngleUploadCard({
     onClip: (f) => void onFile(f),
     onLibrary: () => fileRef.current?.click(),
   });
+  // a photo: the shared capture camera (media/capture.ts, purpose "progress": 3:4 with the grid, the same framing
+  // every time), Library inside it for one already taken
+  const photoCamera = useFilmCamera({
+    purpose: "progress",
+    title: angle === "all" ? "Progress photo" : `${ANGLE_LABEL[angle]} · progress photo`,
+    onClip: (f) => void onFile(f),
+    onLibrary: () => fileRef.current?.click(),
+  });
   const [progress, setProgress] = useState<number | null>(null);
   // a video is trimmed (longer than 10 minutes, or what this phone can send) and shrunk before it uploads
   const [phase, setPhase] = useState<"preparing" | "uploading">("uploading");
@@ -1136,6 +1144,7 @@ function AngleUploadCard({
         type="button"
         onClick={() => {
           if (mediaType === "video" && camera.start()) return;
+          if (mediaType === "photo" && photoCamera.start()) return;
           fileRef.current?.click();
         }}
         className="group relative block aspect-square w-full overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/60 transition active:scale-[0.98] hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1214,6 +1223,7 @@ function AngleUploadCard({
       {err && <p className="text-xs text-destructive">{err}</p>}
       {trimmer.element}
       {camera.element}
+      {photoCamera.element}
     </div>
   );
 }

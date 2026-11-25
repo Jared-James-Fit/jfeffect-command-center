@@ -167,6 +167,16 @@ describe("every place captures through the one camera", () => {
     expect(composer).toContain('if (how === "camera" && camera.start()) return;');
     expect(composer).toContain("framingForCrop(s.picture, s.crop, POST_ASPECTS[aspect])");
   });
+  it("chat, progress photos, check-ins and profile photos use it with their own defaults", () => {
+    expect(read("src/components/message-thread.tsx")).toContain('purpose: "chat"');
+    expect(read("src/components/group-message-thread.tsx")).toContain('purpose: "chat"');
+    const progress = read("src/components/progress/progress-section.tsx");
+    expect(progress).toContain('purpose: "progress"');
+    expect(progress).toContain('if (mediaType === "photo" && photoCamera.start()) return;');
+    expect(read("src/components/forms/client-form-renderer.tsx")).toContain('purpose: video ? undefined : "checkin"');
+    expect(read("src/components/profile-picture-capture.tsx")).toContain('purpose: "profile"');
+    expect(read("src/components/profile-picture-capture.tsx")).toContain("if (profileCamera.start()) return;");
+  });
   it("the set camera keeps its own flow (video only, tap to start and stop)", () => {
     const cam = read("src/components/camera/film-camera.tsx");
     expect(cam).toContain('data-film-shutter={recording ? "recording" : "ready"}');

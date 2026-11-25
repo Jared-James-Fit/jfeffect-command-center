@@ -12,7 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw } from "lucide-react";
+import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw, Camera } from "lucide-react";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { canFilmInApp } from "@/lib/camera/film-settings";
 import { ActionButton } from "@/components/action-button";
 import { QuestionReferenceImage, getQuestionReferenceImage } from "@/components/forms/question-reference-image";
 import {
@@ -1273,6 +1275,8 @@ function QuestionInput({
           </ul>
         )}
         {!readOnly && (
+          <div className="flex flex-wrap items-center gap-2">
+          <CheckinCamera video={q.question_type === "video"} disabled={!!busy} onFile={onUpload} />
           <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-sm hover:bg-muted/40 ${busy ? "pointer-events-none opacity-60" : ""}`}>
             {busy === "uploading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             <span>
@@ -1292,11 +1296,38 @@ function QuestionInput({
               }}
             />
           </label>
+          </div>
         )}
       </div>
     );
   }
   return null;
+}
+
+/**
+ * A check-in's photo or video question: the app's shared capture camera (media/capture.ts, purpose
+ * "checkin": 3:4 with the grid; a video question films only), beside Upload. Hidden where a page
+ * can't use the camera (Upload's picker has the phone's camera there).
+ */
+function CheckinCamera({ video, disabled, onFile }: { video: boolean; disabled: boolean; onFile: (f: File) => void }) {
+  const cam = useFilmCamera({ purpose: video ? undefined : "checkin", maxSeconds: video ? 120 : undefined, title: video ? "Check-in video" : "Check-in", onClip: onFile });
+  const [ok, setOk] = useState(false);
+  useEffect(() => setOk(canFilmInApp()), []);
+  if (!ok) return null;
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => void cam.start()}
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted/40 disabled:opacity-60"
+        data-checkin-camera
+      >
+        <Camera className="h-4 w-4" /> {video ? "Film" : "Take photo"}
+      </button>
+      {cam.element}
+    </>
+  );
 }
 
 /** One-tap answers above a box: tap to add (or take out), then type anything else. */

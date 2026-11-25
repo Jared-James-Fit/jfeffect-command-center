@@ -8,6 +8,7 @@ import { compressImage } from "@/lib/image-compress";
 import { withRetry, isTransientError } from "@/lib/retry";
 import { Progress } from "@/components/ui/progress";
 import { AvatarCropper } from "@/components/avatar-cropper";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
 
 interface Props {
   userId: string;
@@ -79,8 +80,17 @@ export function ProfilePictureCapture({
 
   const triggerFallback = () => cameraInputRef.current?.click();
 
+  // the app's shared capture camera (media/capture.ts, purpose "profile": the front camera, a square guide), full screen;
+  // the inline camera below stays for where it can't open
+  const profileCamera = useFilmCamera({
+    purpose: "profile",
+    onClip: (f) => startCrop(track(URL.createObjectURL(f))),
+    onLibrary: effectiveAllowFileUpload ? () => fileInputRef.current?.click() : undefined,
+  });
+
   const startCamera = async () => {
     setCameraError(null);
+    if (profileCamera.start()) return;
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
       triggerFallback();
       return;
@@ -309,6 +319,7 @@ export function ProfilePictureCapture({
           className="hidden"
           onChange={onFileChosen}
         />
+        {profileCamera.element}
 
         {effectiveAllowFileUpload && !streaming && !preview && (
           <>
