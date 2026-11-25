@@ -51,6 +51,7 @@ import {
   type PostAspect,
 } from "@/lib/photo-frame";
 import { drawableSize, framedCanvas, lightCopy, wholeStoryCanvas, type Drawable } from "@/lib/photo-frame-draw";
+import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
 import { FilterPanel } from "@/components/community/filter-panel";
 import { ShareOutSheet } from "@/components/community/share-out-sheet";
 import { JF_HANDLE, promoLine, shareFileName, workoutShareCaption } from "@/lib/share-out";
@@ -311,6 +312,9 @@ export function ShareStudio({
   // the photo's filter (media-grade.ts), its panel, and a finger on one of its sliders (the card repaints lighter)
   const [shotGrade, setShotGrade] = useState<MediaGrade | null>(null);
   const [enhancing, setEnhancing] = useState(false);
+  // the Filters / Adjust / Colour panel closes with one swipe down, like every bottom sheet (Done too); every edit stays
+  const [enhanceNode, setEnhanceNode] = useState<HTMLDivElement | null>(null);
+  useSwipeDownToClose(enhanceNode, enhancing, () => setEnhancing(false));
   const [gradeLive, setGradeLive] = useState(false);
   // Compare held in the panel: the picture as it was shot until it's let go
   const [comparing, setComparing] = useState(false);
@@ -2387,7 +2391,7 @@ export function ShareStudio({
             </div>
             {/* Enhance: the filters and adjustments over the picture's foot (the picture shows every change at once) */}
             {enhancing && enhanceTarget && (
-              <div className="absolute inset-x-0 bottom-0 z-[7] rounded-t-2xl bg-black/80 px-3 pb-2 pt-1.5 backdrop-blur-md animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-studio-enhance-panel>
+              <div ref={setEnhanceNode} className="absolute inset-x-0 bottom-0 z-[7] rounded-t-2xl bg-black/80 px-3 pb-2 pt-1.5 backdrop-blur-md animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-studio-enhance-panel>
                 <StudioEnhance
                   target={enhanceTarget}
                   grade={enhanceTarget === "shot" ? shotGrade : (clip0?.grade ?? null)}
