@@ -35,7 +35,17 @@ function writeEdits(id: string, v: Record<string, string>) {
   }
 }
 
-export function PresenterScript({ sessionId, slides }: { sessionId: string; slides: ScriptSlide[] }) {
+export function PresenterScript({
+  sessionId,
+  slides,
+  variant = "card",
+}: {
+  sessionId: string;
+  slides: ScriptSlide[];
+  /** "window": the script's own full window (large type, ← → move the slides) */
+  variant?: "card" | "window";
+}) {
+  const big = variant === "window";
   const [index, setIndex] = useState(0);
   const [edits, setEdits] = useState<Record<string, string>>(() => readEdits(sessionId));
   const [editing, setEditing] = useState(false);
@@ -76,6 +86,22 @@ export function PresenterScript({ sessionId, slides }: { sessionId: string; slid
     chan.current?.postMessage({ type: "go", index: to } satisfies PresentMessage);
   };
 
+  const goRef = useRef(go);
+  goRef.current = go;
+  const iNow = useRef(i);
+  iNow.current = i;
+  useEffect(() => {
+    if (!big) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable)) return;
+      if (e.key === "ArrowRight") goRef.current(iNow.current + 1);
+      if (e.key === "ArrowLeft") goRef.current(iNow.current - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [big]);
+
   const key = slide ? `${i}:${slide.key}` : "";
   const edited = key ? edits[key] : undefined;
   const generated = useMemo(() => (slide ? slideText(slide) : ""), [slide]);
@@ -97,15 +123,18 @@ export function PresenterScript({ sessionId, slides }: { sessionId: string; slid
   };
 
   return (
-    <section className="space-y-3 rounded-2xl border border-border p-4" data-presenter-script>
+    <section
+      className={cn("space-y-3", big ? "space-y-5" : "rounded-2xl border border-border p-4")}
+      data-presenter-script={variant}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[12px] text-muted-foreground">Your script · only you see this</p>
-          <p className="truncate text-[16px] font-semibold">
+          <p className={cn("truncate font-semibold", big ? "text-[22px]" : "text-[16px]")}>
             {i + 1} of {total} · {slide.title}
           </p>
         </div>
-        <p className={cn("shrink-0 text-[13px] tabular-nums", over ? "text-warning" : "text-muted-foreground")}>
+        <p className={cn("shrink-0 tabular-nums", big ? "text-[16px]" : "text-[13px]", over ? "text-warning" : "text-muted-foreground")}>
           {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} / {slide.minutes} min
         </p>
       </div>
@@ -115,12 +144,12 @@ export function PresenterScript({ sessionId, slides }: { sessionId: string; slid
           rows={14}
           value={edited ?? generated}
           onChange={(e) => save(e.target.value)}
-          className="text-[16px] sm:text-[15px]"
+          className={big ? "text-[18px]" : "text-[16px] sm:text-[15px]"}
         />
       ) : edited != null ? (
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{edited}</p>
+        <p className={cn("whitespace-pre-wrap leading-relaxed", big ? "text-[19px]" : "text-[15px]")}>{edited}</p>
       ) : (
-        <div className="space-y-3 text-[15px] leading-relaxed">
+        <div className={cn("space-y-3 leading-relaxed", big ? "space-y-5 text-[19px]" : "text-[15px]")}>
           {slide.say.length ? (
             <div className="space-y-1.5">
               {slide.say.map((l, n) => (
@@ -130,7 +159,7 @@ export function PresenterScript({ sessionId, slides }: { sessionId: string; slid
           ) : null}
           {slide.ask.length ? (
             <div>
-              <p className="text-[12px] font-medium text-muted-foreground">Ask</p>
+              <p className={cn("font-medium text-muted-foreground", big ? "text-[14px]" : "text-[12px]")}>Ask</p>
               <ul className="mt-1 space-y-1">
                 {slide.ask.map((q, n) => (
                   <li key={n} className="font-medium">
@@ -141,11 +170,13 @@ export function PresenterScript({ sessionId, slides }: { sessionId: string; slid
             </div>
           ) : null}
           {slide.pause ? (
-            <p className="rounded-lg bg-secondary px-3 py-2 text-[14px]">
+            <p className={cn("rounded-lg bg-secondary px-3 py-2", big ? "text-[17px]" : "text-[14px]")}>
               <span className="font-semibold">Stop and listen.</span> {slide.pause}
             </p>
           ) : null}
-          {slide.transition ? <p className="text-[14px] text-muted-foreground">Then: {slide.transition}</p> : null}
+          {slide.transition ? (
+            <p className={cn("text-muted-foreground", big ? "text-[16px]" : "text-[14px]")}>Then: {slide.transition}</p>
+          ) : null}
         </div>
       )}
 

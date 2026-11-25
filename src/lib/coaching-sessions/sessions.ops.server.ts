@@ -300,6 +300,108 @@ export async function getPresentation(c: Caller, data: any) {
   };
 }
 
+/**
+ * The shared screen's pictures, from the athlete's own records only (their
+ * workouts, weigh-ins, all-time records and the meet's date), read with the
+ * caller's own login. Each part is best effort: one that can't be read is
+ * left out, never guessed.
+ */
+export async function getPresentationVisuals(c: Caller, data: any) {
+  const { session, supabase } = await reachSession(c, data.sessionId);
+  const { weekBuckets, classLimit } = await import("./visuals");
+  const { todayIn } = await import("./sessions.server");
+  const clientId = session.client_id as string;
+  const { data: client } = await supabase
+    .from("clients")
+    .select("user_id, timezone, preferred_weight_unit")
+    .eq("id", clientId)
+    .maybeSingle();
+  const today = todayIn((client as any)?.timezone);
+  const unit: "kg" | "lb" = (client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb";
+  const userId = (client as any)?.user_id ?? null;
+  const LB = 2.20462;
+  const inUnit = (kg: number) => Math.round((unit === "lb" ? kg * LB : kg) * 10) / 10;
+  const toKg = (v: number, u: string | null) => (u === "kg" ? v : v / LB);
+  const addDays = (iso: string, n: number) => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const safe = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await fn();
+    } catch {
+      return fallback;
+    }
+  };
+  const from28 = addDays(today, -27);
+  const from42 = addDays(today, -41);
+  const [dated, canonical, legacy, recent] = await Promise.all([
+    safe(async () => {
+      const { loadDatedWorkouts } = await import("@/lib/cleo-schedule.server");
+      return (await loadDatedWorkouts(supabase, { clientIds: [clientId], from: from28, to: today })) as any[];
+    }, null as any[] | null),
+    userId
+      ? safe(async () => {
+          const { data: rows, error } = await supabase
+            .from("progress_bodyweight")
+            .select("id, logged_date, weight_value, weight_unit, note")
+            .eq("user_id", userId)
+            .gte("logged_date", from42)
+            .order("logged_date");
+          if (error) throw new Error(error.message);
+          return (rows ?? []) as any[];
+        }, [] as any[])
+      : Promise.resolve([] as any[]),
+    safe(async () => {
+      const { data: rows, error } = await supabase
+        .from("progress_metrics")
+        .select("id, entry_date, bodyweight, bodyweight_unit, notes")
+        .eq("client_id", clientId)
+        .not("bodyweight", "is", null)
+        .gte("entry_date", from42)
+        .order("entry_date");
+      if (error) throw new Error(error.message);
+      return (rows ?? []) as any[];
+    }, [] as any[]),
+    safe(async () => {
+      const { data: r, error } = await supabase.rpc("client_recent_records", { _client_id: clientId, _since: `${from28}T00:00:00Z` });
+      if (error) throw new Error(error.message);
+      const { prepRecords } = await import("@/lib/coaching-packages/call-prep.server");
+      return await prepRecords(r);
+    }, null as any),
+  ]);
+
+  const mine = (dated ?? []).filter((w) => w.clientId === clientId && w.visible);
+  const training = dated ? weekBuckets(mine.map((w) => ({ date: w.date, done: !!w.done, optional: !!w.optional })), today) : null;
+
+  const { mergeBodyweightSeries } = await import("@/lib/bodyweight");
+  const points = mergeBodyweightSeries(canonical as any, legacy as any)
+    .filter((p) => Number.isFinite(p.value) && p.value > 0 && p.date >= from42 && p.date <= today)
+    .map((p) => ({ date: p.date, value: inUnit(toKg(p.value, p.unit as string)) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const e = session.event ?? {};
+  const limitKg = classLimit(e.weightClass ?? null);
+  const bodyweight = points.length
+    ? { points, limit: limitKg != null ? inUnit(limitKg) : null, classLabel: e.weightClass ? `${String(e.weightClass).replace(/\s*kg$/i, "")} kg class` : null }
+    : null;
+
+  const records = ((recent?.top ?? []) as any[]).map((r) => ({
+    exercise: String(r.exercise),
+    load: Math.round((unit === "lb" ? r.loadKg * LB : r.loadKg) * 2) / 2,
+    reps: Number(r.reps),
+    date: String(r.date),
+  }));
+
+  return {
+    unit,
+    training,
+    bodyweight,
+    records,
+    countdown: e.title && e.daysOut != null && e.daysOut >= 0 ? { daysOut: Number(e.daysOut), date: e.date ?? null, title: String(e.title) } : null,
+  };
+}
+
 export async function sendSessionQuestions(c: Caller, data: any) {
   const { session: s, supabase, sb, userId } = await reachSession(c, data.sessionId);
   const sentAt = s.questionnaire?.sent_at;

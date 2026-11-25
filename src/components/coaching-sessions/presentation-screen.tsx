@@ -3,15 +3,19 @@
  * time, large type, nothing private. It reads getPresentationFn, which returns
  * only the athlete-safe view, so the coach's notes and Cleo's reads are never
  * in this window at all. ← → (or the dots) move between sections; the coach's
- * own workspace stays in the other window.
+ * own workspace stays in the other window. Each slide can carry one picture
+ * from the athlete's own records (slide-visuals.tsx, visuals.ts). S opens the
+ * coach's script in a window of its own (nothing about it is drawn here).
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { getPresentationFn } from "@/lib/coaching-sessions/sessions.functions";
+import { getPresentationFn, getPresentationVisualsFn } from "@/lib/coaching-sessions/sessions.functions";
 import { cn } from "@/lib/utils";
-import { presentChannel, type PresentMessage } from "@/lib/coaching-sessions/script";
+import { openScriptWindow, presentChannel, type PresentMessage } from "@/lib/coaching-sessions/script";
+import { slideVisuals, type PresentationVisuals } from "@/lib/coaching-sessions/visuals";
+import { SlideVisual } from "./slide-visuals";
 
 export function PresentationScreen({ sessionId }: { sessionId: string }) {
   const read = useServerFn(getPresentationFn);
@@ -20,16 +24,24 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
     queryFn: () => read({ data: { sessionId } }),
     refetchInterval: 20_000,
   });
+  const readVisuals = useServerFn(getPresentationVisualsFn);
+  const vq = useQuery({
+    queryKey: ["coaching-presentation-visuals", sessionId],
+    queryFn: () => readVisuals({ data: { sessionId } }) as Promise<PresentationVisuals>,
+    staleTime: 10 * 60_000,
+    retry: 1,
+  });
   const [i, setI] = useState(0);
   const total = (q.data?.sections.length ?? 0) + 1; // a title screen, then each section
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === " ") setI((n) => Math.min(total - 1, n + 1));
       if (e.key === "ArrowLeft") setI((n) => Math.max(0, n - 1));
+      if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && !e.altKey) openScriptWindow(sessionId);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [total]);
+  }, [total, sessionId]);
 
   // The coach's private script (their other window) follows this slide, and
   // its ‹ › move this screen. Only the index crosses the channel.
@@ -57,6 +69,10 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
     return <div className="fixed inset-0 z-50 bg-background" data-presentation-loading />;
   const d = q.data;
   const section = i > 0 ? d.sections[i - 1] : null;
+  const v = vq.data ?? null;
+  const pictures = v ? slideVisuals(d.sections, v) : {};
+  const kind = pictures[i];
+  const picture = v && kind ? <SlideVisual kind={kind} v={v} /> : null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background text-foreground" data-presentation>
@@ -72,13 +88,24 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
         </button>
       </header>
 
-      <main className="flex min-h-0 flex-1 items-center justify-center px-6 sm:px-10">
+      <main className="flex min-h-0 flex-1 overflow-y-auto px-6 sm:px-10">
+        <div
+          className={cn(
+            "m-auto grid w-full items-center gap-8 py-4",
+            picture ? "max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)] lg:gap-14" : "max-w-3xl",
+          )}
+        >
         {section ? (
-          <div className="w-full max-w-3xl" data-presentation-section={section.key}>
+          <div className="w-full" data-presentation-section={section.key}>
             <p className="text-[15px] font-medium text-muted-foreground">
               {i} of {total - 1} · {section.minutes} min
             </p>
-            <h1 className="mt-2 text-balance text-[40px] font-semibold leading-[1.05] tracking-[-0.03em] sm:text-[64px]">
+            <h1
+              className={cn(
+                "mt-2 text-balance text-[40px] font-semibold leading-[1.05] tracking-[-0.03em]",
+                picture ? "sm:text-[56px]" : "sm:text-[64px]",
+              )}
+            >
               {section.title}
             </h1>
             <p className="mt-3 text-[18px] text-muted-foreground sm:text-[22px]">{section.prompt}</p>
@@ -103,7 +130,7 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
             ) : null}
           </div>
         ) : (
-          <div className="w-full max-w-3xl" data-presentation-title>
+          <div className="w-full" data-presentation-title>
             {d.event?.daysOut != null && d.event.daysOut >= 0 ? (
               <p className="text-[18px] font-medium tabular-nums text-muted-foreground">
                 {d.event.daysOut === 0 ? "Today" : `${d.event.daysOut} days to go`}
@@ -119,6 +146,8 @@ export function PresentationScreen({ sessionId }: { sessionId: string }) {
             </p>
           </div>
         )}
+        {picture ? <div className="w-full">{picture}</div> : null}
+        </div>
       </main>
 
       <footer className="flex items-center justify-between gap-4 px-6 pb-6 sm:px-10">
