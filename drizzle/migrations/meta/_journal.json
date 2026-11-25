@@ -120,6 +120,13 @@
       "when": 1795551574460,
       "tag": "0016_velocity_worker_service_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795627758369,
+      "tag": "0017_bind_agreement_versions_and_documents_reads",
+      "breakpoints": true
     }
   ]
 }
