@@ -4,7 +4,7 @@ import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import { isInactivePrimaryDay } from "@/lib/active-calendar";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
-import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
+import { compareWorkoutItemsBySchedule, type WorkoutItem } from "@/lib/workout-today";
 import { chunk, fetchAllPages } from "@/lib/supabase-paginate";
 import { inWorkoutOrder } from "@/lib/logged-set-order";
 import { cardioSetDone, isPlanCardioRow } from "@/lib/workouts/workout-cardio";
@@ -1954,7 +1954,7 @@ export async function getClientWorkouts(
   // for weeks with no days). We then run these through
   // mergeScheduledInstances to emit one card per scheduled instance and
   // link completions instance-first with a safe legacy fallback.
-  const baseItems = (weeks ?? []).flatMap((w: any) => {
+  const baseItems = (weeks ?? []).flatMap((w: any): WorkoutItem[] => {
     const b = visibleBlocks.find((x: any) => x.id === w?.block_id);
     const weekDays = daysByWeek.get(w.id) ?? [];
     if (weekDays.length === 0) return [{ day: null, week: w, block: b, completion: null, logged_sets_count: 0 }];
