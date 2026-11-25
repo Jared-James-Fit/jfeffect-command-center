@@ -124,6 +124,18 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
       kind: "bodyweight",
       text: `7-day average ${b.inputs.bodyweightAvg ?? "unknown"} kg${b.inputs.bodyweightTrendPerWeek != null ? `, ${b.inputs.bodyweightTrendPerWeek > 0 ? "+" : ""}${b.inputs.bodyweightTrendPerWeek} kg a week` : ""}; class limit ${b.inputs.classLimit ?? "not set"}${b.inputs.bodyweightAvg != null && b.inputs.classLimit != null ? `; ${Math.round((b.inputs.bodyweightAvg - b.inputs.classLimit) * 10) / 10} kg over the limit` : ""}`,
     });
+  const cuts = b.inputs.pastCuts ?? [];
+  if (cuts.length)
+    out.push({
+      id: "BWH",
+      kind: "bodyweight",
+      text: `Bodyweight in past preps (${b.daysOut} days out, like today, and 4 weeks out, against the weigh-in): ${cuts
+        .map(
+          (c) =>
+            `${c.meetDate}${c.weightClass ? ` (${c.weightClass})` : ""}: ${c.sameDistanceKg ?? "no weigh-ins"} kg → ${c.fourWeeksKg ?? "no weigh-ins"} kg → weighed in ${c.weighInKg}`,
+        )
+        .join("; ")}; today ${b.inputs.bodyweightAvg ?? "unknown"} kg`,
+    });
   const wf = b.inputs.watchFacts;
   (wf.pain ?? []).forEach((p, i) =>
     out.push({

@@ -9,7 +9,13 @@
 import { planAttempts, type AttemptPlan } from "./attempts";
 import { recommendCall, type CallRecommendation } from "./call";
 import { readCompetitor, type CompetitorRead } from "./competitor";
-import { forecastMeet, type ConversionPoint, type Forecast, type LiftEvidence } from "./forecast";
+import {
+  forecastMeet,
+  type ConversionPoint,
+  type Forecast,
+  type LiftEvidence,
+  type PastCut,
+} from "./forecast";
 import { planGameDay, type DayStep } from "./gameday";
 import { buildLandscape, type Landscape } from "./landscape";
 import { competitionProfile, type CompetitionProfile, type ForecastCheck } from "./learning";
@@ -65,6 +71,8 @@ export type BriefContext = {
     bodyweightAvg: number | null;
     bodyweightTrendPerWeek: number | null;
     classLimit: number | null;
+    /** their bodyweight at this distance before past meets (forecast.ts pastCuts) */
+    pastCuts?: PastCut[];
   };
   lifts: Record<Lift, LiftEvidence>;
   meets: MeetRecord[];
@@ -170,6 +178,7 @@ export type Brief = {
     bodyweightAvg: number | null;
     bodyweightTrendPerWeek: number | null;
     classLimit: number | null;
+    pastCuts: PastCut[];
     conversion: ConversionPoint[];
     watchFacts: BriefContext["watch"];
   };
@@ -241,6 +250,7 @@ export function buildBrief(ctx: BriefContext): Brief {
     conversion: ctx.conversion,
     concerns: pre.filter((w) => w.area === "pain" || w.area === "recovery"),
     increment: c.rules.incrementKg,
+    weightClass: c.weightClass,
   });
   const watch = watchList({
     ...ctx.watch,
@@ -376,6 +386,7 @@ export function buildBrief(ctx: BriefContext): Brief {
       bodyweightAvg: ctx.athlete.bodyweightAvg,
       bodyweightTrendPerWeek: ctx.athlete.bodyweightTrendPerWeek,
       classLimit: ctx.athlete.classLimit,
+      pastCuts: ctx.athlete.pastCuts ?? [],
       conversion: ctx.conversion,
       watchFacts: ctx.watch,
     },

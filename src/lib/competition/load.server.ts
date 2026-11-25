@@ -20,7 +20,7 @@ import {
 import { meetsFromRows } from "@/lib/analytics/competition-strength";
 import { epley1RM } from "@/lib/analytics/e1rm";
 import type { BriefContext, CompetitionFacts } from "./brief";
-import type { ConversionPoint, LiftEvidence } from "./forecast";
+import { pastCuts, type ConversionPoint, type LiftEvidence } from "./forecast";
 import { addDays, daysBetween } from "./milestones";
 import { readRules, LB_PER_KG } from "./rules";
 import type { Lift, MeetRecord, MilestoneKind, Objective, Observation } from "./types";
@@ -298,9 +298,9 @@ export async function loadCompetitionContext(
             .from("progress_bodyweight")
             .select("logged_date, weight_value, weight_unit")
             .eq("user_id", client.user_id)
-            .gte("logged_date", addDays(today, -28))
+            .gte("logged_date", addDays(today, -730))
             .order("logged_date", { ascending: true })
-            .limit(60)
+            .limit(1000)
         ).data ?? []
       );
     }, [] as any[]),
@@ -680,6 +680,7 @@ export async function loadCompetitionContext(
       bodyweightAvg,
       bodyweightTrendPerWeek,
       classLimit: classLimitKg(facts.weightClass),
+      pastCuts: pastCuts(bw, meets, daysBetween(today, facts.meetDate), today),
     },
     lifts,
     meets,

@@ -17,6 +17,14 @@
  *  - spread: how much the evidence can be trusted (recent hard sessions,
  *    the line's state, meets to calibrate against) sets how wide the
  *    conservative and high scenarios sit.
+ *  - recent form: today's line is what training says now, and that's what
+ *    the conversion was measured against only three weeks out. Further out
+ *    (an off-season volume block, a bench last trained hard two months ago)
+ *    it isn't the meet yet, so their recent meets in the class they're
+ *    entering carry more of the expected the further away the meet is
+ *    (`formShare`: none inside three weeks, three quarters from twelve), by
+ *    how many of those meets there are. Where training and form disagree
+ *    the range widens to hold both.
  *  - concerns: pain on a lift or poor recovery lowers that lift's
  *    conservative scenario and is said, never hidden in the numbers.
  */
@@ -93,6 +101,108 @@ const lowest = (cs: Confidence[]): Confidence =>
   cs.reduce((a, c) => (RANK[c] < RANK[a] ? c : a), "high" as Confidence);
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
+/** Inside this many days the line is read as the conversion was measured: three weeks out. */
+export const FORM_FROM_DAYS = 21;
+/** By this many days out recent platform form carries its full share. */
+export const FORM_FULL_DAYS = 84;
+export const FORM_MAX_SHARE = 0.75;
+/** Meets count as recent form for a year. */
+export const FORM_WINDOW_DAYS = 365;
+
+/** The share of the expected that recent meet form carries at this distance from the meet. */
+export function formShare(daysOut: number, meets: number): number {
+  if (daysOut <= FORM_FROM_DAYS || meets <= 0) return 0;
+  const byTime = Math.min(
+    FORM_MAX_SHARE,
+    ((daysOut - FORM_FROM_DAYS) / (FORM_FULL_DAYS - FORM_FROM_DAYS)) * FORM_MAX_SHARE,
+  );
+  return byTime * (meets >= 3 ? 1 : meets === 2 ? 0.85 : 0.6);
+}
+
+const classKey = (c: string | null | undefined) =>
+  String(c ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/kg$/, "")
+    .replace(/\.0+(?=\+?$)/, "");
+
+/**
+ * Their recent platform form for a lift: the median of what they made at
+ * their last (up to three) full-power meets within a year, in the class
+ * they're entering when it's known (their form at another bodyweight isn't
+ * this meet's).
+ */
+export function recentForm(
+  meets: MeetRecord[],
+  lift: Lift,
+  today: string,
+  weightClass?: string | null,
+): { kg: number; meets: MeetRecord[] } | null {
+  const want = classKey(weightClass);
+  const pool = meets
+    .filter(
+      (m) =>
+        (m.event ?? "SBD").toUpperCase() === "SBD" &&
+        (m.total ?? 0) > 0 &&
+        m.date <= today &&
+        daysBetween(m.date, today) <= FORM_WINDOW_DAYS &&
+        (!want || classKey(m.weightClass) === want) &&
+        liftAt(m, lift) != null,
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 3);
+  if (!pool.length) return null;
+  return { kg: median(pool.map((m) => liftAt(m, lift)!)), meets: pool };
+}
+
+export type PastCut = {
+  meetDate: string;
+  weightClass: string | null;
+  /** their weigh-in at that meet */
+  weighInKg: number;
+  /** their bodyweight average this many days before that meet (as far out as today is) */
+  sameDistanceKg: number | null;
+  /** and four weeks before it */
+  fourWeeksKg: number | null;
+};
+
+/**
+ * How far from the class they were in past preps: their bodyweight at the
+ * same distance before each meet (and four weeks before) against the weigh-in
+ * they made, from their own weigh-ins (pure). A cut this athlete has made
+ * before is evidence; one twice the size isn't the same cut.
+ */
+export function pastCuts(
+  logs: Array<{ day: string; kg: number }>,
+  meets: MeetRecord[],
+  daysOut: number,
+  today: string,
+): PastCut[] {
+  const avgAround = (day: string, half: number) => {
+    const xs = logs.filter((l) => Math.abs(daysBetween(day, l.day)) <= half).map((l) => l.kg);
+    return xs.length >= 2 ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null;
+  };
+  const back = (date: string, days: number) => {
+    const d = new Date(`${date}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  };
+  return meets
+    .filter(
+      (m) =>
+        (m.bodyweight ?? 0) > 0 && m.date <= today && daysBetween(m.date, today) <= 730,
+    )
+    .slice(0, 6)
+    .map((m) => ({
+      meetDate: m.date,
+      weightClass: m.weightClass,
+      weighInKg: m.bodyweight!,
+      sameDistanceKg: daysOut > 7 ? avgAround(back(m.date, daysOut), 7) : null,
+      fourWeeksKg: avgAround(back(m.date, 28), 4),
+    }))
+    .filter((c) => c.sameDistanceKg != null || c.fourWeeksKg != null);
+}
+
 export function conversionFor(lift: Lift, points: ConversionPoint[]): LiftForecast["conversion"] {
   const r = points
     .filter((p) => p.lift === lift && p.trainingKg > 0 && p.meetKg > 0)
@@ -113,9 +223,12 @@ export function forecastMeet(input: {
   conversion: ConversionPoint[];
   concerns: Concern[];
   increment?: number;
+  /** the class they're entering, so recent form is read at that class */
+  weightClass?: string | null;
 }): Forecast {
   const step = input.increment ?? 2.5;
-  const weeks = Math.max(0, daysBetween(input.today, input.meetDate) / 7);
+  const daysOut = Math.max(0, daysBetween(input.today, input.meetDate));
+  const weeks = daysOut / 7;
   const factors: string[] = [];
   const limitations: string[] = [];
   const recentMeet = input.meets.find(
@@ -164,7 +277,6 @@ export function forecastMeet(input: {
     // calibration from their own meets lifts the confidence one step at most
     if (source === "training" && conv.meets >= 2 && conf === "medium" && ev.hardSessions6w >= 2)
       conf = "high";
-    const sp = SPREAD[conf];
     const ratio = source === "meet" ? 1 : conv.ratio;
     if (source === "training")
       basis.push(
@@ -191,11 +303,32 @@ export function forecastMeet(input: {
       .filter((c) => c.lift === lift || c.lift == null)
       .reduce((s, c) => s + CONCERN_CUT[c.severity] * (c.lift == null ? 0.67 : 1), 0);
     if (cut > 0) basis.push(`Conservative lowered ${pct(cut)} for concerns on file`);
-    const mid = now * ratio;
+    const trainingMid = now * ratio;
+    const form = source === "training" ? recentForm(input.meets, lift, input.today, input.weightClass) : null;
+    const share = form ? formShare(daysOut, form.meets.length) : 0;
+    if (form && share > 0) {
+      const since = form.meets[form.meets.length - 1].date;
+      basis.push(
+        `Recent form${input.weightClass ? ` at ${input.weightClass} kg` : ""}: ${form.kg} kg (${form.meets.length === 1 ? `their ${since} meet` : `median of ${form.meets.length} meets since ${since}`})`,
+      );
+      basis.push(
+        `${Math.round(weeks)} weeks out: recent meets carry ${pct(share)} of the expected, today's training ${pct(1 - share)}`,
+      );
+      // form from a full prep beside a line that isn't peaked: said, so nobody reads one as the other
+      if (conf === "low" && share >= 0.5 && form.meets.length >= 2) conf = "medium";
+    }
+    const spread = SPREAD[conf];
+    const expMid = trainingMid * (1 + gainExp) * (1 - share) + (form?.kg ?? 0) * share;
+    const lowMid = share > 0 ? Math.min(trainingMid, expMid) : trainingMid;
+    // with no form in it the high is exactly what it always was
+    const high =
+      share > 0
+        ? Math.max(trainingMid * (1 + gainHigh), form!.kg, expMid) * (1 + spread.up)
+        : trainingMid * (1 + gainHigh + spread.up);
     const range: Range = {
-      conservative: floorTo(mid * (1 - sp.down - Math.min(cut, 0.06)), step),
-      expected: roundTo(mid * (1 + gainExp), step),
-      high: roundTo(mid * (1 + gainExp + sp.up + (gainHigh - gainExp)), step),
+      conservative: floorTo(lowMid * (1 - spread.down - Math.min(cut, 0.06)), step),
+      expected: roundTo(expMid, step),
+      high: roundTo(high, step),
     };
     range.expected = Math.max(range.expected, range.conservative);
     range.high = Math.max(range.high, range.expected + step);

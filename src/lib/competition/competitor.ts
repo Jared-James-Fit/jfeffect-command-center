@@ -73,6 +73,11 @@ const step = (c: Confidence, d: number): Confidence =>
   BY_RANK[Math.max(0, Math.min(2, RANK[c] + d))];
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
+/** A lifter with a meet this recently is still competing: their trend is credited. */
+export const ACTIVE_MONTHS = 9;
+/** A trend is never carried further than this. */
+export const TREND_MAX_YEARS = 1;
+
 export function readCompetitor(input: {
   meets: MeetRecord[];
   today: string;
@@ -133,10 +138,23 @@ export function readCompetitor(input: {
     const stale = (monthsSince ?? 99) > 18;
     // start from their recent level; a stale recent meet leans on the best a little
     const base = stale ? Math.max(recent.total!, best.total! * 0.97) : recent.total!;
-    const yearsAhead = Math.max(0, daysBetween(recent.date, input.meetDate) / 365.25);
+    // a trend is carried for a year at most: further out it's a guess, not a trend
+    const yearsAhead = Math.min(
+      TREND_MAX_YEARS,
+      Math.max(0, daysBetween(recent.date, input.meetDate) / 365.25),
+    );
     const trend = slope ?? 0;
+    // progress is credited only to someone still competing: with no meet in
+    // ACTIVE_MONTHS nothing confirms they kept climbing (injured, retired,
+    // a break), so the expected stays at their last level and only the high
+    // scenario keeps the chance they did
+    const active = (monthsSince ?? 99) <= ACTIVE_MONTHS;
+    const up = active ? Math.max(0, trend) : 0;
     // half the recent trend continues, capped: lifters rarely keep a steep early-career slope
-    const gain = Math.max(-base * 0.05, Math.min(base * 0.06, trend * yearsAhead * 0.5));
+    const gain = Math.max(
+      -base * 0.05,
+      Math.min(base * 0.06, (trend < 0 ? trend : up) * yearsAhead * 0.5),
+    );
     const expTotal = base + gain;
     const highTotal = Math.min(
       Math.max(best.total!, base + Math.max(0, trend) * yearsAhead) * 1.02,
@@ -147,6 +165,10 @@ export function readCompetitor(input: {
     if (best.date !== recent.date) basis.push(`Best total ${best.total} kg (${best.date})`);
     if (slope != null) basis.push(`Recent trend ${slope > 0 ? "+" : ""}${slope} kg a year`);
     if (stale) basis.push(`No meet in ${monthsSince} months`);
+    else if (!active && trend > 0)
+      basis.push(
+        `No meet in ${monthsSince} months: their trend isn't carried on without a meet to confirm it`,
+      );
     confidence =
       (monthsSince ?? 99) <= 9 && withTotal.length >= 3
         ? "high"
