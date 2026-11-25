@@ -3,6 +3,7 @@ import { useVideoTrimmer } from "@/components/video-trimmer";
 import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { askedQuestions } from "@/lib/coaching-sessions/questionnaire";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
@@ -103,11 +104,29 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   });
   const form = useMemo<NfForm | undefined>(() => accessibleForms.find((item) => item.id === formId), [accessibleForms, formId]);
 
-  const { data: questions = [] } = useQuery({
+  const { data: allQuestions = [] } = useQuery({
     queryKey: ["nf-questions", formId],
     queryFn: () => listQuestions(formId),
     enabled: !!form && form.kind !== "external",
   });
+  // A send can ask only some of a form's questions (a coaching session's pre-call
+  // questions: the assignment's settings.ask_keys, coaching-sessions/questionnaire.ts).
+  const keyed = useMemo(() => allQuestions.some((q) => typeof (q.validation as any)?.session_key === "string"), [allQuestions]);
+  const { data: askKeys, isFetched: askKeysFetched } = useQuery({
+    queryKey: ["nf-assignment-ask-keys", formId, client?.id],
+    enabled: !!client?.id && keyed,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("nf_assignments")
+        .select("settings")
+        .eq("form_id", formId)
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      return ((data?.settings as any)?.ask_keys ?? null) as string[] | null;
+    },
+  });
+  const questions = useMemo(() => askedQuestions(allQuestions, askKeys), [allQuestions, askKeys]);
+  const waitingOnAsk = keyed && !askKeysFetched;
 
   // Questions that start from what the app already knows (form-prefill.ts): sex, height, their
   // schedule, birth year, weigh-ins, when they train. Each source is read only when a question asks.
@@ -476,7 +495,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     );
   }
 
-  if (!form || !submission) {
+  if (!form || !submission || waitingOnAsk) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

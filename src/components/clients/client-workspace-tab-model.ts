@@ -7,6 +7,7 @@ import {
   Dumbbell,
   FileText,
   LayoutDashboard,
+  MessagesSquare,
   TrendingUp,
 } from "lucide-react";
 
@@ -16,6 +17,7 @@ export type WorkspaceTab =
   | "nutrition"
   | "cardio"
   | "competition"
+  | "meetings"
   | "metrics"
   | "documents"
   | "sessions"
@@ -32,7 +34,8 @@ export type WorkspaceTab =
  * Cardio is its own tab beside Nutrition (Nov 23 2026): its own plan, builder,
  * history and Cleo, connected to nutrition and training through one client read.
  * Competition follows it (Nov 24 2026): every meet's preparation, the field,
- * the strategy and the meet day, prepared on its own schedule.
+ * the strategy and the meet day, prepared on its own schedule. Meetings
+ * (Nov 25 2026) is every coaching conversation: prepared, presented, remembered.
  * Training also holds program setup; Progress holds metrics, lift
  * analytics and lift videos; Forms holds agreements; Billing holds sales
  * and billing. Profile/setup pages live under More.
@@ -43,6 +46,7 @@ export const CLIENT_WORKSPACE_PRIMARY_TABS = [
   { value: "nutrition", label: "Nutrition", icon: Apple },
   { value: "cardio", label: "Cardio", icon: Activity },
   { value: "competition", label: "Competition", icon: Trophy },
+  { value: "meetings", label: "Meetings", icon: MessagesSquare },
   { value: "metrics", label: "Progress", icon: TrendingUp },
   { value: "documents", label: "Forms", icon: FileText },
   { value: "sessions", label: "Sessions", icon: CalendarCheck },

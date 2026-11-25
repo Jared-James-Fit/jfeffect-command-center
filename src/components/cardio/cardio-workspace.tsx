@@ -7,6 +7,7 @@
  * reaches the client until they publish. Before the workspace's tables exist
  * on a database, the classic cardio editor stands in.
  */
+import { useCleoHandoff } from "@/lib/cleo-handoff";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -96,6 +97,8 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   const navigate = useNavigate();
   const cleo = useCleoAccess();
   const dock = useCleoDock();
+  // a meeting's approved change lands in this dock's box (cleo-handoff.ts)
+  useCleoHandoff(clientId, "cardio", dock.ask);
   const save = useServerFn(saveCardioDraftFn);
   const discard = useServerFn(discardCardioDraftFn);
   const publish = useServerFn(publishCardioPlanFn);

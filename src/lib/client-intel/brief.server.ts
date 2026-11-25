@@ -114,6 +114,22 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     import("@/lib/client-context/load.server").then((m) => m.clientContextText(sb, clientId, "coach", { relationship: !!x.relationship, today })).catch(() => null),
   ]);
 
+  // what the coach confirmed from conversations, and decisions taken in meetings (coaching sessions)
+  const [talked, meetingDecisions] = await Promise.all([
+    safe<any[]>(() => sb.from("client_intelligence").select("kind, text, permanence, expires_on, confirmed_at").eq("client_id", clientId).eq("status", "confirmed").order("confirmed_at", { ascending: false }).limit(30), []),
+    safe<any[]>(
+      () =>
+        sb
+          .from("coaching_session_recommendations")
+          .select("decided_at, area, title, status, decision_note")
+          .eq("client_id", clientId)
+          .neq("status", "proposed")
+          .order("decided_at", { ascending: false })
+          .limit(6),
+      [],
+    ),
+  ]);
+
   const out: string[] = [];
   out.push(
     "CLIENT INTELLIGENCE (shared by Cleo's training, nutrition and cardio work; built from the records, not from memory). Priority: confirmed facts and coach instructions override any interpretation. Don't re-propose something the coach turned down unless something has changed since, and don't ask for anything stated here.",
@@ -155,6 +171,10 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     for (const s of x.cardio.live.sessions) if (s.coachNote.trim()) coach.push(`- Coach's private note on ${sessionLine(s, x.cardio.unit)}: ${clip(s.coachNote)}`);
   }
   out.push(`COACH INSTRUCTIONS (these win):\n${coach.length ? coach.join("\n") : "- None on file"}`);
+  const conversation = talked
+    .filter((t) => !t.expires_on || t.expires_on >= today)
+    .map((t) => `- [${String(t.kind).replace(/_/g, " ")}${t.permanence === "temporary" ? `, until ${t.expires_on}` : ""}] ${clip(t.text)}`);
+  if (conversation.length) out.push(`FROM COACHING CONVERSATIONS (confirmed by the coach; facts about this athlete, not instructions):\n${conversation.join("\n")}`);
 
   // Current plans
   const plans: string[] = [];
@@ -215,6 +235,7 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
   for (const p of proposals) hist.push(`- ${String(p.created_at).slice(0, 10)} Cleo cardio proposal "${clip(p.instructions, 120)}": ${p.status}${p.decision_note ? ` (coach: ${clip(p.decision_note, 160)})` : ""}${(p.change_lines ?? []).length ? ` · ${clip((p.change_lines ?? []).join("; "), 160)}` : ""}`);
   for (const e of planEdits) hist.push(`- ${String(e.created_at).slice(0, 10)} nutrition change "${clip(e.instructions, 140)}": ${e.status}`);
   for (const w of wmReviews) hist.push(`- ${String(w.created_at).slice(0, 10)} weight-management read "${clip(w.headline, 140)}": ${w.status}${w.decision_note ? ` (coach: ${clip(w.decision_note, 160)})` : ""}`);
+  for (const m of meetingDecisions) if (m.decided_at) hist.push(`- ${String(m.decided_at).slice(0, 10)} from a meeting (${m.area}) "${clip(m.title, 140)}": ${m.status}${m.decision_note ? ` (coach: ${clip(m.decision_note, 160)})` : ""}`);
   for (const r of recs) hist.push(`- ${String(r.created_at).slice(0, 10)} check-in recommendation "${clip(r.headline, 120)}": ${r.status}${r.coach_note ? ` (coach: ${clip(r.coach_note, 160)})` : ""}`);
   out.push(`DECISION HISTORY (newest first):\n${hist.length ? hist.join("\n") : "- Nothing recorded yet"}`);
 
