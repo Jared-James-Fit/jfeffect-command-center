@@ -2,11 +2,13 @@
  * Posts "Your new nutrition plan is live" (with the plan card) in the
  * client's coach chat when their plan is published or changed, from the
  * coach who did it. Once per plan version, and a burst of saves posts once
- * (PLAN_MESSAGE_QUIET_MS). Never throws: a plan is live whether or not the
+ * (PLAN_MESSAGE_QUIET_MS), and a save the client wouldn't notice (the same
+ * numbers, meals and notes as the last plan announced, `planContentKey`:
+ * a re-save, new dates, a private note) posts nothing. Never throws: a plan is live whether or not the
  * message went.
  */
 import { splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
-import { PLAN_MESSAGE_KIND, PLAN_MESSAGE_QUIET_MS, planMessageBody, planMessageCard } from "@/lib/nutrition-targets/plan-message";
+import { PLAN_MESSAGE_KIND, PLAN_MESSAGE_QUIET_MS, planContentKey, planMessageBody, planMessageCard } from "@/lib/nutrition-targets/plan-message";
 
 export async function postPlanMessage(
   sb: any,
@@ -43,6 +45,16 @@ export async function postPlanMessage(
       if ((card?.version ?? null) === (plan.last_updated_at ?? null)) return { posted: false, reason: "already_sent" };
       if (now - Date.parse(last.created_at) < PLAN_MESSAGE_QUIET_MS) return { posted: false, reason: "recent" };
     }
+    // only a change the client would notice: the plan they last heard about (this one, or the one before for a re-publish)
+    const { data: latest } = await sb
+      .from("messages")
+      .select("id, attachments")
+      .eq("client_id", input.clientId)
+      .contains("attachments", JSON.stringify([{ kind: PLAN_MESSAGE_KIND }]))
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const lastCard = ((latest?.[0]?.attachments ?? []) as any[]).find((a) => a?.kind === PLAN_MESSAGE_KIND);
+    if (lastCard?.content && lastCard.content === planContentKey(plan)) return { posted: false, reason: "no_change" };
     const update = last ? "changed" : "new";
 
     // From the coach who published it, else theirs, else an admin.

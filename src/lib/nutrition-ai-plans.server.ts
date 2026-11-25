@@ -244,7 +244,8 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
 export async function loadCardioRows(sb: any, clientId: string): Promise<any[]> {
   const { data } = await sb
     .from("cardio_targets")
-    .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at, source")
+    // every column: a session the Cardio tab published (plan_version_id) tells the AI the cardio is the coach's to change
+    .select("*")
     .eq("client_id", clientId);
   return (data ?? []) as any[];
 }

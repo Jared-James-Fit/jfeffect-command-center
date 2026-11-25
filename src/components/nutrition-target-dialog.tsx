@@ -234,7 +234,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       const [rows, prefs] = await Promise.all([
         supabase
           .from("cardio_targets")
-          .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at")
+          // every column: a session the Cardio tab published (plan_version_id, its dates and day rule) is
+          // shown read-only and never rewritten from here; an older database without those columns still reads
+          .select("*")
           .eq("client_id", cardioClient!),
         (supabase as any)
           .from("clients")
@@ -377,7 +379,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           qc.invalidateQueries({ queryKey: k });
         }
       } catch (e: any) {
-        toast.error(`Nutrition saved, but cardio didn't sync: ${e?.message ?? "error"}. Fix it in Cardio Targets.`);
+        toast.error(`Nutrition saved, but cardio didn't sync: ${e?.message ?? "error"}. Fix it in the Cardio tab.`);
       }
     }
     setSaving(false);
@@ -736,6 +738,14 @@ function DayNumbersCheck({ day, onUseCalories }: { day: Day; onUseCalories: (kca
 
 /** One day type's cardio, edited with its calories and saved with the plan. */
 function DayCardio({ draft, onChange, willSync }: { draft?: CardioDraft; onChange: (p: Partial<CardioDraft>) => void; willSync: boolean }) {
+  if (draft?.managed != null) {
+    // the Cardio tab manages their cardio: shown here for context, changed only there
+    return (
+      <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[13px] text-muted-foreground" data-day-cardio-managed>
+        Cardio: <span className="font-medium text-foreground">{draft.managed}</span>. Managed in the Cardio tab; change it there.
+      </p>
+    );
+  }
   if (draft?.program) {
     return (
       <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[13px] text-muted-foreground">

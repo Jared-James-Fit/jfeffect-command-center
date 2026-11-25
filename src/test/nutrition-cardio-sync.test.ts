@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardioDraftsFor, cardioLine, currentCardioText, dayKey, parseAiCardio, planCardioSync } from "@/lib/nutrition-cardio-sync";
+import { cardioDraftsFor, cardioLine, cardioTabOwns, currentCardioText, dayKey, managedCardioLine, parseAiCardio, planCardioSync } from "@/lib/nutrition-cardio-sync";
 
 const NEW = `CALORIE TARGETS
 Training Day: 2230
@@ -110,5 +110,41 @@ describe("drafts and sync", () => {
     expect(currentCardioText([])).toBe("");
     const d = cardioDraftsFor({ labels: ["Training Day"], rows })["Training Day"];
     expect(cardioLine(10000, d)).toBe("10,000 steps · 25 min incline walking · ~150 kcal · 4x/wk");
+  });
+});
+
+describe("once the Cardio tab manages their cardio, the nutrition plan leaves it alone", () => {
+  // a plan published from the Cardio tab: incline walks on set weekdays (stored as "General"), plus days off
+  const builder = [
+    { id: "b1", day_type: "General", day_rule: "weekdays", scheduled_weekdays: ["Monday", "Thursday"], status: "Active", enabled: true, cardio_type: "Incline Treadmill Walk", duration_minutes: 30, plan_version_id: "v1", start_date: "2026-11-01", end_date: null, updated_at: "2026-11-01" },
+    { id: "b2", day_type: "Non-Training Day", day_rule: "non_training", status: "Active", enabled: true, cardio_type: "Bike", custom_type: null, duration_minutes: 20, plan_version_id: "v1", start_date: "2026-11-01", end_date: null, updated_at: "2026-11-01" },
+  ] as any[];
+  const today = "2026-11-25";
+
+  it("knows when the Cardio tab owns it (in force or scheduled), and not after its rows ended", () => {
+    expect(cardioTabOwns(builder, today)).toBe(true);
+    expect(cardioTabOwns([{ ...builder[0], start_date: "2026-12-01" }], today)).toBe(true);
+    expect(cardioTabOwns([{ ...builder[0], end_date: "2026-11-20" }], today)).toBe(false);
+    expect(cardioTabOwns(rows, today)).toBe(false);
+  });
+
+  it("the editor shows each day's cardio from the Cardio tab read-only, and the AI's sessions don't draft over it", () => {
+    const d = cardioDraftsFor({ labels: ["Training Day", "Non-Training Day", "High Day"], rows: [...rows, ...builder], ai: parseAiCardio(NEW), today });
+    expect(d["Training Day"].managed).toBe("30 min incline treadmill walk (Mon, Thu)");
+    expect(d["Non-Training Day"].managed).toBe("30 min incline treadmill walk (Mon, Thu) · 20 min bike");
+    expect(d["Training Day"].fromAi).toBe(false);
+    expect(managedCardioLine([builder[1]], "High Day", today)).toBe("No cardio on these days");
+    expect(cardioLine(8000, d["High Day"])).toBe("8,000 steps · cardio (Cardio tab): 30 min incline treadmill walk (mon, thu)");
+  });
+
+  it("a nutrition save writes no cardio at all, even an enabled Training Day draft (no second session beside the plan)", () => {
+    const drafts = cardioDraftsFor({ labels: ["Training Day"], rows, today });
+    const res = planCardioSync({ clientId: "c", days: [{ label: "Training Day", draft: { ...drafts["Training Day"], enabled: true, duration_minutes: 45 } }], rows: [...rows, ...builder], today });
+    expect(res).toEqual({ updates: [], inserts: [] });
+  });
+
+  it("the nutrition AI is told the cardio is the coach's to change", () => {
+    expect(currentCardioText(builder.map((r) => ({ ...r, start_date: "2026-01-01" })))).toMatch(/manages this cardio in its own Cardio plan/);
+    expect(currentCardioText(rows)).not.toMatch(/Cardio plan/);
   });
 });

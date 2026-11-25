@@ -180,6 +180,49 @@ export function withModality(s: CardioSession, modality: Modality): CardioSessio
   };
 }
 
+/** One weight-management treadmill session (weight-management/treadmill.ts `TreadmillSession`, kept structural here). */
+export type WeightStepSession = { minutes: number; speedMph: number; inclinePct: number; perWeek: number; weekdays: string[] };
+
+/**
+ * The weight-management engine's cardio step (after lifting on training days, and days off) as a change to a
+ * Cardio tab plan, for its draft: the training-days session and the days-off session take the step's time
+ * and days, and a treadmill session its speed and incline (another kind keeps its own settings); a session
+ * the step adds is an incline walk, one it drops is taken off, and every other session (set weekdays, every
+ * day, a sport) stays as it is. Never published from here: the coach reviews and publishes the draft.
+ */
+export function withWeightStep(base: CardioPlan, step: { trainingDay: WeightStepSession | null; restDay: WeightStepSession | null }, ctx: PlanContext): CardioPlan {
+  let sessions = base.sessions.map((s) => ({ ...s, weekdays: [...s.weekdays] }));
+  const place = (rule: "training" | "non_training", want: WeightStepSession | null) => {
+    const i = sessions.findIndex((s) => s.enabled && s.days === rule);
+    if (!want) {
+      if (i >= 0) sessions = sessions.filter((_, j) => j !== i);
+      return;
+    }
+    const picked = rule === "non_training" ? normalizeCardioWeekdays(want.weekdays) : [];
+    const cur = i >= 0 ? sessions[i] : { ...newSession("treadmill_incline", rule, ctx), hrZone: "Zone 2" };
+    const tread = modalitySpec(cur.modality).treadmill;
+    const mph = round(want.speedMph, 2);
+    const next: CardioSession = {
+      ...cur,
+      minutes: clamp(Math.round(want.minutes), 5, 180),
+      weekdays: rule === "non_training" ? weekdaysFor("non_training", picked, ctx) : weekdaysFor("training", [], ctx),
+      ...(tread
+        ? {
+            speedMinMph: mph,
+            speedMaxMph: mph,
+            incline: round(want.inclinePct, 1),
+            inclineMax: cur.inclineMax != null && cur.inclineMax > want.inclinePct ? cur.inclineMax : cur.modality === "treadmill_variable" ? round(want.inclinePct + 2, 1) : null,
+          }
+        : {}),
+    };
+    if (i >= 0) sessions[i] = next;
+    else sessions = [...sessions, next];
+  };
+  place("training", step.trainingDay);
+  place("non_training", step.restDay);
+  return { sessions };
+}
+
 function readProgression(v: unknown): Progression {
   const p = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
   const kind = (["none", "minutes", "incline", "speed", "sessions"] as const).find((k) => k === p.kind) ?? "none";

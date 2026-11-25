@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { CardHeader, Section, StatusChip } from "@/components/nutrition/nutrition-ui";
 import { CardioWeek } from "@/components/cardio/cardio-week";
 import { CleoMark } from "@/components/summer/cleo-mark";
-import { cardioKpis, weekdayDistribution, weeklySeries } from "@/lib/cardio/overview";
+import { cardioKpis, loggedDetails, weekdayDistribution, weeklySeries } from "@/lib/cardio/overview";
 import { daysWords, progressionWords, sessionLine, TIMING_SHORT } from "@/lib/cardio/plan";
 import { REC_LABEL, type CardioRecommendation, type Signal } from "@/lib/cardio/insights";
 import { summarizeCardio } from "@/lib/analytics/cardio-adherence";
@@ -259,7 +259,7 @@ export function CardioOverview({
                     {s.skipped ? <span className="text-muted-foreground"> · skipped</span> : null}
                   </span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {[s.minutes != null ? `${s.minutes} min` : null, s.rpe != null ? `RPE ${s.rpe}` : null, s.heartRate != null ? `${s.heartRate} bpm` : null, s.incline != null ? `${s.incline}%` : null, s.calories != null ? `~${s.calories} kcal (device estimate)` : null].filter(Boolean).join(" · ")}
+                    {loggedDetails(s).join(" · ")}
                   </span>
                 </li>
               ))}
