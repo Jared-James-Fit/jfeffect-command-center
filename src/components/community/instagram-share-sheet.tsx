@@ -131,14 +131,15 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
       const slideItems: Prepared[] = [];
       // the card goes first, or after the photos when it carries the numbers (plan.cardLast)
       const cardAt = plan.cardLast ? plan.slides.length : 0;
-      if (plan.card === "deck") {
-        // a deck: every slide, the cover first, each the feed's own picture for 4:5
+      if (plan.card && (plan.card === "deck" || (plan.cards ?? 1) > 1)) {
+        // a carousel card (a deck, Wins, the Recap): every slide, the cover first, each the feed's own picture for 4:5
+        const multi = plan.card;
         for (let i = 0; i < (plan.cards ?? 1); i++) {
           const host = i === diagramAt ? artHost : null;
           const file =
             format === "feed"
-              ? (await loadPostArt(postArtKey(post, "deck", unit, i), instagramFileName(post, i, "image/jpeg"), () => paintCardFile(post, "deck", "feed", unit, host, i, undefined, i)))?.file
-              : await paintCardFile(post, "deck", format, unit, host, i, undefined, i);
+              ? (await loadPostArt(postArtKey(post, multi, unit, i), instagramFileName(post, i, "image/jpeg"), () => paintCardFile(post, multi, "feed", unit, host, i, undefined, i)))?.file
+              : await paintCardFile(post, multi, format, unit, host, i, undefined, i);
           if (!file) throw new Error("card");
           cardItems.push({ file, url: "", video: false, aspect: `${IG_SIZES[format].w} / ${IG_SIZES[format].h}` });
         }
@@ -154,7 +155,7 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
       }
       if (plan.slides.length) {
         const key = `${post.id}:${attempt}`;
-        if (slidesRef.current?.key !== key) slidesRef.current = { key, files: slideFiles(post, plan.slides, plan.card && !plan.cardLast ? (plan.card === "deck" ? plan.cards ?? 1 : 1) : 0) };
+        if (slidesRef.current?.key !== key) slidesRef.current = { key, files: slideFiles(post, plan.slides, plan.card && !plan.cardLast ? plan.cards ?? 1 : 0) };
         const files = await slidesRef.current.files;
         files.forEach((file, i) => slideItems.push({ file, url: "", video: file.type.startsWith("video/"), aspect: slideAspect(plan.slides[i]) }));
       }

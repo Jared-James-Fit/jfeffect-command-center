@@ -39,6 +39,7 @@ import {
 import { extraLesson, type LessonTrack } from "@/lib/lessons";
 import { canShareFiles, downloadFiles, isTouchDevice } from "@/lib/file-share";
 import { deckOf } from "@/lib/post-decks";
+import { statsSlideCount } from "@/lib/stats-slides";
 
 export { canShareFiles, downloadFiles, isTouchDevice };
 
@@ -52,7 +53,10 @@ export type IgCard = "lesson" | "wins" | "recap" | "compare" | "feature" | "birt
  * when it carries what the words don't (`cardLast`); with no photo, the card
  * alone.
  */
-export type IgPlan = { card: IgCard | null; slides: PostSlide[]; cardLast?: boolean; /** A deck: how many slides it paints (each its own picture, the cover first). */ cards?: number };
+export type IgPlan = { card: IgCard | null; slides: PostSlide[]; cardLast?: boolean; /** A carousel card (a deck, Wins, the Recap): how many slides it paints (each its own picture, the cover first). */ cards?: number };
+
+/** The cards that paint as a carousel, a picture per slide (post-art keys each by its slide). */
+export { CAROUSEL_CARDS as MULTI_CARDS } from "@/lib/post-design";
 
 export const IG_CAPTION_MAX = 2200;
 
@@ -85,6 +89,7 @@ export function instagramPlan(post: CommunityPost): IgPlan {
   const info = infoCard(post);
   // a lesson's diagram leads, the photos after it; for the others a photo leads and the numbers card follows
   if (slides.length) return { card: info, slides, cardLast: !!info && info !== "lesson" };
+  if (info === "wins" || info === "recap") return { card: info, slides: [], cards: statsSlideCount(post) };
   if (info) return { card: info, slides: [] };
   if (extraBirthday(post)) return { card: "birthday", slides: [] };
   if (post.series === "holiday" && extraHoliday(post.series_extra)) return { card: "holiday", slides: [] };
