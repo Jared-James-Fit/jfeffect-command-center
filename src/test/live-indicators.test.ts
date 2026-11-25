@@ -20,12 +20,11 @@ describe("live indicators: one animated look across the app", () => {
     expect(read("src/hooks/use-chat-presence.tsx")).toContain('export { LiveDot } from "@/components/live-indicator";');
   });
 
-  it("a pinned chat shows one signal at a time: live (the dot) or the unread dot, never both, and the muted bell takes the live dot's corner", () => {
-    const tile = read("src/components/messages/inbox-parts.tsx");
-    expect(tile).toContain("<LiveAvatar live={live && !muted} size={60}>{avatar}</LiveAvatar>");
-    expect(tile).toContain("{unread && !live && (");
-    expect(tile).toContain("data-pin-unread");
-    expect(tile).not.toContain("<LiveDot");
+  it("a pinned chat is a normal row: live on its photo, the unread dot and the pin on the right", () => {
+    const pane = read("src/components/group-chats-pane.tsx");
+    expect(pane).toContain("<LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>");
+    expect(read("src/components/messages/inbox-parts.tsx")).not.toContain("PinTile");
+    expect(read("src/components/messages/chat-list-row.tsx")).toContain("data-chat-pinned");
   });
 
   it("the coach's chat row and header, the coach's inbox header, Rankings and Crew all use it", () => {
@@ -49,8 +48,8 @@ describe("live indicators: one animated look across the app", () => {
     expect(admin).toContain('{selectedClientLive ? "Live in chat" : "Active now"}');
     const thread = read("src/components/group-message-thread.tsx");
     expect(thread).toContain("<LiveAvatar live={isLive} size={28} tag={false}>");
-    const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane).toContain("<LiveAvatar live={liveIds.has(m.user_id)} size={px} tag={false}>");
+    const pane = read("src/components/messages/group-avatar.tsx");
+    expect(pane).toContain("<LiveAvatar live={live.has(f.user_id)} size={px} tag={false}>");
     for (const [f, t] of [["group-message-thread", thread], ["group-chats-pane", pane], ["admin/messages", admin]] as const) {
       expect(t, f).not.toMatch(/rounded-full bg-emerald-500 ring-2/);
     }

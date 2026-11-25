@@ -5,10 +5,12 @@
  */
 
 export type InboxFilterKey =
-  | "Inbox" | "Support" | "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Pain" | "Media" | "Sessions" | "Program" | "Archived";
+  | "Inbox" | "Reply" | "Important" | "Support" | "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Pain" | "Media" | "Sessions" | "Program" | "Archived";
 
 /** What a filter shows, one sentence each. */
 export const FILTER_HELP: Record<Exclude<InboxFilterKey, "Inbox">, string> = {
+  Reply: "A client wrote and is waiting on your answer. Swipe a chat and tap Done when it needs nothing more.",
+  Important: "Chats you marked Important or High Priority in the chat's ⋯.",
   Support: "JF Effect Support as a queue: Needs Me (Cleo handed it to you, or you took it over), Unread, Waiting on Member, Cleo Handling, Resolved and All.",
   Weekly: "Weekly check-ins a client sent in that you haven't reviewed, and ones that are overdue.",
   Nutrition: "Nutrition Updates a client sent in that you haven't reviewed, and ones that are overdue.",

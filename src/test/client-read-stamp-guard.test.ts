@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-const { PinTile } = await import("@/components/messages/inbox-parts");
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261129090000_client_message_read_and_edit_guard.sql");
@@ -47,27 +46,3 @@ describe("a client's read stamp on coach messages saves again", () => {
   });
 });
 
-describe("pinned chats show what's new (iMessage pins)", () => {
-  const tile = (unread: boolean, preview?: string) =>
-    renderToStaticMarkup(createElement(PinTile, { name: "Coach Jared", avatar: createElement("span"), unread, preview, onOpen: () => {} }));
-
-  it("an unread pin shows the newest message in a bubble over the face", () => {
-    const html = tile(true, "Quick 60-second weekly check-in 👇");
-    expect(html).toContain("data-pin-preview");
-    expect(html).toContain("Quick 60-second weekly check-in 👇");
-    expect(html).toContain('aria-label="Coach Jared, unread: Quick 60-second weekly check-in 👇"');
-  });
-
-  it("no bubble once it's read, or with nothing to show", () => {
-    expect(tile(false, "old news")).not.toContain("data-pin-preview");
-    expect(tile(true, "  ")).not.toContain("data-pin-preview");
-  });
-
-  it("the coach pin gets the coach's own newest message, and pins line up at the bottom", () => {
-    const page = read("src/routes/_authenticated/portal/messages.tsx");
-    expect(page).toContain("unreadPreview: coachUnread ? coachLast?.coachText : null,");
-    const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane).toContain("preview={pinned.unreadPreview}");
-    expect(pane).toContain('<div className="flex flex-wrap items-end justify-center px-2 py-2" aria-label="Pinned chats">');
-  });
-});

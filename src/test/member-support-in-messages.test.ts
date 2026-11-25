@@ -117,7 +117,7 @@ describe("Messages wiring", () => {
   it("a push or an old Support-tab ticket link opens the chat in 1:1 Chats", () => {
     expect(comm).toContain('if (support) return { tab: "messages", support };');
     expect(comm).toContain("const ticket = /^t:(.+)$/.exec(sub ?? \"\")?.[1];");
-    expect(comm).toContain('{ value: "support", label: "Alerts" }');
+    expect(comm).toContain('{ value: "support", label: "App alerts" }');
   });
 
   it("the Messages tab counts Support replies they haven't read", () => {

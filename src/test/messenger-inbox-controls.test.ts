@@ -161,7 +161,7 @@ describe("live in chat means in the conversation", () => {
     expect(hook).toContain("const here = inConversation && visible;");
     expect(hook).toContain("if (hereRef.current) void channel.track(");
     expect(hook).toContain("else void ch.untrack();");
-    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('useChatPresence(selectedId, "admin", tab !== "groups" && !!selected && !selectedIsMember)');
+    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('useChatPresence(selectedId, "admin", !openGroup && !!selected && !selectedIsMember)');
     expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain('"client", coachChatOpen)');
     expect(read("src/components/group-chats-pane.tsx")).toContain("onPinnedOpenChange?.(pinnedOpen);");
   });

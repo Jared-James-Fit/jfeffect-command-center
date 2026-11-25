@@ -53,26 +53,28 @@ describe("the Messages badge is new messages only", () => {
 describe("the inbox explains itself", () => {
   const page = read("src/route-pages/_authenticated/admin/messages.tsx");
 
-  it("every filter has its sentence, and the line under the chips says it", () => {
+  it("every filter has its sentence in How Messages works, and no line of text sits under the chips", () => {
     const filters = JSON.parse(page.match(/const FILTERS = (\[[^\]]+\]) as const;/)![1]) as string[];
     for (const f of filters) {
       expect(filterHelp(f as any, 0).length, f).toBeGreaterThan(20);
       if (f !== "Inbox") expect(FILTER_HELP[f as keyof typeof FILTER_HELP], f).toBeTruthy();
     }
-    expect(page).toContain("data-filter-help={filter}");
-    expect(page).toContain("filterHelp(filter, newChats)}");
+    expect(page).not.toContain("data-filter-help={filter}");
+    expect(page).not.toContain("filterHelp(filter, newChats)}");
   });
 
   it("the Inbox line and chip carry the badge's number", () => {
     expect(inboxHelp(0)).toBe("No new messages. Every chat is here, newest first.");
     expect(inboxHelp(1)).toBe("1 chat has a new message (the blue dot). Every chat is here, newest first.");
     expect(inboxHelp(3)).toBe("3 chats have new messages (the blue dot). Every chat is here, newest first.");
-    expect(page).toContain('const n = f === "Inbox" ? newChats : FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;');
-    expect(page).toContain('f === "Inbox" ? cn(UNREAD_DOT, "text-white")');
+    // the Unread chip: chats with a new message + group chats with something new, the badge's number
+    expect(page).toContain("unread={newChats + unreadGroups}");
+    expect(read("src/components/messages/inbox-chips.tsx")).toContain('tone === "unread" ? cn(UNREAD_DOT, "text-white")');
   });
 
   it("the ? opens How Messages works", () => {
-    expect(page).toContain("<InboxGuideButton onClick={() => setGuideOpen(true)} />");
+    expect(page).toContain("onGuide={() => setGuideOpen(true)}");
+    expect(page).toContain("How Messages works");
     expect(page).toContain("<InboxGuideSheet open={guideOpen} onOpenChange={setGuideOpen} filters={GUIDE_FILTERS} />");
     const guide = read("src/components/messages/inbox-guide.tsx");
     expect(guide).toContain("How Messages works");

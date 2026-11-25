@@ -19,6 +19,8 @@ import {
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { CHAT_ROW_AVATAR, ChatListRow } from "@/components/messages/chat-list-row";
+import { GroupAvatarCluster } from "@/components/messages/group-avatar";
+import { groupDisplayName } from "@/lib/group-row";
 import { useCommunityMembers } from "@/lib/community.queries";
 import type { CommunityAuthor } from "@/lib/community";
 import { isMuted, useChatPrefs, useSetChatPrefs } from "@/lib/chat-prefs";
@@ -30,28 +32,22 @@ import {
 /** Most people a member-made chat can hold (chat_crew_cap()). */
 export const CREW_CAP = 30;
 
-/** Two overlapping faces, or a group icon. No "active now" here: that would tell an inviter you're looking. */
-export function CrewFaces({ faces, size = 36 }: { faces: Pick<CommunityAuthor, "user_id" | "name" | "avatar_url">[]; size?: number }) {
-  const two = faces.slice(0, 2);
-  if (two.length === 0) {
-    return (
-      <span className="grid shrink-0 place-items-center rounded-full bg-muted text-foreground" style={{ width: size, height: size }}>
-        <Users className={size >= 48 ? "h-6 w-6" : "h-4 w-4"} />
-      </span>
-    );
-  }
-  if (two.length === 1) return <UserAvatar src={two[0].avatar_url} name={two[0].name} size={size} expandable={false} />;
-  const s = Math.round(size * 0.72);
-  return (
-    <span className="relative block shrink-0" style={{ width: size, height: size }}>
-      <span className="absolute right-0 top-0"><UserAvatar src={two[0].avatar_url} name={two[0].name} size={s} expandable={false} /></span>
-      <span className="absolute bottom-0 left-0 rounded-full ring-2 ring-card"><UserAvatar src={two[1].avatar_url} name={two[1].name} size={s} expandable={false} /></span>
-    </span>
-  );
+/**
+ * A member-made chat's picture: 2–4 of the others in it, "+N" past that
+ * (the shared group picture). No "active now" here: that would tell an
+ * inviter you're looking.
+ */
+export function CrewFaces({ faces, total, size = 36 }: { faces: Pick<CommunityAuthor, "user_id" | "name" | "avatar_url">[]; total?: number; size?: number }) {
+  return <GroupAvatarCluster faces={faces} total={total} size={size} />;
+}
+
+/** Everyone else who's joined (the count includes me). */
+export function crewOthers(t: Pick<CrewThread, "joined" | "faces" | "status">): number {
+  return Math.max(t.faces.length, t.joined - (t.status === "joined" ? 1 : 0));
 }
 
 /** A member-made group chat in the Chats list (or an invite in Requests). */
-export function CrewRow({ thread, me, selected, onClick, unread: markedUnread, muted, leading }: {
+export function CrewRow({ thread, me, selected, onClick, unread: markedUnread, muted, pinned, leading }: {
   thread: CrewThread;
   me: string | null | undefined;
   selected: boolean;
@@ -60,6 +56,8 @@ export function CrewRow({ thread, me, selected, onClick, unread: markedUnread, m
   unread?: boolean;
   /** Hide Alerts is on. */
   muted?: boolean;
+  /** Pinned to the top of the list. */
+  pinned?: boolean;
   /** Shown before the faces (a checkbox while selecting). */
   leading?: ReactNode;
 }) {
@@ -70,11 +68,12 @@ export function CrewRow({ thread, me, selected, onClick, unread: markedUnread, m
       selected={selected}
       unread={unread}
       muted={muted}
+      pinned={pinned}
       leading={leading}
       at={thread.last?.created_at}
       unreadLabel="New"
-      avatar={<CrewFaces faces={thread.faces} size={CHAT_ROW_AVATAR} />}
-      name={thread.name}
+      avatar={<CrewFaces faces={thread.faces} total={crewOthers(thread)} size={CHAT_ROW_AVATAR} />}
+      name={groupDisplayName(thread.name, thread.faces, crewOthers(thread))}
       preview={crewPreview(thread, me)}
     />
   );
@@ -384,9 +383,9 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <button type="button" onClick={() => setPeopleOpen(true)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <CrewFaces faces={thread.faces} />
+          <CrewFaces faces={thread.faces} total={crewOthers(thread)} size={40} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-bold">{thread.name}</span>
+            <span className="block truncate text-sm font-semibold">{groupDisplayName(thread.name, thread.faces, crewOthers(thread))}</span>
             <span className="block truncate text-[11px] text-muted-foreground">{joined ? crewSubtitle(thread) : "Group chat invite"}</span>
           </span>
         </button>
