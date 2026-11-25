@@ -242,8 +242,11 @@ export function rollTap(a: {
   showing: string | null;
   key: string;
   max: number;
+  /** The tap landed on a picked tile's number (Select on): it comes off at once, showing or not. */
+  badge?: boolean;
 }): RollTap {
   const on = a.picked.includes(a.key);
+  if (a.multi && on && a.badge) return { kind: "remove" };
   if (!a.multi) return on ? { kind: "focus" } : { kind: "add", replace: a.picked.slice() };
   if (on) return a.showing === a.key ? { kind: "remove" } : { kind: "focus" };
   if (a.picked.length >= a.max) return { kind: "full" };
@@ -254,4 +257,31 @@ export function rollTap(a: {
 export function tileClock(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/**
+ * A hold on a tile one at a time switches Select on with that tile picked
+ * (Instagram's): the photo showing stays picked as number 1.
+ */
+export const ROLL_HOLD_MS = 420;
+
+/* ---- limited access: said once, then a quiet Manage -------------------- */
+
+export const ROLL_LIMITED_SEEN_KEY = "jf-roll-limited-seen-v1";
+
+/**
+ * "You've allowed some of your photos" is said the first time the grid shows
+ * with limited access; after that only a small Manage stays in the grid's
+ * head, so a person who chose limited access is never nagged about it.
+ */
+export function limitedNotice(
+  access: PhotoAccess | null,
+  storage: Pick<Storage, "getItem"> | null,
+): "banner" | "quiet" | null {
+  if (access !== "limited") return null;
+  try {
+    return storage?.getItem(ROLL_LIMITED_SEEN_KEY) ? "quiet" : "banner";
+  } catch {
+    return "quiet";
+  }
 }

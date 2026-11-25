@@ -897,17 +897,15 @@ function SelectStep({
             )}
           </div>
         ) : !focused ? (
-          <div className="flex flex-col items-center gap-4 px-8 text-center animate-in fade-in-0 duration-300">
-            <div className="grid h-20 w-20 place-items-center rounded-full border-2 border-white/80">
-              <Images className="h-9 w-9" />
+          // nothing picked yet (the library was closed): no landing button, the grid's Camera and Library are the way in
+          <div className="flex flex-col items-center gap-3 px-8 text-center animate-in fade-in-0 duration-300" data-composer-empty>
+            <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-white/80">
+              <Images className="h-7 w-7" />
             </div>
             <div>
-              <div className="text-[19px] font-semibold">Share a photo or video</div>
-              <p className="mt-1 text-[13px] text-white/60">Up to {MAX_SLIDES} in one post.</p>
+              <div className="text-[17px] font-semibold">Share a photo or video</div>
+              <p className="mt-1 text-[13px] text-white/60">Up to {MAX_SLIDES} in one post, from Library or Camera below.</p>
             </div>
-            <button type="button" onClick={() => onPick("library")} className="h-11 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground active:scale-[0.97]" data-composer-open-library>
-              Choose from library
-            </button>
             {onWrite && (
               <button type="button" onClick={onWrite} className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-white/80 active:opacity-60" data-composer-write>
                 <PenLine className="h-4 w-4" /> Write a post instead
@@ -960,7 +958,7 @@ function SelectStep({
         />
       ) : (
         <>
-      {/* the gallery's head: a grip (tap, or swipe up / down), what's picked, and the phone's picker by kind */}
+      {/* the gallery's head: a grip (tap, or swipe up / down) and what's picked; the grid's Library tile is the one way to the phone's picker */}
       <div className="touch-none select-none" {...grip} data-composer-gallery-head={expanded ? "expanded" : "collapsed"}>
         {list.length > 0 && <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-white/30" aria-hidden />}
         <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2">
@@ -968,23 +966,6 @@ function SelectStep({
             {list.length ? "Selected" : "Add from"}
             {list.length > 0 && <span className="ml-1.5 text-[14px] font-medium text-white/50">{list.length}/{MAX_SLIDES}</span>}
             {list.length > 1 && <span className="ml-2 hidden whitespace-nowrap text-[12px] font-normal text-white/45 min-[430px]:inline">hold to reorder</span>}
-          </span>
-          {/* the phone's own picker, straight to one kind (its Albums and Favorites are in it) */}
-          <span className="flex shrink-0 gap-1.5" data-composer-source>
-            {(["photos", "videos"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                disabled={list.length >= MAX_SLIDES}
-                onClick={() => onPick(k)}
-                className="inline-flex h-8 items-center gap-1 rounded-full bg-white/10 px-3 text-[13px] font-semibold active:bg-white/20 disabled:opacity-30"
-                aria-label={k === "photos" ? "Add photos" : "Add videos"}
-                data-composer-pick={k}
-              >
-                {k === "photos" ? <Images className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
-                {k === "photos" ? "Photos" : "Videos"}
-              </button>
-            ))}
           </span>
         </div>
       </div>

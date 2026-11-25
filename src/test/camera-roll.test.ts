@@ -2,17 +2,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   READ_CHUNK,
+  ROLL_LIMITED_SEEN_KEY,
   ROLL_VIDEO_MAX_BYTES,
   base64ToBytes,
   chunkRanges,
   estimateVideoBytes,
   hasNativePhotos,
+  limitedNotice,
   loadRollFile,
   rollTap,
   tileClock,
   type RollAsset,
 } from "@/lib/native-photos";
 import { opensLibraryOnTap } from "@/components/community/composer-pick";
+
+// composer-pick only preloads the video tools from it (a server function module this test never needs)
+vi.mock("@/lib/community-media", () => ({ preloadMediaTools: () => undefined }));
 
 const read = (p: string) => readFileSync(p, "utf8");
 const g = globalThis as any;
@@ -99,6 +104,30 @@ describe("which tap does what in the camera roll (Instagram's New post)", () => 
     expect(rollTap({ multi: true, picked: ["a", "b"], showing: "b", key: "b", max: 10 })).toEqual({
       kind: "remove",
     });
+  });
+  it("with Select on, a tap on a pick's number takes it off at once (showing or not)", () => {
+    expect(
+      rollTap({ multi: true, picked: ["a", "b"], showing: "b", key: "a", max: 10, badge: true }),
+    ).toEqual({ kind: "remove" });
+    expect(
+      rollTap({ multi: true, picked: ["a", "b"], showing: "b", key: "b", max: 10, badge: true }),
+    ).toEqual({ kind: "remove" });
+    // one at a time there's no number: a tap is a tap
+    expect(
+      rollTap({ multi: false, picked: ["a"], showing: "a", key: "a", max: 10, badge: true }),
+    ).toEqual({ kind: "focus" });
+  });
+  it("limited access is said once, then only a quiet Manage (never a nag)", () => {
+    const fresh = { getItem: () => null };
+    const seen = { getItem: (k: string) => (k === ROLL_LIMITED_SEEN_KEY ? "1" : null) };
+    expect(limitedNotice("limited", fresh)).toBe("banner");
+    expect(limitedNotice("limited", seen)).toBe("quiet");
+    expect(limitedNotice("authorized", fresh)).toBeNull();
+    expect(limitedNotice("denied", fresh)).toBeNull();
+    const roll = read("src/components/community/camera-roll.tsx");
+    expect(roll).toContain("data-roll-manage");
+    expect(roll).toContain("data-roll-badge");
+    expect(roll).toContain("onHold={multi ? undefined : () => holdAsset(a)}");
   });
   it("a full post never takes another (and one at a time never fills up)", () => {
     const ten = Array.from({ length: 10 }, (_, i) => `k${i}`);
