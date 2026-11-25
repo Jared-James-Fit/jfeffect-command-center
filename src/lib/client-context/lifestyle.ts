@@ -364,7 +364,7 @@ export function relationshipToneLine(raw: Relationship | null | undefined): stri
 export function relationshipWords(raw: Relationship | null | undefined): string | null {
   if (!raw) return null;
   const r = normalizeRelationship(raw);
-  const words = r.labels.filter((k) => k !== "custom").map((k) => RELATIONSHIPS.find((o) => o.key === k)!.label);
+  const words: string[] = r.labels.filter((k) => k !== "custom").map((k) => RELATIONSHIPS.find((o) => o.key === k)!.label);
   if (r.custom) words.push(r.custom);
   return words.length ? words.join(", ") : null;
 }
