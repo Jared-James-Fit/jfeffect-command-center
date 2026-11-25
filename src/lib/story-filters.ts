@@ -20,10 +20,12 @@
  */
 import { RED, INK, MUTED, balancedLines, display, fitDisplay, setSpacing, drawCover, plainBackdrop, SHARE_SIZES, type ShareCardMedia, type ShareFormat } from "@/lib/workout-share-card";
 import { font, fitFont, ellipsize, roundRect } from "@/lib/workout-story-card";
+import { cleanPlace, defaultCardioPhrase, placeBox, type CardioPlace, type CardioStoryData, type CardioTone } from "@/lib/cardio-story";
+import { BOX_H, BOX_W, CARDIO_PAINTERS, type CardioStyle } from "@/lib/cardio-story-paint";
 
 type Ctx = CanvasRenderingContext2D;
 
-export type FilterGroup = "fav" | "today" | "lockin" | "train" | "block" | "meet" | "rest" | "gymbro" | "memes" | "fuel" | "stims" | "time" | "mindset" | "vibe";
+export type FilterGroup = "fav" | "today" | "lockin" | "train" | "cardio" | "block" | "meet" | "rest" | "gymbro" | "memes" | "fuel" | "stims" | "time" | "mindset" | "vibe";
 
 /**
  * The chips over the story camera's templates, in their default order
@@ -38,6 +40,7 @@ export const FILTER_GROUPS: { key: FilterGroup; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "lockin", label: "Lock in" },
   { key: "train", label: "Train" },
+  { key: "cardio", label: "Cardio" },
   { key: "block", label: "Block" },
   { key: "meet", label: "Meet day" },
   { key: "rest", label: "Rest day" },
@@ -51,7 +54,11 @@ export const FILTER_GROUPS: { key: FilterGroup; label: string }[] = [
 
 /** A template's own words, as the person wrote them (its title, a second line, a meet's numbers). */
 export type MeetNumbers = { cls?: string; s?: string; b?: string; d?: string; unit?: "kg" | "lb" };
-export type TemplateText = { title?: string; sub?: string; meet?: MeetNumbers };
+/**
+ * `hide`: cardio metric ids the athlete turned off; `place`: where and how big
+ * a cardio overlay sits (cardio-story.ts); both only mean something to the Cardio group.
+ */
+export type TemplateText = { title?: string; sub?: string; meet?: MeetNumbers; hide?: string[]; place?: CardioPlace };
 
 /** What a filter can show: only what's already the athlete's to share. */
 export type FilterContext = {
@@ -74,6 +81,8 @@ export type FilterContext = {
   block: { block: number | null; week: number | null } | null;
   /** A meal now is pre- or post-workout (mealFuelMoment). */
   fuel: "pre" | "post" | null;
+  /** The athlete's own cardio (the newest completed session, this week, the streak): the Cardio group's numbers. Missing = nothing shown, never a guess. */
+  cardio?: CardioStoryData | null;
   /** What the person typed onto a template (by its id): its words in place of the template's own. */
   custom?: Record<string, TemplateText>;
 };
@@ -103,7 +112,7 @@ export type StoryFilter = {
   /** The design on top, drawn once a minute and kept. */
   over?: (ctx: Ctx, A: Area, c: FilterContext, logo: HTMLImageElement | null) => void;
   /** Its words can be changed (the camera's chip opens them): the title, a second line, a meet's numbers. */
-  edit?: { title: string; sub?: string; meet?: boolean };
+  edit?: { title: string; sub?: string; meet?: boolean; /** The Cardio group: a line to pick (by tone), metrics to hide, a place and size. */ cardio?: CardioTone };
 };
 
 /* ------------------------------------------------------------------ */
@@ -2092,6 +2101,40 @@ for (const t of GYM)
     edit: { title: t.title, sub: t.sub, meet: !!t.meet },
   });
 
+/* ---- Cardio (Nov 25 2026): four typographic styles, each also quiet (mono + grain) ---- */
+const CARDIO_STYLES: { style: CardioStyle; label: string; emoji: string; tone: CardioTone; salt: number }[] = [
+  { style: "treadmill", label: "Treadmill display", emoji: "🏃", tone: "locked", salt: 0 },
+  { style: "stopwatch", label: "Stopwatch", emoji: "⏱️", tone: "funny", salt: 3 },
+  { style: "heartrate", label: "Heart rate", emoji: "❤️‍🔥", tone: "locked", salt: 5 },
+  { style: "editorial", label: "Cardio editorial", emoji: "🚶", tone: "aesthetic", salt: 2 },
+];
+function cardioOver(style: CardioStyle, tone: CardioTone, salt: number, mono: boolean, id: string): NonNullable<StoryFilter["over"]> {
+  return (ctx, A, c) => {
+    const own = c.custom?.[id];
+    const phrase = own?.title?.trim() || defaultCardioPhrase(tone, c.now, salt);
+    const bh = BOX_H[style];
+    // inside the story's safe band (and a full-screen post's, clear of the buttons on the right)
+    const b = placeBox({ left: A.PAD, right: A.SW - A.PAD, top: A.top, bottom: A.bottom }, BOX_W, bh, own?.place ? cleanPlace(own.place) : undefined);
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.scale(b.k, b.k);
+    CARDIO_PAINTERS[style](ctx, { phrase, data: c.cardio ?? null, hidden: own?.hide ?? [], mono });
+    ctx.restore();
+  };
+}
+for (const s of CARDIO_STYLES)
+  for (const mono of [false, true]) {
+    const id = `cardio_${s.style}${mono ? "_mono" : ""}`;
+    FILTERS.push({
+      id,
+      label: mono ? `${s.label} · mono` : s.label,
+      group: "cardio",
+      emoji: s.emoji,
+      over: cardioOver(s.style, s.tone, s.salt, mono, id),
+      edit: { title: "", cardio: s.tone },
+    });
+  }
+
 export const STORY_FILTERS: readonly StoryFilter[] = FILTERS;
 
 /** A filter by its id (the key without "fx:"). */
@@ -2105,6 +2148,8 @@ export function filterLabel(f: StoryFilter, c: FilterContext): string {
 /** The order the groups go in right now: what fits the moment first (Favorites, when the person has any, goes before all of it: buildFilterRow). */
 export function groupOrder(c: FilterContext): FilterGroup[] {
   const lead: FilterGroup[] = [];
+  // a cardio session just completed: its overlays come first (a lifting session finished too still leads with Today)
+  if (c.cardio?.fresh && !c.finished) lead.push("cardio");
   if (c.finished) lead.push("today");
   if (c.session && !c.finished) lead.push("lockin");
   if (c.fuel === "post") lead.push("fuel");
@@ -2153,7 +2198,7 @@ export function isGrade(f: StoryFilter): boolean {
 
 /** What the design shows changes with these (and the minute, for the clocks). */
 function contextKey(c: FilterContext): string {
-  return JSON.stringify([c.firstName, c.session, c.finished, c.block, c.fuel, c.custom ?? null, c.now.getFullYear(), c.now.getMonth(), c.now.getDate(), c.now.getHours(), c.now.getMinutes()]);
+  return JSON.stringify([c.firstName, c.session, c.finished, c.block, c.fuel, c.cardio ?? null, c.custom ?? null, c.now.getFullYear(), c.now.getMonth(), c.now.getDate(), c.now.getHours(), c.now.getMinutes()]);
 }
 
 const overCache = new Map<string, HTMLCanvasElement>();
