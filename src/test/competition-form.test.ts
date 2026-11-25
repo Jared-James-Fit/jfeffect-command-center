@@ -48,7 +48,12 @@ const MEETS: MeetRecord[] = [
   meet("2026-03-14", "66", 65.4, 240, 150, 272.5),
   meet("2025-03-01", "74", 73.8, 265, 172.5, 270),
 ];
-const line = (nowKg: number, state: LiftEvidence["state"], basisDay: string, hard: number): LiftEvidence => ({
+const line = (
+  nowKg: number,
+  state: LiftEvidence["state"],
+  basisDay: string,
+  hard: number,
+): LiftEvidence => ({
   lift: "squat",
   nowKg,
   state,
@@ -135,10 +140,14 @@ describe("past cuts: how far from the class they were at the same distance befor
   it("averages weigh-ins around the same days-out before each meet", () => {
     const logs: Array<{ day: string; kg: number }> = [];
     // ~70 kg through the summer, 75.6 now
-    for (let d = 1; d <= 30; d++) logs.push({ day: `2026-07-${String(d).padStart(2, "0")}`, kg: 70.2 });
-    for (let d = 1; d <= 31; d++) logs.push({ day: `2026-05-${String(d).padStart(2, "0")}`, kg: 70.4 });
-    for (let d = 1; d <= 30; d++) logs.push({ day: `2026-06-${String(d).padStart(2, "0")}`, kg: 70.6 });
-    for (let d = 1; d <= 25; d++) logs.push({ day: `2026-11-${String(d).padStart(2, "0")}`, kg: 75.6 });
+    for (let d = 1; d <= 30; d++)
+      logs.push({ day: `2026-07-${String(d).padStart(2, "0")}`, kg: 70.2 });
+    for (let d = 1; d <= 31; d++)
+      logs.push({ day: `2026-05-${String(d).padStart(2, "0")}`, kg: 70.4 });
+    for (let d = 1; d <= 30; d++)
+      logs.push({ day: `2026-06-${String(d).padStart(2, "0")}`, kg: 70.6 });
+    for (let d = 1; d <= 25; d++)
+      logs.push({ day: `2026-11-${String(d).padStart(2, "0")}`, kg: 75.6 });
     const cuts = pastCuts(logs, MEETS, 75, "2026-11-25");
     const aug = cuts.find((c) => c.meetDate === "2026-08-03")!;
     expect(aug.sameDistanceKg).toBeCloseTo(70.5, 0);
@@ -165,7 +174,10 @@ describe("competitors: a trend is credited only while they're competing", () => 
     expect(r.basis.join(" ")).toMatch(/trend isn't carried on without a meet/);
   });
   it("someone still competing keeps half their trend", () => {
-    const recent = climber.map((m) => ({ ...m, date: m.date.replace("2025", "2026").replace("2024", "2025") }));
+    const recent = climber.map((m) => ({
+      ...m,
+      date: m.date.replace("2025", "2026").replace("2024", "2025"),
+    }));
     const r = readCompetitor({ meets: recent, today: "2026-11-25", meetDate: "2027-02-08" });
     expect(ACTIVE_MONTHS).toBe(9);
     expect(r.projection!.expected).toBeGreaterThan(702.5);
