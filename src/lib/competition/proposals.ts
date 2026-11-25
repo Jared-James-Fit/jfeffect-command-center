@@ -336,6 +336,15 @@ export function checkProposals(b: Brief, evidence: EvidenceItem[], ps: Proposal[
       }
     }
   }
+  // a call that lands on the engine's own number changes nothing: that's an "agree"
+  // in the review, never a call the coach has to keep or put back
+  for (const c of out) {
+    const numeric = c.proposal.type !== "warmup_sets" && c.proposal.kg != null;
+    if (c.ok && numeric && c.before != null && c.proposal.kg === c.before) {
+      c.ok = false;
+      c.reasons.push(`Same as the engine's ${c.before} kg: nothing to change`);
+    }
+  }
   return out;
 }
 

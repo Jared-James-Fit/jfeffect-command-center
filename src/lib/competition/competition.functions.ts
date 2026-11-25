@@ -985,7 +985,27 @@ export const getMyCompetitionsFn = createServerFn({ method: "POST" })
           .order("released_at", { ascending: false })
       : { data: [] };
     const { needsAcknowledgment, currentPlanId } = await import("./lifecycle");
+    // the plan is from their own coach: said by name ("From Jared"), never "your coach"
+    const { data: me } = await sb
+      .from("clients")
+      .select("assigned_coach_id")
+      .eq("id", clientId)
+      .maybeSingle();
+    const { data: coachRow } = (me as any)?.assigned_coach_id
+      ? await sb
+          .from("coaches")
+          .select("first_name, full_name, name")
+          .eq("id", (me as any).assigned_coach_id)
+          .maybeSingle()
+      : { data: null };
+    const coach =
+      String(
+        (coachRow as any)?.first_name ||
+          String((coachRow as any)?.full_name || (coachRow as any)?.name || "").split(" ")[0] ||
+          "",
+      ).trim() || null;
     return {
+      coach,
       competitions: (comps ?? []).map((c: any) => {
         const mine = (released ?? []).filter((a: any) => a.competition_id === c.id);
         return {
@@ -1089,12 +1109,22 @@ export const readLinkFn = createServerFn({ method: "POST" })
         : null;
     const base = { ok: true as const, url: page.url, title: page.title, pdf: page.kind === "pdf" };
     if (data.kind === "roster")
-      return { ...base, roster: await extractRoster(sb, { text, image: file }), lifts: [], meet: null };
+      return {
+        ...base,
+        roster: await extractRoster(sb, { text, image: file }),
+        lifts: [],
+        meet: null,
+      };
     if (data.kind === "training")
       return {
         ...base,
         roster: [],
-        lifts: await extractTraining(sb, { text, image: file, today: todayWinnipeg(), url: page.url }),
+        lifts: await extractTraining(sb, {
+          text,
+          image: file,
+          today: todayWinnipeg(),
+          url: page.url,
+        }),
         meet: null,
       };
     return { ...base, roster: [], lifts: [], meet: await extractMeetInfo(sb, { text, file }) };

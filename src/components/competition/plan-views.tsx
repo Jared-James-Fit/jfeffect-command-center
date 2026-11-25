@@ -244,7 +244,14 @@ function Cell({ label, value, sub }: { label: string; value: string; sub?: strin
   return (
     <div className="rounded-lg bg-muted/60 px-2 py-2">
       <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className="text-[15px] font-semibold tabular-nums">{value}</div>
+      <div
+        className={cn(
+          "whitespace-nowrap font-semibold tabular-nums",
+          value.length > 7 ? "text-[13px] tracking-tight" : "text-[15px]",
+        )}
+      >
+        {value}
+      </div>
       {sub ? <div className="text-[11px] text-muted-foreground">{sub}</div> : null}
     </div>
   );

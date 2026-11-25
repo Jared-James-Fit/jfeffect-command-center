@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Check, ChevronDown, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { decideProposalFn } from "@/lib/competition/competition.functions";
+import { splitRefs } from "@/lib/competition/refs";
 import { cn } from "@/lib/utils";
 
 type Check = {
@@ -54,6 +55,23 @@ const VERDICT: Record<string, { word: string; cls: string }> = {
 };
 const ATTEMPT = ["", "opener", "second", "third"];
 
+function RefTags({ refs, byId }: { refs: string[]; byId: Map<string, string> }) {
+  if (!refs.length) return null;
+  return (
+    <span className="ml-1 inline-flex flex-wrap gap-1 align-middle">
+      {refs.map((r) => (
+        <span
+          key={r}
+          title={byId.get(r)}
+          className="rounded bg-muted px-1 font-mono text-[10px] leading-4 text-muted-foreground"
+        >
+          {r}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function label(p: Check["proposal"]) {
   const lift = p.lift ? `${p.lift[0].toUpperCase()}${p.lift.slice(1)}` : "";
   if (p.type === "forecast") return `${lift} ${p.scenario ?? "expected"}`;
@@ -87,6 +105,7 @@ export function StrategyCalls({
   const qc = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
   const byId = new Map(evidence.map((e) => [e.id, e.text]));
+  const known = new Set(byId.keys());
   const passed = checks.filter((c) => c.ok);
   const setAside = checks.filter((c) => !c.ok);
   const m = useMutation({
@@ -118,7 +137,16 @@ export function StrategyCalls({
                   {(VERDICT[r.verdict] ?? VERDICT.insufficient).word}
                 </span>
                 <span>
-                  <span className="font-medium capitalize">{r.area}</span>: {r.note}
+                  <span className="font-medium capitalize">{r.area}</span>:{" "}
+                  {(() => {
+                    const x = splitRefs(r.note, known);
+                    return (
+                      <>
+                        {x.text}
+                        <RefTags refs={x.refs} byId={byId} />
+                      </>
+                    );
+                  })()}
                 </span>
               </li>
             ))}
@@ -167,8 +195,10 @@ export function StrategyCalls({
                       {p.confidence} confidence
                     </span>
                   </div>
-                  <p className="mt-1">{p.text}</p>
-                  <p className="mt-1 text-[13px] text-muted-foreground">{p.reason}</p>
+                  <p className="mt-1">{splitRefs(p.text, known).text}</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    {splitRefs(p.reason, known).text}
+                  </p>
                   <button
                     type="button"
                     className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted-foreground"
