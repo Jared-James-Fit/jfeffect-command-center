@@ -48,6 +48,7 @@ export class FakeDb {
     if (table === "coaching_purchase_approvals" && !row.used_at && !row.revoked_at && others.some((r) => r.client_id === row.client_id && !r.used_at && !r.revoked_at)) return "coaching_purchase_approvals_one_live";
     if (table === "coaching_package_enrollments" && row.status === "active" && others.some((r) => r.client_id === row.client_id && r.status === "active")) return "coaching_package_enrollments_one_active";
     if (table === "app_members" && row.user_id && others.some((r) => r.user_id === row.user_id)) return "app_members_user_id_key";
+    if (table === "client_crm_activities" && row.dedupe_key && others.some((r) => r.dedupe_key === row.dedupe_key)) return "uq_client_crm_activities_dedupe";
     return null;
   }
 

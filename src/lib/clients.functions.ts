@@ -185,6 +185,24 @@ async function mintSetupToken(client: { id: string; email: string; user_id: stri
   return { tokenHash, type };
 }
 
+/**
+ * Server-only (never a server function): the same setup email the coach's Send
+ * invite sends, for a client who just bought coaching on the site
+ * (coaching-sales/onboarding.server.ts). Only the inbox owner can open it.
+ */
+export async function sendClientSetupEmail(clientId: string): Promise<{ sent: boolean }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: client } = await supabaseAdmin
+    .from("clients")
+    .select("id, email, full_name, user_id, invite_sent_at")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (!client?.email || client.user_id) return { sent: false };
+  const redirectTo = await setupPageFor(client.id, await appSetupPage());
+  await sendSetupEmailFor(client as SetupEmailClient, redirectTo);
+  return { sent: true };
+}
+
 export const inviteClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
