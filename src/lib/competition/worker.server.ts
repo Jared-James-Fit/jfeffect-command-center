@@ -170,6 +170,10 @@ export async function processMilestone(
       milestone: kind,
     });
     const brief = buildBrief(ctx);
+    // the coach's note naming another class than the meet's: the plan stays at the meet's class, said up front
+    const { classNoteConcern } = await import("./watch");
+    const classNote = classNoteConcern(m.instructions, ctx.competition.weightClass);
+    if (classNote) brief.watch = [classNote, ...brief.watch.filter((w) => w.key !== classNote.key)];
     // the class question, read once a week from the rankings (before the first call only)
     const checked = competition.research?.alternatives_checked_at;
     if (

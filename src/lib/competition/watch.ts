@@ -174,3 +174,47 @@ export function liftForPlace(place: string): Lift | null {
   if (/hip|back/.test(p)) return "squat";
   return null;
 }
+
+/**
+ * The weight class a coach's own words name ("I'm competing as a 66kg
+ * athlete", "The game plan is 66kg", "the 84+ class"), else null. Only
+ * explicit class wording counts, so an attempt ("squat 105 kg") or a
+ * bodyweight ("58.1 this morning") never reads as a class.
+ */
+export function classInWords(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const n = "(\\d{2,3})\\s*(?:kg|kgs|kilo|kilos)?\\s*(\\+)?";
+  const patterns = [
+    new RegExp(`\\b(?:compet(?:e|ing)|lift(?:ing)?|enter(?:ed|ing)?|stay(?:ing)?|move|moving|drop(?:ping)?|go(?:ing)?)\\s+(?:as|at|in|to|down to|up to|into)\\s+(?:an?\\s+|the\\s+)?${n}(?=\\s*(?:kg|kgs|kilo|class|athlete|lifter|\\+|$|[^\\d.]))`, "i"),
+    new RegExp(`\\b(?:game\\s+plan|plan|class)\\s+is\\s+(?:the\\s+)?${n}`, "i"),
+    new RegExp(`\\b${n}\\s*(?:kg|kgs)?\\s+(?:weight\\s+)?class\\b`, "i"),
+    new RegExp(`\\b${n}\\s*kg\\s+(?:athlete|lifter)\\b`, "i"),
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (!m) continue;
+    const kg = Number(m[1]);
+    if (kg >= 40 && kg <= 140) return `${kg}${m[2] ? "+" : ""}`;
+  }
+  return null;
+}
+
+/**
+ * A coach's note naming another class than the meet is entered in: the
+ * engine plans at the meet's own class, and only the coach can change it
+ * (the meet's details), so this says so instead of a plan at the wrong class
+ * reading as an answer to the note.
+ */
+export function classNoteConcern(instructions: string | null | undefined, meetClass: string | null | undefined): WatchItem | null {
+  const said = classInWords(instructions);
+  if (!said || !meetClass) return null;
+  const norm = (s: string) => s.replace(/\s|kg/gi, "");
+  if (norm(said) === norm(meetClass)) return null;
+  return {
+    key: `class:note:${said}`,
+    area: "bodyweight",
+    lift: null,
+    severity: "serious",
+    text: `Your note says ${said} kg, but this meet is entered at ${norm(meetClass)} kg, so these numbers are still at ${norm(meetClass)} kg. Change the meet's weight class for the plan to use ${said} kg.`,
+  };
+}

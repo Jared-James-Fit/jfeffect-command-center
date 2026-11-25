@@ -303,6 +303,18 @@ export function AssessmentSheet({
 
             {view === "internal" ? (
               <div className="space-y-5" data-assessment-internal>
+                {((engine?.watch ?? []) as any[])
+                  .filter((w) => String(w.key ?? "").startsWith("class:note:"))
+                  .map((w) => (
+                    // the coach's note named another class than the meet's: said before anything else
+                    <p
+                      key={w.key}
+                      className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-[13px] leading-snug"
+                      data-class-note
+                    >
+                      {w.text}
+                    </p>
+                  ))}
                 <section>
                   <h3 className="text-[15px] font-semibold">{a.headline}</h3>
                   {n?.coach_summary ? (
