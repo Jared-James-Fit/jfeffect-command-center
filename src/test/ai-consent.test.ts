@@ -183,7 +183,7 @@ describe("AI consent is asked in place, never by a popup (Nov 25 2026)", () => {
 
 describe("the documents say the same thing", () => {
   it("Terms and Privacy Policy drafts describe the optional, separate permission", () => {
-    const sql = src("supabase/migrations/20270529120000_ai_consent_terms_privacy.sql");
+    const sql = src("supabase/migrations/20270530100000_ai_consent_terms_privacy.sql");
     expect(sql).toContain("10.1 Optional AI features");
     expect(sql).toContain("Agreeing to these Terms is not that permission");
     expect(sql).toContain("it is never a condition of using JF Effect");
