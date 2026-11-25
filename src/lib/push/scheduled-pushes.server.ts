@@ -3,6 +3,7 @@
 //   1. release pushes that were held during quiet hours
 //   2. one morning game plan per person (8am local, only if something's due)
 //   3. monthly recap ready (the 1st, 9am local, only if they played)
+//   4. Cleo's weekly recap for Premium members (Monday 9am local, premium/weekly-recap.server.ts)
 import { digestLines, weighInDue } from "@/lib/checkin-coordination/plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLIENT_VIEW_HOME } from "@/lib/client-home";
@@ -34,11 +35,19 @@ export function digestBody(parts: Array<string | null | undefined | false>): str
 export async function runPushTick(admin: SupabaseClient, now = new Date()) {
   const db = admin as any;
   const queue = await deliverQueuedPushes(admin);
+  // Cleo's weekly recap for Premium members (Monday 9am local; nobody until Premium is granted)
+  let cleoRecaps = 0;
+  try {
+    const { runWeeklyRecaps } = await import("@/lib/premium/weekly-recap.server");
+    cleoRecaps = (await runWeeklyRecaps(admin, now)).written;
+  } catch (e) {
+    console.warn("[push-tick] cleo recaps failed", e);
+  }
 
   // Only people with at least one active device.
   const { data: subs } = await db.from("push_subscriptions").select("user_id").eq("enabled", true);
   const userIds = [...new Set(((subs ?? []) as any[]).map((s) => s.user_id).filter(Boolean))] as string[];
-  if (!userIds.length) return { queue, digests: 0, recaps: 0 };
+  if (!userIds.length) return { queue, digests: 0, recaps: 0, cleoRecaps };
 
   const [{ data: prefs }, { data: roles }, { data: clients }] = await Promise.all([
     db.from("push_notification_preferences").select("user_id, timezone").in("user_id", userIds),
@@ -99,7 +108,7 @@ export async function runPushTick(admin: SupabaseClient, now = new Date()) {
       }
     }
   }
-  return { queue, digests, recaps };
+  return { queue, digests, recaps, cleoRecaps };
 }
 
 async function leagueParticipants(db: any, month: string): Promise<Set<string>> {
