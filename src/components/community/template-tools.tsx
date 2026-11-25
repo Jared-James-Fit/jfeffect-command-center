@@ -5,6 +5,7 @@ import { feedback } from "@/lib/feedback";
 import { useAuth } from "@/lib/auth";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import type { MeetNumbers, StoryFilter, TemplateText } from "@/lib/story-filters";
+import { CARDIO_METRIC_LABELS, CARDIO_MIN_SCALE, CARDIO_PHRASES, DEFAULT_CARDIO_PLACE, cardioMetrics, cleanPlace, type CardioPlace, type CardioStoryData } from "@/lib/cardio-story";
 
 /*
  * A story template's own tools (Nov 23 2026): star it into Favorites (the
@@ -125,22 +126,29 @@ export function TemplateTextSheet({
   filter,
   value,
   onSave,
+  cardio,
 }: {
   open: boolean;
   onClose: () => void;
   filter: StoryFilter | null;
   value: TemplateText | undefined;
   onSave: (t: TemplateText | null) => void;
+  /** The athlete's cardio: the Cardio group lists the metrics it has, to hide any. */
+  cardio?: CardioStoryData | null;
 }) {
   const def = filter?.edit;
   const [title, setTitle] = useState("");
   const [sub, setSub] = useState("");
   const [meet, setMeet] = useState<MeetNumbers>({ unit: "kg" });
+  const [hide, setHide] = useState<string[]>([]);
+  const [place, setPlace] = useState<CardioPlace>(DEFAULT_CARDIO_PLACE);
   useEffect(() => {
     if (!open || !def) return;
     setTitle((value?.title ?? def.title).replace(/\|/g, "\n"));
     setSub(value?.sub ?? def.sub ?? "");
     setMeet({ unit: "kg", ...(value?.meet ?? {}) });
+    setHide(value?.hide ?? []);
+    setPlace(cleanPlace(value?.place));
   }, [open, def, value]);
   if (!filter || !def) return null;
   const save = () => {
@@ -152,6 +160,11 @@ export function TemplateTextSheet({
       const m: MeetNumbers = { unit: meet.unit ?? "kg" };
       for (const k of ["cls", "s", "b", "d"] as const) if (meet[k]?.trim()) m[k] = meet[k]!.trim().slice(0, 10);
       if (m.cls || m.s || m.b || m.d) t.meet = m;
+    }
+    if (def.cardio) {
+      if (hide.length) t.hide = hide;
+      const pl = cleanPlace(place);
+      if (pl.x !== DEFAULT_CARDIO_PLACE.x || pl.y !== DEFAULT_CARDIO_PLACE.y || pl.s !== DEFAULT_CARDIO_PLACE.s) t.place = pl;
     }
     onSave(Object.keys(t).length ? t : null);
     onClose();
@@ -173,13 +186,55 @@ export function TemplateTextSheet({
           </div>
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-white/60">Title</span>
-            <textarea value={title} onChange={(e) => setTitle(e.target.value)} rows={2} maxLength={60} className={cn(field, "h-auto resize-none py-2.5 leading-snug")} data-template-title />
+            <textarea value={title} onChange={(e) => setTitle(e.target.value)} rows={2} maxLength={60} placeholder={def.cardio ? "Today's pick" : undefined} className={cn(field, "h-auto resize-none py-2.5 leading-snug")} data-template-title />
           </label>
           {def.sub !== undefined && (
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-white/60">Second line</span>
               <input value={sub} onChange={(e) => setSub(e.target.value)} maxLength={48} className={field} data-template-sub />
             </label>
+          )}
+          {def.cardio && (
+            <div className="space-y-4" data-cardio-tools>
+              <div>
+                <span className="mb-1.5 block text-[12px] font-semibold text-white/60">Pick a line</span>
+                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {Object.values(CARDIO_PHRASES).flat().map((ph) => (
+                    <button key={ph} type="button" onClick={() => setTitle(ph)} aria-pressed={title.trim() === ph} className={cn("h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-[13px] font-semibold", title.trim() === ph ? "bg-white text-black" : "bg-white/10 text-white/85 active:bg-white/20")} data-cardio-phrase>
+                      {ph}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {cardioMetrics(cardio, []).length > 0 && (
+                <div>
+                  <span className="mb-1.5 block text-[12px] font-semibold text-white/60">Show</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cardioMetrics(cardio, []).map((m) => {
+                      const on = !hide.includes(m.id);
+                      return (
+                        <button key={m.id} type="button" onClick={() => setHide((h) => (on ? [...h, m.id] : h.filter((x) => x !== m.id)))} aria-pressed={on} className={cn("h-9 rounded-full px-3 text-[13px] font-semibold", on ? "bg-white text-black" : "bg-white/10 text-white/60 line-through")} data-cardio-metric={m.id}>
+                          {CARDIO_METRIC_LABELS[m.id]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1" data-cardio-place>
+                {([
+                  ["s", "Size", CARDIO_MIN_SCALE, 1],
+                  ["x", "Left / right", 0, 1],
+                  ["y", "Up / down", 0, 1],
+                ] as const).map(([k, label, lo, hi]) => (
+                  <label key={k} className="flex h-9 items-center gap-3 text-[13px]">
+                    <span className="w-[84px] shrink-0 text-white/70">{label}</span>
+                    <input type="range" min={lo} max={hi} step={0.01} value={place[k]} onChange={(e) => setPlace((p) => ({ ...p, [k]: Number(e.target.value) }))} className="h-8 min-w-0 flex-1 accent-white" aria-label={label} data-cardio-place-input={k} />
+                  </label>
+                ))}
+                <p className="text-[12px] text-white/50">It always stays inside Instagram's safe area.</p>
+              </div>
+            </div>
           )}
           {def.meet && (
             <div className="space-y-3 rounded-2xl bg-white/[0.04] p-3" data-template-meet>

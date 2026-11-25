@@ -19,7 +19,7 @@ describe("Crew Activity lines", () => {
     expect([many.names, many.others, many.action]).toEqual([["Vicky", "Marc"], 3, "liked your workout"]);
   });
   it("says what happened: a PR's name, a comment's words, a follow", () => {
-    expect(activityLine(N({ win: "Belt Squat PR", emojis: ["fire"] })).action).toBe("celebrated your Belt Squat PR 🔥");
+    expect(activityLine(N({ win: "Belt Squat PR", emojis: ["fire"] })).action).toBe("liked your Belt Squat PR");
     expect(activityLine(N({ kind: "comment", snippet: "clean lockout" }))).toMatchObject({ action: "commented:", quote: "clean lockout" });
     expect(activityLine(N({ kind: "reply", snippet: null, media_type: "gif" }))).toMatchObject({ action: "replied:", quote: "GIF" });
     expect(activityLine(N({ kind: "comment_like", snippet: null }))).toMatchObject({ action: "liked your comment", quote: null });

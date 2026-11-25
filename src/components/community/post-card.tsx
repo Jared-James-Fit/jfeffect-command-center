@@ -361,7 +361,7 @@ export { WIN_STYLE };
 /**
  * Pulse: a finished workout, posted by itself. It leads with the session's
  * one real win (pickWorkoutWin: a PR, a milestone, the top set), tinted to
- * match. Celebrating it is the heart under it (or a double-tap), like any post.
+ * match. Liking it is the heart under it (or a double-tap), like any post.
  */
 export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: WorkoutShareStats; unit: "kg" | "lb" }) {
   const win = pickWorkoutWin(stats, unit);

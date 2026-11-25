@@ -122,7 +122,7 @@ describe("Activity: views, likes, shares and reposts, for the poster only", () =
 
   it("your story: Seen by, the hearts or a swipe up shrink it to the top over its viewers (Instagram's)", () => {
     const stories = read("src/components/community/crew-stories.tsx");
-    expect(stories).toContain("return post.is_mine ? setAskActivity((n) => n + 1) : onOpenPost(storyTarget(post));");
+    expect(stories).toContain("if (post.is_mine) return setAskActivity((n) => n + 1);");
     expect(stories).toContain("<StoryViewersPanel");
     expect(stories).toContain("renderPreview={(m) => <StoryFrame post={m} unit={unit} />}");
     // a swipe from before this bar was on screen never opens it

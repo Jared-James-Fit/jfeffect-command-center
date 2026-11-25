@@ -25,6 +25,8 @@ import { usePerformanceLeague, type PerformanceLeagueRow } from "@/lib/use-perfo
 import { boardMoves, moveMark, weekRange, type RankMove } from "@/lib/league-week";
 import { useLeagueWeek, useLeagueWeekBaseline } from "@/lib/league-week.queries";
 import { LeagueWeekSheet } from "@/components/community/league-week-card";
+import { onAudience, type RankingsAudience } from "@/lib/rankings-audience";
+import { useServiceTier } from "@/lib/service-tier";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type Row = PerformanceLeagueRow;
@@ -63,20 +65,27 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  * New-milestone reveals pop on Home (LevelCelebrations). With no client (a
  * coach looking at the crew's board) it's the board alone.
  */
-export function AthleteLevelCard({ clientId, openPrevious = false }: {
+export function AthleteLevelCard({ clientId, openPrevious = false, audience = "community", onShowCommunity }: {
   clientId: string | null;
   /** Open on last month's final standings (the Rankings spotlight's Champions podium). */
   openPrevious?: boolean;
+  /** Whose League: JF Effect Athletes (active coaching clients) or Community (everyone). Ranks, moves and Last week follow it. */
+  audience?: RankingsAudience;
+  /** A member on JF Effect Athletes isn't on it: the note under the title offers Community. */
+  onShowCommunity?: () => void;
 }) {
   const { data: events = [] } = useXpEvents(clientId);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId ?? "");
-  const { data: rows = [], isPending } = usePerformanceLeague("current");
+  const { data: rows = [], isPending } = usePerformanceLeague("current", audience);
   // ▲ / ▼ since Monday, and last week's card (one tap away under the board)
-  const { data: baseline } = useLeagueWeekBaseline();
+  const { data: baseline } = useLeagueWeekBaseline(audience);
   const moves = boardMoves(rows, baseline);
-  const { data: lastWeek } = useLeagueWeek(!!clientId);
+  const { data: lastWeek } = useLeagueWeek(!!clientId, audience);
+  const { tier } = useServiceTier();
+  // a member reading JF Effect Athletes: they aren't on this board, so there is no "you", and the note says where they are
+  const notOnBoard = !!clientId && !onAudience(audience, tier) && tier === "self_serve";
   const [weekOpen, setWeekOpen] = useState(false);
   // The sheet holds only an athlete's details or last month's final standings.
   const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(() => (openPrevious ? { kind: "previous" } : null));
@@ -109,6 +118,16 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
             {/* what it is, in one line: nobody has to open the rules to get it */}
             <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{LEAGUE_ONE_LINER}</p>
           </div>
+          {notOnBoard && (
+            <div className="mx-3 mt-3 flex items-center gap-2.5 rounded-xl bg-muted/60 px-3 py-2.5 text-[12px] leading-snug text-muted-foreground" data-league-not-on-board>
+              <span className="min-w-0 flex-1">This board is for JF Effect coaching clients. You rank in Community.</span>
+              {onShowCommunity && (
+                <button type="button" onClick={onShowCommunity} className="min-h-9 shrink-0 rounded-full border border-border px-3 text-[12px] font-semibold text-foreground active:bg-muted">
+                  See Community
+                </button>
+              )}
+            </div>
+          )}
 
           {isPending ? (
             <div className="space-y-2 px-3 py-3">
@@ -129,7 +148,7 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
 
               {ranked.length === 0 ? (
                 <p className="mx-3 my-3 rounded-xl border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
-                  Nobody's ranked yet this month. Log your bodyweight and a workout to be first.
+                  {notOnBoard ? "Nobody on this board is ranked yet this month." : "Nobody's ranked yet this month. Log your bodyweight and a workout to be first."}
                 </p>
               ) : (
                 <ol className="mt-3 divide-y divide-border/60 border-t border-border/60" aria-label="Standings">
@@ -190,7 +209,7 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
               onBack={() => setSheet(sheet.fromPrevious ? { kind: "previous" } : null)}
             />
           ) : sheet?.kind === "previous" ? (
-            <FinalStandings onOpenAthlete={openFromPrevious} />
+            <FinalStandings audience={audience} onOpenAthlete={openFromPrevious} />
           ) : null}
         </SheetContent>
       </Sheet>
@@ -470,8 +489,8 @@ function CompareView({ clientId, myStats, myBadgeCount, me, them, live, onBack }
 }
 
 /** Last month's final standings (Final Week Boost awards included), in the sheet. */
-function FinalStandings({ onOpenAthlete }: { onOpenAthlete: (id: string) => void }) {
-  const { data = [], isPending } = usePerformanceLeague("previous");
+function FinalStandings({ audience, onOpenAthlete }: { audience: RankingsAudience; onOpenAthlete: (id: string) => void }) {
+  const { data = [], isPending } = usePerformanceLeague("previous", audience);
   const ranked = rankedRows(data);
   const top = Math.max(0, ...ranked.map((r) => r.total_points));
   const me = data.find((r) => r.is_me);

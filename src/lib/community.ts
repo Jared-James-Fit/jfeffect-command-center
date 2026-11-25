@@ -302,6 +302,18 @@ export function storyTarget(p: Pick<CommunityPost, "id" | "shared_post">): strin
   return p.shared_post?.id ?? p.id;
 }
 
+/**
+ * The one link a story keeps to a page (Nov 25 2026): "View workout" on a workout's win, "View Marc's post" /
+ * "View post" on a story that shares a post. Any other story is the whole thing, with its likes, comments, replies and
+ * share right in the viewer, so it has no link (null) and never opens a page of its own.
+ */
+export function storyLinkLabel(p: Pick<CommunityPost, "series" | "stats" | "auto" | "media_type" | "gif_url" | "author" | "shared_post">): string | null {
+  if (storyFrameKind(p) === "win") return "View workout";
+  const shared = p.shared_post;
+  if (!shared) return null;
+  return shared.author.user_id !== p.author.user_id ? `View ${shared.author.name.split(" ")[0]}'s post` : "View post";
+}
+
 /** Someone on a post's Activity: what they did with it (only what they did shows). */
 export type ActivityPerson = CommunityAuthor & {
   viewed_at?: string;

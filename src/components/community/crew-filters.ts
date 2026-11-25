@@ -26,9 +26,9 @@ export function useMinute(enabled: boolean): Date {
 /** What the filters can show: the athlete's own, already-public things (see story-filters.ts). */
 export function useFilterContext(i: Omit<FilterContext, "now" | "block"> & { blockTitle: string | null | undefined; enabled: boolean }): FilterContext {
   const now = useMinute(i.enabled);
-  const key = JSON.stringify([i.firstName, i.session, i.finished, i.blockTitle, i.fuel, i.custom ?? null]);
+  const key = JSON.stringify([i.firstName, i.session, i.finished, i.blockTitle, i.fuel, i.cardio ?? null, i.custom ?? null]);
   return useMemo(
-    () => ({ now, firstName: i.firstName, session: i.session, finished: i.finished, block: readBlockWeek(i.blockTitle), fuel: i.fuel, custom: i.custom }),
+    () => ({ now, firstName: i.firstName, session: i.session, finished: i.finished, block: readBlockWeek(i.blockTitle), fuel: i.fuel, cardio: i.cardio, custom: i.custom }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [now, key],
   );

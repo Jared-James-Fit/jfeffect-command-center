@@ -10212,6 +10212,27 @@ export type Database = {
           },
         ]
       }
+      community_likes_person_backup: {
+        Row: {
+          backed_up_at: string
+          id: number
+          row_data: Json
+          tbl: string
+        }
+        Insert: {
+          backed_up_at?: string
+          id?: number
+          row_data: Json
+          tbl: string
+        }
+        Update: {
+          backed_up_at?: string
+          id?: number
+          row_data?: Json
+          tbl?: string
+        }
+        Relationships: []
+      }
       community_notifications: {
         Row: {
           actor_user_id: string
@@ -35175,6 +35196,10 @@ export type Database = {
         Args: { _comment_id: string; _liked?: boolean }
         Returns: undefined
       }
+      community_likes_merge_to_person: {
+        Args: { _login: string }
+        Returns: number
+      }
       community_lockin_has_finish: {
         Args: { _post_id: string }
         Returns: boolean
@@ -35601,6 +35626,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      competition_milestone_parked: {
+        Args: { _progress: Json }
+        Returns: boolean
+      }
       completion_workout_key: {
         Args: { _completion_id: string }
         Returns: string
@@ -35973,7 +36002,7 @@ export type Database = {
         Returns: Json
       }
       get_league_week_movement: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           client_id: string
           month_start: string
@@ -35983,7 +36012,7 @@ export type Database = {
           week_start: string
         }[]
       }
-      get_league_week_spotlight: { Args: { _as_user?: string }; Returns: Json }
+      get_league_week_spotlight: { Args: { _as_user?: string; _audience?: string }; Returns: Json }
       get_membership_cleanup_job_status: {
         Args: never
         Returns: {
@@ -36028,7 +36057,7 @@ export type Database = {
         }[]
       }
       get_performance_league: {
-        Args: { _as_user?: string; _month?: string }
+        Args: { _as_user?: string; _audience?: string; _month?: string }
         Returns: {
           adherence_pct: number
           atpr_lifts: number
@@ -36149,7 +36178,7 @@ export type Database = {
         }[]
       }
       get_strength_board_all: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           abs_count: number
           abs_rank: number
@@ -36185,7 +36214,7 @@ export type Database = {
         }[]
       }
       get_strength_board_meets: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           abs_count: number
           abs_rank: number
@@ -36239,7 +36268,7 @@ export type Database = {
         }[]
       }
       get_strength_board_roster: {
-        Args: { _as_user?: string }
+        Args: { _as_user?: string; _audience?: string }
         Returns: {
           avatar_url: string
           client_id: string
