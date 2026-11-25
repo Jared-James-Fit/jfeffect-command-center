@@ -248,6 +248,7 @@ export const setCoachingPackageState = createServerFn({ method: "POST" })
         status: z.enum(["draft", "active", "archived"]).optional(),
         is_public: z.boolean().optional(),
         recommended: z.boolean().optional(),
+        direct_checkout: z.boolean().optional(),
       })
       .parse(d),
   )
@@ -272,6 +273,10 @@ export const setCoachingPackageState = createServerFn({ method: "POST" })
     if (data.status) patch.status = data.status;
     if (data.is_public !== undefined) patch.is_public = data.is_public;
     if (data.recommended !== undefined) patch.recommended = data.recommended;
+    if (data.direct_checkout !== undefined) {
+      if (data.direct_checkout && next.kind !== "subscription") throw new Error("Only a monthly coaching package can be bought straight from the site.");
+      patch.direct_checkout = data.direct_checkout;
+    }
     const { data: saved, error } = await supabase.from("coaching_packages").update(patch).eq("id", data.id).select("*").maybeSingle();
     if (error) throw new Error(friendly(error.message));
     if (!saved) throw new Error("That didn't save.");

@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 
 /**
  * The schedule tick (pg_cron, every 5 minutes): appointment reminders, PT
- * session evening-before texts, and the PT session -> Google Calendar sync.
+ * session evening-before texts, call and session push reminders, and the PT
+ * session -> Google Calendar sync.
  * The name is historical; the cron job already points here.
  */
 export const Route = createFileRoute("/api/public/hooks/appointment-reminders")({
@@ -71,13 +72,22 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
         } catch (e: any) {
           sessionReminders = { error: String(e?.message ?? e) };
         }
+        // Push reminders for calls and sessions (client and coach) and the coach's
+        // "tomorrow" summary: session-reminders.ts, each sent once by its key.
+        let pushReminders: unknown = null;
+        try {
+          const { runSessionReminders } = await import("@/lib/reminders/session-reminders.server");
+          pushReminders = await runSessionReminders(supabaseAdmin as any);
+        } catch (e: any) {
+          pushReminders = { error: String(e?.message ?? e) };
+        }
         try {
           const { syncPtSessionsToGoogle } = await import("@/lib/pt-session-gcal.server");
           googleSync = await syncPtSessionsToGoogle(supabaseAdmin as any);
         } catch (e: any) {
           googleSync = { error: String(e?.message ?? e) };
         }
-        return Response.json({ sent, failed, skipped, total: (due ?? []).length, sessionReminders, googleSync });
+        return Response.json({ sent, failed, skipped, total: (due ?? []).length, sessionReminders, pushReminders, googleSync });
       },
     },
   },
