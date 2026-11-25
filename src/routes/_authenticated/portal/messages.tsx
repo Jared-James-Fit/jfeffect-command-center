@@ -11,6 +11,7 @@ import { MessageThread } from "@/components/message-thread";
 import { useChatPresence } from "@/hooks/use-chat-presence";
 import { LiveAvatar, LiveMark } from "@/components/live-indicator";
 import { GroupChatsPane, type PinnedChat } from "@/components/group-chats-pane";
+import { CleoInboxRow } from "@/components/premium/premium-ui";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { Button } from "@/components/ui/button";
 import {
@@ -270,6 +271,8 @@ function ClientMessages() {
       {/* One inbox, like iMessage: the coach chat pinned first, then your own
           pins, then groups and 1:1 chats by most recent. Only chat? It opens
           straight into it, and back still shows the list (compose, New group). */}
+      {/* Premium only: Cleo's inbox (weekly recaps), above the chats */}
+      <CleoInboxRow />
       <div className="min-h-0 flex-1">
         <GroupChatErrorBoundary>
           <GroupChatsPane asAdmin={false} pinned={pinned} />

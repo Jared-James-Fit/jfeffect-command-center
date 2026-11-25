@@ -1,0 +1,240 @@
+/**
+ * Premium's pieces in the app (premium.ts): whether the signed-in person has
+ * it, Build with Cleo (a program drafted from their profile into the builder,
+ * unsaved, everything editable) and the Cleo inbox (welcome, weekly recaps).
+ * Each renders nothing for someone without Premium, which today is everyone
+ * but a complimentary grant.
+ */
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, Loader2 } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { GOALS, LEVELS, type ProgramGoal, type ProgramLevel } from "@/lib/athlete-programs";
+import { draftBackupKey, type DraftBackup } from "@/lib/athlete-program-draft";
+import { useBuilderExerciseLibrary } from "@/lib/builder-exercise-library";
+import { getMySetupStatus } from "@/lib/member-setup.functions";
+import { getMyPremium, listMyCleoInbox, markCleoInboxRead } from "@/lib/premium/premium.functions";
+import { unreadCount, type CleoInboxItem } from "@/lib/premium/premium";
+import { briefFromProfile, buildCleoDraft, type CleoBrief } from "@/lib/premium/cleo-build";
+
+export function usePremium(): boolean {
+  const { user } = useAuth();
+  const fn = useServerFn(getMyPremium);
+  const q = useQuery({
+    queryKey: ["my-premium", user?.id ?? null],
+    queryFn: () => fn(),
+    enabled: !!user?.id,
+    staleTime: 10 * 60_000,
+  });
+  return q.data?.premium === true;
+}
+
+/* ───────────────────────── Build with Cleo ───────────────────────── */
+
+/** The Premium row in the program start options; nothing for anyone else. */
+export function BuildWithCleoRow({ className }: { className?: string }) {
+  const premium = usePremium();
+  const [open, setOpen] = useState(false);
+  if (!premium) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        data-start-way="cleo"
+        className={cn(
+          "flex min-h-[64px] w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition hover:bg-secondary/40 active:bg-secondary/60",
+          className,
+        )}
+      >
+        <CleoAvatar size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-medium">Build with Cleo</span>
+          <span className="block text-[13px] leading-snug text-muted-foreground">Cleo drafts it from your goal, experience and days. You change anything before you start.</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+      <BuildWithCleoSheet open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+function Chips<T extends string | number>({ options, value, onChange, label }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <button
+            key={String(o.id)}
+            type="button"
+            role="radio"
+            aria-checked={value === o.id}
+            onClick={() => onChange(o.id)}
+            className={cn(
+              "min-h-[40px] rounded-full px-3.5 text-[14px] font-medium transition",
+              value === o.id ? "bg-foreground text-background" : "bg-muted/70 ring-1 ring-border/70 hover:bg-muted",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function BuildWithCleoSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const setupFn = useServerFn(getMySetupStatus);
+  const setup = useQuery({ queryKey: ["member-setup-status"], queryFn: () => setupFn(), enabled: open, staleTime: 60_000 });
+  const library = useBuilderExerciseLibrary();
+  const fromProfile = useMemo(() => briefFromProfile((setup.data?.member ?? {}) as any), [setup.data]);
+  const [brief, setBrief] = useState<CleoBrief | null>(null);
+  const b = brief ?? fromProfile;
+  const set = (patch: Partial<CleoBrief>) => setBrief({ ...b, ...patch });
+  const [note, setNote] = useState<string | null>(null);
+
+  const draft = () => {
+    if (!user?.id || !library.data) return;
+    const { draft, missing } = buildCleoDraft(b, library.data as any);
+    if (!draft.plan.blocks[0]?.weeks[0]?.days.some((d) => d.exercises.length)) {
+      setNote("I couldn't find the exercises for this in the library. Try Build my own instead.");
+      return;
+    }
+    // the builder picks this up as the half-built program on this phone: nothing is saved or started yet
+    const backup: DraftBackup = { v: 2, base: null, savedAt: Date.now(), draft };
+    try {
+      localStorage.setItem(draftBackupKey(user.id, null), JSON.stringify(backup));
+    } catch {
+      setNote("This phone wouldn't keep the draft. Free up some space and try again.");
+      return;
+    }
+    if (missing.length) setNote(`Not in the library, so left out: ${missing.join(", ")}.`);
+    onOpenChange(false);
+    void navigate({ to: "/portal/programs/new" });
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="mx-auto max-h-[92dvh] max-w-lg overflow-y-auto rounded-t-3xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+        <SheetHeader className="text-left">
+          <div className="flex items-center gap-2.5">
+            <CleoAvatar size="sm" />
+            <SheetTitle>Build with Cleo</SheetTitle>
+          </div>
+          <SheetDescription>From your profile. Change any of it, then I'll draft it. It opens in the builder, unsaved, so every exercise, set and week is yours to change before you start.</SheetDescription>
+        </SheetHeader>
+        <div className="mt-4 grid gap-4">
+          <Chips label="Goal" options={GOALS} value={b.goal} onChange={(goal: ProgramGoal) => set({ goal })} />
+          <Chips label="Experience" options={LEVELS} value={b.level} onChange={(level: ProgramLevel) => set({ level })} />
+          <Chips label="Days a week" options={[2, 3, 4, 5].map((n) => ({ id: n, label: String(n) }))} value={b.days} onChange={(days: number) => set({ days })} />
+          <Chips label="Weeks" options={[4, 8, 12].map((n) => ({ id: n, label: String(n) }))} value={b.weeks} onChange={(weeks: number) => set({ weeks })} />
+          {note && <p className="text-[14px] text-muted-foreground">{note}</p>}
+          <button
+            type="button"
+            onClick={draft}
+            disabled={!library.data || setup.isLoading}
+            className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[16px] font-semibold text-background disabled:opacity-60"
+          >
+            {!library.data || setup.isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            Draft my program
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ───────────────────────── the Cleo inbox ───────────────────────── */
+
+/** The row above a Premium member's chats, and its thread (welcome, weekly recaps). */
+export function CleoInboxRow() {
+  const premium = usePremium();
+  const fn = useServerFn(listMyCleoInbox);
+  const readFn = useServerFn(markCleoInboxRead);
+  const qc = useQueryClient();
+  const inbox = useQuery({ queryKey: ["cleo-inbox"], queryFn: () => fn(), enabled: premium, staleTime: 60_000 });
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (premium && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("cleo") === "1") setOpen(true);
+  }, [premium]);
+  const items = inbox.data?.items ?? [];
+  const markRead = useMutation({
+    mutationFn: (ids: string[]) => readFn({ data: { ids } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cleo-inbox"] }),
+  });
+  useEffect(() => {
+    if (!open) return;
+    const ids = items.filter((i) => !i.read_at).map((i) => i.id);
+    if (ids.length) markRead.mutate(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, items.length]);
+  if (!premium || !inbox.data?.premium) return null;
+  const unread = unreadCount(items);
+  const latest = items[0];
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        data-cleo-inbox
+        className="flex min-h-[64px] w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition hover:bg-secondary/40"
+      >
+        <CleoAvatar />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold">Cleo</span>
+          <span className="block truncate text-[13px] text-muted-foreground">{latest ? latest.title : "Your weekly recaps land here"}</span>
+        </span>
+        {unread > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{unread}</span>}
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="bottom" className="mx-auto h-[88dvh] max-w-lg overflow-y-auto rounded-t-3xl pb-[max(env(safe-area-inset-bottom),1rem)]">
+          <SheetHeader className="text-left">
+            <div className="flex items-center gap-2.5">
+              <CleoAvatar size="sm" />
+              <SheetTitle>Cleo</SheetTitle>
+            </div>
+            <SheetDescription>Cleo · AI assistant. Recaps come straight from what you logged.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 grid gap-4">
+            {items.length === 0 && <p className="text-[15px] text-muted-foreground">Nothing yet. Your first recap lands the Monday after a week of training.</p>}
+            {items.map((m) => (
+              <InboxItem key={m.id} item={m} />
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
+function InboxItem({ item }: { item: CleoInboxItem }) {
+  const when = new Date(item.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return (
+    <article className="rounded-2xl bg-muted/50 p-4 ring-1 ring-border/60" data-cleo-item={item.kind}>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-[17px] font-semibold">{item.title}</h3>
+        <span className="text-[12px] text-muted-foreground">{when}</span>
+      </div>
+      {item.cards.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {item.cards.map((c) => (
+            <div key={c.key} className="rounded-xl bg-foreground p-3 text-background">
+              <div className="text-[26px] font-bold leading-none tracking-tight tabular-nums">{c.value}</div>
+              <div className="mt-1 text-[13px] font-medium opacity-80">{c.label}</div>
+              {c.sub && <div className="mt-1 text-[12px] opacity-60">{c.sub}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      {item.body && <p className="mt-3 text-[15px] leading-relaxed">{item.body}</p>}
+    </article>
+  );
+}
