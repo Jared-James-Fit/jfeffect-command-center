@@ -15,7 +15,8 @@ describe("GIFs and voice memos in comments and on posts", () => {
     expect(sql).toContain("IF v_type = 'audio' AND (v_dur IS NULL OR v_dur <= 0 OR v_dur > 121) THEN RAISE EXCEPTION 'Voice memos are up to 2 minutes'; END IF;");
     expect(sql).toContain("IF split_part(v_audio, '/', 1) <> uid::text THEN RAISE EXCEPTION 'Not allowed' USING ERRCODE = '42501'; END IF;");
     expect(read("src/lib/community-media.ts")).toContain("export const VOICE_MAX_SECONDS = 120;");
-    expect(read("src/components/community/voice-memo.tsx")).toContain("if (rec.recording && rec.elapsed >= VOICE_MAX_SECONDS) void finish();");
+    // the recorder stops itself at the cap and keeps what was said
+    expect(read("src/components/community/voice-memo.tsx")).toContain("useVoiceRecorder({ maxSeconds: VOICE_MAX_SECONDS, onAutoStop: deliver })");
   });
   it("only a post's author puts a GIF or voice memo on it", () => {
     expect(sql).toContain("WHERE p.id = _post_id AND p.author_user_id = public.community_main_account(uid) FOR UPDATE;");

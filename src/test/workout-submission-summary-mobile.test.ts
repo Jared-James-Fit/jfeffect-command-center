@@ -22,10 +22,9 @@ describe("workout submission summary mobile layout", () => {
   });
 
   it("progressively hides analytics that do not have useful data", () => {
+    // only the stats this workout has (completion-screen.ts completionStats, Nov 25 2026)
     expect(summary).toContain("summary.totalLifted > 0");
-    expect(summary).toContain("summary.avgRpe != null");
-    expect(summary).toContain("durationMin != null && durationMin > 0");
-    expect(summary).toContain("Baseline logged");
+    expect(summary).toContain("completionStats({");
     // one score on the recap: no second "Recovery /100" or a Completed % beside Sets (Nov 14 2026)
     expect(summary).not.toContain('label="Recovery"');
     expect(summary).not.toContain('label="Completed"');
@@ -37,6 +36,8 @@ describe("workout submission summary mobile layout", () => {
     // else (memberships' session PRs) its own all-time record box
     expect(summary).toContain("{records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} highlight={!!lead} />}");
     expect(readFileSync("src/components/records/training-records.tsx", "utf8")).toContain(">New records</div>");
-    expect(summary).toContain('{prList.length === 1 ? "New all-time record" : `${prList.length} all-time records`}');
+    // one records line (subtle gold only for a headline PR), the list behind it
+    expect(summary).toContain("recordsText(recLine)");
+    expect(summary).toContain('data-recap-records={bigMoment ? "headline" : "quiet"}');
   });
 });

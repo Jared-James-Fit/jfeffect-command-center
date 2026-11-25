@@ -225,15 +225,16 @@ describe("sharing stays optional", () => {
   it("never posts or opens anything on its own: one tap to post, Done always right there", () => {
     const footer = read("src/components/community/recap-post.tsx");
     expect(summary).toContain("useState(false);\n  const [shareMounted");
-    expect(summary).toContain("<RecapPostFooter");
+    expect(summary).toContain("<RecapShare");
     expect(summary).toContain("onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
     // posting only ever happens from the button, and the footer can take it back
     expect(footer).toContain("onClick={() => void shareStory()}");
     expect(footer).not.toMatch(/useEffect\([^)]*shareStory\(\)/);
     expect(footer).toContain("data-recap-story-undo");
-    // Done in both footer states
-    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(2);
+    // one Done, the recap's own sticky footer (Nov 25 2026)
+    expect(summary).toContain("data-recap-done");
+    expect(footer).not.toContain("data-recap-done");
   });
 
   it("is not offered to memberships or to a coach in View-as-client", () => {

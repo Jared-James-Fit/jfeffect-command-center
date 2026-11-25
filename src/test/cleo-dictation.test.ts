@@ -8,20 +8,20 @@ import { describe, expect, it } from "vitest";
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 describe("Cleo dictation", () => {
-  const mic = read("hooks/use-summer-mic.ts");
+  const mic = read("lib/voice/voice-capture.ts");
   const chat = read("components/cleo/cleo-panel.tsx");
   const inbox = read("route-pages/_authenticated/admin/messages.tsx");
 
   it("never stops on silence while dictating; only a tap or the cap ends it", () => {
-    expect(mic).toMatch(/if \(!dictate && heardAt && now - lastLoud > silenceMs\) return finish\(true\);/);
-    expect(mic).toMatch(/if \(!dictate && !heardAt && now - startedAt > noSpeechMs\) return finish\(false\);/);
+    // the one recorder has no silence gate at all: pauses never end a take
+    expect(mic).not.toMatch(/silenceMs|noSpeechMs/);
     // The cap sends what was said rather than throwing it away.
-    expect(mic).toMatch(/timer = window\.setTimeout\(\(\) => finish\(true\), maxMs\);/);
+    expect(mic).toContain('limit = window.setTimeout(() => finish(true, "limit"), opts.maxMs);');
   });
 
   it("the panel dictates up to 5 minutes into the box, to read and change before sending", () => {
     const composer = read("components/cleo/cleo-composer.tsx");
-    expect(composer).toContain("useSummerMic({ dictate: true, maxMs: DICTATION_MAX_MS })");
+    expect(composer).toContain("maxMs: DICTATION_MAX_MS,");
     expect(composer).toContain("export const DICTATION_MAX_MS = 5 * 60_000;");
     // the words go in the box; nothing is sent until they tap Send
     expect(composer).toContain("insert(text);");

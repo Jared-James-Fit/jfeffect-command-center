@@ -101,16 +101,16 @@ describe("where it's offered", () => {
   const uploader = read("src/lib/set-videos/uploader.ts");
   const saveHook = read("src/components/messages/save-media.tsx");
 
-  it("right after filming: the pick says where it came from, and a clip on its way from the camera is offered at once", () => {
+  it("right after filming: the pick says where it came from, and its copy is held, never offered in a pop-up (Nov 25 2026)", () => {
     expect(cell).toContain("const filmedHere = looksFilmedInApp(f);");
     expect(cell).toContain("filmedHere={picked.filmedHere}");
     expect(flow).toContain("if (!res.ok || !res.id || !filmedHere || !isTouchDevice()) return;");
     expect(flow).toContain("noteFilmed(start.userId, { jobId, dayId: start.dayId });");
-    // offered once its copy for Photos is cut: the trimmed part as filmed, never the whole recording
-    expect(flow).toContain("if (copy && holdFilmedFile(start.userId, jobId, copy)) offerPhoneCopy(start.userId, jobId, copy);");
-    // the share sheet opens from the toast's own button, with that copy
-    expect(ui).toContain('label: "Save",');
-    expect(ui).toContain("void saveFiles([file]).then((o) => {");
+    // its copy for the phone (the trimmed part as filmed) is held for the finished workout's save
+    expect(flow).toContain("if (copy) holdFilmedFile(start.userId, jobId, copy);");
+    // nothing pops up after filming
+    expect(flow).not.toContain("offerPhoneCopy");
+    expect(ui).not.toContain("export function offerPhoneCopy");
   });
 
   it("a landed clip is tied to its set video, so it can still be saved after the app closes", () => {
@@ -125,12 +125,17 @@ describe("where it's offered", () => {
     expect(sheet).toContain("forgetFilmed(user.id, { setVideoIds: [v.id] });");
   });
 
-  it("the end of the workout saves every clip filmed here in one go: the review, the finished card and the recap", () => {
-    expect(read("src/components/workout/shared/workout-review-editor.tsx")).toContain("<PhoneCopyReminder dayId={ctx.dayId} />");
-    expect(read("src/components/workout/shared/completed-workout-actions.tsx")).toContain("<PhoneCopyReminder");
-    expect(read("src/components/workout-submission-summary.tsx")).toContain("<PhoneCopyReminder dayId={dayId ?? null}");
+  it("the finished workout saves every clip filmed here in one go, from one small line on the recap (and its Share sheet), never the review", () => {
+    expect(read("src/components/workout/shared/workout-review-editor.tsx")).not.toContain("PhoneCopyReminder");
+    expect(read("src/components/workout/shared/completed-workout-actions.tsx")).not.toContain("PhoneCopyReminder");
+    const summary = read("src/components/workout-submission-summary.tsx");
+    expect(summary).toContain("<SaveVideosInline dayId={dayId} workoutKey={completionId} />");
+    expect(summary).toContain("videos={videos.targets}");
+    // once per workout, remembered (save-offer.ts)
+    expect(ui).toContain("wasOffered(storage, userId, workoutKey)");
+    expect(ui).toContain("markOffered(storage, userId, workoutKey)");
     // never a coach viewing as the athlete, never on a computer
-    expect(ui).toContain("if (viewingAsClient || !dayId || !targets.length || !isTouchDevice()) return null;");
+    expect(ui).toContain("const eligible = viewingAsClient || !dayId || !isTouchDevice() ? [] : targets;");
   });
 
   it("a save that went to the share sheet (or downloaded) stops the offers", () => {

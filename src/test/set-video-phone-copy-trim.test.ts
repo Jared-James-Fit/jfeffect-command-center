@@ -48,13 +48,11 @@ describe("Save to Photos gets the trimmed part, never the whole recording (phone
     expect(await phoneCopyFor({ file, info, trim: { start: 2, end: 9 } })).toBeNull();
   });
 
-  it("the offer after filming hands over that copy, never the picked recording", () => {
+  it("the copy held after filming is that trimmed copy, never the picked recording", () => {
     const flow = read("src/components/workout-day/set-video-flow.tsx");
     expect(flow).toContain("phoneCopy: forPhone");
     expect(flow).toContain("noteFilmed(start.userId, { jobId, dayId: start.dayId });");
-    expect(flow).toContain(
-      "if (copy && holdFilmedFile(start.userId, jobId, copy)) offerPhoneCopy(start.userId, jobId, copy);",
-    );
-    expect(flow).not.toContain("offerPhoneCopy(start.userId, res.id, file)");
+    expect(flow).toContain("if (copy) holdFilmedFile(start.userId, jobId, copy);");
+    expect(flow).not.toContain("offerPhoneCopy");
   });
 });

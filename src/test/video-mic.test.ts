@@ -194,8 +194,9 @@ describe("where it's used", () => {
     expect(read("src/components/camera/film-camera.tsx")).toContain("const got = await openVideoMic();");
     expect(read("src/components/camera/film-camera.tsx")).toContain("noteClipMic(file.name, micNote);");
     expect(read("src/components/community/clip-recorder.ts")).toContain("const got = await openVideoMic();");
-    expect(read("src/components/chat-shared.tsx")).toContain("await getMicStream(true)");
-    expect(read("src/hooks/use-summer-mic.ts")).toContain("getMicStream({ echoCancellation: true, noiseSuppression: true, autoGainControl: true })");
+    // the app's one voice recorder (voice-capture.ts): voice messages ask for the plain mic, dictation the call processing
+    expect(read("src/components/chat-shared.tsx")).toContain("constraints: true })");
+    expect(read("src/lib/voice/voice-capture.ts")).toContain("await getMicStream(opts.constraints ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true })");
     // a set video's upload says what its sound came from, so a real phone's recording can be checked
     expect(read("src/lib/set-videos/uploader.ts")).toContain("mic: clipMicNote(picked.file.name),");
   });
