@@ -176,7 +176,7 @@ describe("the server guard every server function runs through", () => {
 describe("wired in everywhere", () => {
   it("runs the guard on every server function, before the team-preview guard", () => {
     const start = readFileSync("src/start.ts", "utf8");
-    expect(start).toContain("functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard]");
+    expect(start).toContain("functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, nativeAppMark]");
     expect(start).toContain('import("@/lib/mfa-guard.server")');
   });
 

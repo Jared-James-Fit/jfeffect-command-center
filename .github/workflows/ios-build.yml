@@ -441,41 +441,67 @@ jobs:
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 --decode > ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           chmod 600 ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
+      # ── Signing on the App target only ──────────────────────────────────────
+      # Bundle id, team, manual signing and the profile are set on the App target's
+      # Release configuration here, NOT as global xcodebuild arguments: a global
+      # setting applies to every target in the workspace, so the pod frameworks
+      # (Capacitor, CapacitorCordova, JfPhotos) and their resource bundles were all
+      # built as com.jfeffect.app, and the export then tried to give the app's
+      # profile to JfPhotos.framework ("does not support provisioning profiles").
+      # Pods stay unsigned (Podfile post_install); the export signs them when embedded.
       - name: Patch pbxproj for manual signing
         run: |
-          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
-          
-          python3 << 'PYEOF'
-          import re
-
-          path = "ios/App/App.xcodeproj/project.pbxproj"
-          with open(path, "r") as f:
-              content = f.read()
-
-          # Fix bundle ID
-          content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;', 'PRODUCT_BUNDLE_IDENTIFIER = com.jfeffect.app;', content)
-
-          # Set development team
-          content = re.sub(r'DEVELOPMENT_TEAM\s*=\s*[^;]*;', 'DEVELOPMENT_TEAM = 92T56MN5FL;', content)
-
-          with open(path, "w") as f:
-              f.write(content)
-
-          print("✅ pbxproj patched successfully")
-          PYEOF
-
-      - name: Build and Archive iOS app
-        run: |
-          # Get the signing identity from keychain
           SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Apple Distribution" | head -1 | awk -F'"' '{print $2}')
           echo "Using signing identity: $SIGNING_IDENTITY"
-          
           if [ -z "$SIGNING_IDENTITY" ]; then
             echo "ERROR: No Apple Distribution signing identity found!"
             security find-identity -v "$KEYCHAIN_PATH"
             exit 1
           fi
-          
+          export SIGNING_IDENTITY
+
+          python3 << 'PYEOF'
+          import os, re
+
+          path = "ios/App/App.xcodeproj/project.pbxproj"
+          with open(path, "r") as f:
+              content = f.read()
+
+          # Fix bundle ID (App.xcodeproj holds only the App target; pods live in Pods.xcodeproj)
+          content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;', 'PRODUCT_BUNDLE_IDENTIFIER = com.jfeffect.app;', content)
+
+          # Manual signing on the App target's Release configuration (the one with
+          # INFOPLIST_FILE = App/Info.plist and name = Release)
+          signing = {
+              "CODE_SIGN_STYLE": "Manual",
+              "CODE_SIGN_IDENTITY": '"%s"' % os.environ["SIGNING_IDENTITY"],
+              "DEVELOPMENT_TEAM": "92T56MN5FL",
+              "PROVISIONING_PROFILE_SPECIFIER": '"JF Effect App Store Distribution"',
+          }
+          block_re = re.compile(r"(\w+ /\* Release \*/ = \{\s*isa = XCBuildConfiguration;[^{}]*?buildSettings = \{)(.*?)(\n\t\t\t\};\s*name = Release;)", re.S)
+          patched = 0
+          def patch(m):
+              global patched
+              body = m.group(2)
+              if "INFOPLIST_FILE = App/Info.plist;" not in body:
+                  return m.group(0)
+              for key, value in signing.items():
+                  body = re.sub(r"\n\s*%s(\[[^\]]*\])? = [^;]*;" % key, "", body)
+                  body += "\n\t\t\t\t%s = %s;" % (key, value)
+              patched += 1
+              return m.group(1) + body + m.group(3)
+          content = block_re.sub(patch, content)
+          assert patched == 1, f"App target Release configuration found {patched} times (expected 1)"
+
+          with open(path, "w") as f:
+              f.write(content)
+
+          print("✅ pbxproj patched: App target Release signs manually with 'JF Effect App Store Distribution'")
+          PYEOF
+
+      - name: Build and Archive iOS app
+        run: |
+          # Signing settings are on the App target (previous step), not global here.
           cd ios/App
           xcodebuild \
             -workspace App.xcworkspace \
@@ -484,13 +510,8 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/JFEffect.xcarchive" \
             archive \
-            CODE_SIGN_STYLE=Manual \
-            "CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            PRODUCT_BUNDLE_IDENTIFIER=com.jfeffect.app \
             CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
             MARKETING_VERSION=$APP_VERSION \
-            PROVISIONING_PROFILE_SPECIFIER="JF Effect App Store Distribution" \
             "OTHER_CODE_SIGN_FLAGS=--keychain $KEYCHAIN_PATH"
 
       # Proof, in every build's log, that the app going to TestFlight really
@@ -509,6 +530,18 @@ jobs:
           grep -q '"JfPhotosPlugin"' "$APP/capacitor.config.json" || { echo "::error::JfPhotosPlugin is not on the app's plugin list"; exit 1; }
           ls -d "$APP/Frameworks/JfPhotos.framework" >/dev/null 2>&1 || { echo "::error::JfPhotos.framework is not in the app"; exit 1; }
           echo "✅ Camera roll plugin linked"
+          # And that no framework or bundle inside the app has the app's own bundle id
+          # (the export would try to give it the app's profile, and Apple rejects the collision).
+          APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          [ "$APP_ID" = "com.jfeffect.app" ] || { echo "::error::The app's bundle id is $APP_ID, not com.jfeffect.app"; exit 1; }
+          CLASH=0
+          while IFS= read -r PL; do
+            ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PL" 2>/dev/null) || continue
+            echo "  ${PL#$APP/}: $ID"
+            if [ "$ID" = "$APP_ID" ]; then echo "::error::${PL#$APP/} has the app's bundle id $APP_ID"; CLASH=1; fi
+          done < <(find "$APP/Frameworks" "$APP" -mindepth 2 -maxdepth 2 -name Info.plist 2>/dev/null | sort -u)
+          [ "$CLASH" = 0 ] || exit 1
+          echo "✅ Embedded frameworks and bundles have their own bundle ids"
           # And the app's own privacy manifest (Apple rejects an upload without one).
           [ -f "$APP/PrivacyInfo.xcprivacy" ] || { echo "::error::PrivacyInfo.xcprivacy is not in the built app"; exit 1; }
           plutil -lint "$APP/PrivacyInfo.xcprivacy" || { echo "::error::The built app's PrivacyInfo.xcprivacy isn't a valid plist"; exit 1; }
@@ -550,8 +583,10 @@ jobs:
             <string>upload</string>
             <key>signingStyle</key>
             <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
             <key>teamID</key>
-            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <string>92T56MN5FL</string>
             <key>provisioningProfiles</key>
             <dict>
               <key>com.jfeffect.app</key>

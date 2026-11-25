@@ -131,13 +131,15 @@ describe("the iPhone app never sells (rendered)", () => {
   });
 });
 
-describe("Premium is shown normally to people who have it", () => {
+describe("Premium", () => {
   const read = (p: string) => readFileSync(p, "utf8");
 
-  it("the Premium screens never check the platform: no gate, so a holder sees everything in the app", () => {
+  it("is gated only by the option B rule (native-purchases.ts), never its own platform check", () => {
     for (const p of ["src/components/premium/premium-ui.tsx", "src/lib/premium/premium.ts", "src/lib/premium/premium.functions.ts"]) {
       expect(read(p), p).not.toMatch(/isNative|isNativePlatform|@\/platform/);
     }
+    expect(read("src/components/premium/premium-ui.tsx")).toContain("useDigitalPaidAllowed");
+    expect(read("src/lib/premium/premium.functions.ts")).toContain("digitalPaidAllowedFor");
   });
 
   it("nothing in the Premium code sells it: no price, checkout or buy link", () => {

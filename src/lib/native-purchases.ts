@@ -6,9 +6,19 @@
  * Review rejected build 35 for "subscription purchase link-out to Safari via
  * account registration"). A new person in the app can only apply for the free
  * account or sign in. Coaching (1:1, person-to-person, 3.1.3(d)) is paid
- * outside the app too, and the app never links there. Someone who already has
- * something (Premium, a plan, credits) uses it normally. What the app does for
- * paid digital tiers is Jared's decision: docs/APPLE_IAP_DECISION.md.
+ * outside the app too, and the app never links there.
+ *
+ * Nothing digital bought outside the app is unlocked in it either (3.1.1;
+ * Jared chose option B, docs/APPLE_IAP_DECISION.md): in the app a self-serve
+ * member gets the free experience whatever they hold (no Premium, no paid
+ * membership access keys, no bought AI credits), and the paid parts are
+ * hidden, never shown locked. Coaching clients (a person-to-person service,
+ * 3.1.3(d)/(e)) and staff keep everything; the web is unchanged.
+ * `digitalPaidAllowed` is that rule; the screens ask it through
+ * `useDigitalPaidAllowed` (service-tier.ts) and the server through
+ * `digitalPaidAllowedFor` (native-purchases.server.ts), which knows the app's
+ * requests by `isNativeAppRequest` (the build's user-agent stamp, or the
+ * header start.ts adds to every server call from the app).
  *
  * This file is the one guard. Pure rules (tested in native-purchases.test.ts
  * and native-shell-routes.test.ts) plus the runtime pieces that use them:
@@ -204,4 +214,83 @@ export function plansForShell<T extends Switchable>(options: readonly T[], nativ
 export function showPlanPrice(o: { transition: { kind?: string; blocked?: string | null } }, native: boolean): boolean {
   if (!native) return true;
   return o.transition.kind === "current" && o.transition.blocked === "Your current plan";
+}
+
+/* ───────────── Option B: nothing digital bought outside the app is unlocked in it ───────────── */
+
+/** The header the app's own code adds to every server call made inside the iPhone app (start.ts). */
+export const NATIVE_APP_HEADER = "x-jf-native-app";
+/** The iOS build's stamp on the web view's user agent ("JFEffectApp/1850", ios-build.yml). */
+const NATIVE_UA_STAMP = /JFEffectApp\//;
+
+/** A request made from inside the iPhone app: its user-agent stamp, or the app's header. */
+export function isNativeAppRequest(h: { userAgent?: string | null; nativeHeader?: string | null }): boolean {
+  return NATIVE_UA_STAMP.test(h.userAgent ?? "") || !!h.nativeHeader;
+}
+
+/**
+ * Whether paid digital features (Premium, paid-membership access, bought AI
+ * credits) are on for this person here. Always on the web. In the app only for
+ * staff and coaching clients: coaching (1:1 and in person) is a
+ * person-to-person service (3.1.3(d)/(e)), so a client's program, check-ins,
+ * chat and bookings are part of it. A self-serve member (free or paying on the
+ * web) and anyone whose tier isn't known get the free experience (3.1.1).
+ */
+export function digitalPaidAllowed(i: { native: boolean; staff: boolean; tier: "coaching" | "self_serve" | null | undefined }): boolean {
+  return !i.native || i.staff || i.tier === "coaching";
+}
+
+/**
+ * The access keys every free account gets (`member_access_defaults` for a JF
+ * member, given by `member_free_join`): what a member keeps in the app. Any
+ * other key (Premium `jf_premium`, `premium_member`, the paid plan bundles
+ * such as `powerlifting_plans`) came with something paid.
+ */
+export const FREE_ACCESS_KEYS: readonly string[] = [
+  "jf_membership",
+  "app_membership",
+  "program_library",
+  "resource_library",
+  "nutrition_tools",
+  "community",
+];
+const FREE_KEYS = new Set(FREE_ACCESS_KEYS);
+
+/** A member's access rows as the app may use them: only the free keys when paid digital access is off. */
+export function accessForShell<T extends { access_level_key: string }>(rows: readonly T[], allowed: boolean): T[] {
+  return allowed ? [...rows] : rows.filter((r) => FREE_KEYS.has(r.access_level_key));
+}
+
+/** A library plan a free account may open (any active member, or a free key). */
+export function planOpenToFree(plan: { required_access_level?: string | null; audience_mode?: string | null }): boolean {
+  return plan.audience_mode === "all_active" || FREE_KEYS.has(String(plan.required_access_level ?? "app_membership"));
+}
+
+type CreditLike = {
+  unlimited: boolean;
+  allowance_left: number | null;
+  extra: number;
+  left: number | null;
+  history?: Array<{ kind: string }>;
+  purchases?: unknown[];
+};
+
+/**
+ * AI credits as the app shows them when paid digital access is off: the
+ * month's free credits only. Credits bought (or added) on the web stay on the
+ * account for the web and are never shown or spent in the app, and nothing
+ * about buying (purchases, "Bought" lines) is listed.
+ */
+export function creditStateForShell<T extends CreditLike | null | undefined>(state: T, allowed: boolean): T {
+  if (allowed || !state || state.unlimited) return state;
+  const s: any = { ...state, extra: 0, left: Math.max(0, state.allowance_left ?? 0) };
+  if (state.history) s.history = [];
+  if (state.purchases) s.purchases = [];
+  return s;
+}
+
+/** In the app with paid digital access off: an AI action is refused unless the month's free credits cover it. */
+export function shellRefusesCreditSpend(state: Pick<CreditLike, "unlimited" | "allowance_left"> | null | undefined, cost: number, allowed: boolean): boolean {
+  if (allowed || !state || state.unlimited) return false;
+  return (state.allowance_left ?? 0) < cost;
 }

@@ -465,8 +465,8 @@ describe("the hook points", () => {
   it("a coach's import is never charged; a member's is", () => {
     const fns = readFileSync("src/lib/nutrition-import/import.functions.ts", "utf8");
     expect(fns).toContain('if (data.audience === "member") {');
-    expect(fns).toContain('_feature: "nutrition_import"');
-    expect(fns).toContain('_feature: "nutrition_create"');
+    expect(fns).toContain('spendAiCredits(ctx.userId, "nutrition_import"');
+    expect(fns).toContain('spendAiCredits(ctx.userId, "nutrition_create"');
   });
 
   it("no AI icon, and Cleo says what it is where the member meets it", () => {
