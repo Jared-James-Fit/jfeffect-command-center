@@ -11,7 +11,6 @@ import { ThemeAnnouncementGate } from "@/components/whats-new/theme-announcement
 import { ThemeAccountSync } from "@/lib/theme-account-sync";
 import { CoachingAgreementProvider } from "@/components/coaching-agreement/agreement-provider";
 import { AccountLifecycleGate } from "@/components/account/account-lifecycle";
-import { AiConsentHost } from "@/components/ai-consent/ai-consent";
 import { SetVideoResume } from "@/lib/set-videos/resume";
 import { StaffMfaGate } from "@/components/two-step/staff-mfa-gate";
 
@@ -178,8 +177,6 @@ function AuthenticatedLayout() {
         <ThemeAccountSync />
         {/* a set video iOS cut off mid-upload carries on by itself */}
         <SetVideoResume />
-        {/* permission to send their data to AI services, asked when a feature the server refused needs it (withAiConsent) */}
-        <AiConsentHost />
         {/* an account in Recently deleted: Restore (or Contact support) over everything */}
         <AccountLifecycleGate />
       </CoachingAgreementProvider>

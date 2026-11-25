@@ -35,7 +35,7 @@ export async function clientAllowsAi(clientId: string): Promise<{ ok: boolean; n
   return { ok: data?.ok === true, name: (data?.name as string | null) ?? null };
 }
 
-/** The signed-in person's own AI feature: refused with a message the app turns into the consent sheet. */
+/** The signed-in person's own AI feature: refused with a message the app turns into its inline request (useAiConsentInline). */
 export async function requireOwnAiConsent(userId: string): Promise<void> {
   if (!(await userAllowsAi(userId))) throw new AiConsentError(selfConsentMessage());
 }

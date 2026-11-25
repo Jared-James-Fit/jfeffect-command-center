@@ -41,7 +41,7 @@ import type { ImportFlag } from "@/lib/program-import/types";
 import { useProgramEditor } from "@/components/athlete-programs/use-program-editor";
 import { tagLatestVersion } from "@/lib/program-history-queries";
 import { ProgramWorkbench, type WorkbenchReviewApi } from "@/components/athlete-programs/workbench/program-workbench";
-import { useAiConsentAware } from "@/components/ai-consent/ai-consent";
+import { isAiConsentDismissed, useAiConsentInline } from "@/components/ai-consent/ai-consent";
 
 const COST = FEATURE_COSTS.program_import;
 
@@ -192,7 +192,7 @@ function Reading({ row }: { row: ImportRow }) {
 function Failed({ row }: { row: ImportRow }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const retry = useAiConsentAware(useServerFn(retryProgramImport));
+  const [retry, consentAsk] = useAiConsentInline(useServerFn(retryProgramImport), "reads your program");
   const setCredits = useSetCreditState();
   const discard = useDiscard(row.id);
   const [busy, setBusy] = useState(false);
@@ -210,8 +210,8 @@ function Failed({ row }: { row: ImportRow }) {
         return;
       }
       void qc.invalidateQueries({ queryKey: importKeys.one(row.id) });
-    } catch {
-      toast.error("Couldn't start it again. Try again.");
+    } catch (e) {
+      if (!isAiConsentDismissed(e)) toast.error("Couldn't start it again. Try again.");
     } finally {
       setBusy(false);
     }
@@ -234,6 +234,7 @@ function Failed({ row }: { row: ImportRow }) {
           <Button variant="outline" onClick={() => navigate({ to: "/portal/programs/import", search: { paste: 1 } })}>
             Paste it as text instead
           </Button>
+          {consentAsk}
           <Button variant="ghost" onClick={discard.run} disabled={discard.busy}>
             Discard
           </Button>
@@ -337,6 +338,7 @@ function NothingFound({ row }: { row: ImportRow }) {
               Do a full read
             </Button>
           )}
+          {reread.ask}
           <Button variant="outline" onClick={() => navigate({ to: "/portal/programs/import", search: { paste: 1 } })}>
             Paste it as text
           </Button>
@@ -352,7 +354,7 @@ function NothingFound({ row }: { row: ImportRow }) {
 
 function useReread(row: ImportRow) {
   const qc = useQueryClient();
-  const reread = useAiConsentAware(useServerFn(rereadProgramImport));
+  const [reread, consentAsk] = useAiConsentInline(useServerFn(rereadProgramImport), "reads your program");
   const setCredits = useSetCreditState();
   const [busy, setBusy] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
@@ -370,13 +372,14 @@ function useReread(row: ImportRow) {
           return;
         }
         void qc.invalidateQueries({ queryKey: importKeys.one(row.id) });
-      } catch {
-        toast.error("Couldn't start it. Try again.");
+      } catch (e) {
+        if (!isAiConsentDismissed(e)) toast.error("Couldn't start it. Try again.");
       } finally {
         setBusy(false);
       }
     },
     sheet: <AiCreditsSheet open={creditsOpen} onOpenChange={setCreditsOpen} out feature="program_import" />,
+    ask: consentAsk,
   };
 }
 
@@ -605,6 +608,7 @@ function ReviewPanel({
                   <span className="shrink-0 text-[13px] text-muted-foreground">{COST} credits</span>
                 </button>
               )}
+              {reread.ask}
             </div>
           </GroupRow>
         )}
