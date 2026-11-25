@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { BellOff } from "lucide-react";
+import { BellOff, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { activityAge } from "@/lib/crew-activity";
 import { StoryRing, useStoryRing } from "@/components/community/story-ring";
@@ -52,6 +52,7 @@ export function ChatListRow({
   dot = true,
   unreadLabel,
   muted = false,
+  pinned = false,
   selected = false,
   dim = false,
   leading,
@@ -80,6 +81,8 @@ export function ChatListRow({
   unreadLabel?: string;
   /** Hide Alerts is on. */
   muted?: boolean;
+  /** Pinned to the top of the list: a small pin on the right (iMessage). */
+  pinned?: boolean;
   selected?: boolean;
   /** An archived chat. */
   dim?: boolean;
@@ -159,9 +162,10 @@ export function ChatListRow({
         </span>
         {extra}
       </span>
-      {(muted || after || (unread && dot)) && (
+      {(muted || pinned || after || (unread && dot)) && (
         <span className="flex shrink-0 items-center gap-2">
           {muted && <BellOff className="h-4 w-4 text-muted-foreground" aria-label="Alerts hidden" />}
+          {pinned && <Pin className="h-3.5 w-3.5 rotate-45 text-muted-foreground/80" aria-label="Pinned" data-chat-pinned />}
           {after}
           {unread && dot && (
             <span

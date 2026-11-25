@@ -167,12 +167,16 @@ describe("weekly check-ins and Nutrition Updates have their own filters", () => 
 
 describe("the coach inbox", () => {
   const route = read("src/route-pages/_authenticated/admin/messages.tsx");
-  it("filters only what the rows can't already show: forms first, every chip but Inbox only while something's in it", () => {
-    expect(route).toContain('const FILTERS = ["Inbox", "Support", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;');
+  it("All · Unread · Groups · 1:1 Chats lead, and the rest live in one Filter menu with their counts", () => {
+    expect(route).toContain('const FILTERS = ["Inbox", "Reply", "Important", "Support", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;');
     for (const gone of ['"Needs Response"', 'case "Unread"', '"Follow Up"', 'case "Priority"', '"Waiting on Client"', 'case "Done"']) expect(route).not.toContain(gone);
-    expect(route).toContain('const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));');
-    // Support shows while anyone has written to Support (Cleo's chats included), its number what needs you
-    expect(route).toContain('FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f || (f === "Support" && supportChats.length > 0))');
+    expect(route).toContain("<InboxControls");
+    expect(route).toContain("<FilterMenu");
+    // JF Effect Support is in the Filter menu, its own chips under the four while it's picked
+    expect(route).toContain('{ label: "Conversations", filters: ["Reply", "Important", "Support"] },');
+    expect(route).toContain('{filter === "Support" && (');
+    expect(route).toContain('case "Reply": return status !== "archived" && it.workflow.state === "needs_response";');
+    expect(route).toContain('case "Important": return status !== "archived" && !!it.state?.priority && it.state.priority !== "Normal";');
     expect(route).toContain("return status !== \"archived\" && matchesSignal(it.signals, filter as SignalFilter);");
   });
   it("rows show one quiet line (no pills, no number on the photo), and the line or the photo opens the Brief", () => {
@@ -199,7 +203,7 @@ describe("the coach inbox", () => {
     const badges = route.slice(route.indexOf("const FILTER_BADGE"), route.indexOf("const BADGE_STYLE"));
     expect(badges).not.toContain("Archived");
     expect(route).toContain('const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));');
-    expect(route).toContain('aria-label={n ? `${label}, ${n}${f === "Inbox" ? " with new messages" : ""}` : label}');
+    expect(route).toContain('data-filter-badge={FILTER_BADGE[f] ?? "count"}');
   });
 });
 
