@@ -219,3 +219,29 @@ describe("another class: what they'd total there, on their own numbers", () => {
     expect(r.kg).toBe(660);
   });
 });
+
+describe("the conversion comes from meets in the class being entered", () => {
+  it("a cut at 66 kg isn't carried to a 74 kg meet", () => {
+    const pts = CONVERSION.map((p) => ({ ...p, weightClass: "66" }));
+    const f = forecastMeet({
+      today: "2026-11-25",
+      meetDate: "2026-12-09",
+      lifts,
+      meets: MEETS,
+      conversion: pts,
+      concerns: [],
+      weightClass: "74",
+    });
+    // no 74 kg meets to calibrate against: 1.0, said, never the 66 kg cut's 0.95
+    expect(f.lifts.squat!.conversion.ratio).toBe(1);
+    expect(f.lifts.squat!.basis.join(" ")).toMatch(/another class/);
+    expect(f.lifts.squat!.range.expected).toBeGreaterThanOrEqual(230);
+    // at 66 kg the same points still apply
+    const at66 = forecastMeet({
+      ...{ today: "2026-11-25", meetDate: "2026-12-09", lifts, meets: MEETS, concerns: [] },
+      conversion: pts,
+      weightClass: "66",
+    });
+    expect(at66.lifts.squat!.conversion.ratio).toBeLessThan(1);
+  });
+});

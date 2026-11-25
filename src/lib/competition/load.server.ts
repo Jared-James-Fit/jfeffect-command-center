@@ -496,7 +496,13 @@ export async function loadCompetitionContext(
         daysBetween(pre.basis, addDays(m.date, -21)) > 42
       )
         continue;
-      conversion.push({ lift, meetDate: m.date, meetKg: v, trainingKg: kg(pre.value) });
+      conversion.push({
+        lift,
+        meetDate: m.date,
+        meetKg: v,
+        trainingKg: kg(pre.value),
+        weightClass: m.weightClass ?? null,
+      });
     }
   }
 
@@ -649,7 +655,9 @@ export async function loadCompetitionContext(
   }
 
   const forecastChecks = (checks as any[]).flatMap((c) => {
-    const exp = c.internal?.strategy?.adjusted?.total?.expected ?? c.internal?.engine?.forecast?.total?.expected;
+    const exp =
+      c.internal?.strategy?.adjusted?.total?.expected ??
+      c.internal?.engine?.forecast?.total?.expected;
     const actual = Number(c.competitions?.results?.total);
     return exp && actual
       ? [
@@ -693,7 +701,10 @@ export async function loadCompetitionContext(
       identity: c.identity,
       meets: readMeets(c.meets),
       observations: readObservations(c.observations),
-      status: c.field_status === "suggested" || c.field_status === "registered" ? c.field_status : "confirmed",
+      status:
+        c.field_status === "suggested" || c.field_status === "registered"
+          ? c.field_status
+          : "confirmed",
     })),
     watch: {
       programEndsOn,

@@ -10212,6 +10212,27 @@ export type Database = {
           },
         ]
       }
+      community_likes_person_backup: {
+        Row: {
+          backed_up_at: string
+          id: number
+          row_data: Json
+          tbl: string
+        }
+        Insert: {
+          backed_up_at?: string
+          id?: number
+          row_data: Json
+          tbl: string
+        }
+        Update: {
+          backed_up_at?: string
+          id?: number
+          row_data?: Json
+          tbl?: string
+        }
+        Relationships: []
+      }
       community_notifications: {
         Row: {
           actor_user_id: string
@@ -35175,6 +35196,10 @@ export type Database = {
         Args: { _comment_id: string; _liked?: boolean }
         Returns: undefined
       }
+      community_likes_merge_to_person: {
+        Args: { _login: string }
+        Returns: number
+      }
       community_lockin_has_finish: {
         Args: { _post_id: string }
         Returns: boolean
@@ -35600,6 +35625,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      competition_milestone_parked: {
+        Args: { _progress: Json }
+        Returns: boolean
       }
       completion_workout_key: {
         Args: { _completion_id: string }
