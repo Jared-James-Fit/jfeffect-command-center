@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUp, ChevronLeft, Loader2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowUp, ChevronLeft, LifeBuoy, Loader2, Sparkles, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { getMemberSupport, getMySupportThread, markMyThreadRead, sendSupportMessage } from "@/lib/member-support.functions";
+import { askForPerson, getMemberSupport, getMySupportThread, markMyThreadRead, sendSupportMessage } from "@/lib/member-support.functions";
+import { CLEO_SUPPORT_LABEL, supportSegments } from "@/lib/support-cleo/rules";
 import { useClientImpersonation, useViewingAsClient } from "@/lib/client-impersonation";
 import { PREVIEW_ONLY_MESSAGE } from "@/lib/community";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
@@ -35,7 +37,7 @@ export function useSupportConversation() {
     },
   });
   const messages = (q.data?.messages ?? []) as SupportMsg[];
-  const thread = q.data?.thread as { id: string; unread_for_member?: number } | null | undefined;
+  const thread = q.data?.thread as { id: string; unread_for_member?: number; handler?: string; status?: string } | null | undefined;
   return { ...q, key, previewing, thread, messages };
 }
 
@@ -45,9 +47,27 @@ export function useSupportConversation() {
  * left, one box to write in. The team answers from the coach's Messages; each
  * side gets a push when the other writes, and "Seen" shows once the team read it.
  */
+/** A message's words with its in-app paths as taps (only the help answers' paths). */
+function SupportBody({ body }: { body: string }) {
+  return (
+    <>
+      {supportSegments(body).map((seg, i) => {
+        if ("text" in seg) return <span key={i}>{seg.text}</span>;
+        const [path, hash] = seg.to.split("#");
+        return (
+          <Link key={i} to={path as any} hash={hash} className="font-semibold underline underline-offset-2" data-support-link={seg.to}>
+            {seg.label}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
 export function SupportConversation({ onBack }: { onBack?: () => void }) {
   const qc = useQueryClient();
   const send = useServerFn(sendSupportMessage);
+  const askPerson = useServerFn(askForPerson);
   const markRead = useServerFn(markMyThreadRead);
   const { key, previewing, thread, messages: saved, isLoading } = useSupportConversation();
   const [pending, setPending] = useState<SupportMsg[]>([]);
@@ -55,6 +75,10 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
 
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
+  // Cleo answers first on a new chat, or one Cleo has (never once the team has it)
+  const cleoFirst = !thread || thread.handler === "cleo" || thread.status === "closed";
+  const teamHasIt = !!thread && thread.handler === "human" && thread.status !== "closed";
   const endRef = useRef<HTMLDivElement>(null);
 
   // Reading it clears the Messages badge (never while a coach previews).
@@ -101,6 +125,20 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
     }
   };
 
+  const talkToPerson = async () => {
+    if (previewing) { toast(PREVIEW_ONLY_MESSAGE); return; }
+    if (teamHasIt) { toast("The JF Effect team has this chat. They'll reply right here."); return; }
+    setAsking(true);
+    try {
+      await askPerson();
+      await qc.invalidateQueries({ queryKey: key });
+    } catch (e: any) {
+      toast.error(e?.message ?? "That didn't go through. Try again.");
+    } finally {
+      setAsking(false);
+    }
+  };
+
   const seen = supportSeenLine(saved);
 
   return (
@@ -114,7 +152,9 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
         <img src="/icon-192.png" alt="" className="h-10 w-10 shrink-0 rounded-full border border-border object-cover" />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[16px] font-semibold leading-5">{SUPPORT_CHAT_NAME}</h1>
-          <p className="truncate text-[13px] leading-[18px] text-muted-foreground">Usually replies within a day</p>
+          <p className="truncate text-[13px] leading-[18px] text-muted-foreground" data-support-who>
+            {teamHasIt ? "The JF Effect team · usually replies within a day" : "Cleo answers first · the team replies within a day"}
+          </p>
         </div>
       </header>
 
@@ -127,8 +167,8 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
               <img src="/icon-192.png" alt="" className="mx-auto mb-3 h-16 w-16 rounded-full border border-border object-cover" />
               <div className="text-[16px] font-semibold">How can we help?</div>
               <p className="mt-1 text-[15px] leading-5 text-muted-foreground">
-                Ask anything about the app or your account. Found a bug? Tell us what happened.
-                You'll get a notification when we reply.
+                Ask anything about the app or your account. Cleo, JF Effect's assistant, answers first;
+                the team takes anything Cleo can't. Found a bug? Tell us what happened.
               </p>
             </div>
           </div>
@@ -136,6 +176,7 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
           <ul className="space-y-1.5">
             {messages.map((m, i) => {
               const mine = m.sender_role === "member";
+              const cleo = m.sender_role === "cleo";
               const next = messages[i + 1];
               const lastOfRun = !next || (next.sender_role === "member") !== mine
                 || new Date(next.created_at).getTime() - new Date(m.created_at).getTime() > 10 * 60_000;
@@ -146,14 +187,17 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
                       className={cn(
                         "whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[15px] leading-5",
                         mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-secondary text-foreground",
+                        cleo && "border border-border bg-background",
                         m.pending && "opacity-60",
                       )}
+                      data-support-sender={m.sender_role}
                     >
-                      {m.body}
+                      {mine ? m.body : <SupportBody body={m.body} />}
                     </div>
                     {lastOfRun && (
-                      <div className={cn("mt-0.5 px-1 text-[11px] text-muted-foreground", mine && "text-right")}>
-                        {m.pending ? "Sending…" : `${mine ? "" : "JF Effect · "}${timeLabel(m.created_at)}`}
+                      <div className={cn("mt-0.5 flex items-center gap-1 px-1 text-[11px] text-muted-foreground", mine && "justify-end")}>
+                        {cleo && <Sparkles className="h-3 w-3" aria-hidden />}
+                        {m.pending ? "Sending…" : `${mine ? "" : cleo ? `${CLEO_SUPPORT_LABEL} · ` : "JF Effect · "}${timeLabel(m.created_at)}`}
                         {!m.pending && seen && seen.id === m.id ? " · Seen" : ""}
                       </div>
                     )}
@@ -163,6 +207,11 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
             })}
           </ul>
         )}
+        {busy && cleoFirst && !previewing && (
+          <div className="mt-1 flex items-center gap-1.5 px-1 text-[13px] text-muted-foreground" data-support-cleo-typing>
+            <Sparkles className="h-3.5 w-3.5" aria-hidden /> Cleo is typing…
+          </div>
+        )}
         <div ref={endRef} />
       </main>
 
@@ -170,6 +219,27 @@ export function SupportConversation({ onBack }: { onBack?: () => void }) {
         className="shrink-0 border-t border-border bg-background px-3 pt-2 sm:px-4"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
       >
+        {/* Always there: a person, and the help hub (never a button on every screen). */}
+        <div className="mb-2 flex gap-1.5 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => void talkToPerson()}
+            disabled={asking}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-semibold disabled:opacity-50"
+            data-support-talk-to-person
+          >
+            {asking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserRound className="h-3.5 w-3.5" />}
+            Talk to a person
+          </button>
+          <Link
+            to="/portal/account"
+            hash="help"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-semibold"
+            data-support-help-hub
+          >
+            <LifeBuoy className="h-3.5 w-3.5" /> Help & Tutorials
+          </Link>
+        </div>
         <div className="flex items-end gap-2">
           <AutoGrowTextarea
             value={body}

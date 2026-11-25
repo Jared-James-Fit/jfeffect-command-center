@@ -124,7 +124,21 @@ export const sendSupportMessage = createServerFn({ method: "POST" })
     }).select("id, sender_role, body, created_at").single();
     if (error) throw new Error(error.message);
 
-    // Tell the team (content-free; never fails the send).
+    // Cleo answers first (a resolved chat that gets a new message goes back to Cleo):
+    // inside this send, so the answer is there when it returns; never fails the send.
+    const cleoHasIt = thread.status === "closed" || thread.handler === "cleo";
+    if (cleoHasIt) {
+      try {
+        const { runCleoSupportTurn } = await import("@/lib/support-cleo/cleo-support.server");
+        const r = await runCleoSupportTurn(p.admin, thread.id, userId);
+        return { ok: true, threadId: thread.id as string, message: msg, cleo: r.outcome };
+      } catch (e) {
+        console.warn("[support] Cleo's turn failed", e);
+      }
+      return { ok: true, threadId: thread.id as string, message: msg, cleo: "skipped" as const };
+    }
+
+    // A person has this chat: tell the team (content-free; never fails the send).
     try {
       const { notifyAppEvent } = await import("@/lib/push/app-events.server");
       const clientId = thread.client_id ?? p.clientId;
@@ -136,7 +150,41 @@ export const sendSupportMessage = createServerFn({ method: "POST" })
     } catch (e) {
       console.warn("[support] push to team failed", e);
     }
-    return { ok: true, threadId: thread.id as string, message: msg };
+    return { ok: true, threadId: thread.id as string, message: msg, cleo: "team" as const };
+  });
+
+/**
+ * Member or client: "Talk to a person", always there. Cleo hands the chat to
+ * the team at once (it says so once); nothing happens twice if a person has it.
+ */
+export const askForPerson = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const p = await myPerson(context.userId);
+    if (!p.memberId && !p.clientId) throw new Error("Support is for JF Effect members and clients.");
+    let thread = await ensureMyThread(p);
+    if (thread.handler === "human" && thread.status !== "closed") return { ok: true, already: true };
+    if (thread.status === "closed" || thread.handler !== "cleo") {
+      const { data } = await p.admin.from("member_support_threads")
+        .update({ status: "open", handler: "cleo", escalation: null, escalated_at: null, resolved_by: null, resolved_at: null })
+        .eq("id", thread.id).select("*").single();
+      thread = data ?? thread;
+    }
+    const { data: rows } = await p.admin.from("member_support_messages")
+      .select("sender_role, body").eq("thread_id", thread.id).order("created_at", { ascending: true }).limit(200);
+    const list = (rows ?? []) as { sender_role: string; body: string }[];
+    const lastAsk = [...list].reverse().find((m) => m.sender_role === "member")?.body ?? "";
+    const { ruleEscalation } = await import("@/lib/support-cleo/rules");
+    const { escalateSupportThread } = await import("@/lib/support-cleo/cleo-support.server");
+    const { data: c } = thread.client_id
+      ? await p.admin.from("clients").select("first_name, preferred_name").eq("id", thread.client_id).maybeSingle()
+      : { data: null };
+    await escalateSupportThread(p.admin, thread, ruleEscalation({
+      category: "human_request", by: "person", lastAsk,
+      cleoSaid: list.filter((m) => m.sender_role === "cleo").map((m) => m.body),
+      at: new Date().toISOString(),
+    }), { firstName: (c as any)?.preferred_name || (c as any)?.first_name || null, actorUserId: context.userId });
+    return { ok: true, already: false };
   });
 
 /** Member or client: they've read the team's replies (their read receipt for the team). */
@@ -278,6 +326,12 @@ export const replyMemberSupport = createServerFn({ method: "POST" })
       body: data.body,
     }).select("id, sender_role, sender_user_id, category, body, created_at").single();
     if (error) throw new Error(error.message);
+    // A person answered: the chat is theirs now, and Cleo stays quiet in it.
+    if (thread.handler !== "human" || !thread.owner_user_id) {
+      await admin.from("member_support_threads")
+        .update({ handler: "human", owner_user_id: thread.owner_user_id ?? context.userId })
+        .eq("id", thread.id);
+    }
 
     try {
       const { notifyAppEvent } = await import("@/lib/push/app-events.server");
@@ -291,21 +345,73 @@ export const replyMemberSupport = createServerFn({ method: "POST" })
     return { ok: true, threadId: thread.id as string, message: msg };
   });
 
-/** Staff: Done (closed, under Archived until they write again), reopen, or read / unread. */
+/**
+ * Staff: Done / Resolved (closed, under Resolved until they write again, which
+ * goes back to Cleo first), reopen, read / unread, Take over (a person has it:
+ * Cleo never writes in it) or Return to Cleo (the card is cleared).
+ */
 export const updateMemberSupport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({
     threadId: z.string().uuid(),
     status: z.enum(["open", "answered", "closed"]).optional(),
     read: z.boolean().optional(),
+    handler: z.enum(["cleo", "human"]).optional(),
   }).parse(i))
   .handler(async ({ data, context }) => {
     const { admin, thread } = await resolveMember(context, { threadId: data.threadId });
-    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { updated_at: now };
     if (data.status) patch.status = data.status;
+    if (data.status === "closed") Object.assign(patch, { resolved_by: "team", resolved_at: now, unread_for_team: 0 });
+    if (data.status === "open") Object.assign(patch, { resolved_by: null, resolved_at: null });
+    if (data.handler === "human") Object.assign(patch, { handler: "human", owner_user_id: context.userId });
+    if (data.handler === "cleo") {
+      Object.assign(patch, { handler: "cleo", owner_user_id: null, escalation: null, escalated_at: null, cleo_turns: 0, unread_for_team: 0 });
+    }
     if (data.read === true) patch.unread_for_team = 0;
     if (data.read === false) patch.unread_for_team = Math.max(1, thread?.unread_for_team ?? 0);
     const { error } = await admin.from("member_support_threads").update(patch).eq("id", data.threadId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/**
+ * Staff: a reply drafted in the coach's saved voice (My Voice) for a Support
+ * chat, from the conversation, the hand-off card and the help answers. Only
+ * ever put in the coach's reply box: never sent, and never as him by itself.
+ * "Re-create" asks again.
+ */
+export const draftSupportReply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ threadId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { admin, thread, client } = await resolveMember(context, { threadId: data.threadId });
+    if (!thread) throw new Error("That support chat is gone.");
+    const { data: rows } = await admin.from("member_support_messages")
+      .select("sender_role, body").eq("thread_id", thread.id).order("created_at", { ascending: true }).limit(200);
+    const { voicePromptForClient } = await import("@/lib/coach-voice.functions");
+    const { kbForPrompt } = await import("@/lib/support-cleo/rules");
+    const { askRoute } = await import("@/lib/ai/route-call.server");
+    const { casualize } = await import("@/lib/coach-voice");
+    const voice = await voicePromptForClient(admin, client?.id ?? null);
+    const tier = client?.service_tier === "coaching" ? "coaching" : "self_serve";
+    const convo = ((rows ?? []) as { sender_role: string; body: string }[]).slice(-14)
+      .map((m) => `${m.sender_role === "member" ? "THEM" : m.sender_role === "cleo" ? "CLEO (the app's assistant)" : "TEAM"}: ${m.body.slice(0, 1200)}`).join("\n");
+    const esc = thread.escalation as any;
+    const system = [
+      "You draft a reply for the JF Effect team to send in a JF Effect Support chat. The coach reads and edits it before anything is sent.",
+      "Write as the coach would, in his voice below. Short (2-4 sentences), answer first, one clear next step.",
+      "Never promise a refund, a credit, a price, an exception or a change to their plan or access: if that's what they asked, say you're looking into it and what you need from them.",
+      "Never invent a feature: app facts only from the HELP ANSWERS. No medical advice.",
+      "Reply with the message text only.",
+      voice,
+    ].join("\n\n");
+    const prompt = [
+      esc ? `WHY IT CAME TO YOU: ${esc.reason ?? ""}. ${esc.summary ?? ""}. Suggested: ${esc.next_action ?? ""}` : "",
+      `HELP ANSWERS:\n${kbForPrompt(tier)}`,
+      `CHAT (newest last):\n${convo}`,
+    ].filter(Boolean).join("\n\n");
+    const r = await askRoute("coach_write", { system, prompt, tag: "coach_write:support" }, { sb: admin, openaiOnly: true });
+    return { draft: casualize(r.text.trim()) };
   });
