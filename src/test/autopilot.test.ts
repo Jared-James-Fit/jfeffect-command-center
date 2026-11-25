@@ -343,3 +343,11 @@ describe("cost", () => {
     expect(u.usd).toBeCloseTo((1000 * 0.25 + 500 * 2) / 1e6, 6);
   });
 });
+
+describe("cost table in docs/CLEO_AUTOPILOT.md", () => {
+  it("matches the estimate the doc prints", () => {
+    const t = costTable();
+    expect(t.map((r) => r.usdPerWeek)).toEqual([5.29, 10.58, 21.16, 52.9, 105.8]);
+    expect(t.map((r) => r.callsPerWeek)).toEqual([55, 110, 220, 550, 1100]);
+  });
+});
