@@ -32,7 +32,7 @@ every critical blocker is closed, and only with Jared's explicit approval.
 ## Critical blockers (any one of these means "do not submit")
 
 1. **AI consent must be live before submission (5.1.2(i)).** The code is done (below), but it
-   depends on migration `20270527101500_ai_data_consent.sql`. The server fails closed: deploy
+   depends on migration `20270527107000_ai_data_consent.sql`. The server fails closed: deploy
    the code before the migration is applied and every client/member AI feature stops. Apply the
    migration first, then deploy.
 2. **Privacy policy must match (5.1.1(i), 5.1.2(i)).** The published policy (`/legal/privacy-policy`)
@@ -93,7 +93,7 @@ every critical blocker is closed, and only with Jared's explicit approval.
 
 | Fix | Where |
 | --- | --- |
-| Explicit permission before personal data goes to third-party AI: names OpenAI and Google (Gemini) and what each is used for; asked once per app open until answered (clients and members), and again at the point of use when the server refuses; Allow re-runs the action; withdraw or give it any time in Account → Privacy & data → AI processing; every answer recorded with its wording version | `supabase/migrations/20270527101500_ai_data_consent.sql`, `src/lib/ai-consent/`, `src/components/ai-consent/ai-consent.tsx`, portal layout, signed-in layout, Account page |
+| Explicit permission before personal data goes to third-party AI: names OpenAI and Google (Gemini) and what each is used for; asked once per app open until answered (clients and members), and again at the point of use when the server refuses; Allow re-runs the action; withdraw or give it any time in Account → Privacy & data → AI processing; every answer recorded with its wording version | `supabase/migrations/20270527107000_ai_data_consent.sql`, `src/lib/ai-consent/`, `src/components/ai-consent/ai-consent.tsx`, portal layout, signed-in layout, Account page |
 | Server enforcement, failing closed, before any model call: the person's own features (meal estimates via `withAiCredits`, program and meal-plan imports and Create with Cleo, pain reading and pain voice, voice-memo transcripts by speaker) and the coach-side paths listed in item 6 | `consent.server.ts` and the callers; tested in `src/test/ai-consent.test.ts` |
 | Graceful degradation: pain reading keeps the app's own reader, pain voice says to type it, a voice memo stays a memo, coach-side drafting fails with the coach's words ("<name> hasn't allowed … do it by hand"), Nutrition Update plans show that reason on the coach's card, coaching automation items fail with it | same |
 | Privacy manifest actually shipped: it lived under `ios/`, which the build deletes before `cap add ios`, so no build ever contained it. Moved to `native/ios-app/PrivacyInfo.xcprivacy`, rewritten from what the app collects, copied in and added to the App target's Resources every build, and checked in the built app | `.github/workflows/ios-build.yml` |
@@ -134,7 +134,7 @@ detection; not worth it now.
 
 ## Manual actions only Jared can do
 
-1. Approve and apply migration `20270527101500_ai_data_consent.sql` before deploying this code.
+1. Approve and apply migration `20270527107000_ai_data_consent.sql` before deploying this code.
 2. Update and publish the Privacy Policy (blocker 2) and the AI disclosure; have counsel review.
 3. Decide the payment questions above (membership IAP, credit packs).
 4. App Store Connect: app record details, Health & Fitness category, age-rating questionnaire,

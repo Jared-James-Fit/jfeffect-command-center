@@ -91,7 +91,7 @@ describe("AI consent is enforced on the server before data reaches a model", () 
   it("fails closed and is written only by the person", () => {
     const server = src("src/lib/ai-consent/consent.server.ts");
     expect(server).toMatch(/if \(error\) \{[\s\S]*?return false;/);
-    const sql = src("supabase/migrations/20270527101500_ai_data_consent.sql");
+    const sql = src("supabase/migrations/20270527107000_ai_data_consent.sql");
     expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("user_id = (SELECT auth.uid())");
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.ai_consent_ok\(uuid, integer\) FROM PUBLIC, anon, authenticated/);

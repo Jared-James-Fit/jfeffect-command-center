@@ -1,4 +1,4 @@
--- ROLLBACK for supabase/migrations/20270527101500_ai_data_consent.sql
+-- ROLLBACK for supabase/migrations/20270527107000_ai_data_consent.sql
 --
 -- NOT a migration: it lives outside supabase/migrations so it never runs by itself.
 -- The app's AI paths check consent through ai_consent_ok / ai_consent_ok_for_client and
