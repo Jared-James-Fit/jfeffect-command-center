@@ -215,7 +215,7 @@ function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: strin
         ) : null}
       </div>
 
-      {step === "during" && !retro && agenda ? <PresenterScript sessionId={s.id} slides={scriptSlides} /> : null}
+      {(step === "during" || step === "before") && !retro && agenda ? <PresenterScript sessionId={s.id} slides={scriptSlides} /> : null}
 
       {step === "before" && !retro ? (
         <>
