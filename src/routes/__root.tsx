@@ -243,6 +243,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   beforeLoad: ({ location }) => {
     const to = shellRedirect(location.pathname);
     if (to) throw redirect({ to: "/", replace: true });
+    // the root adds nothing to the route context
+    return undefined as never;
   },
   head: () => ({
     meta: [
