@@ -48,6 +48,7 @@ import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/d
 import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
 import { addPlanSteps } from "@/lib/checkin-coordination/steps";
 import { CleoRecommendationCard } from "@/components/messages/cleo-recommendation-card";
+import { ReplyRecreate } from "@/components/autopilot/reply-recreate";
 import { CHANGE_FOLLOW_UPS, NU } from "@/lib/checkin-coordination/nutrition-fold";
 import { MEAL_CHOICE } from "@/lib/nutrition-history";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -1030,17 +1031,8 @@ export function MessengerCheckinSubmissionCard({
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
               <MessageSquareText className="h-3.5 w-3.5" /> Suggested response
-              {role === "admin" && (
-                <button
-                  type="button"
-                  onClick={() => void redoSuggestion()}
-                  disabled={redoing}
-                  className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-primary hover:bg-primary/10 disabled:opacity-60"
-                  title="Write a new suggestion"
-                >
-                  <RotateCcw className={cn("h-3 w-3", redoing && "animate-spin")} /> {redoing ? "Writing…" : "Redo"}
-                </button>
-              )}
+              {/* Re-create: new wording from the stored assessment (never a new recap), with a style menu and every version kept */}
+              {role === "admin" && <ReplyRecreate checkinId={submissionId} current={String(analysis.suggested_response ?? "")} />}
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
               {analysis.suggested_response}

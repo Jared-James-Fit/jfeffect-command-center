@@ -25,8 +25,8 @@ export type CallProfile = {
 /** Estimates: token sizes from the prompts' typical length; frequencies from how often each change is proposed. */
 export const CALL_PROFILES: CallProfile[] = [
   { key: "reply", label: "Check-in reply (written with the recap: one call)", model: "gpt-5-mini", input: 6_000, output: 900, perClientWeek: 1 },
-  { key: "nutrition", label: "Nutrition draft (Change it with AI: targets + menus)", model: "gpt-5.5", input: 18_000, output: 5_000, perClientWeek: 0.35 * 2 },
-  { key: "training", label: "Training draft (Edit with AI proposal)", model: "gpt-5.5", input: 22_000, output: 4_000, perClientWeek: 0.15 },
+  { key: "nutrition", label: "Nutrition draft (Adjust plan: targets + menus)", model: "gpt-5.5", input: 18_000, output: 5_000, perClientWeek: 0.35 * 2 },
+  { key: "training", label: "Training draft (Adjust program proposal)", model: "gpt-5.5", input: 22_000, output: 4_000, perClientWeek: 0.15 },
   { key: "cardio", label: "Cardio draft the treadmill step can't express (Cleo — Cardio)", model: "gpt-5.5", input: 9_000, output: 2_000, perClientWeek: 0.05 },
   { key: "recreate", label: "Re-create (the coach asks for new wording)", model: "gpt-5-mini", input: 4_000, output: 400, perClientWeek: 0.3 },
 ];

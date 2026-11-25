@@ -36,6 +36,7 @@ import { PaymentRequestCard } from "@/components/payment-request-card";
 import { AutoPaySetupCard } from "@/components/billing/auto-pay-setup-card";
 import { NutritionPlanChatCard } from "@/components/messages/nutrition-plan-chat-card";
 import { CardioPlanChatCard } from "@/components/messages/cardio-plan-chat-card";
+import { AutopilotUpdateChatCard } from "@/components/messages/autopilot-update-chat-card";
 import { CompetitionUpdateChatCard, type CompetitionUpdateAttachment } from "@/components/messages/competition-update-chat-card";
 import type { CardioMessageAttachment } from "@/lib/cardio/plan-message";
 import type { PlanMessageAttachment } from "@/lib/nutrition-targets/plan-message";
@@ -630,6 +631,9 @@ function AttachmentView({
   }
   if ((att as any).kind === "competition_update") {
     return <CompetitionUpdateChatCard att={att as unknown as CompetitionUpdateAttachment} staff={role !== "client"} clientId={clientId} />;
+  }
+  if ((att as any).kind === "autopilot_update") {
+    return <AutopilotUpdateChatCard att={att as any} staff={role !== "client"} clientId={clientId} />;
   }
   if ((att as any).kind === "cardio_plan") {
     return <CardioPlanChatCard att={att as unknown as CardioMessageAttachment} staff={role !== "client"} clientId={clientId} />;

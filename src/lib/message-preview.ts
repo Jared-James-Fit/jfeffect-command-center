@@ -3,7 +3,7 @@
  * or what was sent ("📷 Photo", "🎥 2 Videos", "🎤 Voice memo") when there are
  * none. Used where a chat shows its newest message outside the thread.
  */
-type Att = { type?: string | null; kind?: string | null; story?: boolean | null; reply?: boolean | null; shared?: boolean | null } | null | undefined;
+type Att = { type?: string | null; kind?: string | null; story?: boolean | null; reply?: boolean | null; shared?: boolean | null; title?: string | null } | null | undefined;
 
 const plural = (n: number, one: string, many: string) => (n > 1 ? `${n} ${many}` : one);
 
@@ -21,6 +21,7 @@ export function messagePreviewText(body: string | null | undefined, attachments:
   if (first?.kind === "recipe_share") return "🍽️ Shared a recipe";
   if (first?.kind === "nutrition_plan") return "🍽️ Your nutrition plan";
   if (first?.kind === "cardio_plan") return "Your cardio plan";
+  if (first?.kind === "autopilot_update") return String(first.title ?? "Your plan has been updated");
   if (first?.kind === "gif") return "GIF";
   if (first?.kind === "sound") return "🔊 Sound";
   const images = list.filter((a) => a?.type === "image").length;
