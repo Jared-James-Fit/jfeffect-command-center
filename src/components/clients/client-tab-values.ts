@@ -1,3 +1,3 @@
 // Tab ids for the admin client workspace. Lives outside the page so the route file stays tiny.
-export const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "competition", "metrics", "documents", "sessions", "purchases", "info", "goals-setup", "coaching", "notes", "files", "account"] as const;
+export const TAB_VALUES = ["summary", "training", "nutrition", "cardio", "competition", "meetings", "metrics", "documents", "sessions", "purchases", "info", "goals-setup", "coaching", "notes", "files", "account"] as const;
 export type TabValue = typeof TAB_VALUES[number];
