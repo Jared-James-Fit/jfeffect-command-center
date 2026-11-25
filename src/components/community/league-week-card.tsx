@@ -33,7 +33,7 @@ export function LeagueWeekCard({ week, play = true, onRankings, onDismiss, dismi
   bare?: boolean;
 }) {
   const { me } = week;
-  const { data: live } = usePerformanceLeague("current");
+  const { data: live } = usePerformanceLeague("current", week.audience ?? "community");
   const liveMe = live?.find((r) => r.is_me) ?? null;
   const chase = live ? chaseLine(live, liveMe) : null;
   const head = weekHeadline(me);
@@ -48,6 +48,7 @@ export function LeagueWeekCard({ week, play = true, onRankings, onDismiss, dismi
       <header className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-muted-foreground">
           {monthName(week.month_start)} League · week {week.week_of_month}
+          {week.audience === "coaching" && <span data-league-week-audience> · JF Effect Athletes</span>}
         </span>
         <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">{weekRange(week.week_start, week.week_end)}</span>
         {onDismiss && (

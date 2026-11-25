@@ -63,8 +63,8 @@ describe("Strength source switch", () => {
   const board = readFileSync("src/components/portal/strength-board.tsx", "utf8");
   const slide = board.slice(board.indexOf("export function StrengthBoardSlide("), board.indexOf("function KingTile("));
   it("both boards load up front, so switching is instant; any filter change folds Show all back", () => {
-    expect(slide).toContain("const allTime = useStrengthBoard();");
-    expect(slide).toContain("const meets = useMeetBoard();");
+    expect(slide).toContain("const allTime = useStrengthBoard(audience);");
+    expect(slide).toContain("const meets = useMeetBoard(audience);");
     expect(slide).toContain('onClick={() => pick(setSource)(source === "meets" ? "all" : "meets")}');
     expect(slide).toContain("onClick={() => pick(setMode)(k)}");
     expect(slide).toContain("onClick={() => pick(setDivision)(d)}");
