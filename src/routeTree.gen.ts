@@ -275,6 +275,7 @@ import { Route as ApiPublicHooksCleoTurnRouteImport } from './routes/api/public/
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
 import { Route as ApiPublicHooksCoachingPackageStripeRouteImport } from './routes/api/public/hooks/coaching-package-stripe'
+import { Route as ApiPublicHooksCoachingSessionsSelfcheckRouteImport } from './routes/api/public/hooks/coaching-sessions-selfcheck'
 import { Route as ApiPublicHooksCoachingSessionsTickRouteImport } from './routes/api/public/hooks/coaching-sessions-tick'
 import { Route as ApiPublicHooksCompetitionIntelTickRouteImport } from './routes/api/public/hooks/competition-intel-tick'
 import { Route as ApiPublicHooksCompetitionSelfcheckRouteImport } from './routes/api/public/hooks/competition-selfcheck'
@@ -1861,6 +1862,12 @@ const ApiPublicHooksCoachingPackageStripeRoute =
     path: '/api/public/hooks/coaching-package-stripe',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCoachingSessionsSelfcheckRoute =
+  ApiPublicHooksCoachingSessionsSelfcheckRouteImport.update({
+    id: '/api/public/hooks/coaching-sessions-selfcheck',
+    path: '/api/public/hooks/coaching-sessions-selfcheck',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksCoachingSessionsTickRoute =
   ApiPublicHooksCoachingSessionsTickRouteImport.update({
     id: '/api/public/hooks/coaching-sessions-tick',
@@ -2479,6 +2486,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
+  '/api/public/hooks/coaching-sessions-selfcheck': typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
   '/api/public/hooks/coaching-sessions-tick': typeof ApiPublicHooksCoachingSessionsTickRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
   '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
@@ -2804,6 +2812,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
+  '/api/public/hooks/coaching-sessions-selfcheck': typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
   '/api/public/hooks/coaching-sessions-tick': typeof ApiPublicHooksCoachingSessionsTickRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
   '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
@@ -3135,6 +3144,7 @@ export interface FileRoutesById {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
+  '/api/public/hooks/coaching-sessions-selfcheck': typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
   '/api/public/hooks/coaching-sessions-tick': typeof ApiPublicHooksCoachingSessionsTickRoute
   '/api/public/hooks/competition-intel-tick': typeof ApiPublicHooksCompetitionIntelTickRoute
   '/api/public/hooks/competition-selfcheck': typeof ApiPublicHooksCompetitionSelfcheckRoute
@@ -3466,6 +3476,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
+    | '/api/public/hooks/coaching-sessions-selfcheck'
     | '/api/public/hooks/coaching-sessions-tick'
     | '/api/public/hooks/competition-intel-tick'
     | '/api/public/hooks/competition-selfcheck'
@@ -3791,6 +3802,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
+    | '/api/public/hooks/coaching-sessions-selfcheck'
     | '/api/public/hooks/coaching-sessions-tick'
     | '/api/public/hooks/competition-intel-tick'
     | '/api/public/hooks/competition-selfcheck'
@@ -4121,6 +4133,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/coaching-package-stripe'
+    | '/api/public/hooks/coaching-sessions-selfcheck'
     | '/api/public/hooks/coaching-sessions-tick'
     | '/api/public/hooks/competition-intel-tick'
     | '/api/public/hooks/competition-selfcheck'
@@ -4271,6 +4284,7 @@ export interface RootRouteChildren {
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
   ApiPublicHooksCoachingPackageStripeRoute: typeof ApiPublicHooksCoachingPackageStripeRoute
+  ApiPublicHooksCoachingSessionsSelfcheckRoute: typeof ApiPublicHooksCoachingSessionsSelfcheckRoute
   ApiPublicHooksCoachingSessionsTickRoute: typeof ApiPublicHooksCoachingSessionsTickRoute
   ApiPublicHooksCompetitionIntelTickRoute: typeof ApiPublicHooksCompetitionIntelTickRoute
   ApiPublicHooksCompetitionSelfcheckRoute: typeof ApiPublicHooksCompetitionSelfcheckRoute
@@ -6185,6 +6199,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCoachingPackageStripeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/coaching-sessions-selfcheck': {
+      id: '/api/public/hooks/coaching-sessions-selfcheck'
+      path: '/api/public/hooks/coaching-sessions-selfcheck'
+      fullPath: '/api/public/hooks/coaching-sessions-selfcheck'
+      preLoaderRoute: typeof ApiPublicHooksCoachingSessionsSelfcheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/coaching-sessions-tick': {
       id: '/api/public/hooks/coaching-sessions-tick'
       path: '/api/public/hooks/coaching-sessions-tick'
@@ -7373,6 +7394,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksCoachAutomationTickRoute,
   ApiPublicHooksCoachingPackageStripeRoute:
     ApiPublicHooksCoachingPackageStripeRoute,
+  ApiPublicHooksCoachingSessionsSelfcheckRoute:
+    ApiPublicHooksCoachingSessionsSelfcheckRoute,
   ApiPublicHooksCoachingSessionsTickRoute:
     ApiPublicHooksCoachingSessionsTickRoute,
   ApiPublicHooksCompetitionIntelTickRoute:

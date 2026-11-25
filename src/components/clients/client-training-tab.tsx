@@ -19,6 +19,7 @@
  * tab (Adjust program's engine: proposals with a tick per change, nothing applied
  * until the coach applies it), so the coach never leaves the tab to change it.
  */
+import { useCleoHandoff } from "@/lib/cleo-handoff";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -111,6 +112,8 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     return () => window.clearTimeout(t);
   }, [hash]);
   const dock = useCleoDock();
+  // a meeting's approved change lands in this dock's box (cleo-handoff.ts)
+  useCleoHandoff(clientId, "training", dock.ask);
   const qc = useQueryClient();
   // the block Adjust program centres on: the one the program card shows (running, else next)
   const [focusId, setFocusId] = useState<string | null>(null);

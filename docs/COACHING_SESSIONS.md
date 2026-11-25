@@ -58,12 +58,33 @@ added afterwards). Cleo prepares, organizes and remembers; the coach decides.
   15–30 minute call, with why; meaningful decisions earn a call, the final week
   before a meet avoids one, an existing booking is respected, and an included
   call is said apart from a General Call.
-- `questionnaireFor` — only what's missing or stale, as tap answers with
-  prefills; 1–3 minutes.
-- `checkAnalysis` — every extracted item must quote the transcript (or cite a
-  record); agreements are only what both sides said yes to; tentative ideas and
-  Cleo's interpretations are labelled; contradictions with confirmed
-  intelligence are flagged.
+- `questionnaireFor` — only what's missing or stale (a fresh check-in covers
+  how they feel, a fresh weigh-in their weight, a meet adds how they feel
+  about it), sent as the "Before our call" form with `settings.ask_keys`;
+  1–3 minutes.
+- `checkBrief` — Cleo's pre-call brief only organizes the prep: focus points
+  cite prep lines that exist; nothing carries a number the prep doesn't.
+- `checkAnalysis` — every extracted item must quote the transcript
+  (`quoteFound`); a hedged agreement is only floated; a recommendation needs
+  the conversation behind it and no invented numbers (five at most);
+  intelligence the coach already confirmed isn't proposed again; what's
+  dropped is listed for the coach.
+
+## Background work
+
+`coaching-sessions-tick` (pg_cron every minute, only while
+`coaching_sessions_due()`): `runSessionWork` claims a row by its `updated_at`,
+writes Cleo's brief (route `session_brief`) or reads the meeting (route
+`session_analysis`) through `stagedCall` on the OpenAI key only, parks while a
+model is still thinking, and waits without using an attempt while OpenAI is
+down; then removes raw transcripts past their retention date.
+
+## Where an approved change goes
+
+Training, nutrition and cardio: words in that tab's own Cleo dock
+(`handOffToCleo` → `useCleoHandoff`), where Adjust program, Adjust plan or the
+cardio draft shows exactly what changes before anything is applied.
+Communication: the client's chat box. Anything else: a coach commitment.
 
 ## Phases
 

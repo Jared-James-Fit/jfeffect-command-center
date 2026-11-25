@@ -857,7 +857,7 @@ export function ClientProfileWorkspace({
         {/* Meetings (Nov 25 2026): every coaching conversation, prepared, presented and remembered. */}
         <TabsContent value="meetings" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <Suspense fallback={<TabFallback />}>
-            <MeetingsWorkspace clientId={id} />
+            <MeetingsWorkspace clientId={id} onOpenTab={(t: string) => setTab(t as TabValue)} />
           </Suspense>
         </TabsContent>
 

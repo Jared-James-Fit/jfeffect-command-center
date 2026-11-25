@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract" | "session_brief" | "session_analysis";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -173,6 +173,15 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * (a name or a number that isn't in it is dropped). Answered while the coach waits. OpenAI only.
    */
   competition_extract: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
+  /**
+   * Coaching sessions (docs/COACHING_SESSIONS.md, Nov 25 2026). The pre-call brief only organizes
+   * the sourced prep (coaching-sessions/brief.ts checks every ref and number), so GPT-5.5 at low
+   * effort, then GPT-5 mini. Reading a meeting's notes or transcript is the harder read (who said
+   * what, what was agreed and what was only floated), checked by code against the transcript
+   * (analysis.ts); GPT-5.5 at medium, then GPT-6 Astra. Both in the background; OpenAI key only.
+   */
+  session_brief: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
+  session_analysis: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 24_000, strongOnly: false },
 };
 
 /**

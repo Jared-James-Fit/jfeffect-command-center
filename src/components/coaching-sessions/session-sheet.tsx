@@ -1,11 +1,13 @@
 /**
- * One meeting, start to finish, in one sheet (coach only): the agenda Cleo
- * prepared with each line's source, Present (the athlete-safe screen, in its
- * own window for screen sharing), notes and decisions as the call goes, who
- * does what, and the game plan, sent only on the coach's tap. Everything
- * autosaves.
+ * One meeting, start to finish, in one sheet (coach only), in three steps:
+ * Before (Cleo's brief, the pre-call questions, the agenda with each line's
+ * source, private notes), During (Present: the athlete-safe screen in its own
+ * window for screen sharing; notes and decisions as the call goes) and After
+ * (the transcript or notes read by Cleo, decisions on what it proposes, who
+ * does what, and the game plan, sent only on the coach's tap). Autosaves.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -19,9 +21,14 @@ import { cn } from "@/lib/utils";
 import {
   commitmentFn,
   getSessionFn,
+  queueBriefFn,
+  sendSessionQuestionsFn,
   sendSessionSummaryFn,
   updateSessionFn,
 } from "@/lib/coaching-sessions/sessions.functions";
+import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import { ANSWER_WORDS } from "@/lib/coaching-sessions/questionnaire";
+import { SessionAfter } from "./session-after";
 import type { Agenda, PrepItem } from "@/lib/coaching-sessions/prepare";
 import { draftGamePlan, gamePlanMessage, type GamePlan } from "@/lib/coaching-sessions/presentation";
 import { meetingsKey, sessionKey } from "./keys";
@@ -35,12 +42,35 @@ const SOURCE_WORDS: Record<PrepItem["source"], string> = {
 };
 
 
-export function SessionSheet({ sessionId, clientId, onClose }: { sessionId: string; clientId: string; onClose: () => void }) {
+export function SessionSheet({
+  sessionId,
+  clientId,
+  onClose,
+  onOpenTab,
+}: {
+  sessionId: string;
+  clientId: string;
+  onClose: () => void;
+  onOpenTab?: (tab: string) => void;
+}) {
   const read = useServerFn(getSessionFn);
+  // the prep is read again once when the sheet opens; polls after that only pick up Cleo's work
+  const first = useRef(true);
   const q = useQuery({
     queryKey: sessionKey(sessionId),
-    queryFn: () => read({ data: { sessionId, refresh: true } }),
+    queryFn: () => {
+      const refresh = first.current;
+      first.current = false;
+      return read({ data: { sessionId, refresh } });
+    },
     staleTime: 30_000,
+    refetchInterval: (query) => {
+      const s = (query.state.data as any)?.session;
+      if (!s) return false;
+      if (["queued", "running"].includes(s.write_up_status) || ["queued", "running"].includes(s.analysis_status)) return 5000;
+      if (s.questionnaire?.sent_at && !s.questionnaire?.submitted_at) return 20_000;
+      return false;
+    },
   });
   return (
     <Sheet open onOpenChange={(o) => (!o ? onClose() : null)}>
@@ -53,15 +83,21 @@ export function SessionSheet({ sessionId, clientId, onClose }: { sessionId: stri
         ) : q.error || !q.data ? (
           <ErrorState error={q.error} what="this meeting" onRetry={() => q.refetch()} retrying={q.isFetching} />
         ) : (
-          <SessionBody data={q.data} clientId={clientId} />
+          <SessionBody data={q.data} clientId={clientId} onOpenTab={onOpenTab} />
         )}
       </SheetContent>
     </Sheet>
   );
 }
 
-function SessionBody({ data, clientId }: { data: any; clientId: string }) {
+type Step = "before" | "during" | "after";
+const STEP_WORDS: Record<Step, string> = { before: "Before", during: "During", after: "After" };
+
+function SessionBody({ data, clientId, onOpenTab }: { data: any; clientId: string; onOpenTab?: (tab: string) => void }) {
   const s = data.session;
+  const [step, setStep] = useState<Step>(() =>
+    s.format === "retrospective" || s.status === "done" ? "after" : s.status === "live" ? "during" : "before",
+  );
   const agenda: Agenda | null = s.agenda ?? null;
   const qc = useQueryClient();
   const update = useServerFn(updateSessionFn);
@@ -102,8 +138,13 @@ function SessionBody({ data, clientId }: { data: any; clientId: string }) {
 
   const present = () => {
     const url = `/admin/meetings/${s.id}/present`;
-    const w = window.open(url, `jf-present-${s.id}`, "noopener");
-    if (!w) window.location.assign(url);
+    // a window of its own (to share that one screen); with "noopener" window.open
+    // always returns null, so the opener link is cut by hand instead
+    const w = window.open(url, `jf-present-${s.id}`);
+    if (w) w.opener = null;
+    else window.location.assign(url);
+    if (s.status === "ready") void update({ data: { sessionId: s.id, status: "live" } }).then(refresh);
+    setStep("during");
   };
 
   return (
@@ -123,17 +164,46 @@ function SessionBody({ data, clientId }: { data: any; clientId: string }) {
             {s.status !== "done" ? (
               <Button
                 variant="outline"
-                onClick={() => update({ data: { sessionId: s.id, status: "done" } }).then(refresh)}
+                onClick={() =>
+                  update({ data: { sessionId: s.id, status: "done" } }).then(() => {
+                    refresh();
+                    setStep("after");
+                  })
+                }
               >
-                <Check className="mr-1.5 h-4 w-4" /> Mark done
+                <Check className="mr-1.5 h-4 w-4" /> Call's done
               </Button>
             ) : null}
           </div>
         ) : null}
+        {!retro ? (
+          <div className="mt-3 grid grid-cols-3 rounded-lg bg-secondary p-1" role="tablist" aria-label="Meeting step">
+            {(["before", "during", "after"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={step === k}
+                onClick={() => setStep(k)}
+                className={cn("h-9 rounded-md text-[14px]", step === k ? "bg-background font-medium shadow-sm" : "text-muted-foreground")}
+                data-step={k}
+              >
+                {STEP_WORDS[k]}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </SheetHeader>
 
+      {step === "before" && !retro ? (
+        <>
+          {data.cleo ? <CleoBrief data={data} onChange={refresh} /> : null}
+          <PreCallQuestions data={data} onChange={refresh} />
+        </>
+      ) : null}
+
       {/* The agenda, each line with where it came from */}
-      {!retro && agenda ? (
+      {step === "before" && !retro && agenda ? (
         <section className="space-y-4" data-session-agenda>
           <div className="flex items-baseline justify-between">
             <h3 className="text-[16px] font-semibold">Agenda</h3>
@@ -179,20 +249,21 @@ function SessionBody({ data, clientId }: { data: any; clientId: string }) {
       ) : null}
 
       {/* Private notes */}
+      {step !== "after" || retro ? (
       <section className="space-y-2">
         <div className="flex items-baseline justify-between">
-          <h3 className="text-[16px] font-semibold">{retro ? "What was discussed" : "Your notes"}</h3>
+          <h3 className="text-[16px] font-semibold">{retro ? "What was discussed" : step === "during" ? "Notes" : "Your notes"}</h3>
           <span className="text-[12px] text-muted-foreground">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : "Private"}</span>
         </div>
-        {retro ? (
+        {retro || step === "during" ? (
           <Textarea
-            rows={6}
+            rows={retro ? 6 : 8}
             value={liveNotes}
             onChange={(e) => {
               setLiveNotes(e.target.value);
               save({ sessionId: s.id, live: { notes: e.target.value } });
             }}
-            placeholder="Paste your notes or the meeting summary"
+            placeholder={retro ? "Your notes or the meeting summary (or add the transcript below)" : "Quick notes as you talk"}
           />
         ) : (
           <Textarea
@@ -205,23 +276,13 @@ function SessionBody({ data, clientId }: { data: any; clientId: string }) {
             placeholder="Anything Cleo should take into account"
           />
         )}
-        {!retro ? (
-          <>
-            <p className="pt-2 text-[13px] font-medium text-muted-foreground">During the call</p>
-            <Textarea
-              rows={4}
-              value={liveNotes}
-              onChange={(e) => {
-                setLiveNotes(e.target.value);
-                save({ sessionId: s.id, live: { notes: e.target.value } });
-              }}
-              placeholder="Quick notes as you talk"
-            />
-          </>
-        ) : null}
       </section>
+      ) : null}
+
+      {step === "after" ? <SessionAfter data={data} clientId={clientId} onOpenTab={onOpenTab} /> : null}
 
       {/* Decisions */}
+      {step !== "before" ? (
       <section className="space-y-2" data-session-decisions>
         <h3 className="text-[16px] font-semibold">What we agreed</h3>
         {decisions.length ? (
@@ -262,10 +323,13 @@ function SessionBody({ data, clientId }: { data: any; clientId: string }) {
           </Button>
         </form>
       </section>
+      ) : null}
 
-      <CommitmentsEditor sessionId={s.id} items={data.commitments} onChange={refresh} />
+      {step !== "before" ? (
+        <CommitmentsEditor sessionId={s.id} items={(data.commitments as any[]).filter((c) => c.confirmed !== false)} onChange={refresh} />
+      ) : null}
 
-      <GamePlanSender data={data} decisions={decisions} onSent={refresh} />
+      {step === "after" ? <GamePlanSender data={data} decisions={decisions} onSent={refresh} /> : null}
     </div>
   );
 }
@@ -365,12 +429,147 @@ function GamePlanSender({ data, decisions, onSent }: { data: any; decisions: str
         Optional. Kept here either way; it reaches them only if you send it.
       </p>
       <Textarea rows={10} value={message} onChange={(e) => setText(e.target.value)} />
-      {s.shared_at ? (
+      {!data.hasApp ? (
+        <p className="text-[13px] text-muted-foreground">They don't have the app yet: copy it and send it another way.</p>
+      ) : s.shared_at ? (
         <p className="text-[13px] text-muted-foreground">Sent {new Date(s.shared_at).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
       ) : (
         <Button onClick={() => go.mutate()} loading={go.isPending} disabled={message.trim().length < 10}>
           <Send className="mr-1.5 h-4 w-4" /> Send in their chat
         </Button>
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Before the call                                                     */
+
+function CleoBrief({ data, onChange }: { data: any; onChange: () => void }) {
+  const s = data.session;
+  const again = useServerFn(queueBriefFn);
+  const go = useMutation({ mutationFn: () => again({ data: { sessionId: s.id } }), onSuccess: onChange, onError: (e: any) => toast.error(e?.message ?? "Couldn't start it") });
+  const b = s.write_up;
+  const working = s.write_up_status === "queued" || s.write_up_status === "running";
+  return (
+    <section className="space-y-3 rounded-2xl border border-border p-4" data-cleo-brief>
+      <div className="flex items-start gap-3">
+        <CleoAvatar className="h-8 w-8 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[12px] text-muted-foreground">Cleo's brief</p>
+            {!working && s.write_up_status !== "none" ? (
+              <button type="button" onClick={() => go.mutate()} className="flex items-center gap-1 text-[12px] text-muted-foreground" aria-label="Write the brief again">
+                <RefreshCw className="h-3 w-3" /> Again
+              </button>
+            ) : null}
+          </div>
+          {working ? (
+            <div className="mt-1 space-y-2">
+              <p className="text-[14px] text-muted-foreground">Reading what's on file…</p>
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : s.write_up_status === "failed" ? (
+            <p className="text-[14px] text-muted-foreground">
+              Cleo couldn't write it this time.{" "}
+              <button type="button" className="underline" onClick={() => go.mutate()}>
+                Try again
+              </button>
+            </p>
+          ) : !b ? (
+            <Button size="sm" variant="outline" className="mt-1 h-9" onClick={() => go.mutate()} loading={go.isPending}>
+              Write a brief
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              {b.summary ? <p className="text-[15px] leading-relaxed">{b.summary}</p> : null}
+              {b.focus?.length ? (
+                <div>
+                  <p className="text-[13px] font-medium text-muted-foreground">What matters most</p>
+                  <ol className="mt-1 list-decimal space-y-1 pl-5 text-[14px]">
+                    {b.focus.map((f: any) => (
+                      <li key={f.text}>{f.text}</li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+              {b.questions?.length ? (
+                <div>
+                  <p className="text-[13px] font-medium text-muted-foreground">Questions to ask</p>
+                  <ul className="mt-1 space-y-1.5">
+                    {b.questions.map((q: any) => (
+                      <li key={q.text} className="text-[14px] leading-snug">
+                        {q.text}
+                        {q.why ? <span className="block text-[12px] text-muted-foreground">{q.why}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {b.listenFor?.length ? (
+                <p className="text-[13px] text-muted-foreground">Listen for: {b.listenFor.join(" · ")}</p>
+              ) : null}
+              {b.avoid?.length ? <p className="text-[13px] text-muted-foreground">Skip: {b.avoid.join(" · ")}</p> : null}
+              <p className="text-[11px] text-muted-foreground">Organized from what's on file; it adds nothing new.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PreCallQuestions({ data, onChange }: { data: any; onChange: () => void }) {
+  const s = data.session;
+  const send = useServerFn(sendSessionQuestionsFn);
+  const go = useMutation({
+    mutationFn: () => send({ data: { sessionId: s.id } }),
+    onSuccess: (r) => {
+      toast.success(r.already ? "Already sent" : "Sent in their chat");
+      onChange();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't send them"),
+  });
+  const q = s.questionnaire;
+  const preview = data.questions as null | { keys: string[]; minutes: number; reasons: string[] };
+  if (s.format === "touch_base" && !q) return null;
+  return (
+    <section className="space-y-2 rounded-2xl border border-border p-4" data-precall>
+      <h3 className="text-[16px] font-semibold">Before the call</h3>
+      {q?.submitted_at ? (
+        <>
+          <p className="text-[13px] text-muted-foreground">They answered {new Date(q.submitted_at).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}. It's in the agenda.</p>
+          <ul className="space-y-1.5">
+            {Object.entries((q.answers ?? {}) as Record<string, { label: string; text: string }>).map(([k, v]) => (
+              <li key={k} className="text-[14px] leading-snug">
+                <span className="text-muted-foreground">{ANSWER_WORDS[k as keyof typeof ANSWER_WORDS] ?? v.label}: </span>
+                {v.text}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : q?.sent_at ? (
+        <p className="text-[14px] text-muted-foreground">
+          Sent {new Date(q.sent_at).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}: {q.keys?.length ?? 0} quick questions, about {q.minutes ?? 2} min. Their answers land here.
+        </p>
+      ) : preview && preview.keys.length ? (
+        <>
+          <p className="text-[14px]">
+            {preview.keys.length} quick questions, about {preview.minutes} min: only what isn't already on file.
+          </p>
+          <p className="text-[13px] text-muted-foreground">{preview.keys.map((k) => ANSWER_WORDS[k as keyof typeof ANSWER_WORDS] ?? k).join(" · ")}</p>
+          {preview.reasons.length ? <p className="text-[12px] text-muted-foreground">{preview.reasons.join(". ")}.</p> : null}
+          {data.hasApp ? (
+            <Button size="sm" className="h-9" onClick={() => go.mutate()} loading={go.isPending} data-send-questions>
+              <Send className="mr-1.5 h-4 w-4" /> Send in their chat
+            </Button>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">They don't have the app yet, so ask these on the call.</p>
+          )}
+        </>
+      ) : (
+        <p className="text-[14px] text-muted-foreground">Everything Cleo would ask is already on file. Nothing to send.</p>
       )}
     </section>
   );

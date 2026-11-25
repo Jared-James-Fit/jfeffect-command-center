@@ -22,6 +22,8 @@ import { commitmentFn, getSessionsHomeFn, prepareSessionFn } from "@/lib/coachin
 import { LEVEL_WORDS, type InterventionLevel } from "@/lib/coaching-sessions/prepare";
 import type { SessionEvent } from "@/lib/coaching-sessions/events";
 import { SessionSheet } from "./session-sheet";
+import { IntelRow } from "./session-after";
+import { intelligenceFn } from "@/lib/coaching-sessions/sessions.functions";
 import { meetingsKey } from "./keys";
 
 
@@ -43,7 +45,7 @@ const day = (iso: string | null | undefined) =>
       })
     : "";
 
-export function MeetingsWorkspace({ clientId }: { clientId: string }) {
+export function MeetingsWorkspace({ clientId, onOpenTab }: { clientId: string; onOpenTab?: (tab: string) => void }) {
   const read = useServerFn(getSessionsHomeFn);
   const q = useQuery({ queryKey: meetingsKey(clientId), queryFn: () => read({ data: { clientId } }) });
   const [prepare, setPrepare] = useState<null | { format: "call" | "touch_base" | "retrospective" }>(null);
@@ -133,6 +135,9 @@ export function MeetingsWorkspace({ clientId }: { clientId: string }) {
       {/* Open commitments, both sides */}
       {d.commitments.length ? <Commitments clientId={clientId} items={d.commitments} /> : null}
 
+      {/* What Cleo remembers from conversations */}
+      <Remembered clientId={clientId} items={(d.intelligence as any[]).filter((i) => i.status !== "archived")} />
+
       {/* Meetings */}
       <section className="rounded-2xl border border-border bg-card p-4" data-meetings-list>
         <h3 className="text-[16px] font-semibold">Meetings</h3>
@@ -186,7 +191,7 @@ export function MeetingsWorkspace({ clientId }: { clientId: string }) {
           }}
         />
       ) : null}
-      {open ? <SessionSheet sessionId={open} clientId={clientId} onClose={() => setOpen(null)} /> : null}
+      {open ? <SessionSheet sessionId={open} clientId={clientId} onOpenTab={(t) => { setOpen(null); onOpenTab?.(t); }} onClose={() => setOpen(null)} /> : null}
     </div>
   );
 }
@@ -364,5 +369,52 @@ function PrepareSheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Lasting coaching intelligence: what the coach kept from conversations (and can add, change or remove). */
+function Remembered({ clientId, items }: { clientId: string; items: any[] }) {
+  const qc = useQueryClient();
+  const act = useServerFn(intelligenceFn);
+  const [text, setText] = useState("");
+  const refresh = () => qc.invalidateQueries({ queryKey: meetingsKey(clientId) });
+  const add = useMutation({
+    mutationFn: () => act({ data: { clientId, action: "add", text: text.trim() } }),
+    onSuccess: () => {
+      setText("");
+      refresh();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
+  });
+  const kept = items.filter((i) => i.status === "confirmed");
+  const proposed = items.filter((i) => i.status === "proposed");
+  return (
+    <section className="space-y-2 rounded-2xl border border-border bg-card p-4" data-meetings-remembered>
+      <h3 className="text-[16px] font-semibold">What Cleo remembers</h3>
+      <p className="text-[13px] text-muted-foreground">
+        Kept from your conversations. Cleo uses these in their training, nutrition and cardio work; change or remove any of them.
+      </p>
+      {proposed.length ? <p className="text-[13px] text-muted-foreground">{proposed.length} from a meeting waiting for you to keep or let go.</p> : null}
+      {[...proposed, ...kept].map((i) => (
+        <IntelRow key={i.id} item={i} clientId={clientId} refresh={refresh} />
+      ))}
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (text.trim().length >= 3) add.mutate();
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Add something worth remembering"
+          className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-[16px] sm:text-[14px]"
+        />
+        <Button type="submit" variant="outline" size="sm" className="h-10" loading={add.isPending}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      </form>
+    </section>
   );
 }
