@@ -19,7 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, ChevronDown, Copy, ExternalLink, Plus, Star, Users, Utensils } from "lucide-react";
+import { ChevronRight, ChevronDown, Copy, Plus, Star, Users, Utensils } from "lucide-react";
+import { PackageShareButton } from "@/components/sales/package-share-dialog";
 import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
@@ -334,9 +335,7 @@ function ClientsDirectoryPage() {
         {/* A quiet shortcut to the existing public catalogue; no new navigation or dashboard. */}
         {!viewOnly && (
           <div className="flex flex-wrap items-center justify-end gap-1">
-            <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Services &amp; packages
-            </a>
+            <PackageShareButton label="Services & packages" />
             <Button variant="ghost" size="sm" className="h-9 px-2 text-xs text-muted-foreground" onClick={async () => {
               try {
                 await navigator.clipboard.writeText(PACKAGES_PAGE_URL);

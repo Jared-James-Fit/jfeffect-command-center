@@ -12,6 +12,7 @@ on:
       - 'src/lib/coaching-agreement*'
       - 'src/lib/coaching-packages/**'
       - 'src/routes/coaching.index.tsx'
+      - 'src/routes/_authenticated/admin/clients.index.tsx'
       - 'src/route-pages/_authenticated/admin/clients.$id.tsx'
       - 'src/test/client-directory-services.test.ts'
       - 'src/test/coaching-packages.test.ts'
