@@ -174,6 +174,8 @@ export type Feasibility = {
   approaches: ApproachOption[];
   recommended: ApproachKey | null;
   recommendedWhy: string | null;
+  /** Recorded preference used to select an approach, when applicable. */
+  recommendationEvidence?: string;
   /** the one-line answer: "82/100 feasibility: Current training supports this target." */
   headline: string;
   action: Recommendation;
