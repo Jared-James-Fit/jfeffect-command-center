@@ -42,6 +42,12 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
   const eventRefs = milestone ? plansOnDate(references.filter((p) => !p.revision_of), milestone.date, (p) => ({ start: p.start_date, end: p.end_date })) : [];
   const ref = references.find((p) => p.id === selected) ?? (milestone ? eventRefs.length === 1 ? eventRefs[0] : undefined : references[0]);
   const today = todayLocalISO();
+  const samePlanEdits = references.filter((p) => p.revision_of === currentId && p.revision_captured_at);
+  const latestEdit = samePlanEdits[0];
+  const todayEdits = samePlanEdits.filter((p) => toLocalISO(new Date(p.revision_captured_at)) === today);
+  const firstToday = todayEdits[todayEdits.length - 1];
+  const latestReference = latestEdit ?? references[0];
+  const changes = ref ? days.map((d) => ({ current: d, prior: (ref.nutrition_target_days ?? []).find((p) => String(p.day_label).trim().toLowerCase() === String(d.day_label).trim().toLowerCase()) })) : [];
   const date = parseLocalDate(anchor || today) ?? parseLocalDate(today)!;
   const monday = new Date(date);
   monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
@@ -82,7 +88,7 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
     <section className="min-w-0 space-y-2 rounded-xl border border-border p-3" aria-label="Weekly nutrition comparison">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-          Weekly targets
+          Plan history & weekly targets
           <Popover>
             <PopoverTrigger asChild>
               <button type="button" title="How weekly targets are calculated" aria-label="How weekly targets are calculated" className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted">
@@ -96,6 +102,26 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
         </div>
         <span className="text-xs text-muted-foreground">{dates[0]} – {dates[6].slice(5)}</span>
       </div>
+      {references.length > 0 && <div className="space-y-2 border-b border-border pb-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium">What changed?</span>
+          <span className="text-muted-foreground">{todayEdits.length ? todayEdits.length + " recorded today" : references.length + " saved references"}</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {latestReference && <Button type="button" size="sm" variant={ref?.id === latestReference.id ? "secondary" : "outline"} onClick={() => { setMilestone(null); setSelected(latestReference.id); setShowMeals(false); }}>{latestEdit ? "Last adjustment" : "Previous plan"}</Button>}
+          {todayEdits.length > 1 && firstToday && <Button type="button" size="sm" variant={ref?.id === firstToday.id ? "secondary" : "outline"} onClick={() => { setMilestone(null); setSelected(firstToday.id); setShowMeals(false); }}>All changes today</Button>}
+          <Button type="button" size="sm" variant="ghost" onClick={() => setCompareOpen((v) => !v)}>{compareOpen ? "Hide full comparison" : "Full comparison"}</Button>
+        </div>
+        {ref && <><p className="text-muted-foreground">{referenceLabel(ref)}{ref.revision_source ? " · " + (ref.revision_source === "cleo" ? "Cleo-assisted" : ref.revision_source === "undo" ? "Undo" : "Coach edit") : ""}</p>
+          <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,0.65fr))] gap-x-1 gap-y-1.5 tabular-nums">
+            <span className="text-muted-foreground">kcal/day</span><span className="text-right text-muted-foreground">Before</span><span className="text-right text-muted-foreground">Now</span><span className="text-right text-muted-foreground">Change</span>
+            {changes.map(({current,prior}, i) => <div className="contents" key={current.day_label + i}><span className="min-w-0 break-words">{current.day_label}</span><span className="text-right">{number(prior?.calories)}</span><span className="text-right font-medium">{number(current.calories)}</span><span className="text-right font-medium">{difference(current.calories ?? null, prior?.calories ?? null)}</span></div>)}
+            {(ref.nutrition_target_days ?? []).filter((p) => !changes.some((c) => c.prior === p)).map((p, i) => <div key={p.day_label + i} className="contents"><span>{p.day_label} (removed)</span><span className="text-right">{number(p.calories)}</span><span className="text-right">—</span><span className="text-right">—</span></div>)}
+          </div>
+          {ref.revision_partial && <p className="text-muted-foreground">Recovered day targets and meals; other plan settings were not recorded in this older edit.</p>}
+        </>}
+      </div>}
+      {historyUnavailable && <p className="text-xs text-warning">Saved revision history is unavailable.</p>}
       <PlanEventTimeline clientId={clientId} onPick={(m) => { setMilestone(m); setSelected(""); setShowMeals(false); }} renderMilestone={(m) => {
         const matches = plansOnDate(references.filter((p) => !p.revision_of), m.date, (p) => ({ start: p.start_date, end: p.end_date }));
         return <p className="text-muted-foreground">{matches.length === 1 ? referenceLabel(matches[0]) : matches.length > 1 ? matches.length + " matching reference plans" : "No reference plan covers this date."}</p>;
@@ -116,11 +142,10 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
           <div className="flex items-center justify-between gap-2 border-t border-border pt-2 text-xs">
             <span className="min-w-0 truncate text-muted-foreground">{ref ? "vs. " + referenceLabel(ref) : "No previous plan"}</span><span className="shrink-0 font-medium tabular-nums">{ref ? delta + (delta === "—" ? "" : " kcal") : ""}</span>
           </div>
-          {historyUnavailable && <p className="text-xs text-warning">Saved revision history is unavailable.</p>}
-          {references.length > 0 && <details className="group text-xs" onToggle={(e) => setCompareOpen(e.currentTarget.open)}>
+          {references.length > 0 && <details className="group text-xs" open={compareOpen} onToggle={(e) => setCompareOpen(e.currentTarget.open)}>
             <summary className="flex cursor-pointer items-center gap-1.5 rounded-md py-2 font-medium"><History className="h-3.5 w-3.5" />Compare plans<span className="ml-auto text-muted-foreground">+</span></summary>
             <div className="space-y-3 pt-1">
-              <label className="block text-muted-foreground">Reference plan
+              <label className="block text-muted-foreground">Compare against
                 <select className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-foreground" value={ref?.id ?? ""} onChange={(e) => { setSelected(e.target.value); setShowMeals(false); }}>
                   {!ref && <option value="" disabled>{eventRefs.length > 1 ? "Select a matching plan" : "Select a reference plan"}</option>}
                   {references.map((p) => <option key={p.id} value={p.id}>{referenceLabel(p)} · {p.phase ?? "Nutrition"}</option>)}
@@ -131,7 +156,7 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
                 <span>Week (kcal)</span><span className="text-right">{number(previous?.total)}</span><span className="text-right font-medium">{number(total)}</span>
                 <span>Daily average</span><span className="text-right">{number(previous?.average)}</span><span className="text-right font-medium">{number(average)}</span>
                 <span className="col-span-3 mt-1 border-t border-border pt-2 text-muted-foreground">{dates[detail]} · {currDay?.day_label ?? "Unassigned"}</span>
-                {(["calories", "protein", "carbs", "fats", "steps"] as const).map((key) => <div key={key} className="contents"><span className="capitalize">{key}</span><span className="text-right">{number(prevDay?.[key])}</span><span className="text-right font-medium">{number(currDay?.[key])}</span></div>)}
+                {(["calories", "protein", "carbs", "fats", "fibre", "steps"] as const).map((key) => <div key={key} className="contents"><span className="capitalize">{key}</span><span className="text-right">{number(prevDay?.[key])}</span><span className="text-right font-medium">{number(currDay?.[key])}</span></div>)}
               </div>
               <details className="rounded-md border border-border p-2">
                 <summary className="cursor-pointer font-medium">Results during each plan</summary>
@@ -151,8 +176,8 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
                 <div className="min-w-0 rounded-md border border-border p-2"><p className="mb-1 font-medium">This plan · {currDay?.day_label ?? "—"}</p><p className="whitespace-pre-wrap break-words text-muted-foreground">{currDay?.notes || "No meal text recorded."}</p></div>
               </div>}
               <div className="flex flex-wrap gap-2">
-                {ref && onReuse && <Button type="button" variant="outline" size="sm" onClick={() => onReuse(ref)}>Use as draft</Button>}
-                {ref && showCleo && <Button type="button" variant="outline" size="sm" onClick={() => prefillPlanAiChange(clientId, "Compare the current nutrition plan to the reference plan " + referenceLabel(ref) + (ref.revision_of ? " (revision ID " : " (plan ID ") + ref.id + "). Use the saved reference if available; do not guess missing details.")}>Ask Cleo to compare</Button>}
+                {ref && !ref.revision_partial && onReuse && <Button type="button" variant="outline" size="sm" onClick={() => onReuse(ref)}>Use as draft</Button>}
+                {ref && showCleo && <Button type="button" variant="outline" size="sm" onClick={() => prefillPlanAiChange(clientId, "Compare the current nutrition plan to the reference plan " + referenceLabel(ref) + (ref.revision_partial ? " (legacy edit ID " : ref.revision_of ? " (revision ID " : " (plan ID ") + ref.id + "). Use the saved reference if available; do not guess missing details.")}>Ask Cleo to compare</Button>}
               </div>
             </div>
           </details>}
