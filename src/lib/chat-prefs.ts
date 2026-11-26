@@ -13,6 +13,7 @@ import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import { listenChannel } from "@/lib/realtime-channel";
 import { friendlyError } from "@/lib/direct-chats";
 
@@ -80,23 +81,29 @@ export function deletePatch(now = new Date().toISOString()): ChatPrefPatch {
 export function useChatPrefs(enabled = true, { live = false }: { live?: boolean } = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const on = enabled && !!user;
+  const pov = usePovCrewRead();
+  const on = enabled && !!user && pov.ready;
   const q = useQuery({
-    queryKey: chatPrefsKey,
+    queryKey: pov.key(chatPrefsKey),
     enabled: on,
-    queryFn: listChatPrefs,
+    queryFn: async (): Promise<ChatPref[]> => {
+      if (!pov.isPov) return listChatPrefs();
+      const { data, error } = await pov.read("chat_prefs", "");
+      if (error) throw error;
+      return Array.isArray(data) ? data as ChatPref[] : [];
+    },
     staleTime: 60_000,
   });
   // Pins and mutes follow you across devices.
   useEffect(() => {
-    if (!on || !live || !user) return;
+    if (!on || !live || !user || pov.isPov) return;
     const ch = listenChannel(`chat-prefs-${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_thread_prefs", filter: `user_id=eq.${user.id}` }, () => {
         qc.invalidateQueries({ queryKey: chatPrefsKey });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [on, live, user, qc]);
+  }, [on, live, user, qc, pov.isPov]);
   const rows = on && Array.isArray(q.data) ? q.data : null;
   const prefs = useMemo(() => (rows ? toPrefMap(rows) : EMPTY), [rows]);
   return { prefs, isFetched: q.isFetched };
@@ -105,15 +112,18 @@ export function useChatPrefs(enabled = true, { live = false }: { live?: boolean 
 /** Change one or more chats' settings (shows immediately; undone if it doesn't save). */
 export function useSetChatPrefs() {
   const { user } = useAuth();
+  const { isPov } = usePovCrewRead();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (changes: Array<{ key: string; patch: ChatPrefPatch }>) => {
+      if (isPov) throw new Error("Chat preferences are read-only in POV.");
       if (!user) throw new Error("Not signed in");
       const rows = changes.map(({ key, patch }) => ({ user_id: user.id, thread_key: key, ...patch }));
       const { error } = await db.from("chat_thread_prefs").upsert(rows, { onConflict: "user_id,thread_key" });
       if (error) throw new Error(friendlyError(error.message));
     },
     onMutate: async (changes) => {
+      if (isPov) return undefined;
       await qc.cancelQueries({ queryKey: chatPrefsKey });
       const prev = qc.getQueryData<ChatPref[]>(chatPrefsKey);
       const next = new Map((prev ?? []).map((r) => [r.thread_key, r]));
