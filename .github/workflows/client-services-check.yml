@@ -15,6 +15,7 @@ on:
       - 'src/lib/coaching-agreement*'
       - 'src/lib/coaching-packages/**'
       - 'src/routes/coaching.index.tsx'
+      - 'src/routes/_authenticated/portal/index.tsx'
       - 'src/routes/_authenticated/admin/clients.index.tsx'
       - 'src/route-pages/_authenticated/admin/clients.$id.tsx'
       - 'src/components/competition/prep/handling-directory.tsx'

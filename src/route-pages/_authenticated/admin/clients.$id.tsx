@@ -1900,7 +1900,7 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
       if (error) throw error;
       return data;
     },
-    enabled: coaching, staleTime: 60_000,
+    enabled: coaching || scope.requirements?.generalGoals === true, staleTime: 60_000,
   });
   const outstanding = pendingSetupRequests({
     eligible: coaching && !!form.user_id && !form.archived && !form.portal_access_disabled && !["Archived", "Deactivated", "Deleted"].includes(form.status),
@@ -1952,6 +1952,7 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   if (!coaching && scope.handlingMeets.length) {
     steps.push({ label: "Basic information", state: isBasicInfoComplete(form) ? "Completed" : "Awaiting client", tab: "info" });
     steps.push({ label: "Account photo", state: form.profile_picture_url ? "Completed" : "Awaiting client", tab: "info" });
+    steps.push({ label: "Goals & setup", state: !goals.isSuccess ? "Check status" : isGoalsSetupComplete(goals.data) ? "Completed" : "Awaiting client", tab: "goals-setup" });
   }
   if (!scope.ready && !coaching && form.source === "competition_handling") steps.push({ label: "Competition setup", state: "Check status", tab: "competition" });
   for (const meet of scope.handlingMeets) {

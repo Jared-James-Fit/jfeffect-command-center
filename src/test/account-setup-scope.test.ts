@@ -4,11 +4,11 @@ import { accountSetupRequirements } from "../lib/account-setup-scope";
 describe("universal account setup scope", () => {
   it("keeps free and member onboarding lightweight", () => {
     expect(accountSetupRequirements("self_serve", [], false)).toEqual({
-      memberSetup: true, basicInfo: false, headshot: false, coachingGoals: false, trainingSchedule: false, nutritionOnly: false,
+      memberSetup: true, basicInfo: false, headshot: false, coachingGoals: false, generalGoals: false, trainingSchedule: false, nutritionOnly: false,
     });
   });
-  it("adds handling without unlocking full coaching", () => {
-    expect(accountSetupRequirements("self_serve", [], true)).toMatchObject({ memberSetup: true, basicInfo: true, headshot: true, coachingGoals: false, trainingSchedule: false });
+  it("requires ordinary goals questions for handling without unlocking full coaching", () => {
+    expect(accountSetupRequirements("self_serve", [], true)).toMatchObject({ memberSetup: true, basicInfo: true, headshot: true, coachingGoals: false, generalGoals: true, trainingSchedule: false });
   });
   it("preserves nutrition intake for nutrition-only coaching", () => {
     expect(accountSetupRequirements("coaching", ["nutrition"], false)).toMatchObject({ coachingGoals: true, nutritionOnly: true, trainingSchedule: false });
@@ -32,4 +32,21 @@ describe("previous account intake reuse", () => {
     const defaults = memberBasicPrefill({ phone: "1234567", address_city: "Winnipeg", emergency_contact_phone: "7654321", avatar_url: "ignored" });
     expect(fillMissing({ phone: "existing", city: null }, defaults)).toEqual({ phone: "existing", city: "Winnipeg", emergency_contact_phone: "7654321" });
   });
+});
+
+
+import { firstPendingHandlingMeet } from "../lib/account-setup-scope";
+describe("guided handling intake", () => {
+  it("automatically selects the first outstanding assigned competition", () => {
+    expect(firstPendingHandlingMeet([{ id: "complete", done: true }, { id: "terms-or-intake", done: false }, { id: "next", done: false }])?.id).toBe("terms-or-intake");
+  });
+  it("does not prompt unassigned or completed athletes", () => {
+    expect(firstPendingHandlingMeet([])).toBeUndefined();
+    expect(firstPendingHandlingMeet([{ id: "complete", done: true }])).toBeUndefined();
+  });
+});
+
+
+it("uses the full shared questionnaire for nutrition plus handling without changing the service tier", () => {
+  expect(accountSetupRequirements("coaching", ["nutrition"], true)).toMatchObject({generalGoals: true, nutritionOnly: false});
 });

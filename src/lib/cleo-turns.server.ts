@@ -591,7 +591,7 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
         lines.push(status(meet.intakeDone, `Competition intake: ${meet.name}`), status(meet.termsDone, "Handling terms"));
         if (meet.remaining.length) lines.push("Remaining: " + meet.remaining.join(", "));
       }
-      if (req.coachingGoals) {
+      if (req.generalGoals) {
         const nutritionOnly = req.nutritionOnly;
         if (req.trainingSchedule) lines.push(status(!!c.training_schedule_completed, "Training schedule"));
         const label = nutritionOnly ? "Nutrition setup" : "Goals & setup";
