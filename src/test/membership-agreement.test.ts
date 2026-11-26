@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { MEMBERSHIP_AGREEMENT_ACKS, membershipAckText } from "@/lib/membership-agreement/acks";
+import { MEMBERSHIP_AGREEMENT_ACKS, membershipAckText, isMemberAppAcceptance, CLICK_ACCEPTANCE_VERSION_ID } from "@/lib/membership-agreement/acks";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -11,14 +11,29 @@ describe("JF members sign their own Membership Agreement, never the Coaching Agr
     for (const a of MEMBERSHIP_AGREEMENT_ACKS) expect(text).toContain(a.text);
   });
 
-  it("the server only takes a member's signature on the live version, with their typed name and the exact text", () => {
+  it("the server only takes a member's signature on the live version, with their authenticated identity and the exact text", () => {
     const fn = read("src/lib/membership-agreement.functions.ts");
     expect(fn).toContain('if (!client || (client as any).service_tier !== "self_serve") return { applicable: false as const };');
     expect(fn).toContain("if (!current || current.id !== data.versionId) {");
-    expect(fn).toContain('signature_method: "typed_name",');
+    expect(fn).toContain("signature_method: current.signature_method,");
+    expect(fn).toContain('typed_name: current.signature_method === "typed_name" ? data.typedName : null,');
+    expect(fn).toContain("current.id === CLICK_ACCEPTANCE_VERSION_ID && !current.requires_reacceptance");
     expect(fn).toContain("rendered_snapshot: current.body,");
     // checkout's box accepts the terms; v3+ also needs the in-app signature
     expect(fn).toContain("needsSigning: !signed && current.version_number >= IN_APP_SIGNING_FROM_VERSION,");
+  });
+
+  it("only complete in-app checkbox evidence or historical typed-name evidence unlocks access", () => {
+    const row = { signature_method: "checkbox", context_ref: "member_app", checkbox_checked: true, acknowledgement_text: membershipAckText(MEMBERSHIP_AGREEMENT_ACKS.map(a => a.id)) };
+    expect(isMemberAppAcceptance(row)).toBe(true);
+    expect(isMemberAppAcceptance({ ...row, context_ref: "checkout" })).toBe(false);
+    expect(isMemberAppAcceptance({ ...row, checkbox_checked: false })).toBe(false);
+    expect(isMemberAppAcceptance({ ...row, acknowledgement_text: "partial" })).toBe(false);
+    expect(isMemberAppAcceptance({ ...row, signature_method: "typed_name" })).toBe(true);
+    const migration = read("supabase/migrations/20270603090000_membership_click_acceptance.sql");
+    expect(migration).toContain(CLICK_ACCEPTANCE_VERSION_ID);
+    expect(migration).toContain("'checkbox', false");
+    expect(read("src/components/member/member-agreement.tsx")).toContain("Agree & continue");
   });
 
   it("the mandatory gate wraps portal content before setup, skips View as client, and keeps the Account copy", () => {
