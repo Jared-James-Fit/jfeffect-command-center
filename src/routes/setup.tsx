@@ -162,8 +162,8 @@ function SetupPage() {
     setBusy(false);
   };
 
-  // After the password: offer the Coaching Agreement (part of account setup). Anything
-  // that isn't a client who still needs to sign carries straight on to the next step.
+  // After the password: require the Coaching Agreement when applicable. The portal
+  // independently verifies all required agreements before rendering any app content.
   const continueAfterPassword = async () => {
     try {
       const ctx = await getAgreementContext();
@@ -276,14 +276,14 @@ function SetupPage() {
             <Button
               type="button"
               variant="ghost"
-              onClick={finishToPortal}
+              onClick={async () => { await supabase.auth.signOut(); window.location.href = "/auth"; }}
               className="min-h-10 w-full"
             >
-              I'll do this later
+              Sign out
             </Button>
           </div>
           <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
-            You'll see a reminder in the app until it's signed.
+            Required before accessing your account.
           </p>
         </div>
       )}

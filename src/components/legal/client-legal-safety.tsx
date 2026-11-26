@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ShieldCheck, ShieldAlert, FileText, Clock } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 const OPTIONAL_CONSENTS = [
@@ -23,16 +24,19 @@ const OPTIONAL_CONSENTS = [
  * /portal/account screen — does NOT add a sidebar item. `bare`: the Account
  * section already names it, so no card or title of its own.
  */
-export function ClientLegalSafety({ bare = false }: { bare?: boolean } = {}) {
+export function ClientLegalSafety({ bare = false, requiredOnly }: { bare?: boolean; requiredOnly?: string[] } = {}) {
+  const { user } = useAuth();
   const statusFn = useServerFn(listMyLegalStatus);
   const historyFn = useServerFn(listMyAcceptanceHistory);
   const consentsFn = useServerFn(listMyConsents);
   const setConsentFn = useServerFn(setConsentPreference);
   const qc = useQueryClient();
 
-  const { data: docs = [] } = useQuery({ queryKey: ["legal-status"], queryFn: () => statusFn() });
+  const { data: docs = [] } = useQuery({ queryKey: ["legal-status", user?.id ?? "anon"], enabled: !!user?.id, queryFn: () => statusFn() });
   const { data: history = [] } = useQuery({ queryKey: ["legal-history"], queryFn: () => historyFn() });
   const { data: consents = [] } = useQuery({ queryKey: ["legal-consents"], queryFn: () => consentsFn() });
+
+  if (requiredOnly) return <Section title="Required to continue" docs={docs.filter((d: any) => requiredOnly.includes(d.document_id))} />;
 
   const required = docs.filter((d: any) => d.is_required);
   const optional = docs.filter((d: any) => !d.is_required && !d.is_optional_consent);
@@ -138,7 +142,7 @@ function DocRow({ doc }: { doc: any }) {
   const [typedName, setTypedName] = useState("");
   const acceptFn = useServerFn(recordAcceptance);
   const qc = useQueryClient();
-  const isAccepted = !!doc.accepted_at;
+  const isAccepted = !!doc.accepted_at || !!doc.satisfied_by_prior_version;
 
   const submit = async () => {
     try {
@@ -217,12 +221,12 @@ function DocRow({ doc }: { doc: any }) {
                     />
                   </div>
                 )}
-                <Button onClick={submit} className="w-full">Accept {doc.title}</Button>
+                <Button onClick={submit} disabled={(doc.version?.signature_method === "checkbox" && !checked) || (doc.version?.signature_method === "typed_name" && !typedName.trim())} className="w-full">Accept {doc.title}</Button>
               </div>
             )}
             {isAccepted && (
               <div className="text-xs text-muted-foreground">
-                Accepted {new Date(doc.accepted_at).toLocaleString()}.
+                {doc.accepted_at ? `Accepted ${new Date(doc.accepted_at).toLocaleString()}.` : "Previously accepted; no new signature required."}
               </div>
             )}
           </div>

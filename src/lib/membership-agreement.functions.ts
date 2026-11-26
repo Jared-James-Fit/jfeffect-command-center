@@ -21,18 +21,20 @@ type CurrentVersion = {
 /** The published Membership Agreement, if there is one live. */
 async function loadCurrent(): Promise<CurrentVersion | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: doc } = await supabaseAdmin
+  const { data: doc, error: docError } = await supabaseAdmin
     .from("legal_documents")
     .select("id, current_version_id, archived, emergency_disabled")
     .eq("slug", MEMBERSHIP_AGREEMENT_SLUG)
     .maybeSingle();
+  if (docError) throw new Error(docError.message);
   const d = doc as { id: string; current_version_id: string | null; archived: boolean | null; emergency_disabled: boolean | null } | null;
   if (!d?.current_version_id || d.archived || d.emergency_disabled) return null;
-  const { data: ver } = await supabaseAdmin
+  const { data: ver, error: versionError } = await supabaseAdmin
     .from("legal_document_versions")
     .select("id, version_number, title, body, effective_date, status")
     .eq("id", d.current_version_id)
     .maybeSingle();
+  if (versionError) throw new Error(versionError.message);
   const v = ver as (Omit<CurrentVersion, "documentId"> & { status: string }) | null;
   if (!v || v.status !== "published") return null;
   return { documentId: d.id, id: v.id, version_number: v.version_number, title: v.title, body: v.body, effective_date: v.effective_date };
@@ -47,21 +49,23 @@ export const getMyMembershipAgreement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { data: client } = await supabase.from("clients").select("id, service_tier").eq("user_id", userId).maybeSingle();
+    const { data: client, error: clientError } = await supabase.from("clients").select("id, service_tier").eq("user_id", userId).maybeSingle();
+    if (clientError) throw new Error(clientError.message);
     if (!client || (client as any).service_tier !== "self_serve") return { applicable: false as const };
     const current = await loadCurrent();
     if (!current) return { applicable: false as const };
-    const { data: acc } = await supabase
+    const { data: acc, error: acceptanceError } = await supabase
       .from("legal_acceptances")
-      .select("version_id, accepted_at, signature_method")
+      .select("version_id, accepted_at, signature_method, context_ref")
       .eq("user_id", userId)
       .eq("document_id", current.documentId)
       .is("revoked_at", null)
       .order("accepted_at", { ascending: false });
-    const rows = (acc ?? []) as Array<{ version_id: string; accepted_at: string; signature_method: string }>;
+    if (acceptanceError) throw new Error(acceptanceError.message);
+    const rows = (acc ?? []) as Array<{ version_id: string; accepted_at: string; signature_method: string; context_ref: string | null }>;
     const onThis = rows.filter((r) => r.version_id === current.id);
     // the checkout box accepts the terms; the health and risk ticks and a typed name are given in the app
-    const signed = onThis.find((r) => r.signature_method === "typed_name") ?? null;
+    const signed = onThis.find((r) => r.signature_method === "typed_name" && r.context_ref === "member_app") ?? null;
     return {
       applicable: true as const,
       version: current,

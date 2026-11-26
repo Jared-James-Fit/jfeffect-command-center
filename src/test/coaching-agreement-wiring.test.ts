@@ -25,11 +25,12 @@ describe("client side wiring", () => {
     );
   });
 
-  it("shows the launch popup on any page: nothing in it depends on the route", () => {
-    const src = read("src/components/coaching-agreement/agreement-launch-popup.tsx");
-    expect(src).not.toContain("QUIET_PREFIXES");
-    expect(src).not.toContain("useRouterState");
-    expect(src).not.toMatch(/pathname/);
+  it("blocks children while a coaching signature is outstanding or unavailable", () => {
+    const src = read("src/components/coaching-agreement/agreement-provider.tsx");
+    expect(src).toContain("needsSignature ? (");
+    expect(src).toContain('data.reason === "unavailable"');
+    expect(src).not.toContain("AgreementLaunchPopup");
+    expect(src).toContain("Review & sign");
   });
 
   it("keeps the agreement text out of the code that loads on every signed-in page", () => {

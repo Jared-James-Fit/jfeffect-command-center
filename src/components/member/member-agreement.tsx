@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useLocation } from "@tanstack/react-router";
+import { AgreementAccessScreen } from "@/components/legal/agreement-access-screen";
 import { CheckCircle2, ExternalLink, FileSignature, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { acceptMembershipAgreement, getMyMembershipAgreement } from "@/lib/membership-agreement.functions";
 import { MEMBERSHIP_AGREEMENT_ACKS, MEMBERSHIP_AGREEMENT_SUMMARY } from "@/lib/membership-agreement/acks";
-import { getMySetupStatus } from "@/lib/member-setup.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 const QUERY_ROOT = "membership-agreement";
 
@@ -23,7 +23,8 @@ export function useMembershipAgreement() {
     queryKey: [QUERY_ROOT, user?.id ?? "anon"],
     enabled: !!user?.id,
     queryFn: () => fetch(),
-    staleTime: 5 * 60_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
 }
@@ -35,11 +36,11 @@ const fmtDate = (iso: string | null | undefined) =>
 function MemberAgreementSheet({
   open,
   onOpenChange,
-  onNotNow,
+  required = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onNotNow?: () => void;
+  required?: boolean;
 }) {
   const qc = useQueryClient();
   const { data } = useMembershipAgreement();
@@ -60,11 +61,11 @@ function MemberAgreementSheet({
   const ready = ticks.length === MEMBERSHIP_AGREEMENT_ACKS.length && name.trim().length >= 2;
 
   const submit = async () => {
-    if (!ready) return;
+    if (!ready || saving) return;
     setSaving(true);
     try {
       await accept({ data: { versionId: v.id, typedName: name.trim(), acks: ticks } });
-      await qc.invalidateQueries({ queryKey: [QUERY_ROOT] });
+      await Promise.all([qc.invalidateQueries({ queryKey: [QUERY_ROOT] }), qc.invalidateQueries({ queryKey: ["legal-status"] })]);
       toast.success("Membership Agreement signed", { description: "Your copy is in Account → Agreement." });
       onOpenChange(false);
     } catch (e: any) {
@@ -76,10 +77,11 @@ function MemberAgreementSheet({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" safeTopClose className="h-[95dvh] overflow-hidden p-0">
+    <Sheet open={open} onOpenChange={required ? () => {} : onOpenChange}>
+      <SheetContent side="bottom" safeTopClose hideCloseButton={required} onEscapeKeyDown={required ? (e) => e.preventDefault() : undefined} onPointerDownOutside={required ? (e) => e.preventDefault() : undefined} className="h-[95dvh] overflow-hidden p-0">
         <div className="flex h-full flex-col">
-          <SheetHeader className="shrink-0 border-b py-4 pr-4 pl-28 text-left">
+          <SheetHeader className={`shrink-0 border-b py-4 pr-4 text-left ${required ? "pl-4" : "pl-28"}`}>
+            {required && <p className="text-xs font-semibold uppercase tracking-wider text-primary">Account setup · Required</p>}
             <SheetTitle className="flex items-center gap-2">
               <FileSignature className="h-5 w-5 text-primary" /> {v.title}
             </SheetTitle>
@@ -159,11 +161,7 @@ function MemberAgreementSheet({
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Sign and continue
             </Button>
-            {onNotNow && (
-              <Button variant="ghost" className="w-full text-muted-foreground" onClick={onNotNow}>
-                Not now
-              </Button>
-            )}
+            {required && <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground"><a href="mailto:support@jfeffect.com" className="underline">Contact support</a><Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/auth"; }}>Sign out</Button></div>}
           </div>
         </div>
       </SheetContent>
@@ -171,62 +169,14 @@ function MemberAgreementSheet({
   );
 }
 
-// Pages a member can always use without being asked (billing, support, account).
-const ALLOW = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade", "/portal/plan"];
-const DISMISS_KEY = (uid: string) => `membership-agreement:not-now:${uid}`;
-
-function uiIsClear() {
-  return !document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
-}
-
-/**
- * Asks a JF member to accept the live Membership Agreement: once each time the
- * app is opened until they do ("Not now" lasts for this launch), after their
- * membership setup is done, and never over another open sheet.
- */
-export function MemberAgreementGate() {
-  const { user } = useAuth();
-  const location = useLocation();
-  const { data } = useMembershipAgreement();
-  const fetchSetup = useServerFn(getMySetupStatus);
-  const { data: setup } = useQuery({ queryKey: ["m-setup-status"], queryFn: () => fetchSetup(), staleTime: 60_000 });
-  const [open, setOpen] = useState(false);
-
-  const uid = user?.id ?? "";
-  const needed = !!uid && !!data?.applicable && data.needsSigning && setup?.complete !== false;
-  const allowed = ALLOW.some((p) => location.pathname.startsWith(p));
-
-  useEffect(() => {
-    if (!needed || allowed || open) return;
-    try {
-      if (sessionStorage.getItem(DISMISS_KEY(uid))) return;
-    } catch {
-      /* private mode: ask anyway */
-    }
-    const t = window.setInterval(() => {
-      if (uiIsClear()) {
-        setOpen(true);
-        window.clearInterval(t);
-      }
-    }, 1500);
-    return () => window.clearInterval(t);
-  }, [needed, allowed, open, uid, location.pathname]);
-
-  if (!needed) return null;
-  return (
-    <MemberAgreementSheet
-      open={open}
-      onOpenChange={setOpen}
-      onNotNow={() => {
-        try {
-          sessionStorage.setItem(DISMISS_KEY(uid), String(Date.now()));
-        } catch {
-          /* ignore */
-        }
-        setOpen(false);
-      }}
-    />
-  );
+/** Legal acceptance precedes account setup and every portal screen. No dismissal state. */
+export function MemberAgreementGate({ children }: { children: ReactNode }) {
+  const q = useMembershipAgreement();
+  if (q.isError || !q.data) return <AgreementAccessScreen checking={!q.isError} retry={() => void q.refetch()} />;
+  if (q.data.applicable && q.data.needsSigning) {
+    return <><AgreementAccessScreen title="Membership agreement required" /><MemberAgreementSheet key={q.data.version.id} open required onOpenChange={() => {}} /></>;
+  }
+  return <>{children}</>;
 }
 
 /** Where a member's agreement stands, for the Account row: "Signed" / "Accepted" / "Action required"; null when it doesn't apply. */
