@@ -8,6 +8,9 @@
 -- deleting the client or the block (a cascade) isn't kept: the client's own
 -- history goes with them.
 
+-- never wait long on a busy table (a backup's read lock must not queue the app behind this)
+SET lock_timeout = '5s';
+
 CREATE TABLE IF NOT EXISTS public.pl_client_max_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   max_id uuid NOT NULL,
@@ -67,7 +70,15 @@ $$;
 
 REVOKE ALL ON FUNCTION public.tg_pl_client_max_history() FROM PUBLIC, anon, authenticated;
 
-DROP TRIGGER IF EXISTS pl_client_max_history ON public.pl_client_maxes;
-CREATE TRIGGER pl_client_max_history
-  AFTER INSERT OR UPDATE OR DELETE ON public.pl_client_maxes
-  FOR EACH ROW EXECUTE FUNCTION public.tg_pl_client_max_history();
+-- created only when missing: DROP TRIGGER would take an exclusive lock on pl_client_maxes
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'pl_client_max_history' AND tgrelid = 'public.pl_client_maxes'::regclass
+  ) THEN
+    CREATE TRIGGER pl_client_max_history
+      AFTER INSERT OR UPDATE OR DELETE ON public.pl_client_maxes
+      FOR EACH ROW EXECUTE FUNCTION public.tg_pl_client_max_history();
+  END IF;
+END $$;
