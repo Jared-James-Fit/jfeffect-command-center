@@ -33,3 +33,15 @@ describe("previous account intake reuse", () => {
     expect(fillMissing({ phone: "existing", city: null }, defaults)).toEqual({ phone: "existing", city: "Winnipeg", emergency_contact_phone: "7654321" });
   });
 });
+
+
+import { firstPendingHandlingMeet } from "../lib/account-setup-scope";
+describe("guided handling intake", () => {
+  it("automatically selects the first outstanding assigned competition", () => {
+    expect(firstPendingHandlingMeet([{ id: "complete", done: true }, { id: "terms-or-intake", done: false }, { id: "next", done: false }])?.id).toBe("terms-or-intake");
+  });
+  it("does not prompt unassigned or completed athletes", () => {
+    expect(firstPendingHandlingMeet([])).toBeUndefined();
+    expect(firstPendingHandlingMeet([{ id: "complete", done: true }])).toBeUndefined();
+  });
+});

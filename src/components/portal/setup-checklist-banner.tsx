@@ -26,6 +26,7 @@ import { useHeadshotCamera, useMyHeadshot } from "@/components/headshots/headsho
 type Props = {
   clientId: string;
   userId: string;
+  onOpenMeet?: (meetId: string) => void;
   /**
    * Shown instead of the checklist once it has nothing to ask but the
    * agreement (a client who finished setup and is asked to sign a new
@@ -37,7 +38,7 @@ type Props = {
 type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "member_setup";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
-export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Props) {
+export function SetupChecklistBanner({ clientId, userId, onOpenMeet, whenHidden = null }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
   const { isImpersonating } = useClientImpersonation();
@@ -131,9 +132,9 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       description: memberFree ? "Your goal, experience and training days." : "Your remaining membership details.",
       icon: IdCard, done: member.data?.complete === true, onClick: () => setMemberOpen(true),
     });
-    for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done });
+    for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done, onClick: onOpenMeet && !meet.done ? () => onOpenMeet(meet.id) : undefined });
     return applicable;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, member.data?.complete]);
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, member.data?.complete, onOpenMeet]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);

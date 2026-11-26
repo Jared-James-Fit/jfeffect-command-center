@@ -11,3 +11,9 @@ export function accountSetupRequirements(tier: string | null | undefined, packag
     nutritionOnly,
   };
 }
+
+
+/** The server supplies only active upcoming handling meets, in date order. */
+export function firstPendingHandlingMeet<T extends { id: string; done: boolean }>(meets: readonly T[]): T | undefined {
+  return meets.find(meet => !meet.done);
+}

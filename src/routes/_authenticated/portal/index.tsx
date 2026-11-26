@@ -4,7 +4,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
+import { firstPendingHandlingMeet } from "@/lib/account-setup-scope";
+import { HandlingSetupDialog } from "@/components/portal/setup-handling-dialog";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
@@ -62,6 +64,7 @@ function greeting() {
 function PortalHome() {
   const { user, role } = useAuth();
   const portalUserId = usePortalUserId();
+  const viewingAsClient = useViewingAsClient();
   const offlineNoCache = useIsOfflineWithoutCache();
   const qc = useQueryClient();
   // A JF member (self-serve): same Home, without the coach's pieces.
@@ -156,6 +159,8 @@ function PortalHome() {
 
   const scope = useGoalsServiceScope(client?.id);
   const [goalsSetupPromptOpen, setGoalsSetupPromptOpen] = useState(false);
+  const [handlingSetupMeet, setHandlingSetupMeet] = useState<{ clientId: string; meetId: string } | null>(null);
+  const pendingHandlingMeet = firstPendingHandlingMeet(scope.handlingMeets);
 
   // Prompt incomplete clients once per app launch (not on every visit to Home),
   // and only once nothing else is open: it waits for any other popup or sheet to
@@ -164,21 +169,23 @@ function PortalHome() {
   const goalsIncomplete = scope.ready && goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null, scope.nutritionOnly);
   const promptClientId = client?.id ?? null;
   useEffect(() => {
-    if (!promptClientId || !coaching || !goalsIncomplete || goalsPromptShownFor.has(promptClientId)) return;
+    if (!promptClientId || !scope.ready || viewingAsClient || offlineNoCache || goalsPromptShownFor.has(promptClientId)) return;
+    if (!pendingHandlingMeet && (!coaching || !goalsIncomplete)) return;
     let stopped = false;
     let timer = 0;
     const tick = () => {
       if (stopped || goalsPromptShownFor.has(promptClientId)) return;
       if (uiIsClear()) {
         goalsPromptShownFor.add(promptClientId);
-        setGoalsSetupPromptOpen(true);
+        if (pendingHandlingMeet) setHandlingSetupMeet({ clientId: promptClientId, meetId: pendingHandlingMeet.id });
+        else setGoalsSetupPromptOpen(true);
         return;
       }
       timer = window.setTimeout(tick, 1200);
     };
     timer = window.setTimeout(tick, 1500);
     return () => { stopped = true; window.clearTimeout(timer); };
-  }, [promptClientId, coaching, goalsIncomplete]);
+  }, [promptClientId, coaching, goalsIncomplete, pendingHandlingMeet?.id, scope.ready, viewingAsClient, offlineNoCache]);
 
 
   // Only derive the name from the loaded client record. Falling back to the
@@ -195,6 +202,10 @@ function PortalHome() {
 
   return (
     <>
+      {/* The same guided meet questionnaire is offered on Home, not only on the invite or Competition page. */}
+      {handlingSetupMeet && handlingSetupMeet.clientId === client?.id && !viewingAsClient && (
+        <HandlingSetupDialog key={`${handlingSetupMeet.clientId}:${handlingSetupMeet.meetId}`} clientId={handlingSetupMeet.clientId} meetId={handlingSetupMeet.meetId} onClose={() => setHandlingSetupMeet(null)} />
+      )}
       {/* Background gates / popups — keep wired exactly as before. */}
       {client?.id && coaching && (
         <Dialog
@@ -253,6 +264,7 @@ function PortalHome() {
               <SetupChecklistBanner
                 clientId={client.id}
                 userId={portalUserId ?? ""}
+                onOpenMeet={viewingAsClient ? undefined : (meetId) => { goalsPromptShownFor.add(client.id); setHandlingSetupMeet({ clientId: client.id, meetId }); }}
                 whenHidden={
                   <SectionErrorBoundary label="Coaching agreement">
                     <AgreementDashboardCard />
