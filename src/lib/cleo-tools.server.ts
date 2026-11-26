@@ -523,7 +523,7 @@ export function cleoReadTools(ctx: ToolCtx) {
           const a = s.analysis ?? {};
           const items = (Array.isArray(a.items) ? a.items : []).slice(0, 30).map((i: any) => `- ${i.kind} (${i.basis}, ${i.speaker}): ${String(i.text ?? "").slice(0, 400)}${i.quote ? ` | source: ${String(i.quote).slice(0, 220)}` : ""}`);
           const followups = recs.filter(r => r.session_id === s.id).map(r => `- Follow-up: ${r.title} (${r.status}${r.applied_at ? ", applied" : ""})${r.decision_note ? ` — ${r.decision_note}` : ""}`);
-          return [`${s.event?.title ?? "Meeting"} · ${String(s.scheduled_at ?? s.created_at).slice(0, 10)}`, s.analysis_status === "ready" ? String(a.summary ?? "No summary on file") : "Meeting analysis not ready", ...items, ...followups].join("\n");
+          return [`${s.event?.title ?? "Meeting"} · ${String(s.scheduled_at ?? s.created_at).slice(0, 10)} · session ID ${s.id}`, s.analysis_status === "ready" ? String(a.summary ?? "No summary on file") : "Meeting analysis not ready", ...items, ...followups].join("\n");
         }).join("\n\n");
       }),
     }),
@@ -542,7 +542,7 @@ export function cleoReadTools(ctx: ToolCtx) {
         const rows = (data ?? []) as any[];
         const text = goalsText(rows, unit);
         if (!text) return `${clientName(c)} has no goals on file yet. Goals come from meetings, check-ins and their messages (proposed for the coach), or the coach adds them on their profile.`;
-        const lines = [`${clientName(c)} goals (${unit}):`, text];
+        const lines = [`${clientName(c)} goals (${unit}):`, text, "Goal identifiers (use these for any confirmed change):", ...rows.filter(g => g.status === "proposed" || g.status === "active").map(g => `${g.title} | goal ID ${g.id} | version ${g.version} | ${g.status} | ${g.client_facing ? "client-visible" : "private"} | source ${g.source_kind ?? "unknown"}${g.source_id ? ` ${g.source_id}` : ""}`)];
         if (details) {
           for (const g of rows.filter((r) => (r.status === "active" || r.status === "proposed") && r.feasibility?.approaches?.length)) {
             const f = g.feasibility;
