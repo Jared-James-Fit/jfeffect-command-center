@@ -3,96 +3,110 @@ import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescript
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronRight, ShieldCheck } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { feedback } from "@/lib/feedback";
-import {
-  CREW_CONTACT_EMAIL,
-  CREW_RULES,
-  CREW_TERMS_SLUG,
-  acceptCrewRules,
-  answerCrewRules,
-  crewModerationKey,
-  useCrewModeration,
-  useCrewRulesAsk,
-} from "@/lib/crew-safety";
+import { cn } from "@/lib/utils";
+import { CREW_CONTACT_EMAIL, CREW_RULES, CREW_TERMS_SLUG, crewModerationKey, useCrewModeration } from "@/lib/crew-safety";
 
 /**
- * The one-time Community rules, asked the first time someone posts or
- * comments in Crew (the server refuses with `crew_rules` until they agree;
- * `withCrewRules` opens this and sends the post again on Agree). Mounted once
- * in the app shell. Agree is stored on the server (community_accept_rules).
+ * The Crew community guidelines, in the words every screen shows: the public
+ * page (/community-guidelines, linked from sign-up's box), Settings, Help and
+ * Terms 8.1. They're agreed to once, with the Terms, when the account is made;
+ * nothing asks for them in the middle of a comment or a post (Nov 26 2026,
+ * 20270531100000_crew_guidelines_at_signup.sql).
  */
-export function CrewRulesHost() {
-  const open = useCrewRulesAsk();
-  const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
-
-  const agree = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await acceptCrewRules();
-      feedback("tap");
-      void qc.invalidateQueries({ queryKey: crewModerationKey });
-      answerCrewRules(true);
-    } catch {
-      toast.error("Couldn't save that. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
+export function CrewGuidelines({ className, tone = "default", onLeave }: { className?: string; tone?: "default" | "page"; onLeave?: () => void }) {
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && answerCrewRules(false)}>
+    <div className={className} data-crew-guidelines>
+      <ul className="space-y-3.5">
+        {CREW_RULES.map((r) => (
+          <li key={r.title}>
+            <span className={cn("block font-semibold", tone === "page" ? "text-[17px]" : "text-[15px]")}>{r.title}</span>
+            <span className={cn("block leading-snug text-muted-foreground", tone === "page" ? "text-[15px]" : "text-[14px]")}>{r.body}</span>
+          </li>
+        ))}
+      </ul>
+      <p className={cn("mt-4 leading-snug text-muted-foreground", tone === "page" ? "text-[15px]" : "text-[13px]")}>
+        Part of the{" "}
+        <Link to="/legal/$slug" params={{ slug: CREW_TERMS_SLUG }} className="font-semibold text-foreground underline underline-offset-2" onClick={onLeave}>
+          Terms of Service
+        </Link>
+        , agreed to when you made your account. Questions or something urgent:{" "}
+        <a href={`mailto:${CREW_CONTACT_EMAIL}`} className="font-semibold text-foreground underline underline-offset-2">
+          {CREW_CONTACT_EMAIL}
+        </a>
+        .
+      </p>
+    </div>
+  );
+}
+
+/** The guidelines in a sheet, from Settings (Account, Crew's privacy settings). Read-only: nothing to agree to here. */
+export function CrewGuidelinesSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
         swipeToClose
         hideCloseButton
-        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),12px)]"
-        data-crew-rules
+        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),16px)]"
+        data-crew-guidelines-sheet
       >
         <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30" aria-hidden />
-        <div className="px-5 pb-2 pt-4">
+        <div className="px-5 pb-1 pt-4">
           <div className="grid h-11 w-11 place-items-center rounded-full bg-muted">
             <ShieldCheck className="h-5 w-5" aria-hidden />
           </div>
-          <SheetTitle className="mt-3 text-[20px] font-bold">Crew community rules</SheetTitle>
+          <SheetTitle className="mt-3 text-[20px] font-bold">Community guidelines</SheetTitle>
           <SheetDescription className="mt-1 text-[14px] leading-snug text-muted-foreground">
-            Crew is a place to train and cheer each other on. Before your first post or comment, agree to keep it that way.
+            Crew is a place to train and cheer each other on.
           </SheetDescription>
         </div>
-        <ul className="space-y-3 px-5 py-3">
-          {CREW_RULES.map((r) => (
-            <li key={r.title}>
-              <span className="block text-[15px] font-semibold">{r.title}</span>
-              <span className="block text-[14px] leading-snug text-muted-foreground">{r.body}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="px-5 text-[13px] leading-snug text-muted-foreground">
-          Part of the{" "}
-          <Link to="/legal/$slug" params={{ slug: CREW_TERMS_SLUG }} className="font-semibold text-foreground underline" onClick={() => answerCrewRules(false)}>
-            Terms of Service
-          </Link>
-          . Questions or something urgent:{" "}
-          <a href={`mailto:${CREW_CONTACT_EMAIL}`} className="font-semibold text-foreground underline">
-            {CREW_CONTACT_EMAIL}
-          </a>
-          .
-        </p>
-        <div className="grid gap-2 px-5 pb-2 pt-4">
-          <Button className="h-12 w-full text-[15px]" onClick={() => void agree()} disabled={busy} data-crew-rules-agree>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-label="Saving" /> : "I agree"}
-          </Button>
-          <Button variant="ghost" className="h-11 w-full" onClick={() => answerCrewRules(false)} disabled={busy}>
-            Not now
-          </Button>
-        </div>
+        <CrewGuidelines className="px-5 pb-2 pt-3" onLeave={() => onOpenChange(false)} />
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * A settings row that opens the guidelines: Account → Privacy & data ("settings"), and
+ * Crew's Edit profile → Privacy list ("list", that list's own row style).
+ */
+export function CrewGuidelinesRow({ className, variant = "settings" }: { className?: string; variant?: "settings" | "list" }) {
+  const [open, setOpen] = useState(false);
+  // mounted on the first tap, then kept for its closing slide
+  const [mounted, setMounted] = useState(false);
+  const show = () => {
+    setMounted(true);
+    setOpen(true);
+  };
+  return (
+    <>
+      {variant === "list" ? (
+        <button type="button" onClick={show} className={cn("flex min-h-[52px] w-full items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3 text-left active:bg-muted", className)} data-crew-guidelines-row>
+          <span className="min-w-0">
+            <span className="block text-[13px] font-bold">Community guidelines</span>
+            <span className="block text-[11.5px] leading-snug text-muted-foreground">What's not allowed, and how to report or block</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={show}
+          className={cn("flex min-h-12 w-full items-center gap-3 rounded-xl px-1 py-2 text-left active:bg-muted/60", className)}
+          data-crew-guidelines-row
+        >
+          <ShieldCheck className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">Community guidelines</span>
+            <span className="block text-[13px] text-muted-foreground">What's not allowed in Crew, and how to report or block</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
+      )}
+      {mounted && <CrewGuidelinesSheet open={open} onOpenChange={setOpen} />}
+    </>
   );
 }
 
@@ -121,7 +135,7 @@ export function CrewWarningNotice() {
           <AlertDialogTitle>A note from the JF Effect team</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-left">
-              <p>Something you posted in Crew went against the community rules{warning.note ? ":" : "."}</p>
+              <p>Something you posted in Crew went against the community guidelines{warning.note ? ":" : "."}</p>
               {warning.note && <p className="font-medium text-foreground">“{warning.note}”</p>}
               {paused && (
                 <p>
