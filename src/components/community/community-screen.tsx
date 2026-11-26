@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { attentionExit } from "@/lib/post-attention";
 import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
@@ -174,6 +175,7 @@ export function CommunityScreen({
   coach?: CoachCrew;
 }) {
   const { user, role } = useAuth();
+  const portalUserId = usePortalUserId();
   const qc = useQueryClient();
   // viewing as a client: the client's screen, without the coach's extras (remove anyone's post, …)
   const viewerIsStaff = (role === "admin" || role === "coach") && !previewOnly;
@@ -182,7 +184,7 @@ export function CommunityScreen({
   const canStory = canShare || !!coach;
   // leaving Crew ends the visit on whatever post is on screen (an exit); a layout
   // cleanup, so it runs before the cards' own cleanups take them off screen
-  useLayoutEffect(() => () => attentionExit(), []);
+  useLayoutEffect(() => () => { if (!previewOnly) attentionExit(); }, [previewOnly]);
   const [scope, setScope] = useState<Scope>(() => {
     const base = initialPageScope();
     // a push, the bell or a link (#post=…): straight onto the post's own screen, the feed under it for ‹ back
@@ -277,16 +279,17 @@ export function CommunityScreen({
   // note), once a visit, until the first double-tap, and only for the first
   // few visits either way. Remembered on the account, not the device.
   const hints = useHintsSeen();
-  const markHint = useMarkHintSeen();
+  const persistHint = useMarkHintSeen();
+  const markHint = useCallback((key: string) => { if (!previewOnly) persistHint(key); }, [persistHint, previewOnly]);
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
   const [tipDone, setTipDone] = useState(tipShownThisVisit);
   const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
   const hintId = scope.kind === "feed" && !tipDone && tipVisit && feedPosts.length ? ((feedPosts.find((p) => p.kind !== "note") ?? feedPosts[0])?.id ?? null) : null;
   useEffect(() => {
-    if (!hintId || !tipVisit || tipShownThisVisit) return;
+    if (previewOnly || !hintId || !tipVisit || tipShownThisVisit) return;
     tipShownThisVisit = true;
     markHint(tipVisit);
-  }, [hintId, tipVisit, markHint]);
+  }, [hintId, tipVisit, markHint, previewOnly]);
   const onTipDone = useCallback(() => setTipDone(true), []);
   // "Swipe for workout": on the first workout in the feed until they reach a recap (or open a workout), on the
   // account, so it never comes back on another phone. Waits for the like tip. A new key from Nov 20 2026, when the
@@ -310,12 +313,12 @@ export function CommunityScreen({
   // feed: opening on Rankings mustn't clear a count you haven't looked at.
   const markedRef = useRef(false);
   useEffect(() => {
-    if (markedRef.current || !ranked.isSuccess || scope.kind !== "feed") return;
+    if (previewOnly || markedRef.current || !ranked.isSuccess || scope.kind !== "feed") return;
     markedRef.current = true;
     void markCommunitySeen(qc);
-  }, [ranked.isSuccess, qc, scope.kind]);
+  }, [ranked.isSuccess, qc, scope.kind, previewOnly]);
 
-  const { data: unit = "lb" } = useViewerUnit(user?.id);
+  const { data: unit = "lb" } = useViewerUnit(portalUserId);
 
   // New posts from the crew while you're down the feed: a pill to jump up to them.
   const myId = useMyCommunityId();
