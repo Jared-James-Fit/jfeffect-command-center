@@ -4,6 +4,8 @@ import { z } from "zod";
 import { assertAdminView, readClientFor } from "@/lib/permissions.server";
 import { legalDocApplies, type LegalViewer } from "@/lib/legal-applies";
 import { IN_APP_SIGNING_FROM_VERSION } from "@/lib/membership-agreement.functions";
+import { MEMBERSHIP_AGREEMENT_SLUG } from "@/lib/membership-agreement/acks";
+import { SIGNUP_LEGAL_SLUGS } from "@/lib/legal-signup";
 
 // ============================================================================
 // Legal & Safety — server functions
@@ -94,10 +96,11 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
       .eq("archived", false);
     if (e1) throw new Error(e1.message);
     // who's asking decides which member documents apply (legal-applies.ts)
-    const [{ data: me }, { data: membership }] = await Promise.all([
+    const [{ data: me, error: clientError }, { data: membership, error: membershipError }] = await Promise.all([
       context.supabase.from("clients").select("service_tier").eq("user_id", context.userId).maybeSingle(),
       context.supabase.from("app_members").select("stripe_subscription_id").eq("user_id", context.userId).maybeSingle(),
     ]);
+    if (clientError || membershipError) throw new Error(clientError?.message ?? membershipError?.message ?? "Could not verify account.");
     const viewer: LegalViewer = {
       tier: (me as any)?.service_tier === "self_serve" ? "self_serve" : (me as any)?.service_tier ? "coaching" : null,
       paidMembership: !!(membership as any)?.stripe_subscription_id,
@@ -312,16 +315,21 @@ export const recordAcceptance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => AcceptSchema.parse(d))
   .handler(async ({ data, context }) => {
+    // Confirm this is the actual published document, not an arbitrary version or signature method.
+    const { data: doc, error: docError } = await context.supabase.from("legal_documents").select("slug, current_version_id, archived, emergency_disabled").eq("id", data.document_id).single();
+    if (docError || !doc || doc.archived || doc.emergency_disabled || doc.current_version_id !== data.version_id) throw new Error("This document was updated or is unavailable. Review the current version.");
+    if (doc.slug === MEMBERSHIP_AGREEMENT_SLUG) throw new Error("Sign the Membership Agreement through its required signing form.");
     // Look up the version body to snapshot it as immutable evidence.
     const { data: ver, error: vErr } = await context.supabase
       .from("legal_document_versions")
-      .select("body, status")
+      .select("body, status, signature_method")
       .eq("id", data.version_id)
       .single();
     if (vErr) throw new Error(vErr.message);
     if (ver.status !== "published") {
       throw new Error("Cannot accept a non-published version.");
     }
+    if ((SIGNUP_LEGAL_SLUGS as readonly string[]).includes(doc.slug) && data.signature_method !== ver.signature_method) throw new Error("Use the required acceptance method.");
     if (data.signature_method === "checkbox" && !data.checkbox_checked) {
       throw new Error("Acknowledgement checkbox is required.");
     }
