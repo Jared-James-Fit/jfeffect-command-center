@@ -759,68 +759,20 @@ export function playSynth(build: (c: AudioContext, out: AudioNode, t: number) =>
 }
 
 /**
- * A piece of music that loops until it's stopped (the Rankings themes,
- * rankings-music.ts): `build` sets up its sound and returns a scheduler that
- * adds every note up to a time, topped up a little ahead on a timer. On the
- * same context, toggle and audio session as every other sound ("ambient":
- * it mixes with the athlete's own music and follows the silent switch). If
- * the context is waiting for a tap it starts on that tap, not dropped.
- * Returns stop(fadeSeconds).
+ * For background music that plays on the same engine (rankings-music.ts):
+ * the app's one context (null where there's no Web Audio), its master bus (the
+ * volume and the limiter every sound goes through), and a nudge to start it
+ * (it starts by itself on the next tap or key when the browser wants one).
  */
-export type MusicLoop = { schedule: (until: number) => void };
-export function startAppMusic(
-  build: (c: BaseAudioContext, out: AudioNode, t0: number) => MusicLoop,
-  opts: { volume?: number; fadeIn?: number; lookahead?: number } = {},
-): (fade?: number) => void {
-  if (typeof window === "undefined" || !appSoundsEnabled() || appSoundVolume() <= 0) return () => {};
+export function appAudioContext(): AudioContext | null {
+  return getCtx();
+}
+export function appSoundBus(c: AudioContext): AudioNode {
+  return masterBus(c);
+}
+export function wakeAppAudio(): void {
   const c = getCtx();
-  if (!c) return () => {};
-  const volume = opts.volume ?? 0.5;
-  const ahead = opts.lookahead ?? 0.9;
-  let master: GainNode | null = null;
-  let timer: number | undefined;
-  let stopped = false;
-  const begin = () => {
-    if (stopped || master || c.state !== "running") return;
-    try {
-      const t0 = c.currentTime + 0.06;
-      const m = c.createGain();
-      m.gain.setValueAtTime(0, t0);
-      m.gain.linearRampToValueAtTime(volume, t0 + (opts.fadeIn ?? 1.2));
-      const limiter = c.createDynamicsCompressor();
-      limiter.threshold.value = -12;
-      limiter.knee.value = 8;
-      limiter.ratio.value = 5;
-      limiter.attack.value = 0.004;
-      limiter.release.value = 0.2;
-      m.connect(limiter).connect(masterBus(c));
-      master = m;
-      const music = build(c, m, t0);
-      music.schedule(c.currentTime + ahead);
-      timer = window.setInterval(() => music.schedule(c.currentTime + ahead), 200);
-    } catch { /* never let music break the UI */ }
-  };
-  const onState = () => begin();
-  wake(c);
-  if (c.state === "running") begin();
-  else c.addEventListener?.("statechange", onState);
-  return (fade = 0.8) => {
-    if (stopped) return;
-    stopped = true;
-    c.removeEventListener?.("statechange", onState);
-    window.clearInterval(timer);
-    const m = master;
-    master = null;
-    if (!m) return;
-    try {
-      const t = c.currentTime;
-      m.gain.cancelScheduledValues(t);
-      m.gain.setValueAtTime(m.gain.value, t);
-      m.gain.linearRampToValueAtTime(0, t + fade);
-      // notes already scheduled ring out under the fade, then everything is let go
-      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, (fade + 0.3) * 1000);
-    } catch { /* gone */ }
-  };
+  if (c) wake(c);
 }
 
 /**
