@@ -231,16 +231,18 @@ export function ClientAnalyticsDashboard({
     if (typeof window !== "undefined" && window.location.hash === "#recovery") return "overview";
     return viewFromSearch(initialView) ?? "overview";
   });
+  const [recordsOpen,setRecordsOpen]=useState(false);
+  const [recordSection,setRecordSection]=useState<"gym"|"competitions"|"lifetime">("gym");
   const changeView = (v: AnalyticsView) => {
     const next = viewFromSearch(v) ?? "overview";
     setView(next);
+    if(v==="records")setRecordsOpen(true);
     onViewChange?.(next);
     if (typeof window !== "undefined") {
       if (v === "training" || v === "records") {
         window.requestAnimationFrame(() => {
           const section = document.getElementById(v === "training" ? "analytics-muscles" : "analytics-records");
-          const details = section?.querySelector("details");
-          if (details && v === "records") details.open = true;
+
           section?.scrollIntoView({ block: "start" });
         });
       } else window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -979,7 +981,8 @@ export function ClientAnalyticsDashboard({
                           sex={competition.data?.sex ?? null}
                           today={today}
                           unit={displayUnit}
-                          onRecords={() => changeView("records")}
+                          onRecords={() => {setRecordSection("gym");changeView("records");}}
+                          onCompetitions={() => {setRecordSection("competitions");changeView("records");}}
                         />
                       </SectionErrorBoundary>
                     </Card>
@@ -1014,42 +1017,7 @@ export function ClientAnalyticsDashboard({
                   </SectionErrorBoundary></MoreDetail>
                 )}
 
-                {profile === "physique" && muscleRead.rows.some((r) => r.perWeek > 0) && (
-                  <section aria-label="Your most trained muscles">
-                    <SectionTitle
-                      title="Your most trained muscles"
-                      sub="Sets a week for each muscle"
-                      right={
-                        <button
-                          type="button"
-                          onClick={() => changeView("training")}
-                          className="min-h-10 text-[13px] font-medium text-foreground"
-                        >
-                          See all muscles
-                        </button>
-                      }
-                    />
-                    <ul className="space-y-1.5">
-                      {[...muscleRead.rows]
-                        .sort((a, b) => b.perWeek - a.perWeek)
-                        .slice(0, 5)
-                        .map((r, _i, top) => (
-                          <li key={r.muscle} className="flex items-center gap-3 text-[14px]">
-                            <span className="w-24 shrink-0 truncate">{r.muscle}</span>
-                            <span className="relative h-2 flex-1 rounded-full bg-muted/60">
-                              <span
-                                className="absolute inset-y-0 left-0 rounded-full bg-[var(--chart-4)]"
-                                style={{ width: `${(r.perWeek / Math.max(0.1, top[0].perWeek)) * 100}%` }}
-                              />
-                            </span>
-                            <span className="w-20 shrink-0 text-right text-[13px] tabular-nums text-muted-foreground">
-                              {r.perWeek} a week
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  </section>
-                )}
+
               </div>
             )}
 
@@ -1079,6 +1047,32 @@ export function ClientAnalyticsDashboard({
 
             {view === "overview" && (
               <div className="space-y-6">
+                <Card className="p-4" id="analytics-muscles" data-training-muscles>
+                  <SectionTitle
+                    title="Muscle training map"
+                  />
+                  <SectionErrorBoundary label="Muscle training map">
+                    <MuscleMap
+                      read={muscleRead}
+                      coached={coached}
+                      credit={supportCredit}
+                      onCredit={setSupportCredit}
+                      onExercise={setMuscleExercise}
+                      history={allLoadSets}
+                      start={startDay}
+                      end={endDay < today ? endDay : today}
+                      periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end < today ? b.end : today}))}
+                    />
+                  </SectionErrorBoundary>
+                </Card>
+                <div id="analytics-records" className="scroll-mt-20">
+                  <MoreDetail label="Records & competitions" open={recordsOpen} onOpenChange={setRecordsOpen}>
+                    <SectionErrorBoundary label="Records">
+                      <RecordsView key={recordSection} initialSection={recordSection} lifetime={lifetime} records={records} byExercise={byExercise} meets={meets} unit={displayUnit} bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []} sex={competition.data?.sex ?? null} results={allResults as any[]} today={today} />
+                    </SectionErrorBoundary>
+                  </MoreDetail>
+                </div>
+                <MoreDetail label="Strength & programming">
                 {hasPowerlifting && (
                   <MoreDetail label="Competition lift trends">
                     <SectionTitle
@@ -1173,24 +1167,8 @@ export function ClientAnalyticsDashboard({
                   </MoreDetail>
                 )}
 
-                <Card className="p-4" id="analytics-muscles" data-training-muscles>
-                  <SectionTitle
-                    title="Muscle training map"
-                  />
-                  <SectionErrorBoundary label="Muscle training map">
-                    <MuscleMap
-                      read={muscleRead}
-                      coached={coached}
-                      credit={supportCredit}
-                      onCredit={setSupportCredit}
-                      onExercise={setMuscleExercise}
-                      history={allLoadSets}
-                      start={startDay}
-                      end={endDay < today ? endDay : today}
-                      periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end < today ? b.end : today}))}
-                    />
-                  </SectionErrorBoundary>
-                </Card>
+                </MoreDetail>
+                <MoreDetail label="Training & recovery details">
                 {hasSbdInPeriod && (
                   <MoreDetail label="Squat, bench and deadlift workload">
                     <SectionTitle
@@ -1343,28 +1321,11 @@ export function ClientAnalyticsDashboard({
                     </SectionErrorBoundary>
                   )}
                 </MoreDetail>
-              </div>
-            )}
-
-            {view === "overview" && (
-              <div id="analytics-records">
-                <MoreDetail label="Records & competitions">
-                <SectionErrorBoundary label="Records">
-                  <RecordsView
-                    lifetime={lifetime}
-                    records={records}
-                    byExercise={byExercise}
-                    meets={meets}
-                    unit={displayUnit}
-                    bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []}
-                    sex={competition.data?.sex ?? null}
-                    results={allResults as any[]}
-                    today={today}
-                  />
-                </SectionErrorBoundary>
                 </MoreDetail>
               </div>
             )}
+
+
           </>
         )}
       </div>
