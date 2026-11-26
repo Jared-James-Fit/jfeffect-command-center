@@ -80,3 +80,30 @@ export function setPrSummary(items: SetPrItem[]): string {
   if (items.length === 1) return items[0].title;
   return `${items.length} PRs`;
 }
+
+/**
+ * The most reps a record can be for and still be "a PR" worth celebrating
+ * (community.ts' HEADLINE_PR_MAX_REPS; the same test, set-pr-items keeps it
+ * here so the logger never loads the Crew module for it).
+ */
+export const GENUINE_PR_MAX_REPS = 10;
+
+/**
+ * Whether a set's records earn the PR celebration (pure, tested): an all-time
+ * record at 10 reps or fewer, or the heaviest weight they've ever put on the
+ * exercise. A block or program best (the plan was always going to bring it),
+ * or an all-time best at 12 or 15 reps on an accessory, keeps its chip under
+ * the set and its League points; it just isn't a moment.
+ */
+export function isGenuineSetPr(input: {
+  record?: Pick<ServerRecord, "reps" | "atpr"> | null;
+  loadRecord?: Pick<ServerRecord, "atpr"> | null;
+  /** The on-phone rep-max check (all-time by construction), when the server has no records here. */
+  localPr?: Pick<SetPR, "reps"> | null;
+}): boolean {
+  const { record, loadRecord, localPr } = input;
+  if (loadRecord?.atpr) return true;
+  if (record?.atpr && Number(record.reps) >= 1 && Number(record.reps) <= GENUINE_PR_MAX_REPS) return true;
+  if (!record && !loadRecord && localPr && localPr.reps >= 1 && localPr.reps <= GENUINE_PR_MAX_REPS) return true;
+  return false;
+}

@@ -111,12 +111,13 @@ export function RestLine({ seconds, auto = false, scopeKey, timerId, shows, idle
     return () => window.clearInterval(id);
   }, [done]);
 
-  // The end of the rest: the timer's buzz and two gentle chimes, once per rest
-  // however many cards show it, and only when it ended while we're looking.
+  // The end of the rest: two gentle bells and a soft double tap, once per rest
+  // however many cards show it (and across a remount), and only when it ended
+  // while we're looking (a rest that ran out in the background stays quiet).
   useEffect(() => {
     if (!mine || !restFinished(mine)) return;
     if (Date.now() - mine.endsAt > 3000) return;
-    if (claimRestDoneCue(scopeKey, mine)) feedback("timer");
+    if (claimRestDoneCue(scopeKey, mine)) feedback("rest", { key: `${scopeKey}:${mine.startedAt}:${mine.endsAt}`, at: mine.endsAt });
   }, [mine, done, scopeKey]);
 
   const words = restWords(seconds);

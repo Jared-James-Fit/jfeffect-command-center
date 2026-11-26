@@ -118,7 +118,8 @@ describe("the rest line over the sets", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(wdv).not.toContain("ActiveRestTimerProvider");
     expect(wdv).not.toContain("onSetCompleted");
-    expect(wdv).toContain("if (restAuto && restOrder && effectiveRest && effectiveRest > 0) startWorkoutRest(dayId, restRowId, effectiveRest);");
+    // with the set's own moment (feedback.ts: new and fresh), so a refetch's replay never restarts it
+    expect(wdv).toContain("if (moment && restAuto && restOrder && effectiveRest && effectiveRest > 0) startWorkoutRest(dayId, restRowId, effectiveRest);");
     expect(wdv).toContain("clearRestTimer(dayId);");
     expect(wdv).toContain("<RestLine");
     expect(wdv).toContain('data-testid="card-rest-auto"');

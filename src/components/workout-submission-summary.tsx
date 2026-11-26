@@ -80,9 +80,16 @@ type Props = {
   onClose?: () => void;
   /** Edit workout: closes the recap onto the workout, its sets ready to change (finished workouts). */
   onEdit?: () => void;
+  /**
+   * The workout was just finished here (the celebration after the review), so
+   * the reveal plays its sting and tap. "View score" on a finished workout, a
+   * ?recap=1 link or a coach's look shows the same reveal in silence: a
+   * finish is celebrated once, never replayed from history.
+   */
+  celebrate?: boolean;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose, onEdit }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose, onEdit, celebrate = false }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -133,12 +140,14 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   // out on the server and can trail the reveal): a PR day gets the full
   // build-and-drop, never the short one by mistake. Waits at most 2 s.
   useEffect(() => {
-    if (!open || revealStage < 1 || stingPlayedRef.current) return;
+    if (!open || !celebrate || revealStage < 1 || stingPlayedRef.current) return;
     const fire = () => {
       if (stingPlayedRef.current) return;
       stingPlayedRef.current = true;
-      // the finish's tap lands with the reveal (a headline PR its success tap); the sting is its sound
-      feedback(stingRef.current === "pr" ? "pr" : "workout", { sound: false });
+      // the finish's tap lands with the reveal (a headline PR its success tap); the sting is its
+      // sound. Once per finished workout: a second reveal of the same one in this session is silent.
+      const moment = feedback(stingRef.current === "pr" ? "pr" : "workout", { sound: false, key: `recap:${completionId ?? dayId ?? workoutTitle ?? ""}` });
+      if (!moment) return;
       void import("@/lib/achievement-music").then(({ playSting }) => {
         if (stingPlayedRef.current) stopStingRef.current = playSting(stingRef.current);
       });
@@ -147,7 +156,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     if (!usesRecords || (records !== null && (!completionId || shareStats !== undefined))) { fire(); return; }
     const wait = window.setTimeout(fire, 2000);
     return () => window.clearTimeout(wait);
-  }, [open, revealStage, usesRecords, records, completionId, shareStats]);
+  }, [open, celebrate, revealStage, usesRecords, records, completionId, shareStats, dayId, workoutTitle]);
 
   useEffect(() => {
     if (!open || revealStage < 1) return;
