@@ -1,3 +1,7 @@
+import { MemberSetupWizard } from "@/components/member/member-setup-wizard";
+import { getMySetupStatus } from "@/lib/member-setup.functions";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { isFreeAccount } from "@/lib/member-setup-steps";
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -31,13 +35,21 @@ type Props = {
    */
   whenHidden?: ReactNode;
 };
-type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
+type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "member_setup";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
-export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, whenHidden = null }: Props) {
+export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
+  const [memberOpen, setMemberOpen] = useState(false);
+  const { isImpersonating } = useClientImpersonation();
   const agreement = useCoachingAgreement();
   const scope = useGoalsServiceScope(clientId);
+  const memberRead = useServerFn(getMySetupStatus);
+  const memberEnabled = scope.requirements?.memberSetup === true && !isImpersonating;
+  const member = useQuery({ queryKey: ["m-setup-status"], queryFn: () => memberRead(), enabled: memberEnabled, staleTime: 60_000 });
+  const memberApplies = memberEnabled && member.data?.member?.account_type === "jf_member" && !member.data.member.is_admin_sandbox;
+  const memberFree = isFreeAccount(member.data?.member);
+  const needsGoals = scope.requirements?.coachingGoals === true;
   const { data: client, isPending: clientPending, isFetched: clientFetched, isError: clientError, refetch: retryClient } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
@@ -49,7 +61,7 @@ export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, w
     },
   });
   const { data: goals, isPending: goalsPending, isFetched: goalsFetched, isError: goalsError, refetch: retryGoals } = useQuery({
-    queryKey: ["client-goals-setup", clientId], enabled: !!clientId && !handlingOnly, staleTime: 60_000,
+    queryKey: ["client-goals-setup", clientId], enabled: !!clientId && needsGoals, staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("client_goals_setup").select("*").eq("client_id", clientId).maybeSingle();
       if (error) throw error;
@@ -104,17 +116,32 @@ export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, w
         done: agreement.state.state.state !== "needs_signature",
       });
     }
-    const applicable = handlingOnly ? base.filter(i => ["profile_picture", "basic_info", "calendar"].includes(i.key)) : scope.nutritionOnly ? base.filter(i => i.key !== "training_schedule") : base;
+    const req = scope.requirements;
+    const applicable = base.filter(i => {
+      switch (i.key) {
+        case "profile_picture": return !!req?.headshot;
+        case "basic_info": return !!req?.basicInfo;
+        case "training_schedule": return !!req?.trainingSchedule;
+        case "goals_setup": return !!req?.coachingGoals;
+        case "agreement": return !!req?.coachingGoals;
+        default: return true;
+      }
+    });
+    if (memberApplies) applicable.unshift({
+      key: "member_setup", label: memberFree ? "Set up your training" : "Finish your membership setup",
+      description: memberFree ? "Your goal, experience and training days." : "Your remaining membership details.",
+      icon: IdCard, done: member.data?.complete === true, onClick: () => setMemberOpen(true),
+    });
     for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done });
     return applicable;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, handlingOnly]);
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, member.data?.complete]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
   const done = required.filter((i) => i.done).length;
   if (!clientId || !userId) return null;
-  if (scope.error || clientError || (!handlingOnly && goalsError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(!handlingOnly ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
-  if (!scope.ready || clientPending || !clientFetched || (!handlingOnly && (goalsPending || !goalsFetched))) return null;
+  if (scope.error || clientError || (needsGoals && goalsError) || (memberEnabled && member.isError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : []), ...(memberEnabled ? [member.refetch()] : [])]); }}>Try again</Button></Card>;
+  if (!scope.ready || clientPending || !clientFetched || (needsGoals && (goalsPending || !goalsFetched)) || (memberEnabled && member.isPending)) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
   if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;
@@ -125,7 +152,7 @@ export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, w
       <Card className="p-4 sm:p-5" data-testid="setup-checklist">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2"><h2 className="text-base font-semibold tracking-tight">Complete your setup</h2><Badge variant="secondary" className="text-[11px]">{done}/{required.length}</Badge></div>
-          <p className="text-[13px] text-muted-foreground">{handlingOnly ? "A few quick steps so your handler can prepare your meet." : "A few quick steps so your coach can tailor your program."}</p>
+          <p className="text-[13px] text-muted-foreground">{needsGoals ? "A few quick steps so your coach can tailor your program." : scope.handlingMeets.length ? "Complete your account and competition setup." : "A few quick details to get started."}</p>
         </div>
         <div className="mt-3"><Progress value={Math.round((done / required.length) * 100)} /></div>
         <ul className="mt-3 divide-y divide-border">
@@ -139,6 +166,7 @@ export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, w
         <div className="mt-3 flex flex-wrap gap-2">{nextItem.key === "agreement" || nextItem.onClick ? <Button className="h-10" onClick={nextItem.onClick} disabled={!nextItem.onClick}>Continue setup</Button> : nextItem.sheet ? <Button className="h-10" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild className="h-10"><Link to={nextItem.to!} search={nextItem.search as any}>Continue setup</Link></Button>}</div>
       </Card>
       {camera.element}
+      {memberEnabled && <MemberSetupWizard open={memberOpen} onClose={() => setMemberOpen(false)} />}
       <SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} onOpenChange={(o) => { if (!o) setOpenStep(null); }} />
     </>
   );

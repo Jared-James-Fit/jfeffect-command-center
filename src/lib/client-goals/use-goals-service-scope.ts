@@ -11,5 +11,5 @@ export function useGoalsServiceScope(clientId: string | undefined | null) {
     staleTime: 30_000,
     queryFn: () => read({ data: { clientId: clientId! } }),
   });
-  return { nutritionOnly: q.data?.nutritionOnly === true, handlingMeets: q.data?.handlingMeets ?? [], ready: !!q.data, error: q.isError, retry: q.refetch };
+  return { requirements: q.data?.requirements, nutritionOnly: q.data?.nutritionOnly === true, handlingMeets: q.data?.handlingMeets ?? [], ready: !!q.data, error: q.isError, retry: q.refetch };
 }

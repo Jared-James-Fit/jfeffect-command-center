@@ -558,6 +558,8 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
       await assertRequesterReaches(supabaseAdmin, userId, chat.client_id);
       const { isBasicInfoComplete } = await import("@/lib/basic-info");
       const { isGoalsSetupComplete } = await import("@/lib/client-goals/schema");
+      const { accountSetupRequirements } = await import("@/lib/account-setup-scope");
+      const { setupMissing } = await import("@/lib/member-setup-steps");
       const [client, goals, enrollments] = await Promise.all([
         cleo.db.from("clients").select("id, user_id, last_signed_in_at, portal_access_disabled, profile_picture_url, service_tier, first_name, last_name, phone, date_of_birth, height_cm, address, city, country, timezone, emergency_contact_name, emergency_contact_phone, training_schedule_completed").eq("id", chat.client_id).maybeSingle(),
         cleo.db.from("client_goals_setup").select("*").eq("client_id", chat.client_id).maybeSingle(),
@@ -569,20 +571,29 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
       const lines = [
         "Client setup (checked internally):",
         c.portal_access_disabled ? "○ Account access — disabled" : status(!!c.last_signed_in_at, "Account sign-in"),
-        status(isBasicInfoComplete(c), "Basic information"),
-        status(!!c.profile_picture_url, "Account photo"),
       ];
       const { loadHandlingSetup } = await import("@/lib/competition/handling-setup.server");
       const handlingMeets = await loadHandlingSetup(supabaseAdmin, chat.client_id);
+      if (enrollments.error) throw new Error("Could not read service scope");
+      const req = accountSetupRequirements(c.service_tier, (enrollments.data ?? []).map((e: any) => e.coaching_packages?.slug ?? ""), handlingMeets.length > 0);
+      if (req.basicInfo) lines.push(status(isBasicInfoComplete(c), "Basic information"));
+      if (req.headshot) lines.push(status(!!c.profile_picture_url, "Account photo"));
+      if (req.memberSetup && c.user_id) {
+        const member = await supabaseAdmin.from("app_members").select("account_type, is_admin_sandbox, subscription_status, stripe_subscription_id, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, committed_training_days").eq("user_id", c.user_id).maybeSingle();
+        if (member.error) lines.push("Membership setup — couldn’t verify");
+        else if (member.data?.account_type === "jf_member" && !member.data.is_admin_sandbox) {
+          const missing = setupMissing(member.data);
+          lines.push(status(missing.length === 0, "Membership setup"));
+          if (missing.length) lines.push("Remaining: " + missing.map(s => s.replace(/_/g, " ")).join(", "));
+        }
+      }
       for (const meet of handlingMeets) {
         lines.push(status(meet.intakeDone, `Competition intake: ${meet.name}`), status(meet.termsDone, "Handling terms"));
         if (meet.remaining.length) lines.push("Remaining: " + meet.remaining.join(", "));
       }
-      if (c.service_tier === "self_serve") { /* no regular coaching intake required */ }
-      else if (enrollments.error) lines.push("Service scope — couldn't verify; check the client profile.");
-      else {
-        const nutritionOnly = !!enrollments.data?.length && enrollments.data.every((e: any) => e.coaching_packages?.slug === "nutrition");
-        if (!nutritionOnly) lines.push(status(!!c.training_schedule_completed, "Training schedule"));
+      if (req.coachingGoals) {
+        const nutritionOnly = req.nutritionOnly;
+        if (req.trainingSchedule) lines.push(status(!!c.training_schedule_completed, "Training schedule"));
         const label = nutritionOnly ? "Nutrition setup" : "Goals & setup";
         lines.push(goals.error ? label + " — couldn't verify" : status(isGoalsSetupComplete(goals.data, nutritionOnly), label));
       }
