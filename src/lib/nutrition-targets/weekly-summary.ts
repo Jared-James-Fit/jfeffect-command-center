@@ -1,6 +1,6 @@
 import { pickPlanDayForDate, resolveClientNutritionDay, weekdayForISO, type PlanDayLike, type ResolveInput } from "@/lib/client-nutrition-day";
 
-export type WeeklyPlanDay = PlanDayLike & { calories?: number | null; protein?: number | null; carbs?: number | null; fats?: number | null; steps?: number | null; notes?: string | null };
+export type WeeklyPlanDay = PlanDayLike & { calories?: number | null; protein?: number | null; carbs?: number | null; fats?: number | null; fibre?: number | null; steps?: number | null; notes?: string | null };
 export type WeekContext = Pick<ResolveInput, "overrides" | "preferredHighDays" | "workoutDates" | "scheduleKnown">;
 
 export function summarizeNutritionWeek(days: WeeklyPlanDay[], dates: string[], context: WeekContext) {
