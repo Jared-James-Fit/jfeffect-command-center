@@ -80,7 +80,7 @@ export function currentRing(strength: Record<CompLift, LiftStrength>, today: str
       conversion.push({lift,meetDate:meet.date,meetKg:meet.lifts[lift]/LB_PER_KG,trainingKg:point.value/LB_PER_KG,weightClass:meet.weightClass});
     }
   }
-  const forecast = forecastMeet({ today, meetDate: today, lifts: evidence, meets: [], conversion, concerns: [], weightClass });
+  const forecast = forecastMeet({ today, meetDate: today, lifts: evidence, meets: [], conversion, concerns: [], weightClass: undefined });
   for (const lift of COMP_LIFTS) {
     const f = forecast.lifts[lift];
     if (!f || f.source !== "training") continue;
