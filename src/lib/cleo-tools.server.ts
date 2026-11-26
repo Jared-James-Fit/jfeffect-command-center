@@ -474,6 +474,26 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
 
+    meetings: tool({
+      description: "Read a client's completed coaching meetings, discussion notes, recorded decisions and follow-ups, including the source date and whether an item was tentative or an AI interpretation. Use before answering what was discussed or agreed, including attempt selections. This is coach-only; never invent missing discussion or treat a proposal as approved.",
+      inputSchema: z.object({ client_id: clientId, limit: z.number().int().min(1).max(12).default(5) }),
+      execute: safe("meeting notes", async ({ client_id, limit }) => {
+        const { assertStaffReachesClient } = await import("@/lib/staff-client-access.server");
+        await assertStaffReachesClient(db, ctx.caller, client_id);
+        const c = await clientRow(db, client_id);
+        const res = await db.from("coaching_sessions").select("id, event, scheduled_at, created_at, analysis, analysis_status").eq("client_id", client_id).eq("status", "done").order("created_at", { ascending: false }).limit(limit);
+        const sessions = rows<any>(res, "meetings");
+        if (!sessions.length) return `${clientName(c)} has no completed meetings on file.`;
+        const recs = rows<any>(await db.from("coaching_session_recommendations").select("session_id, title, status, decision_note, applied_at").eq("client_id", client_id).in("session_id", sessions.map(s => s.id)), "meeting follow-ups");
+        return sessions.map(s => {
+          const a = s.analysis ?? {};
+          const items = (Array.isArray(a.items) ? a.items : []).slice(0, 30).map((i: any) => `- ${i.kind} (${i.basis}, ${i.speaker}): ${String(i.text ?? "").slice(0, 400)}${i.quote ? ` | source: ${String(i.quote).slice(0, 220)}` : ""}`);
+          const followups = recs.filter(r => r.session_id === s.id).map(r => `- Follow-up: ${r.title} (${r.status}${r.applied_at ? ", applied" : ""})${r.decision_note ? ` — ${r.decision_note}` : ""}`);
+          return [`${s.event?.title ?? "Meeting"} · ${String(s.scheduled_at ?? s.created_at).slice(0, 10)}`, s.analysis_status === "ready" ? String(a.summary ?? "No summary on file") : "Meeting analysis not ready", ...items, ...followups].join("\n");
+        }).join("\n\n");
+      }),
+    }),
+
     goals: tool({
       description:
         "A client's goal ledger: each goal's own target (what they said, with the unit marked when it was inferred), the coach-approved target, Cleo's projection with its range and confidence, the feasibility score out of 100 (where the target sits in their own projected range: never a probability), the six approaches from easy to extremely aggressive with their targets, the recommended approach and why, the read's recommended action, time left, and outcomes of past goals. Use it before answering whether a target is realistic or what to aim for.",

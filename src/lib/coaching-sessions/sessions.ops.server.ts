@@ -57,7 +57,7 @@ export async function getSessionsHome(c: Caller, data: any) {
   const ctx = await loadSessionContext(supabase, data.clientId, c.trusted ? { includeTests: true } : {});
   const next = ctx.events.find((e) => e.daysOut == null || e.daysOut >= 0) ?? null;
   const { intervention, prep } = await prepareFor(supabase, ctx, { event: next });
-  const [{ data: sessions }, { data: memories }, { data: openRecs }] = await Promise.all([
+  const [{ data: sessions }, { data: memories }, { data: openRecs }, { data: discussedGoals }] = await Promise.all([
     supabase
       .from("coaching_sessions")
       .select("id, event, format, status, scheduled_at, minutes, created_at, analysis_status, shared_at, write_up_status, pt_session_id, coach_reviewed_at, changes, agenda, auto_prepared, analysis")
@@ -66,6 +66,7 @@ export async function getSessionsHome(c: Caller, data: any) {
       .limit(30),
     supabase.from("client_intelligence").select("*").eq("client_id", data.clientId).neq("status", "archived").order("updated_at", { ascending: false }).limit(120),
     supabase.from("coaching_session_recommendations").select("id, session_id, status, applied_at").eq("client_id", data.clientId).in("status", ["proposed", "approved", "edited", "clarify"]),
+    sb.from("client_goals").select("id, title, source_id, source_speaker, source_quote, client_value, client_value_max, client_unit, client_unit_source, client_text, status").eq("client_id", data.clientId).eq("source_kind", "meeting").order("source_at", { ascending: false }).limit(120),
   ]);
   const ptById = new Map(calls.map((x: any) => [x.id, x]));
   const list = ((sessions ?? []) as any[]).map((s) => {
@@ -78,6 +79,8 @@ export async function getSessionsHome(c: Caller, data: any) {
       changes: undefined,
       objective: agenda?.objective ?? null,
       summary: typeof analysis?.summary === "string" ? analysis.summary : null,
+      discussion: (Array.isArray(analysis?.items) ? analysis.items : []).filter((i: any) => ["goal", "objective", "agreement", "tentative"].includes(i?.kind) && typeof i.text === "string").map((i: any) => ({ text: i.text, kind: i.kind, speaker: i.speaker, basis: i.basis, quote: i.quote })),
+      discussedGoals: ((discussedGoals ?? []) as any[]).filter((g) => g.source_id === s.id),
       changedSinceReview,
       openRecommendations: recs.length,
       appointment: pt

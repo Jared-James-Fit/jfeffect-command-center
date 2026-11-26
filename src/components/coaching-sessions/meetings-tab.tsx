@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/loading";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import { cn } from "@/lib/utils";
+import { dualRange, inputKg } from "@/lib/dual-weight";
 import {
   commitmentFn,
   getSessionsHomeFn,
@@ -231,6 +232,28 @@ export function MeetingsWorkspace({
                 {s.status === "done" && (
                   <div className="space-y-1.5 px-4 pb-3 pl-11 text-xs">
                     {s.summary ? <p className="whitespace-pre-wrap text-muted-foreground">{s.summary}</p> : null}
+                    {s.discussedGoals?.length ? (
+                      <div className="rounded-lg border border-border px-3 py-2 space-y-1" data-meeting-discussed-goals>
+                        <p className="font-medium">Discussed targets</p>
+                        {s.discussedGoals.map((g: any) => {
+                          const w = g.client_value != null && (g.client_unit === "kg" || g.client_unit === "lb")
+                            ? dualRange(inputKg(Number(g.client_value), g.client_unit), g.client_value_max != null ? inputKg(Number(g.client_value_max), g.client_unit) : null, "kg", g.client_unit) : null;
+                          return <div key={g.id} className="flex flex-wrap justify-between gap-x-3">
+                            <span>{g.title}</span>
+                            <span className="tabular-nums">{w ? <>{w.primary} <span className="text-muted-foreground">({w.secondary})</span></> : g.client_value != null ? `${g.client_value} (unit unconfirmed)` : g.client_text ?? "—"}{g.client_unit_source === "inferred" ? <span className="text-muted-foreground"> · unit inferred</span> : null}</span>
+                          </div>;
+                        })}
+                        <p className="text-muted-foreground">Source: this meeting · discussed, not necessarily approved.</p>
+                      </div>
+                    ) : null}
+                    {s.discussion?.length ? (
+                      <details className="text-muted-foreground">
+                        <summary className="cursor-pointer">Discussion notes ({s.discussion.length})</summary>
+                        <div className="mt-1 space-y-1">
+                          {s.discussion.map((i: any, index: number) => <p key={index}><span className="font-medium">{i.basis === "interpretation" ? "Cleo interpretation" : i.basis === "tentative" || i.kind === "tentative" ? "Tentative" : i.kind === "agreement" ? "Recorded agreement" : i.speaker === "athlete" ? "Athlete" : i.speaker === "coach" ? "Coach" : "Discussed"}:</span> {i.text}</p>)}
+                        </div>
+                      </details>
+                    ) : null}
                     {(d.intelligence as any[]).filter((i) => i.source_session_id === s.id && i.status !== "archived" && ["goal", "decision", "commitment"].includes(i.kind)).slice(0, 6).map((i) => (
                       <p key={i.id} className="leading-snug"><span className="font-medium">{i.status === "confirmed" ? "Saved note" : "For review"}:</span> {i.text}</p>
                     ))}

@@ -49,6 +49,7 @@ export function goalLine(g: GoalRow, unit: Unit): string {
     else parts.push("approved (no number)");
   } else if (g.status === "proposed") parts.push("not reviewed by the coach yet");
   else parts.push(g.status);
+  if (g.source_kind) parts.push(`source: ${g.source_kind}${g.source_at ? ` ${g.source_at.slice(0, 10)}` : ""}${g.source_speaker ? ` (${g.source_speaker})` : ""}${g.source_quote ? ` — “${g.source_quote.slice(0, 240)}”` : g.source_context ? ` — ${g.source_context.slice(0, 240)}` : ""}`);
   const f = g.feasibility;
   if (f?.projection) parts.push(`projection (interpretation): ${fmtWeight(f.projection.expectedKg, unit)} (${fmtWeight(f.projection.lowKg, unit)}–${fmtWeight(f.projection.highKg, unit)}), ${f.confidence} confidence`);
   if (f?.score != null) parts.push(`feasibility ${f.score}/100`);
