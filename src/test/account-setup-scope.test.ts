@@ -85,3 +85,20 @@ describe("shared setup progress", () => {
     expect(accountSetupProgress([]).needsReminder).toBe(false);
   });
 });
+
+import { readFileSync } from "node:fs";
+
+describe("setup launch reminder POV parity", () => {
+  const portal = readFileSync("src/routes/_authenticated/portal/route.tsx", "utf8");
+  const banner = readFileSync("src/components/portal/setup-checklist-banner.tsx", "utf8");
+  it("mounts the reminder for the target account before the session-only gates, resetting on POV entry", () => {
+    expect(portal).toMatch(/<SetupChecklistBanner key=\{[^\n]+isImpersonating[^\n]+clientId[^\n]+portalUserId[^\n]+\} clientId=\{clientId\} userId=\{portalUserId\} reminderOnly \/>\}\s*\{!isImpersonating &&/);
+  });
+  it("does not suppress reminders in POV and preserves preview-only setup actions", () => {
+    expect(banner).not.toMatch(/if \([^\n]*(?:reminderOnly|needsReminder)[^\n]*isImpersonating[^\n]*\)/);
+    expect(banner).not.toMatch(/if \(isImpersonating \|\| !needsReminder\)/);
+    expect(banner).toContain("preview={isImpersonating}");
+    expect(banner).toContain('isImpersonating ? () => setOpenStep("profile_picture") : camera.open');
+    expect(banner).toContain("shownLaunch.current === launch");
+  });
+});
