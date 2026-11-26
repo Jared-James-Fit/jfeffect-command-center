@@ -110,6 +110,7 @@ export function AddInfoSheet({
 
   // paste: files (screenshots) become uploads; text goes in the box as usual
   const onPaste = (e: React.ClipboardEvent) => {
+    if (busy) return;
     const files = Array.from(e.clipboardData?.files ?? []);
     if (files.length) {
       e.preventDefault();
@@ -194,7 +195,7 @@ export function AddInfoSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-3 space-y-3">
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -209,14 +210,15 @@ export function AddInfoSheet({
               addFiles(e.dataTransfer.files);
             }}
             className={cn(
-              "flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed p-5 text-center transition-colors",
-              dragging ? "border-foreground bg-muted" : "border-border hover:bg-muted/50",
+              "flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-3 py-4 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+              dragging ? "border-primary bg-primary/15" : "border-primary/55 bg-primary/5 hover:bg-primary/10",
             )}
+            disabled={busy}
             data-intel-drop
           >
-            <FileUp className="h-5 w-5 text-muted-foreground" />
-            <span className="text-[14px] font-medium">Drop files, or tap to choose</span>
-            <span className="text-[12px] text-muted-foreground">Excel, CSV, PDF, Word, photos, screenshots · video kept for reference · paste works too</span>
+            <span className="mb-1 rounded-lg bg-primary/10 p-2 text-foreground"><FileUp className="h-5 w-5" /></span>
+            <span className="text-[14px] font-semibold">Drop files or browse</span>
+            <span className="text-[12px] text-muted-foreground">PDF, spreadsheets, Word, photos, video · paste supported</span>
           </button>
           <input ref={inputRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => (addFiles(e.target.files), (e.target.value = ""))} />
 
@@ -247,13 +249,13 @@ export function AddInfoSheet({
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={`Or type / paste notes: "Openers 170 / 105 / 200", "Squat rack 9", "Nov 18: squat 182.5×2 @8.5"…`}
-              className="min-h-[84px] text-[14px]"
+              className="min-h-[64px] bg-background text-[14px]"
               data-intel-text
             />
           ) : null}
 
-          <div className="space-y-1.5">
-            <p className="text-[12.5px] text-muted-foreground">Provided by</p>
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <p className="text-[12.5px] font-medium">Provided by</p>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Provided by">
               {PROVIDER_CHOICES.map((p) => (
                 <button
@@ -277,8 +279,8 @@ export function AddInfoSheet({
             {provider === "unknown" ? <p className="text-[11.5px] text-muted-foreground">Cleo reads who wrote it from the file when it says.</p> : null}
           </div>
 
-          <button type="button" className="text-[12.5px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setMore((m) => !m)}>
-            {more ? "Fewer options" : "What it's for, and context (optional)"}
+          <button type="button" aria-expanded={more} className="text-[12.5px] font-medium underline-offset-2 hover:underline" onClick={() => setMore((m) => !m)}>
+            {more ? "Hide optional details" : "Purpose & context (optional)"}
           </button>
           {more ? (
             <div className="space-y-2">

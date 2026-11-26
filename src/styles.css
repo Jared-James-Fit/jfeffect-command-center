@@ -150,7 +150,7 @@
   --warning: oklch(0.65 0.15 75);                  /* amber, visible on white */
 
   /* Borders & inputs */
-  --border: oklch(0.905 0.004 280);                /* subtle light grey */
+  --border: oklch(0.875 0.006 280);                /* clearer boundaries */
   --input: oklch(0.97 0.002 280);                  /* near-white input bg */
   /* Focus ring: blue so focused inputs don't look like errors */
   --ring: oklch(0.55 0.18 250);                    /* #3B82F6 blue */
@@ -200,29 +200,29 @@
    Preserves the original JF Effect dark aesthetic.
    ============================================================ */
 .dark {
-  --background: oklch(0.16 0.005 280);
+  --background: oklch(0.15 0.005 280);
   --foreground: oklch(0.97 0.005 280);
-  --card: oklch(0.205 0.006 280);
+  --card: oklch(0.225 0.008 280);
   --card-foreground: oklch(0.97 0.005 280);
-  --popover: oklch(0.205 0.006 280);
+  --popover: oklch(0.255 0.008 280);
   --popover-foreground: oklch(0.97 0.005 280);
-  --secondary: oklch(0.26 0.008 280);
+  --secondary: oklch(0.29 0.008 280);
   --secondary-foreground: oklch(0.97 0.005 280);
-  --muted: oklch(0.24 0.006 280);
-  --muted-foreground: oklch(0.74 0.01 280);
-  --accent: oklch(0.28 0.01 280);
+  --muted: oklch(0.28 0.008 280);
+  --muted-foreground: oklch(0.78 0.01 280);
+  --accent: oklch(0.33 0.01 280);
   --accent-foreground: oklch(0.97 0.005 280);
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.98 0.005 280);
   --success: oklch(0.68 0.16 150);
   --warning: oklch(0.78 0.15 75);
-  --border: oklch(0.32 0.008 280);
-  --input: oklch(0.27 0.008 280);
+  --border: oklch(0.38 0.01 280);
+  --input: oklch(0.32 0.01 280);
   --sidebar: oklch(0.13 0.005 280);
   --sidebar-foreground: oklch(0.85 0.005 280);
   --sidebar-accent: oklch(0.22 0.008 280);
   --sidebar-accent-foreground: oklch(0.97 0.005 280);
-  --sidebar-border: oklch(0.24 0.008 280);
+  --sidebar-border: oklch(0.30 0.008 280);
   --shadow-card: 0 8px 30px -12px oklch(0 0 0 / 0.5);
   --builder-canvas: oklch(0.40 0.005 280);
   --builder-card: oklch(0.17 0.006 280);
