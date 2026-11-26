@@ -215,6 +215,24 @@ function identityPatch(p: any) {
   return patch;
 }
 
+function identitySummary(c: any, p: any) {
+  const before = identityBefore(c);
+  const patch = identityPatch(p);
+  const changes = Object.entries(patch).filter(([key, value]) => before[key] !== value);
+  if (!changes.length) throw new Error("That name is already saved.");
+  const lines: string[] = [];
+  if (changes.some(([key]) => key === "full_name" || key === "first_name" || key === "last_name")) {
+    const oldName = before.full_name ?? [before.first_name, before.last_name].filter(Boolean).join(" ");
+    lines.push(`Full name: ${oldName || "Not set"} → ${patch.full_name}`);
+    // If the display name was already correct, show which split name fields are being corrected.
+    if (before.full_name === patch.full_name) {
+      for (const [key, value] of changes.filter(([key]) => key === "first_name" || key === "last_name")) lines.push(`${key.replace(/_/g, " ")}: ${before[key] ?? "Not set"} → ${value}`);
+    }
+  }
+  if (changes.some(([key]) => key === "preferred_name")) lines.push(`Preferred name: ${before.preferred_name ?? "Not set"} → ${patch.preferred_name ?? "Not set"}`);
+  return [`Update ${clientLabel(c)}'s profile name.`, ...lines].join("\n");
+}
+
 /** The card's words, from the database. Throws when the thing doesn't exist or can't be done. */
 export async function describeAction(db: any, kind: CleoActionKind, p: any): Promise<string> {
   if (kind === "restore_program_version") {
@@ -226,10 +244,7 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
   switch (kind) {
     case "update_client_identity": {
       const c = await client(db, p.client_id);
-      const patch = identityPatch(p);
-      const changes = Object.entries(patch).filter(([key, value]) => (c[key] ?? null) !== value);
-      if (!changes.length) throw new Error("That name is already saved.");
-      return [`Update ${clientLabel(c)}'s profile name.`, ...changes.map(([key, value]) => `${key.replace(/_/g, " ")}: ${c[key] ?? "Not set"} → ${value ?? "Not set"}`)].join("\n");
+      return identitySummary(c, p);
     }
     case "update_meet_from_attachment":
       throw new Error("A source attachment is required.");
@@ -385,10 +400,7 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
     const before = identityBefore(c);
     // Snapshot is server-derived, not supplied by the model.
     intakeMeta = { _identity_before: before };
-    const patch = identityPatch(p);
-    const changes = Object.entries(patch).filter(([key, value]) => before[key] !== value);
-    if (!changes.length) throw new Error("That name is already saved.");
-    summary = [`Update ${clientLabel(c)}'s profile name.`, ...changes.map(([key, value]) => `${key.replace(/_/g, " ")}: ${before[key] ?? "Not set"} → ${value ?? "Not set"}`)].join("\n");
+    summary = identitySummary(c, p);
   } else {
     summary = await describeAction(actor.db, kind, params);
   }

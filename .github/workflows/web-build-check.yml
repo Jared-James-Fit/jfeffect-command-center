@@ -39,5 +39,8 @@ jobs:
       - name: Run analytics regression tests
         run: npm test -- src/test/performance-ring.test.ts src/test/analytics-redesign.test.ts src/test/analytics-unified.test.ts
 
+      - name: Run Cleo permission and execution regression tests
+        run: npm test -- src/test/cleo-actions-run-as-requester.test.ts
+
       - name: Build production app
         run: npm run build

@@ -216,22 +216,39 @@ describe("approving a coach's card", () => {
 
   it("updates the reviewed full name without removing the nickname, as the assigned coach", async () => {
     const { approveAction } = await import("@/lib/cleo-actions.server");
-    Object.assign(tables.clients[0], { first_name: "Ari", last_name: null, full_name: "Ari", preferred_name: "Ari" });
+    Object.assign(tables.clients[0], { first_name: "Al", last_name: null, full_name: "Al", preferred_name: "Al" });
     const id = card("update_client_identity", {
-      client_id: MARC, first_name: "Ariana", last_name: "Willison",
-      _identity_before: { first_name: "Ari", last_name: null, full_name: "Ari", preferred_name: "Ari" },
+      client_id: MARC, first_name: "Alex", last_name: "Morgan",
+      _identity_before: { first_name: "Al", last_name: null, full_name: "Al", preferred_name: "Al" },
     });
     expect((await approveAction(ownerActor() as any, id)).status).toBe("done");
-    expect(tables.clients[0]).toMatchObject({ first_name: "Ariana", last_name: "Willison", full_name: "Ariana Willison", preferred_name: "Ari", info_last_updated_by: "coach" });
+    expect(tables.clients[0]).toMatchObject({ first_name: "Alex", last_name: "Morgan", full_name: "Alex Morgan", preferred_name: "Al", info_last_updated_by: "coach" });
     expect(tables.cleo_actions.find(r => r.id === id)).toMatchObject({ executed_as: ANA });
+  });
+
+  it("does not offer identity edits to unrelated roles", () => {
+    expect(routeFor("update_client_identity", coach)).toBe("ask_owner");
+    expect(routeFor("update_client_identity", admin)).toBe("run");
+    expect(routeFor("update_client_identity", finance)).toBe("not_allowed");
+    expect(routeFor("update_client_identity", { isAdmin: false, permissions: [] })).toBe("not_allowed");
+  });
+
+  it("refuses an identity update for another coach's client", async () => {
+    const { approveAction } = await import("@/lib/cleo-actions.server");
+    const id = card("update_client_identity", {
+      client_id: NICO, first_name: "Alex", last_name: "Morgan",
+      _identity_before: { first_name: null, last_name: null, full_name: null, preferred_name: null },
+    });
+    expect((await approveAction(ownerActor() as any, id)).status).toBe("failed");
+    expect(tables.clients[1].full_name).toBeUndefined();
   });
 
   it("refuses a stale identity update", async () => {
     const { approveAction } = await import("@/lib/cleo-actions.server");
     Object.assign(tables.clients[0], { first_name: "Newer", last_name: null, full_name: "Newer", preferred_name: null });
     const id = card("update_client_identity", {
-      client_id: MARC, first_name: "Ariana", last_name: "Willison",
-      _identity_before: { first_name: "Ari", last_name: null, full_name: "Ari", preferred_name: null },
+      client_id: MARC, first_name: "Alex", last_name: "Morgan",
+      _identity_before: { first_name: "Al", last_name: null, full_name: "Al", preferred_name: null },
     });
     expect((await approveAction(ownerActor() as any, id)).status).toBe("failed");
     expect(tables.clients[0].full_name).toBe("Newer");
