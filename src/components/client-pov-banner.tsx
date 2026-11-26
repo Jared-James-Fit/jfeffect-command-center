@@ -67,6 +67,12 @@ export function ClientPovBanner() {
   const [switching, setSwitching] = useState(false);
   const starting = useRef(false);
   const qc = useQueryClient();
+  // Private viewer-relative results cannot outlive the authorized session.
+  useEffect(() => {
+    const id = pov?.id;
+    if (!id) return;
+    return () => { qc.removeQueries({ queryKey: ["pov-crew", id] }); };
+  }, [qc, pov?.id]);
 
   const exit = (why: string = "exit") => {
     const target = back;

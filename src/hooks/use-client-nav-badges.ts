@@ -5,6 +5,8 @@ import { isUnread, useDirectThreads } from "@/lib/direct-chats";
 import { isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
 import { useCommunityActivity } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
 import { messagesBadgeCount, unreadGroupIds, waitingChatCount } from "@/lib/nav-badge-counts";
 import { useChatPrefs } from "@/lib/chat-prefs";
@@ -51,6 +53,8 @@ export function markNavSeen(userId: string | undefined, route: string) {
  */
 export function useClientNavBadges(): Record<string, NavBadge> {
   const { user, role, viewOnly } = useAuth();
+  const targetUserId = usePortalUserId();
+  const pov = usePovCrewRead();
   const qc = useQueryClient();
   const [, setTick] = useState(0);
 
@@ -64,14 +68,19 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     };
   }, []);
 
-  const enabled = !!user && role === "client";
-  const adminEnabled = !!user && (role === "admin" || role === "coach");
+  const enabled = !!targetUserId && (pov.isPov ? pov.ready : role === "client");
+  const adminEnabled = !!user && !pov.isPov && (role === "admin" || role === "coach");
 
   const { data } = useQuery({
-    queryKey: ["client-nav-badges", user?.id],
+    queryKey: pov.key(["client-nav-badges", targetUserId]),
     enabled,
     refetchInterval: 300_000,
     queryFn: async () => {
+      if (pov.isPov) {
+        const { data, error } = await pov.read("nav_data", "");
+        if (error) throw error;
+        return data as any;
+      }
       const { data: client } = await supabase
         .from("clients")
         .select("id, last_program_update")
@@ -109,7 +118,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
 
   useEffect(() => {
     const clientId = data?.client?.id;
-    if (!enabled || !user || !clientId) return;
+    if (!enabled || !user || !clientId || pov.isPov) return;
 
     let invalidationTimer: ReturnType<typeof setTimeout> | undefined;
     const invalidateBadges = () => {
@@ -130,7 +139,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       if (invalidationTimer) clearTimeout(invalidationTimer);
       supabase.removeChannel(ch);
     };
-  }, [data?.client?.id, enabled, user, qc]);
+  }, [data?.client?.id, enabled, user, qc, pov.isPov]);
 
   // 1:1 chats and message requests from other members: a dot, like lift feedback.
   const { data: directs } = useDirectThreads(enabled);
@@ -161,20 +170,20 @@ export function useClientNavBadges(): Record<string, NavBadge> {
 
   const messagesCount = messagesBadgeCount({
     coachMessages: unread,
-    directThreads: waitingChatCount((directs ?? []).map((t) => ({ key: t.group_id, unread: isUnread(t, user?.id), at: t.last_at })), chatPrefs),
-    crewThreads: waitingChatCount((crews ?? []).map((t) => ({ key: t.group_id, unread: isCrewUnread(t, user?.id), at: t.last_at })), chatPrefs),
-    groupThreads: user ? coachGroupsWaiting(data.groupMemberships ?? [], data.groupMsgs ?? [], user.id, chatPrefs) : 0,
+    directThreads: waitingChatCount((directs ?? []).map((t) => ({ key: t.group_id, unread: isUnread(t, targetUserId), at: t.last_at })), chatPrefs),
+    crewThreads: waitingChatCount((crews ?? []).map((t) => ({ key: t.group_id, unread: isCrewUnread(t, targetUserId), at: t.last_at })), chatPrefs),
+    groupThreads: targetUserId ? coachGroupsWaiting(data.groupMemberships ?? [], data.groupMsgs ?? [], targetUserId, chatPrefs) : 0,
     supportReplies: data.supportUnread ?? 0,
   });
   if (messagesCount > 0) result["/portal/messages"] = { count: messagesCount };
 
   // Program updates surface on the Workouts tab
-  const programSeen = getLastSeen(user?.id, "/portal/workouts");
+  const programSeen = getLastSeen(targetUserId, "/portal/workouts");
   const programLatest = data.client.last_program_update ? new Date(data.client.last_program_update).getTime() : 0;
   if (programLatest > 0 && programLatest > programSeen) result["/portal/workouts"] = { dot: true };
 
   // Nutrition targets: dot if targets updated since last viewed
-  const nutSeen = getLastSeen(user?.id, "/portal/nutrition-targets");
+  const nutSeen = getLastSeen(targetUserId, "/portal/nutrition-targets");
   const nutLatest = Math.max(
     0,
     ...((data.nut ?? []) as any[]).map((n) => Math.max(

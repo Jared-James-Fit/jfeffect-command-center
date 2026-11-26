@@ -14,6 +14,6 @@ export const Route = createFileRoute("/_authenticated/portal/community")({
 });
 
 function PortalCommunity() {
-  const { isImpersonating } = useClientImpersonation();
-  return <CommunityScreen canShare previewOnly={isImpersonating} />;
+  const { isImpersonating, client } = useClientImpersonation();
+  return <CommunityScreen key={isImpersonating ? `pov:${client?.id}:${client?.pov?.id ?? "pending"}` : "self"} canShare previewOnly={isImpersonating} />;
 }

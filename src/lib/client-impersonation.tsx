@@ -142,7 +142,8 @@ export function useClientImpersonation() {
 export function useViewingAsClient(): boolean {
   const { user } = useAuth();
   const { client } = useClientImpersonation();
-  return !!client && !!user && user.id !== client.user_id;
+  // An explicit POV session is a preview even for a staff login linked to its own athlete.
+  return !!client && !!user;
 }
 
 /**

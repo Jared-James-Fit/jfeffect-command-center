@@ -18,6 +18,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import type { NavItem } from "@/components/app-shell";
 import { toast } from "sonner";
 
@@ -42,10 +43,21 @@ export function SettingsMenu({
   align?: "start" | "center" | "end";
 }) {
   const { user, role } = useAuth();
+  const { isImpersonating, client } = useClientImpersonation();
+  const { data: targetAccount } = useQuery({
+    queryKey: ["pov-crew", client?.pov?.id, client?.user_id, client?.id, "menu-email"],
+    enabled: isImpersonating && !!client?.id && !!client?.pov?.id,
+    queryFn: async () => {
+      const { data } = await supabase.from("clients").select("email, service_tier").eq("id", client!.id).maybeSingle();
+      return data;
+    },
+  });
+  const viewerRole = isImpersonating ? (targetAccount?.service_tier === "self_serve" ? "member" : "client") : role;
+  const viewerEmail = isImpersonating ? targetAccount?.email ?? "" : user?.email ?? "";
   const qc = useQueryClient();
   const navigate = useNavigate();
   // a client's or member's account photo is their account headshot, taken in Account with its live camera
-  const athlete = role === "client" || role === "member";
+  const athlete = viewerRole === "client" || viewerRole === "member";
   const changePhoto = () => {
     if (athlete) void navigate({ to: "/portal/account", hash: "account-headshot" });
     else setPicOpen(true);
@@ -79,7 +91,7 @@ export function SettingsMenu({
   });
 
   const handleUploaded = async (path: string) => {
-    if (!user?.id) return;
+    if (isImpersonating || !user?.id) return;
     try {
       // Only a team login gets here (an athlete's photo is their account headshot, taken in
       // Account with the live camera): the login's profile and its coach record. A client row's
@@ -112,7 +124,7 @@ export function SettingsMenu({
               type="button"
               onClick={() => {
                 if (signedPic) setViewOpen(true);
-                else if (role !== "member") changePhoto();
+                else if (viewerRole !== "member") changePhoto();
               }}
               className="shrink-0"
               aria-label="View profile picture"
@@ -120,8 +132,8 @@ export function SettingsMenu({
               <UserAvatar src={mePic} name={meName} size={40} expandable={false} />
             </button>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{meName || user?.email}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{user?.email}</div>
+              <div className="truncate text-sm font-semibold">{meName || viewerEmail}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{viewerEmail}</div>
             </div>
           </div>
           <DropdownMenuSeparator />
@@ -133,7 +145,7 @@ export function SettingsMenu({
               <ImageIcon className="mr-2 h-4 w-4" /> View photo
             </DropdownMenuItem>
           )}
-          {role !== "member" && (
+          {viewerRole !== "member" && (
             <DropdownMenuItem onSelect={changePhoto}>
               <Camera className="mr-2 h-4 w-4" /> {athlete ? (mePic ? "Update account headshot" : "Add account headshot") : mePic ? "Change photo" : "Add photo"}
             </DropdownMenuItem>
@@ -166,7 +178,7 @@ export function SettingsMenu({
           <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">
             Account
           </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setEmailOpen(true); }}>
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); if (isImpersonating) toast.message("Account security changes are not available in POV."); else setEmailOpen(true); }}>
             <Mail className="mr-2 h-4 w-4" /> Change email
           </DropdownMenuItem>
 
@@ -190,7 +202,7 @@ export function SettingsMenu({
               Take a new picture or upload one from your device.
             </DialogDescription>
           </DialogHeader>
-          {user?.id ? (
+          {!isImpersonating && user?.id ? (
             <ProfilePictureCapture
               mode="admin"
               allowFileUpload
@@ -222,7 +234,7 @@ export function SettingsMenu({
       <ChangeEmailDialog
         open={emailOpen}
         onOpenChange={setEmailOpen}
-        currentEmail={user?.email ?? ""}
+        currentEmail={viewerEmail}
       />
     </>
   );

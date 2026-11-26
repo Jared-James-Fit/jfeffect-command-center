@@ -111,7 +111,7 @@ function useGroupMembers(groupId: string) {
  */
 export function GroupCover({ groupId, size = CHAT_ROW_AVATAR }: { groupId: string; size?: number }) {
   const { user, role } = useAuth();
-  const me = usePortalUserId() ?? user?.id ?? null;
+  const me = usePortalUserId() ?? null;
   const members = useGroupMembers(groupId);
   const { others } = useGroupPresence(groupId, presenceRoleOf(role));
   const live = new Set(others.map((p) => p.user_id));
@@ -136,7 +136,7 @@ export function GroupChatRow({
   onClick: () => void;
 }) {
   const { user } = useAuth();
-  const me = usePortalUserId() ?? user?.id ?? null;
+  const me = usePortalUserId() ?? null;
   const members = useGroupMembers(group.id);
   const nameOf = (id: string) => members.find((m) => m.user_id === id)?.full_name;
   const others = members.filter((m) => m.user_id !== me).map((m) => ({ name: m.full_name }));
