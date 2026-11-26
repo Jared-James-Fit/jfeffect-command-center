@@ -434,7 +434,7 @@ export async function extractFromMessages(sb: Db): Promise<number> {
 /* The coach's decisions                                              */
 
 export type GoalDecision =
-  | { action: "approve"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
+  | { action: "approve"; expectedVersion?: number; changeReason?: "round_up" | "restore"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
   | { action: "dismiss" }
   | { action: "archive" }
   | { action: "reopen" }
@@ -460,6 +460,7 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
   let patch: Record<string, unknown> = {};
   let action: string = d.action;
   if (d.action === "approve") {
+    if (d.expectedVersion != null && g.version !== d.expectedVersion) throw new Error("The goal changed since you opened it. Refresh and try again.");
     const measurable = g.kind === "lift" || g.kind === "total" || g.kind === "bodyweight";
     let kg: number | null = null;
     let value: number | null = null;
@@ -528,6 +529,7 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
   if (!data) throw new Error("The goal changed since you opened it. Refresh and try again.");
   const next = data as GoalRow;
   await goalEvent(sb, g, actor, action, {
+    ...(d.action === "approve" && d.changeReason ? { change_reason: d.changeReason } : {}),
     before: { status: g.status, approved_kg: g.approved_kg, approved_value: g.approved_value, approved_unit: g.approved_unit, approved_text: g.approved_text, deadline: g.deadline },
     after: { status: next.status, approved_kg: next.approved_kg, approved_value: next.approved_value, approved_unit: next.approved_unit, approved_text: next.approved_text, deadline: next.deadline, approach: next.approved_approach },
   });

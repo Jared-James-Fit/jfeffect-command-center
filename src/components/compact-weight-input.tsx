@@ -14,7 +14,7 @@ export function draftKg(draft: WeightDraft): number | null {
  * rounds. Switching the display unit never reinterprets or rounds the draft. */
 export function CompactWeightInput({ draft, onChange, incrementKg, confirmed, autoFocus = false, disabled = false }: {
   draft: WeightDraft;
-  onChange: (draft: WeightDraft) => void;
+  onChange: (draft: WeightDraft, rounded?: boolean) => void;
   incrementKg?: number;
   confirmed?: boolean;
   autoFocus?: boolean;
@@ -39,7 +39,7 @@ export function CompactWeightInput({ draft, onChange, incrementKg, confirmed, au
         {kg != null && <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground" aria-live="polite">= {weightNumber(kgIn(kg, other), 1)} {other}</span>}
       </div>
       {next != null && <Button type="button" size="sm" variant="outline" disabled={disabled} className="min-h-9 h-auto whitespace-normal px-2 py-1 text-xs"
-        onClick={() => onChange({ value: String(next), unit: "kg" })}>
+        onClick={() => { setDisplayUnit("kg"); onChange({ value: String(next), unit: "kg" }, true); }}>
         Round up to {dualLoadText(next, "kg")}
       </Button>}
       {next != null && !confirmed && <p className="text-[10px] text-muted-foreground">Standard increment · confirm meet rules</p>}

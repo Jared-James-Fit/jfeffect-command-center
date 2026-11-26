@@ -223,7 +223,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
   const { goal, rec } = useGoalMutations(g.client_id);
   const f = g.feasibility;
   const busy = goal.isPending || rec.isPending;
-  const said = fmtClientTarget(g);
+  const said = g.client_value != null && !g.client_unit ? null : fmtClientTarget(g);
   const approved = approvedWords(g, unit);
   const clientWeight = g.client_unit ? goalWeight(sourceKg(g.client_value, g.client_unit, g.client_kg), unit, sourceKg(g.client_value_max, g.client_unit, g.client_kg_max), g.client_unit) : null;
   const projected = goalWeight(f?.projection?.expectedKg, unit);
@@ -248,7 +248,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
 
       {g.kind !== "preference" && (
         <dl className="mt-1.5 grid grid-cols-3 gap-2 text-xs" data-goal-numbers>
-          <Num label="Client" value={clientWeight?.primary ?? said ?? "—"} secondary={clientWeight?.secondary} note={g.client_unit_source === "inferred" ? "unit inferred" : g.tentative ? "tentative" : null} />
+          <Num label="Client" value={clientWeight?.primary ?? said ?? (g.client_value != null ? "Unit needed" : "—")} secondary={clientWeight?.secondary} note={g.client_unit_source === "inferred" ? "unit inferred" : g.tentative ? "tentative" : null} />
           <Num
             label="Projected"
             value={projected?.primary ?? (measurable ? "—" : "Not scored")}
@@ -505,6 +505,9 @@ function GoalHistory({ g, view, unit, onRestore }: { g: GoalRow; view: View; uni
         return <div key={h.at + i} className="border-b border-border/60 pb-2 last:border-0 last:pb-0">
           <p className="font-medium">{HISTORY_WORD[h.action] ?? h.action.replace(/_/g, " ")}</p>
           {changed && (a || b) && <p className="mt-0.5 tabular-nums"><WeightWords weight={b} /> → <WeightWords weight={a} /></p>}
+          {h.detail?.change_reason === "round_up" && <p className="text-[11px] text-muted-foreground">Rounded up to the meet increment.</p>}
+          {h.detail?.change_reason === "restore" && <p className="text-[11px] text-muted-foreground">Restored previous target.</p>}
+          {h.action === "recommendation" && typeof h.detail?.suggested_kg === "number" && <p className="text-muted-foreground">Suggested: <WeightWords weight={goalWeight(h.detail.suggested_kg, unit)} /></p>}
           <p className="text-[11px] text-muted-foreground">{actor} · {new Date(h.at).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
           {changed && prev && onRestore && (h.action === "edited" || h.action === "approved") && <Button type="button" variant="ghost" size="sm" className="mt-1 h-8 px-2" onClick={() => onRestore(prev)}>Restore previous target</Button>}
         </div>;
@@ -517,23 +520,31 @@ function GoalHistory({ g, view, unit, onRestore }: { g: GoalRow; view: View; uni
 function EditGoalInline({ g, view, unit, initial, incrementKg, confirmed, onClose }: { g: GoalRow; view: View; unit: Unit; initial: WeightDraft | null; incrementKg?: number; confirmed?: boolean; onClose: () => void }) {
   const u0 = g.approved_unit ?? g.client_unit ?? unit;
   const suggested = g.recommendation_status === "open" ? g.recommendation?.suggestedKg : null;
-  const start = suggested != null ? { value: String(suggested), unit: "kg" as Unit } : { value: String(g.approved_value ?? g.client_value_max ?? g.client_value ?? ""), unit: u0 };
+  const start: WeightDraft = suggested != null ? { value: String(suggested), unit: "kg" }
+    : g.approved_value != null && g.approved_unit ? { value: String(g.approved_value), unit: g.approved_unit }
+    : g.approved_kg != null ? { value: String(g.approved_kg), unit: "kg" }
+    : g.client_unit ? { value: String(g.client_value_max ?? g.client_value ?? ""), unit: g.client_unit }
+    : { value: "", unit: u0 };
   const [draft, setDraft] = useState<WeightDraft>(initial ?? start);
+  const [reason, setReason] = useState<"round_up" | "restore" | undefined>(initial ? "restore" : undefined);
   const [deadline, setDeadline] = useState(g.deadline ?? "");
   const [tell, setTell] = useState(g.client_facing);
   const [settings, setSettings] = useState(false);
   const { goal } = useGoalMutations(g.client_id);
   const kg = draftKg(draft);
-  const valid = kg != null && kg <= 1500 && Number(draft.value) <= 3000;
+  const unchanged = g.status === "active" && g.recommendation_status !== "open" && kg != null && g.approved_kg != null
+    && Math.abs(kg - (sourceKg(g.approved_value, g.approved_unit, g.approved_kg) ?? -1)) < 1e-7
+    && (g.competition_id || (deadline || null) === g.deadline) && tell === g.client_facing;
+  const valid = kg != null && kg <= 1500 && Number(draft.value) <= 3000 && !unchanged;
   const save = () => {
     if (!valid || goal.isPending) return;
-    goal.mutate({ goalId: g.id, decision: { action: "approve", value: Number(draft.value), unit: draft.unit, deadline: g.competition_id ? undefined : deadline || null, clientFacing: tell } },
+    goal.mutate({ goalId: g.id, decision: { action: "approve", value: Number(draft.value), unit: draft.unit, expectedVersion: g.version, changeReason: reason, deadline: g.competition_id ? undefined : deadline || null, clientFacing: tell } },
       { onSuccess: () => { toast.success("Target saved"); onClose(); } });
   };
   return <form className="mt-2 rounded-lg border border-border p-2" onSubmit={e => { e.preventDefault(); save(); }} data-goal-edit>
     {initial && <p className="mb-1 text-xs text-muted-foreground">Restore previous target — save to confirm.</p>}
     <div className="flex flex-wrap items-start justify-between gap-1.5">
-      <CompactWeightInput draft={draft} onChange={setDraft} autoFocus incrementKg={incrementKg} confirmed={confirmed} disabled={goal.isPending} />
+      <CompactWeightInput draft={draft} onChange={(d, rounded) => { setDraft(d); setReason(rounded ? "round_up" : initial ? "restore" : undefined); }} autoFocus incrementKg={incrementKg} confirmed={confirmed} disabled={goal.isPending} />
       <div className="flex items-center gap-1">
         <Button type="submit" size="sm" className="h-9" disabled={!valid || goal.isPending}>{goal.isPending ? "Saving…" : "Save"}</Button>
         <Button type="button" size="sm" variant="ghost" className="h-9 px-2" disabled={goal.isPending} onClick={onClose}>Cancel</Button>
