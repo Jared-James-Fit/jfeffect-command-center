@@ -229,6 +229,9 @@ export function initialEffort(
 }
 
 /** Primary button label: says what's missing, and how many optional answers a quick finish skips. */
+/** What the review's button points at when something's still needed (the sheet scrolls there and lights it). */
+export type CheckoutMissing = "effort" | "pain-where" | "pain-side" | "pain-score";
+
 export function checkoutCta(input: {
   isEdit: boolean;
   effort: number | null;
@@ -236,19 +239,21 @@ export function checkoutCta(input: {
   painArea: string | null;
   sleepBucket: string | null;
   recoveryToday: number | null;
-  /** A picked place with no "how bad" yet (the body map's places each have their own). */
+  /** A reported place with no "how bad" yet (a number or Unsure). */
   painUnrated?: boolean;
   /** "Somewhere else" picked with nothing said about where. */
   painUnnamed?: boolean;
-}): { label: string; enabled: boolean } {
-  if (input.effort == null) return { label: "Pick how hard it was", enabled: false };
-  if (input.pain === true && !input.painArea)
-    return { label: "Pick where it hurts", enabled: false };
-  if (input.pain === true && input.painUnnamed)
-    return { label: "Say where it hurts", enabled: false };
-  if (input.pain === true && input.painUnrated)
-    return { label: "Pick how bad it is", enabled: false };
+  /** A knee, an elbow… with no side yet. */
+  painNoSide?: boolean;
+}): { label: string; enabled: boolean; missing?: CheckoutMissing } {
+  if (input.effort == null) return { label: "Pick how hard it was", enabled: false, missing: "effort" };
+  if (input.pain === true && !input.painArea) return { label: "Say where it hurts", enabled: false, missing: "pain-where" };
+  if (input.pain === true && input.painUnnamed) return { label: "Say where it hurts", enabled: false, missing: "pain-where" };
+  if (input.pain === true && input.painNoSide) return { label: "Pick which side", enabled: false, missing: "pain-side" };
+  if (input.pain === true && input.painUnrated) return { label: "Rate how bad it is", enabled: false, missing: "pain-score" };
   if (input.isEdit) return { label: "Save changes", enabled: true };
+  // a pain report is checked on the sheet and confirmed with the finish (nothing comes after it)
+  if (input.pain === true) return { label: "Confirm & finish", enabled: true };
   const skipped = [input.sleepBucket, input.recoveryToday, input.pain].filter(
     (v) => v == null,
   ).length;

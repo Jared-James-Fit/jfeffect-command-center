@@ -215,13 +215,14 @@ function placeOf(r: any): Place {
     r.region !== "other" && r.note ? `“${r.note}”` : null,
   ].filter(Boolean).join(" · ");
   const score = typeof r.score === "number" ? r.score : null;
-  const level = score ?? (r.severity === "severe" ? 8 : r.severity === "moderate" ? 5 : 3);
+  const level = score ?? (r.severity === "severe" ? 8 : r.severity === "moderate" ? 5 : r.severity === "mild" ? 3 : 0);
   return {
     region: r.region,
     side,
     site: r.site ?? null,
     name: placeLabel({ region: r.region, side, site: r.site ?? null, note: r.note }),
-    score: score != null ? `${score}/10` : severityLabel((r.severity as Severity) ?? null),
+    // no number and no band: they said they weren't sure (Nov 26 2026)
+    score: score != null ? `${score}/10` : severityLabel((r.severity as Severity) ?? null) ?? (r.severity == null ? "Unsure" : null),
     level,
     extra: extra || null,
     impact: r.impact === "stopped" || r.impact === "modified" ? r.impact : null,

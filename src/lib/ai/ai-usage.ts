@@ -67,6 +67,7 @@ const FEATURE_NAMES: Record<string, string> = {
   cardio_plan: "Cleo · cardio plans",
   competition: "Cleo · competition assessments",
   competition_extract: "Cleo · competition rosters and captions",
+  athlete_intel: "Cleo · reading uploaded athlete information",
   session_brief: "Cleo · meeting prep briefs",
   session_analysis: "Cleo · meeting notes and transcripts",
   support_answer: "Cleo · JF Effect Support answers",

@@ -78,9 +78,14 @@ describe("quick check-out (review v2)", () => {
     expect(checkoutCta({ ...base, effort: null }).enabled).toBe(false);
     expect(checkoutCta({ ...base, pain: true }).enabled).toBe(false);
     expect(checkoutCta({ ...base, isEdit: true }).label).toBe("Save changes");
-    // the body map: every place needs a how bad, and "somewhere else" needs words
-    expect(checkoutCta({ ...base, pain: true, painArea: "Knee (R)", painUnrated: true })).toEqual({ label: "Pick how bad it is", enabled: false });
-    expect(checkoutCta({ ...base, pain: true, painArea: "Other", painUnnamed: true })).toEqual({ label: "Say where it hurts", enabled: false });
+    // every place needs a side (where it has one) and a how bad (or Unsure); "somewhere else" needs words.
+    // The button says what's left and where it is (never a surprise step after it)
+    expect(checkoutCta({ ...base, pain: true, painArea: "Knee (R)", painUnrated: true })).toEqual({ label: "Rate how bad it is", enabled: false, missing: "pain-score" });
+    expect(checkoutCta({ ...base, pain: true, painArea: "Knee", painNoSide: true, painUnrated: true })).toEqual({ label: "Pick which side", enabled: false, missing: "pain-side" });
+    expect(checkoutCta({ ...base, pain: true, painArea: "Other", painUnnamed: true })).toEqual({ label: "Say where it hurts", enabled: false, missing: "pain-where" });
+    expect(checkoutCta({ ...base, effort: null, pain: true, painArea: null })).toMatchObject({ missing: "effort" });
+    // a complete pain report is confirmed with the finish
+    expect(checkoutCta({ ...base, pain: true, painArea: "Knee (R)" })).toEqual({ label: "Confirm & finish", enabled: true });
     const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
     expect(editor).toContain(
       "useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null)",

@@ -29,7 +29,9 @@ export type EvidenceKind =
   | "competitor_meet"
   | "competitor_training"
   | "competitor_read"
-  | "field";
+  | "field"
+  /** uploaded athlete information: their coach's attempt plan, warm-ups, notes (athlete-intel) */
+  | "intel";
 
 export type EvidenceItem = {
   id: string;
@@ -211,6 +213,8 @@ export function buildEvidence(b: Brief): EvidenceItem[] {
           : ""
       }`,
     });
+  // uploaded athlete information: attributed, prescribed kept apart from completed
+  for (const u of b.inputs.intel ?? []) out.push({ id: u.id, kind: u.kind, lift: u.lift, date: u.date, text: u.text });
   if (b.landscape.ranked.length)
     out.push({
       id: "FIELD",

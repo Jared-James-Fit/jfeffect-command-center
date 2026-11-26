@@ -24,7 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { draftPainReplyFn, getClientPainFn } from "@/lib/pain/pain.functions";
 import { areaSummary, buildPainHistory, reasonWords, shortDay, sidesLine, type PainArea } from "@/lib/pain/history";
 import { recoverySuggestions } from "@/lib/pain/recovery";
-import { associations, associationLine, sessionContext } from "@/lib/pain/sessions";
+import { associations, associationLine, blockShift, blockShiftLine, sessionContext } from "@/lib/pain/sessions";
 import { redFlags, URGENT_SIGNS } from "@/lib/pain/safety";
 import { FEELS, TIMINGS, placeLabel, severityLabel } from "@/lib/pain/report";
 import { siteAnatomy } from "@/lib/pain/sites";
@@ -52,6 +52,7 @@ const feelWord = (f: string) => FEELS.find((x) => x.v === f)?.label.toLowerCase(
 
 function AreaCard({ a, sessions }: { a: PainArea; sessions: Parameters<typeof associations>[1] }) {
   const assoc = associations(a, sessions);
+  const shift = blockShift(a, sessions);
   const ctx = sessionContext(a, sessions);
   const recent = [...a.entries].reverse().slice(0, 5);
   const tone = a.reasons.includes("red_flag") || a.reasons.includes("severe") || a.reasons.includes("worse") ? "text-warning" : "text-muted-foreground";
@@ -69,6 +70,11 @@ function AreaCard({ a, sessions }: { a: PainArea; sessions: Parameters<typeof as
           {associationLine(x).replace(/^came/, "Came")}.
         </p>
       ))}
+      {shift && (
+        <p className={cn("text-[12px]", shift.direction === "more" ? "text-warning" : "text-muted-foreground")} data-pain-block-shift>
+          {blockShiftLine(shift).replace(/^came/, "Came")}.
+        </p>
+      )}
       {ctx.sessions >= 2 && (ctx.shortSleep >= 2 || ctx.veryHard >= 2) && (
         <p className="text-[12px] text-muted-foreground">
           Of the {ctx.sessions} sessions it came up in: {[ctx.shortSleep ? `${ctx.shortSleep} after under 6h sleep` : null, ctx.veryHard ? `${ctx.veryHard} rated very hard` : null].filter(Boolean).join(", ")}.
@@ -82,7 +88,7 @@ function AreaCard({ a, sessions }: { a: PainArea; sessions: Parameters<typeof as
               {" · "}
               {[
                 e.site ? `${placeLabel(e)}${siteAnatomy(e.site) ? ` (${siteAnatomy(e.site)!.toLowerCase()})` : ""}` : e.side && a.region !== "other" ? areaLabel(e.region, e.side) : null,
-                e.score != null ? `${e.score}/10` : severityLabel(e.severity)?.toLowerCase(),
+                e.score != null ? `${e.score}/10` : severityLabel(e.severity)?.toLowerCase() ?? (e.unsure ? "not sure how bad" : null),
                 e.timing.length ? e.timing.map((t) => TIMINGS.find((x) => x.v === t)?.label.toLowerCase() ?? t).join(", ") : null,
                 e.sameIssue && e.change ? `${e.change} (their word)` : e.sameIssue === false ? "said it's new" : null,
                 e.exerciseName,
@@ -276,7 +282,7 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
                 .map((a) => (
                   <p key={`${a.region}-${a.latest.id}`} className="text-[13px] text-muted-foreground">
                     <span className="font-medium text-foreground">{a.label}</span> · {a.status === "quiet" ? `quiet since ${shortDay(a.last)}` : `once, ${shortDay(a.last)}`}
-                    {a.latestSeverity ? ` · ${severityLabel(a.latestSeverity)!.toLowerCase()}` : ""}
+                    {a.latestSeverity ? ` · ${severityLabel(a.latestSeverity)!.toLowerCase()}` : a.latestUnsure ? " · not sure how bad" : ""}
                   </p>
                 ))}
             </div>

@@ -58,6 +58,7 @@ import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as PPostIdRouteImport } from './routes/p.$postId'
 import { Route as PayTokenRouteImport } from './routes/pay.$token'
 import { Route as PersonalTrainerSelkirkApplyRouteImport } from './routes/personal-trainer-selkirk.apply'
+import { Route as ShareTokenRouteImport } from './routes/share.$token'
 import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
@@ -272,6 +273,7 @@ import { Route as ApiPublicHooksAiBenchmarkRouteImport } from './routes/api/publ
 import { Route as ApiPublicHooksAiHealthTickRouteImport } from './routes/api/public/hooks/ai-health-tick'
 import { Route as ApiPublicHooksAiModelsCheckRouteImport } from './routes/api/public/hooks/ai-models-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
+import { Route as ApiPublicHooksAthleteIntelTickRouteImport } from './routes/api/public/hooks/athlete-intel-tick'
 import { Route as ApiPublicHooksAutoPaySendRouteImport } from './routes/api/public/hooks/auto-pay-send'
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
@@ -288,7 +290,6 @@ import { Route as ApiPublicHooksCompetitionSelfcheckRouteImport } from './routes
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
-import { Route as ApiPublicHooksVelocityWorkerRouteImport } from './routes/api/public/hooks/velocity-worker'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksGoalIntelTickRouteImport } from './routes/api/public/hooks/goal-intel-tick'
@@ -323,6 +324,7 @@ import { Route as ApiPublicHooksStripePortalConfigRouteImport } from './routes/a
 import { Route as ApiPublicHooksStripeSyncRouteImport } from './routes/api/public/hooks/stripe-sync'
 import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
 import { Route as ApiPublicHooksTrainingRoadmapTickRouteImport } from './routes/api/public/hooks/training-roadmap-tick'
+import { Route as ApiPublicHooksVelocityWorkerRouteImport } from './routes/api/public/hooks/velocity-worker'
 import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
 import { Route as ChallengesSlugRCodeRouteImport } from './routes/challenges.$slug.r.$code'
@@ -598,6 +600,11 @@ const PersonalTrainerSelkirkApplyRoute =
     path: '/apply',
     getParentRoute: () => PersonalTrainerSelkirkRoute,
   } as any)
+const ShareTokenRoute = ShareTokenRouteImport.update({
+  id: '/share/$token',
+  path: '/share/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignTokenRoute = SignTokenRouteImport.update({
   id: '/sign/$token',
   path: '/sign/$token',
@@ -1855,6 +1862,12 @@ const ApiPublicHooksAppointmentRemindersRoute =
     path: '/api/public/hooks/appointment-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksAthleteIntelTickRoute =
+  ApiPublicHooksAthleteIntelTickRouteImport.update({
+    id: '/api/public/hooks/athlete-intel-tick',
+    path: '/api/public/hooks/athlete-intel-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksAutoPaySendRoute =
   ApiPublicHooksAutoPaySendRouteImport.update({
     id: '/api/public/hooks/auto-pay-send',
@@ -1947,12 +1960,6 @@ const ApiPublicHooksFeedCopiesTickRoute =
   ApiPublicHooksFeedCopiesTickRouteImport.update({
     id: '/api/public/hooks/feed-copies-tick',
     path: '/api/public/hooks/feed-copies-tick',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicHooksVelocityWorkerRoute =
-  ApiPublicHooksVelocityWorkerRouteImport.update({
-    id: '/api/public/hooks/velocity-worker',
-    path: '/api/public/hooks/velocity-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
@@ -2156,6 +2163,12 @@ const ApiPublicHooksTrainingRoadmapTickRoute =
   ApiPublicHooksTrainingRoadmapTickRouteImport.update({
     id: '/api/public/hooks/training-roadmap-tick',
     path: '/api/public/hooks/training-roadmap-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksVelocityWorkerRoute =
+  ApiPublicHooksVelocityWorkerRouteImport.update({
+    id: '/api/public/hooks/velocity-worker',
+    path: '/api/public/hooks/velocity-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksWearablesSyncRoute =
@@ -2367,6 +2380,7 @@ export interface FileRoutesByFullPath {
   '/p/$postId': typeof PPostIdRoute
   '/pay/$token': typeof PayTokenRoute
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
+  '/share/$token': typeof ShareTokenRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/challenges/': typeof ChallengesIndexRoute
@@ -2564,6 +2578,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/ai-health-tick': typeof ApiPublicHooksAiHealthTickRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/athlete-intel-tick': typeof ApiPublicHooksAthleteIntelTickRoute
   '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2580,7 +2595,6 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
-  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -2615,6 +2629,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
@@ -2706,6 +2721,7 @@ export interface FileRoutesByTo {
   '/p/$postId': typeof PPostIdRoute
   '/pay/$token': typeof PayTokenRoute
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
+  '/share/$token': typeof ShareTokenRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/challenges': typeof ChallengesIndexRoute
@@ -2902,6 +2918,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/ai-health-tick': typeof ApiPublicHooksAiHealthTickRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/athlete-intel-tick': typeof ApiPublicHooksAthleteIntelTickRoute
   '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2918,7 +2935,6 @@ export interface FileRoutesByTo {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
-  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -2953,6 +2969,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
@@ -3049,6 +3066,7 @@ export interface FileRoutesById {
   '/p/$postId': typeof PPostIdRoute
   '/pay/$token': typeof PayTokenRoute
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
+  '/share/$token': typeof ShareTokenRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/challenges/': typeof ChallengesIndexRoute
@@ -3246,6 +3264,7 @@ export interface FileRoutesById {
   '/api/public/hooks/ai-health-tick': typeof ApiPublicHooksAiHealthTickRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/athlete-intel-tick': typeof ApiPublicHooksAthleteIntelTickRoute
   '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -3262,7 +3281,6 @@ export interface FileRoutesById {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
-  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -3297,6 +3315,7 @@ export interface FileRoutesById {
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
@@ -3393,6 +3412,7 @@ export interface FileRouteTypes {
     | '/p/$postId'
     | '/pay/$token'
     | '/personal-trainer-selkirk/apply'
+    | '/share/$token'
     | '/sign/$token'
     | '/signup/jf'
     | '/challenges/'
@@ -3590,6 +3610,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ai-health-tick'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/athlete-intel-tick'
     | '/api/public/hooks/auto-pay-send'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -3606,7 +3627,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
-    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -3641,6 +3661,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/challenges/$slug/r/$code'
@@ -3732,6 +3753,7 @@ export interface FileRouteTypes {
     | '/p/$postId'
     | '/pay/$token'
     | '/personal-trainer-selkirk/apply'
+    | '/share/$token'
     | '/sign/$token'
     | '/signup/jf'
     | '/challenges'
@@ -3928,6 +3950,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ai-health-tick'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/athlete-intel-tick'
     | '/api/public/hooks/auto-pay-send'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -3944,7 +3967,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
-    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -3979,6 +4001,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/challenges/$slug/r/$code'
@@ -4074,6 +4097,7 @@ export interface FileRouteTypes {
     | '/p/$postId'
     | '/pay/$token'
     | '/personal-trainer-selkirk/apply'
+    | '/share/$token'
     | '/sign/$token'
     | '/signup/jf'
     | '/challenges/'
@@ -4271,6 +4295,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ai-health-tick'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/athlete-intel-tick'
     | '/api/public/hooks/auto-pay-send'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -4287,7 +4312,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
-    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -4322,6 +4346,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/challenges/$slug/r/$code'
@@ -4411,6 +4436,7 @@ export interface RootRouteChildren {
   MWelcomeRoute: typeof MWelcomeRoute
   PPostIdRoute: typeof PPostIdRoute
   PayTokenRoute: typeof PayTokenRoute
+  ShareTokenRoute: typeof ShareTokenRoute
   SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
   ChallengesIndexRoute: typeof ChallengesIndexRoute
@@ -4431,6 +4457,7 @@ export interface RootRouteChildren {
   ApiPublicHooksAiHealthTickRoute: typeof ApiPublicHooksAiHealthTickRoute
   ApiPublicHooksAiModelsCheckRoute: typeof ApiPublicHooksAiModelsCheckRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
+  ApiPublicHooksAthleteIntelTickRoute: typeof ApiPublicHooksAthleteIntelTickRoute
   ApiPublicHooksAutoPaySendRoute: typeof ApiPublicHooksAutoPaySendRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -4447,7 +4474,6 @@ export interface RootRouteChildren {
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
-  ApiPublicHooksVelocityWorkerRoute: typeof ApiPublicHooksVelocityWorkerRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksGoalIntelTickRoute: typeof ApiPublicHooksGoalIntelTickRoute
@@ -4482,6 +4508,7 @@ export interface RootRouteChildren {
   ApiPublicHooksStripeSyncRoute: typeof ApiPublicHooksStripeSyncRoute
   ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
   ApiPublicHooksTrainingRoadmapTickRoute: typeof ApiPublicHooksTrainingRoadmapTickRoute
+  ApiPublicHooksVelocityWorkerRoute: typeof ApiPublicHooksVelocityWorkerRoute
   ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
   ChallengesSlugRCodeRoute: typeof ChallengesSlugRCodeRoute
@@ -4838,6 +4865,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/personal-trainer-selkirk/apply'
       preLoaderRoute: typeof PersonalTrainerSelkirkApplyRouteImport
       parentRoute: typeof PersonalTrainerSelkirkRoute
+    }
+    '/share/$token': {
+      id: '/share/$token'
+      path: '/share/$token'
+      fullPath: '/share/$token'
+      preLoaderRoute: typeof ShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/sign/$token': {
       id: '/sign/$token'
@@ -6337,6 +6371,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAppointmentRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/athlete-intel-tick': {
+      id: '/api/public/hooks/athlete-intel-tick'
+      path: '/api/public/hooks/athlete-intel-tick'
+      fullPath: '/api/public/hooks/athlete-intel-tick'
+      preLoaderRoute: typeof ApiPublicHooksAthleteIntelTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/auto-pay-send': {
       id: '/api/public/hooks/auto-pay-send'
       path: '/api/public/hooks/auto-pay-send'
@@ -6447,13 +6488,6 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/feed-copies-tick'
       fullPath: '/api/public/hooks/feed-copies-tick'
       preLoaderRoute: typeof ApiPublicHooksFeedCopiesTickRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/velocity-worker': {
-      id: '/api/public/hooks/velocity-worker'
-      path: '/api/public/hooks/velocity-worker'
-      fullPath: '/api/public/hooks/velocity-worker'
-      preLoaderRoute: typeof ApiPublicHooksVelocityWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/fillout': {
@@ -6692,6 +6726,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/training-roadmap-tick'
       fullPath: '/api/public/hooks/training-roadmap-tick'
       preLoaderRoute: typeof ApiPublicHooksTrainingRoadmapTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/velocity-worker': {
+      id: '/api/public/hooks/velocity-worker'
+      path: '/api/public/hooks/velocity-worker'
+      fullPath: '/api/public/hooks/velocity-worker'
+      preLoaderRoute: typeof ApiPublicHooksVelocityWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/wearables-sync': {
@@ -7326,7 +7367,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSettingsNutritionAutomationRoute:
       AuthenticatedAdminSettingsNutritionAutomationRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
-    AuthenticatedAdminSettingsVelocityRoute: AuthenticatedAdminSettingsVelocityRoute,
+    AuthenticatedAdminSettingsVelocityRoute:
+      AuthenticatedAdminSettingsVelocityRoute,
     AuthenticatedAdminAgreementsNativeIndexRoute:
       AuthenticatedAdminAgreementsNativeIndexRoute,
     AuthenticatedAdminAgreementsIndexRoute:
@@ -7619,6 +7661,7 @@ const rootRouteChildren: RootRouteChildren = {
   MWelcomeRoute: MWelcomeRoute,
   PPostIdRoute: PPostIdRoute,
   PayTokenRoute: PayTokenRoute,
+  ShareTokenRoute: ShareTokenRoute,
   SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
   ChallengesIndexRoute: ChallengesIndexRoute,
@@ -7641,6 +7684,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksAiModelsCheckRoute: ApiPublicHooksAiModelsCheckRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
+  ApiPublicHooksAthleteIntelTickRoute: ApiPublicHooksAthleteIntelTickRoute,
   ApiPublicHooksAutoPaySendRoute: ApiPublicHooksAutoPaySendRoute,
   ApiPublicHooksBirthdayNotificationsRoute:
     ApiPublicHooksBirthdayNotificationsRoute,
@@ -7667,7 +7711,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
-  ApiPublicHooksVelocityWorkerRoute: ApiPublicHooksVelocityWorkerRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksGoalIntelTickRoute: ApiPublicHooksGoalIntelTickRoute,
@@ -7710,6 +7753,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
   ApiPublicHooksTrainingRoadmapTickRoute:
     ApiPublicHooksTrainingRoadmapTickRoute,
+  ApiPublicHooksVelocityWorkerRoute: ApiPublicHooksVelocityWorkerRoute,
   ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
   ChallengesSlugRCodeRoute: ChallengesSlugRCodeRoute,

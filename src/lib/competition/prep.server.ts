@@ -146,7 +146,23 @@ export async function loadPrep(
     if (co) handler = { first: String(co.first_name || ""), name: String(co.full_name || co.first_name || ""), phone: co.phone ?? null };
   }
   const existing = handlingRow?.existing_coach ?? {};
+  // uploaded athlete information (athlete-intel): their coach's attempts and warm-ups, racks, cues, notes
+  let intel: Parameters<typeof draftGameplan>[0]["intel"] = null;
+  try {
+    const { loadFacts } = await import("@/lib/athlete-intel/fact-store.server");
+    const { gameplanIntel } = await import("@/lib/athlete-intel/engine-input");
+    const { resolveFacts } = await import("@/lib/athlete-intel/facts");
+    const facts = (await loadFacts(sb, comp.client_id)).filter((f) => f.competition_id == null || f.competition_id === competitionId);
+    if (facts.length)
+      intel = {
+        ...gameplanIntel(facts, competitionId),
+        conflicts: [...new Set(resolveFacts(facts).conflicts.filter((c) => c.kind === "attempt_plan" && c.lift).map((c) => c.lift!))],
+      };
+  } catch (e) {
+    console.warn("[competition] athlete information couldn't be read", (e as Error)?.message);
+  }
   const engineDraft = draftGameplan({
+    intel,
     rules,
     objective: comp.objective ?? null,
     info,

@@ -40,7 +40,7 @@ export const getPainReportContextFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { userId } = context;
     const supabase = context.supabase as any;
-    const { loadPainEntries, loadDayExercises, todayIn } = await import("@/lib/pain/load");
+    const { loadPainEntries, loadDayExercises, loadRecentExercises, todayIn } = await import("@/lib/pain/load");
     let clientId: string | null = null;
     if (data.actAsClientId) {
       await assertStaff(supabase, userId, data.actAsClientId);
@@ -49,7 +49,7 @@ export const getPainReportContextFn = createServerFn({ method: "POST" })
       const { data: me } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
       clientId = me?.id ?? null;
     }
-    const empty = { clientId: null as string | null, today: todayIn(null), entries: [] as PainEntry[], exercises: [] as { id: string | null; name: string }[], feedbackId: null as string | null };
+    const empty = { clientId: null as string | null, today: todayIn(null), entries: [] as PainEntry[], exercises: [] as { id: string | null; name: string }[], recentExercises: [] as { id: string | null; name: string }[], feedbackId: null as string | null };
     if (!clientId) return empty;
     const { data: client } = await supabase.from("clients").select("timezone").eq("id", clientId).maybeSingle();
     const tz = client?.timezone ?? null;
@@ -64,11 +64,15 @@ export const getPainReportContextFn = createServerFn({ method: "POST" })
         feedbackId = fb?.id ?? null;
       }
     }
-    const [byClient, exercises] = await Promise.all([
+    const [byClient, exercises, recent] = await Promise.all([
       loadPainEntries(supabase, [clientId], { days: 45, tz: new Map([[clientId, tz]]) }),
       data.dayId ? loadDayExercises(supabase, data.dayId) : Promise.resolve([]),
+      // the lifts of the last four weeks, for "my hack squat" on a day without one (never blocks the review)
+      loadRecentExercises(supabase, clientId).catch(() => [] as { id: string | null; name: string }[]),
     ]);
-    return { clientId, today: todayIn(tz), entries: byClient.get(clientId) ?? [], exercises, feedbackId };
+    const today = new Set(exercises.map((x) => x.name.toLowerCase()));
+    const recentExercises = recent.filter((x) => !today.has(x.name.toLowerCase()));
+    return { clientId, today: todayIn(tz), entries: byClient.get(clientId) ?? [], exercises, recentExercises, feedbackId };
   });
 
 /** Everything the coach's pain sheet shows for one client (the sheet works the history out with the same code). */
