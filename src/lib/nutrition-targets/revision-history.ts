@@ -48,6 +48,7 @@ function daySignature(d: Record<string, any>) {
 }
 
 export function referenceLabel(plan: PlanRow) {
+  if (plan.scheduled_reference) return "Scheduled draft · " + planPeriod(plan);
   if (!plan.revision_captured_at) return planPeriod(plan);
   const at = new Date(plan.revision_captured_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
   return (plan.revision_partial ? "Before Cleo edit · " : "Before edit · ") + at + (plan.revision_partial ? " · saved day targets" : " · " + planPeriod(plan));
