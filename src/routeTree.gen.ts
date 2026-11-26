@@ -52,6 +52,7 @@ import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
 import { Route as CoachingIndexRouteImport } from './routes/coaching.index'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as HTokenRouteImport } from './routes/h.$token'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as PPostIdRouteImport } from './routes/p.$postId'
@@ -561,6 +562,11 @@ const CoachingApplyRoute = CoachingApplyRouteImport.update({
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HTokenRoute = HTokenRouteImport.update({
+  id: '/h/$token',
+  path: '/h/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalSlugRoute = LegalSlugRouteImport.update({
@@ -2334,6 +2340,7 @@ export interface FileRoutesByFullPath {
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/h/$token': typeof HTokenRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/p/$postId': typeof PPostIdRoute
@@ -2669,6 +2676,7 @@ export interface FileRoutesByTo {
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/h/$token': typeof HTokenRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/p/$postId': typeof PPostIdRoute
@@ -3008,6 +3016,7 @@ export interface FileRoutesById {
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/h/$token': typeof HTokenRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/p/$postId': typeof PPostIdRoute
@@ -3348,6 +3357,7 @@ export interface FileRouteTypes {
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
+    | '/h/$token'
     | '/legal/$slug'
     | '/m/welcome'
     | '/p/$postId'
@@ -3683,6 +3693,7 @@ export interface FileRouteTypes {
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
+    | '/h/$token'
     | '/legal/$slug'
     | '/m/welcome'
     | '/p/$postId'
@@ -4021,6 +4032,7 @@ export interface FileRouteTypes {
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
+    | '/h/$token'
     | '/legal/$slug'
     | '/m/welcome'
     | '/p/$postId'
@@ -4355,6 +4367,7 @@ export interface RootRouteChildren {
   BookSlugRoute: typeof BookSlugRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
+  HTokenRoute: typeof HTokenRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   PPostIdRoute: typeof PPostIdRoute
@@ -4742,6 +4755,13 @@ declare module '@tanstack/react-router' {
       path: '/email/unsubscribe'
       fullPath: '/email/unsubscribe'
       preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/h/$token': {
+      id: '/h/$token'
+      path: '/h/$token'
+      fullPath: '/h/$token'
+      preLoaderRoute: typeof HTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/$slug': {
@@ -7529,6 +7549,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookSlugRoute: BookSlugRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
+  HTokenRoute: HTokenRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   PPostIdRoute: PPostIdRoute,

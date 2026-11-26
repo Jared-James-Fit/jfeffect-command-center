@@ -126,7 +126,8 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
   it("the paged feed opens it from … more and 💬; the coach's card feed keeps its comments sheet", () => {
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("onOpenComments={openCommentsSheet}\n                  onOpenCaption={openCaptionSheet}\n                  onOpenWorkout={openWorkoutSheet}\n                  sheetOpen={sheet?.post.id === p.id}");
-    expect(screen).toContain("{paging && <PostSheet post={sheetPost}");
+    // the feed's screens and a post on its own screen (post-open.ts) share it
+    expect(screen).toContain("{pagedLook && <PostSheet post={sheetPost}");
     expect(screen).toContain("<CommentsSheet post={commentsFor}");
   });
 });

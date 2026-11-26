@@ -115,7 +115,7 @@ begin
 
   -- 10. the worker is called only when there's work
   update client_goals set assessed_at = now() where status in ('proposed', 'active');
-  insert into app_settings (key, value) values ('goal_intel_scan', jsonb_build_object('messages_at', now())) on conflict (key) do update set value = excluded.value;
+  insert into app_settings (key, value) values ('goal_intel_scan', jsonb_build_object('messages_at', now())::text) on conflict (key) do update set value = excluded.value;
   assert not public.goal_intel_due(), 'nothing waiting: not due';
   insert into client_update_outbox (client_id, body, send_after) values (sam, 'hi', now() - interval '1 minute');
   assert public.goal_intel_due(), 'an update whose window is up is due';

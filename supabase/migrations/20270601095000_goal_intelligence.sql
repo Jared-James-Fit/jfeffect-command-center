@@ -515,7 +515,7 @@ REVOKE ALL ON FUNCTION public.tg_intel_profile_goal_sync() FROM PUBLIC, anon, au
 
 -- ── 7. Settings: the review window and whether updates go by themselves ───
 INSERT INTO public.app_settings (key, value)
-VALUES ('goal_updates', jsonb_build_object('review_minutes', 30, 'auto_send', true))
+VALUES ('goal_updates', jsonb_build_object('review_minutes', 30, 'auto_send', true)::text)
 ON CONFLICT (key) DO NOTHING;
 
 -- ── 8. What's waiting for the worker (the cron asks before it calls) ─────
@@ -538,9 +538,9 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
     OR EXISTS (SELECT 1 FROM public.client_goals g
                WHERE g.status IN ('proposed', 'active') AND (g.assessed_at IS NULL OR g.assessed_at < now() - interval '6 hours'))
     -- clients' own messages, read at most every 30 minutes
-    OR (coalesce((SELECT (value ->> 'messages_at')::timestamptz FROM public.app_settings WHERE key = 'goal_intel_scan'), now() - interval '7 days') < now() - interval '30 minutes'
+    OR (coalesce((SELECT (value::jsonb ->> 'messages_at')::timestamptz FROM public.app_settings WHERE key = 'goal_intel_scan'), now() - interval '7 days') < now() - interval '30 minutes'
         AND EXISTS (SELECT 1 FROM public.messages m
-                    WHERE m.sender_role = 'client' AND m.created_at > coalesce((SELECT (value ->> 'messages_at')::timestamptz FROM public.app_settings WHERE key = 'goal_intel_scan'), now() - interval '7 days')));
+                    WHERE m.sender_role = 'client' AND m.created_at > coalesce((SELECT (value::jsonb ->> 'messages_at')::timestamptz FROM public.app_settings WHERE key = 'goal_intel_scan'), now() - interval '7 days')));
 $$;
 REVOKE ALL ON FUNCTION public.goal_intel_due() FROM PUBLIC, anon, authenticated;
 

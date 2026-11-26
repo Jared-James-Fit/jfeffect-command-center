@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Heart, History, Loader2, Pencil, Power, Trash2, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Heart, History, Hourglass, Loader2, Pencil, Plus, Power, RefreshCw, Trash2, UserPlus, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +15,20 @@ import { VirtualTag } from "@/components/name-marks";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { STARTER_PERSONAS } from "@/lib/virtual-accounts/personas";
+import { foldName } from "@/lib/virtual-accounts/names";
+import { NameFields, errorWords, useNameDraft } from "@/components/admin/virtual-accounts/name-editor";
+import { fullName, likeStateWords, rolloutStatusWords } from "@/lib/virtual-accounts/rollout";
 import {
+  addVirtualAccountFn,
   clearVirtualLikesFn,
   createStarterVirtualAccountsFn,
+  renameVirtualAccountFn,
   listVirtualAccountsFn,
+  setVirtualRolloutFn,
   setVirtualSettingsFn,
   updateVirtualAccountFn,
   virtualActivityFn,
+  type RolloutState,
   type VirtualAccount,
   type VirtualSettings,
 } from "@/lib/virtual-accounts/virtual-accounts.functions";
@@ -44,6 +51,7 @@ export function VirtualAccountsPage() {
   const createFn = useServerFn(createStarterVirtualAccountsFn);
   const settingsFn = useServerFn(setVirtualSettingsFn);
   const { data, isLoading, isError, refetch } = useQuery({ queryKey: KEY, queryFn: () => listFn(), staleTime: 15_000 });
+  const [adding, setAdding] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: KEY });
 
   const create = useMutation({
@@ -57,9 +65,12 @@ export function VirtualAccountsPage() {
   });
   const setSettings = useMutation({
     mutationFn: (patch: Partial<VirtualSettings>) => settingsFn({ data: patch }),
-    onSuccess: (s) => {
+    onSuccess: (s, patch) => {
       qc.setQueryData(KEY, (prev: any) => (prev ? { ...prev, settings: s } : prev));
-      toast.success(s.automation_enabled ? "Automated likes are on" : "Automated likes are off");
+      void refresh();
+      if ("automation_enabled" in patch) toast.success(s.automation_enabled ? "Automated likes are on" : "Automated likes are off");
+      else if ("rollout_enabled" in patch) toast.success(s.rollout_enabled ? "Gradual start is on" : "Gradual start is off");
+      else toast.success("Saved");
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
   });
@@ -122,15 +133,30 @@ export function VirtualAccountsPage() {
           <li>Only crew-wide posts by real people; never a private account's, a story, or one whose author blocked it. Quiet hours and a daily limit apply.</li>
           <li>They're left out of member counts, revenue, conversion and engagement analytics, post scores and the rankings.</li>
           <li>No photos or media: their picture is their initials. Anything on their profile is yours to write here.</li>
+          <li>
+            Names are natural and varied, from one generator: never a placeholder like "Jon Doe" or "Test User", never another
+            virtual account's first name or surname, and never a real member's name or the first name a member goes by. A
+            placeholder name is replaced automatically, keeping the account, its likes and its history.
+          </li>
         </ul>
       </Card>
 
-      {canEdit && missing > 0 && (
-        <Button className="h-11 w-full" disabled={create.isPending} onClick={() => create.mutate()} data-virtual-create>
-          {create.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <UserPlus className="mr-1.5 h-4 w-4" />}
-          Add {missing} starter virtual account{missing === 1 ? "" : "s"}
-        </Button>
+      <RolloutCard accounts={data.accounts} settings={s} rollout={data.rollout} canEdit={canEdit} onSettings={(p) => setSettings.mutate(p)} onChanged={refresh} />
+
+      {canEdit && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {missing > 0 && (
+            <Button className="h-11" disabled={create.isPending} onClick={() => create.mutate()} data-virtual-create>
+              {create.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <UserPlus className="mr-1.5 h-4 w-4" />}
+              Add {missing} starter virtual account{missing === 1 ? "" : "s"}
+            </Button>
+          )}
+          <Button variant="outline" className={cn("h-11", missing === 0 && "sm:col-span-2")} onClick={() => setAdding(true)} data-virtual-add>
+            <Plus className="mr-1.5 h-4 w-4" /> Add a virtual account
+          </Button>
+        </div>
       )}
+      {adding && <AddDialog onClose={() => setAdding(false)} onAdded={refresh} />}
 
       {data.accounts.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted-foreground">No virtual accounts yet.</Card>
@@ -169,7 +195,7 @@ function NumberSetting({ label, value, min, max, disabled, onSave }: { label: st
 function VirtualRow({ a, canEdit, onChanged }: { a: VirtualAccount; canEdit: boolean; onChanged: () => void }) {
   const updateFn = useServerFn(updateVirtualAccountFn);
   const clearFn = useServerFn(clearVirtualLikesFn);
-  const [edit, setEdit] = useState(false);
+  const [edit, setEdit] = useState<false | "edit" | "rename">(false);
   const [log, setLog] = useState(false);
   const update = useMutation({
     mutationFn: (patch: Record<string, unknown>) => updateFn({ data: { userId: a.user_id, patch } as any }),
@@ -195,10 +221,24 @@ function VirtualRow({ a, canEdit, onChanged }: { a: VirtualAccount; canEdit: boo
             <MembershipEmblem badge="free" size={14} />
             <VirtualTag />
           </div>
-          <div className="truncate text-xs text-muted-foreground">@{a.username ?? a.slug}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            @{a.username ?? a.slug}
+            {nameSourceWords(a) && <span data-virtual-name-source> · {nameSourceWords(a)}</span>}
+          </div>
+          {a.name_problem && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-warning/10 px-2.5 py-1.5 text-xs" data-virtual-name-problem>
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden />
+              <span className="min-w-0 flex-1">{a.name_problem}</span>
+              {canEdit && (
+                <button type="button" className="inline-flex min-h-8 items-center gap-1 font-semibold underline-offset-2 hover:underline" onClick={() => setEdit("rename")}>
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Pick a new name
+                </button>
+              )}
+            </div>
+          )}
           {a.bio && <p className="mt-1 text-sm">{a.bio}</p>}
-          <div className="mt-1 text-xs text-muted-foreground">
-            {a.likes_24h} like{a.likes_24h === 1 ? "" : "s"} today · {a.likes_total} in all · {a.followers} follower{a.followers === 1 ? "" : "s"}
+          <div className="mt-1 text-xs text-muted-foreground" data-virtual-like-state>
+            {likeStateWords(a)} · {a.likes_24h} like{a.likes_24h === 1 ? "" : "s"} today · {a.likes_total} in all · {a.followers} follower{a.followers === 1 ? "" : "s"}
           </div>
         </div>
       </div>
@@ -251,7 +291,7 @@ function VirtualRow({ a, canEdit, onChanged }: { a: VirtualAccount; canEdit: boo
       </div>
       <div className="flex flex-wrap gap-2">
         {canEdit && (
-          <Button variant="outline" size="sm" className="h-10" onClick={() => setEdit(true)}>
+          <Button variant="outline" size="sm" className="h-10" onClick={() => setEdit("edit")}>
             <Pencil className="mr-1.5 h-4 w-4" /> Edit profile
           </Button>
         )}
@@ -265,7 +305,17 @@ function VirtualRow({ a, canEdit, onChanged }: { a: VirtualAccount; canEdit: boo
         )}
       </div>
       {log && <ActivityLog userId={a.user_id} />}
-      {edit && <EditDialog a={a} onClose={() => setEdit(false)} onSave={(patch) => update.mutateAsync(patch).then(() => setEdit(false))} />}
+      {edit && (
+        <EditDialog
+          a={a}
+          suggestNew={edit === "rename"}
+          onClose={() => setEdit(false)}
+          onSaved={() => {
+            setEdit(false);
+            onChanged();
+          }}
+        />
+      )}
     </li>
   );
 }
@@ -290,14 +340,151 @@ function ActivityLog({ userId }: { userId: string }) {
   );
 }
 
-function EditDialog({ a, onClose, onSave }: { a: VirtualAccount; onClose: () => void; onSave: (patch: Record<string, unknown>) => Promise<unknown> }) {
-  const [first, setFirst] = useState(a.first_name);
-  const [last, setLast] = useState(a.last_name ?? "");
+/**
+ * The gradual start: queued accounts start liking one at a time, the next only after the gap
+ * (days), a like since the last start, and in the daytime, so new names show up the way new
+ * members do. The queue can be reordered, emptied or filled here; switching an account's likes on
+ * by hand starts it now.
+ */
+function RolloutCard({
+  accounts,
+  settings: s,
+  rollout,
+  canEdit,
+  onSettings,
+  onChanged,
+}: {
+  accounts: VirtualAccount[];
+  settings: VirtualSettings;
+  rollout: RolloutState | null;
+  canEdit: boolean;
+  onSettings: (patch: Partial<VirtualSettings>) => void;
+  onChanged: () => void;
+}) {
+  const fn = useServerFn(setVirtualRolloutFn);
+  const queue = accounts
+    .filter((a) => a.active && !a.likes_enabled && a.rollout_position != null)
+    .sort((x, y) => (x.rollout_position ?? 0) - (y.rollout_position ?? 0));
+  const waiting = accounts.filter((a) => a.active && !a.likes_enabled && a.rollout_position == null);
+  const liking = accounts.filter((a) => a.active && a.likes_enabled).length;
+  const save = useMutation({
+    mutationFn: (order: string[]) => fn({ data: { order } }),
+    onSuccess: () => onChanged(),
+    onError: (e: unknown) => toast.error(errorWords(e, "Couldn't save the queue")),
+  });
+  const ids = queue.map((a) => a.user_id);
+  const move = (i: number, d: -1 | 1) => {
+    const next = [...ids];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    save.mutate(next);
+  };
+  return (
+    <Card className="space-y-3 p-4" data-virtual-rollout>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+          <Hourglass className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold">Gradual start</div>
+          <p className="text-sm text-muted-foreground">
+            {liking} liking · {queue.length} in the queue. The next one starts once {s.rollout_gap_days} day{s.rollout_gap_days === 1 ? "" : "s"} have
+            passed since the last, there's been a like since then, and it's daytime.
+          </p>
+        </div>
+        <Switch
+          checked={s.rollout_enabled}
+          disabled={!canEdit}
+          onCheckedChange={(v) => onSettings({ rollout_enabled: v })}
+          aria-label="Gradual start"
+          data-virtual-rollout-switch
+        />
+      </div>
+      <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm" data-virtual-rollout-status>
+        {rolloutStatusWords(rollout, accounts, s)}
+      </p>
+      <label className="flex min-h-11 items-center justify-between gap-3 rounded-lg border px-3 text-sm">
+        Days between starts, at least
+        <select
+          className="h-9 rounded-md border bg-background px-2"
+          value={s.rollout_gap_days}
+          disabled={!canEdit}
+          onChange={(e) => onSettings({ rollout_gap_days: Number(e.target.value) })}
+          aria-label="Days between starts"
+        >
+          {[1, 2, 3, 4, 5, 7, 10, 14].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      {queue.length > 0 && (
+        <ol className="space-y-1" data-virtual-rollout-queue>
+          {queue.map((a, i) => (
+            <li key={a.user_id} className="flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm">
+              <span className="w-6 shrink-0 text-xs text-muted-foreground">#{i + 1}</span>
+              <span className="min-w-0 flex-1 truncate">{fullName(a)}</span>
+              {canEdit && (
+                <span className="flex shrink-0 items-center">
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={i === 0 || save.isPending} onClick={() => move(i, -1)} aria-label={`Move ${fullName(a)} up`}>
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={i === queue.length - 1 || save.isPending} onClick={() => move(i, 1)} aria-label={`Move ${fullName(a)} down`}>
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={save.isPending} onClick={() => save.mutate(ids.filter((x) => x !== a.user_id))} aria-label={`Take ${fullName(a)} out of the queue`}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      {canEdit && waiting.length > 0 && (
+        <Button variant="outline" className="h-11 w-full" disabled={save.isPending} onClick={() => save.mutate([...ids, ...waiting.map((a) => a.user_id)])} data-virtual-rollout-queue-rest>
+          Add {waiting.length} not liking yet to the queue
+        </Button>
+      )}
+    </Card>
+  );
+}
+
+/** How the account got the name it has, in a few words. */
+function nameSourceWords(a: VirtualAccount): string | null {
+  const when = a.name_set_at ? new Date(a.name_set_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+  switch (a.name_source) {
+    case "starter":
+      return "Starter name";
+    case "generated":
+      return when ? `Generated name, ${when}` : "Generated name";
+    case "admin":
+      return when ? `Named by an admin, ${when}` : "Named by an admin";
+    case "corrected":
+      return when ? `Placeholder name replaced automatically, ${when}` : "Placeholder name replaced automatically";
+    default:
+      return null;
+  }
+}
+
+/** Whether the username was made from the old first name, so a new name should bring a new username. */
+function usernameFollowsName(username: string | null, first: string): boolean {
+  const f = foldName(first).replace(/ /g, "");
+  return !!username && f.length >= 3 && username.includes(f);
+}
+
+function EditDialog({ a, suggestNew, onClose, onSaved }: { a: VirtualAccount; suggestNew?: boolean; onClose: () => void; onSaved: () => void }) {
+  const updateFn = useServerFn(updateVirtualAccountFn);
+  const renameFn = useServerFn(renameVirtualAccountFn);
+  const name = useNameDraft({ userId: a.user_id, first: a.first_name, last: a.last_name ?? "", gender: a.name_gender, suggestOnOpen: suggestNew });
   const [bio, setBio] = useState(a.bio ?? "");
   const [background, setBackground] = useState(a.background ?? "");
   const [notes, setNotes] = useState(a.notes ?? "");
   const [sports, setSports] = useState<string[]>(a.disciplines ?? []);
+  const [moveUsername, setMoveUsername] = useState(usernameFollowsName(a.username, a.first_name));
   const [busy, setBusy] = useState(false);
+  const d = name.draft;
+  const nameOk = !name.changed || name.ready;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
@@ -305,10 +492,22 @@ function EditDialog({ a, onClose, onSave }: { a: VirtualAccount; onClose: () => 
           <DialogTitle>Edit {a.first_name}</DialogTitle>
           <DialogDescription>Words only. A virtual account never gets a photo or media.</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-2">
-          <Input value={first} onChange={(e) => setFirst(e.target.value.slice(0, 40))} placeholder="First name" aria-label="First name" className="h-11" />
-          <Input value={last} onChange={(e) => setLast(e.target.value.slice(0, 40))} placeholder="Last name" aria-label="Last name" className="h-11" />
-        </div>
+        {a.name_problem && !name.changed && (
+          <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 px-2.5 py-2 text-xs">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden />
+            {a.name_problem}
+          </p>
+        )}
+        <NameFields state={name} onError={(m) => toast.error(m)} />
+        {name.changed && d.username && d.username !== a.username && (
+          <label className="flex min-h-11 items-center justify-between gap-3 rounded-lg border px-3 text-sm" data-virtual-move-username>
+            <span className="min-w-0">
+              Change the username to <span className="font-semibold">@{d.username}</span>
+              <span className="block text-xs text-muted-foreground">Now @{a.username ?? a.slug}</span>
+            </span>
+            <Switch checked={moveUsername} onCheckedChange={setMoveUsername} aria-label="Change the username too" />
+          </label>
+        )}
         <Textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 150))} placeholder="Bio (150 characters, shown on their profile)" aria-label="Bio" rows={2} />
         <Textarea value={background} onChange={(e) => setBackground(e.target.value.slice(0, 600))} placeholder="Fitness background (admins only)" aria-label="Fitness background" rows={2} />
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value.slice(0, 600))} placeholder="Notes (admins only)" aria-label="Notes" rows={2} />
@@ -330,18 +529,77 @@ function EditDialog({ a, onClose, onSave }: { a: VirtualAccount; onClose: () => 
         </div>
         <Button
           className="h-11"
-          disabled={busy || !first.trim()}
+          loading={busy}
+          disabled={busy || !nameOk}
           onClick={async () => {
             setBusy(true);
             try {
-              await onSave({ first_name: first.trim(), last_name: last.trim(), bio: bio.trim(), background: background.trim(), notes: notes.trim(), disciplines: sports });
-              toast.success("Saved");
+              if (name.changed) {
+                await renameFn({
+                  data: {
+                    userId: a.user_id,
+                    first: d.first.trim(),
+                    last: d.last.trim(),
+                    username: moveUsername && d.username && d.username !== a.username ? d.username : null,
+                    gender: d.gender,
+                    origin: d.origin,
+                    source: d.source,
+                  },
+                });
+              }
+              await updateFn({ data: { userId: a.user_id, patch: { bio: bio.trim(), background: background.trim(), notes: notes.trim(), disciplines: sports as Array<(typeof SPORTS)[number]> } } });
+              toast.success(name.changed ? `Renamed to ${d.first.trim()} ${d.last.trim()}` : "Saved");
+              onSaved();
+            } catch (e: unknown) {
+              toast.error(errorWords(e, "Couldn't save"));
             } finally {
               setBusy(false);
             }
           }}
         >
           Save
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** A new virtual account: a generated name to start (another one tap away), or one typed and checked. */
+function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const addFn = useServerFn(addVirtualAccountFn);
+  const name = useNameDraft({ suggestOnOpen: true });
+  const [busy, setBusy] = useState(false);
+  const d = name.draft;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md" data-virtual-add-dialog>
+        <DialogHeader>
+          <DialogTitle>Add a virtual account</DialogTitle>
+          <DialogDescription>
+            A free account labelled "Virtual" wherever it shows. Words only: no photo or media, and likes stay off until you turn them on.
+          </DialogDescription>
+        </DialogHeader>
+        <NameFields state={name} onError={(m) => toast.error(m)} />
+        <Button
+          className="h-11"
+          loading={busy || name.suggesting}
+          disabled={busy || !name.ready || !d.username}
+          onClick={async () => {
+            if (!d.username) return;
+            setBusy(true);
+            try {
+              await addFn({ data: { first: d.first.trim(), last: d.last.trim(), username: d.username, gender: d.gender, origin: d.origin, source: d.source } });
+              toast.success(`Added ${d.first.trim()} ${d.last.trim()}`);
+              onAdded();
+              onClose();
+            } catch (e: unknown) {
+              toast.error(errorWords(e, "Couldn't add it"));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Add {d.first.trim() || "account"}
         </Button>
       </DialogContent>
     </Dialog>

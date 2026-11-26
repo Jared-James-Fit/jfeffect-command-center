@@ -69,11 +69,13 @@ describe("The workout in Crew: the post's last swipe, never a page it sends you 
     expect(detail).toContain("<CommentThread post={post} viewerIsStaff={viewerIsStaff} inline onOpenAuthor={onOpenAuthor} />");
   });
 
-  it("View workout from the feed opens the page on the workout, past the picture; a profile or a link opens at the top", () => {
+  it("the finance login's feed of cards: View workout opens the page on the workout, past the picture", () => {
     const detail = read("src/components/community/post-detail.tsx");
     expect(detail).toContain('if (jumped.current || at !== "workout" || !post.media_type || !el || !box) return;');
     const screen = read("src/components/community/community-screen.tsx");
-    expect(screen.match(/onOpen=\{openWorkout\}/g)?.length).toBe(2);
+    // only the feed of cards (no bar of its own) still opens the workout page; a post's screen opens its own sheet (Nov 26 2026)
+    expect(screen.match(/onOpen=\{openWorkout\}/g)?.length).toBe(1);
+    expect(screen.match(/onOpen=\{openMore\}/g)?.length).toBe(2);
     expect(screen).toContain('setDetailAt({ id: post.id, at: "workout" });');
     expect(screen).toContain("at={detailAt?.id === detailId ? detailAt.at : undefined}");
     // closing the page however it closes forgets where it opened

@@ -9,6 +9,7 @@
 //   - at most COMMUNITY_DAILY_CAP a day per person, so the crew never
 //     crowds out what the coach sends
 // Lockscreen copy says who and what, never the comment itself.
+import { postOpenFromNotice, postOpenHash } from "@/lib/post-open";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeDisplayName } from "@/lib/push/notification-payload";
 
@@ -110,7 +111,8 @@ export async function pushCommunityActivity(admin: SupabaseClient, actorUserId: 
         const r = await sendWebPushToUser(
           admin,
           uid,
-          { ...copy, url: `${base}#post=${n.post_id}`, tag: `community:${n.kind}:${anchor}`, data: { kind: "community_activity", postId: n.post_id } },
+          // the post's own screen, on the slide it's about (a "Belt Squat PR" opens on that set), comments up for a comment
+          { ...copy, url: `${base}#${postOpenHash(postOpenFromNotice(n) ?? { id: n.post_id })}`, tag: `community:${n.kind}:${anchor}`, data: { kind: "community_activity", postId: n.post_id } },
           {
             category: "community",
             eventKey: `community:${n.id}:${uid}`,
