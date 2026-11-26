@@ -26,7 +26,7 @@ export type Rect = { x: number; y: number; w: number; h: number };
 
 /* ---- purposes ------------------------------------------------------------ */
 
-export type MediaPurpose = "post" | "story" | "progress" | "checkin" | "chat" | "profile";
+export type MediaPurpose = "post" | "story" | "progress" | "checkin" | "chat" | "profile" | "setup";
 
 export type CaptureRatio = "screen" | "original" | "9:16" | "4:5" | "3:4" | "1:1" | "16:9";
 
@@ -79,6 +79,8 @@ export const PURPOSES: Record<MediaPurpose, PurposeDefaults> = {
   checkin: { ratio: "3:4", facing: "environment", photo: true, video: true, max: 10, grid: true, maxSeconds: 120, title: "Check-in" },
   chat: { ratio: "original", facing: "environment", photo: true, video: true, max: 10, grid: false, maxSeconds: 300, title: "Camera" },
   profile: { ratio: "1:1", facing: "user", photo: true, video: false, max: 1, grid: false, maxSeconds: 0, title: "Profile photo" },
+  // a rack's hole numbers or a machine's seat pin: the picture as the camera has it, back camera, no grid
+  setup: { ratio: "original", facing: "environment", photo: true, video: false, max: 4, grid: false, maxSeconds: 0, title: "Setup photo" },
 };
 
 /** What a file input for this purpose accepts. */

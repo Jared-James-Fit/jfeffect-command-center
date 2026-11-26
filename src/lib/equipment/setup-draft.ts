@@ -1,39 +1,47 @@
 /**
- * The setup sheet's draft (setup-sheet.tsx): what's being typed is kept apart
- * from what's saved until Done (or "Save changes") writes it, so nothing goes
- * to the server half-typed, an exit with changes can ask first, and a draft an
- * interruption cut short (the app closed, the page reloaded, the card behind
- * remounted) is still there when the sheet opens again. Pure, tested.
+ * The setup sheet's draft (setup-sheet.tsx): what's on screen, kept apart from
+ * what's saved so the autosave (setup-autosave.ts) knows when there's a change
+ * to send, a refetch never writes over what's being typed, and a change that
+ * couldn't be sent waits on the phone (setup-outbox.ts). Pure, tested.
  */
-import { cleanSettings, setupFields, type EquipmentKind, type ExerciseSetup, type Setting } from "./equipment";
+import { PHOTOS_MAX, cleanSettings, setupFields, setupPhotos, type EquipmentKind, type ExerciseSetup, type Setting } from "./equipment";
 
-export type SetupDraft = { fields: Setting[]; notes: string; photo: string | null };
+export type SetupDraft = { fields: Setting[]; notes: string; photos: string[] };
 
-/** What the sheet starts from: the saved setup, with the kind's usual settings offered (empty) after it. */
-export function draftFromSetup(kind: EquipmentKind | null, setup: Pick<ExerciseSetup, "settings" | "notes" | "photo_path"> | null | undefined): SetupDraft {
+type ExerciseLike = { name?: string | null; equipment?: string | null } | null | undefined;
+
+/** What the sheet starts from: the saved setup, with the equipment's and lift's usual settings offered (empty) after it. */
+export function draftFromSetup(
+  kind: EquipmentKind | null,
+  setup: Pick<ExerciseSetup, "settings" | "notes" | "photo_path" | "photo_paths"> | null | undefined,
+  exercise?: ExerciseLike,
+): SetupDraft {
   return {
-    fields: setupFields(kind, setup?.settings ?? []),
+    fields: setupFields(kind, setup?.settings ?? [], exercise),
     notes: setup?.notes ?? "",
-    photo: setup?.photo_path ?? null,
+    photos: setupPhotos(setup),
   };
 }
 
-/** The draft as it would be stored: labelled values only, the note trimmed. */
-export function savedForm(d: SetupDraft): { settings: Setting[]; notes: string | null; photo: string | null } {
-  return { settings: cleanSettings(d.fields), notes: d.notes.trim() || null, photo: d.photo ?? null };
+/** The draft as it would be stored: labelled values only, the note trimmed, at most 4 photos. */
+export function savedForm(d: SetupDraft): { settings: Setting[]; notes: string | null; photos: string[] } {
+  const photos: string[] = [];
+  for (const p of d.photos ?? []) if (p && !photos.includes(p) && photos.length < PHOTOS_MAX) photos.push(p);
+  return { settings: cleanSettings(d.fields), notes: d.notes.trim() || null, photos };
+}
+
+/** The draft's stored form as one string, to tell two drafts apart. */
+export function formKey(d: SetupDraft): string {
+  return JSON.stringify(savedForm(d));
 }
 
 /**
  * Whether the draft would save anything different from `base`. An offered
  * setting left empty, a label renamed with no value beside it, or a note with
- * only spaces added changes nothing, so it never asks "Save your changes?".
+ * only spaces added changes nothing, so nothing is sent.
  */
 export function draftChanged(draft: SetupDraft, base: SetupDraft): boolean {
-  const a = savedForm(draft);
-  const b = savedForm(base);
-  if (a.notes !== b.notes || a.photo !== b.photo) return true;
-  if (a.settings.length !== b.settings.length) return true;
-  return a.settings.some((s, i) => s.label !== b.settings[i].label || s.value !== b.settings[i].value);
+  return formKey(draft) !== formKey(base);
 }
 
 /**
@@ -64,78 +72,6 @@ export function switchPlan({ dirty, fromId, targetHasSetup }: { dirty: boolean; 
   if (!dirty) return "switch";
   if (fromId === null && !targetHasSetup) return "carry";
   return "save";
-}
-
-// ─────────────── the draft kept on the phone ───────────────
-
-const STORE_PREFIX = "jf-setup-draft:v1:";
-/** A draft older than this is let go (a whole day: it was abandoned, not interrupted). */
-export const DRAFT_KEEP_MS = 24 * 60 * 60_000;
-
-type Stored = { draft: SetupDraft; base: string | null; at: number };
-
-export function draftKey(clientId: string, exerciseId: string, equipmentId: string | null): string {
-  return `${STORE_PREFIX}${clientId}:${exerciseId}:${equipmentId ?? "none"}`;
-}
-
-function store(): Storage | null {
-  try {
-    return typeof window !== "undefined" ? window.localStorage : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Keep the draft on the phone (`base`: the saved setup's updated_at it was typed over). */
-export function keepDraft(key: string, draft: SetupDraft, base: string | null, now = Date.now()): void {
-  try {
-    store()?.setItem(key, JSON.stringify({ draft, base, at: now } satisfies Stored));
-  } catch {
-    /* private mode / full: the draft just isn't kept */
-  }
-}
-
-export function forgetDraft(key: string): void {
-  try {
-    store()?.removeItem(key);
-  } catch {
-    /* nothing to forget */
-  }
-}
-
-/**
- * A draft left on the phone, only while it's fresh and was typed over the setup
- * as it's saved now: one typed over an older version (the coach changed it
- * since) is let go rather than saved over the newer one.
- */
-export function readKeptDraft(key: string, base: string | null, now = Date.now()): SetupDraft | null {
-  let raw: string | null = null;
-  try {
-    raw = store()?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
-  const kept = parseKept(raw, base, now);
-  if (raw && !kept) forgetDraft(key);
-  return kept;
-}
-
-export function parseKept(raw: string | null, base: string | null, now: number): SetupDraft | null {
-  if (!raw) return null;
-  try {
-    const s = JSON.parse(raw) as Stored;
-    if (!s || typeof s.at !== "number" || now - s.at > DRAFT_KEEP_MS) return null;
-    if ((s.base ?? null) !== (base ?? null)) return null;
-    const d = s.draft;
-    if (!d || !Array.isArray(d.fields) || typeof d.notes !== "string") return null;
-    return {
-      fields: d.fields.map((f) => ({ label: String(f?.label ?? ""), value: String(f?.value ?? "") })),
-      notes: d.notes,
-      photo: typeof d.photo === "string" ? d.photo : null,
-    };
-  } catch {
-    return null;
-  }
 }
 
 /**
