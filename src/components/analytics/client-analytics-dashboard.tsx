@@ -934,7 +934,7 @@ export function ClientAnalyticsDashboard({
           <OfflineState what="training data" />
         ) : resultsState === "error" ? (
           <ErrorState error={resultsQ.error} what="training data" onRetry={() => resultsQ.refetch()} retrying={resultsQ.isFetching} />
-        ) : (allResults as any[]).length === 0 ? (
+        ) : (allResults as any[]).length === 0 && !meets.length && view !== "records" ? (
           <AnalyticsEmptyPreview />
         ) : (
           <>
@@ -1046,6 +1046,23 @@ export function ClientAnalyticsDashboard({
             {view === "strength" && (
               <div className="space-y-6" data-analytics-view="strength">
 
+                <Card className="p-4">
+                  <SectionTitle
+                    title="Exercise progress"
+                    sub="Pick an exercise to see its progress. Each dot is your best set that day."
+                  />
+                  <SectionErrorBoundary label="Exercise progress">
+                    <LiftProgressCard
+                      history={history}
+                      comparisonHistory={comparisonHistory}
+                      periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end<today?b.end:today}))}
+                      displayUnit={displayUnit}
+                      conv={conv}
+                      onOpenSet={setSelectedDot}
+                      compact
+                    />
+                  </SectionErrorBoundary>
+                </Card>
                 {hasPowerlifting && (
                   <MoreDetail label="Competition lift trends">
                     <SectionTitle
@@ -1100,23 +1117,6 @@ export function ClientAnalyticsDashboard({
                   </section>
                   </MoreDetail>
                 )}
-                {<Card className="p-4">
-                  <SectionTitle
-                    title="Exercise progress"
-                    sub="Pick an exercise to see its progress. Each dot is your best set that day."
-                  />
-                  <SectionErrorBoundary label="Exercise progress">
-                    <LiftProgressCard
-                      history={history}
-                      comparisonHistory={comparisonHistory}
-                      periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end<today?b.end:today}))}
-                      displayUnit={displayUnit}
-                      conv={conv}
-                      onOpenSet={setSelectedDot}
-                      compact
-                    />
-                  </SectionErrorBoundary>
-                </Card>}
                 {blocks.length >= 2 && (
                   <MoreDetail label="Compare training blocks">
                     <SectionTitle
