@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Eraser, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { displayedLoadOther } from "@/lib/dual-weight";
 import {
   WEIGHT_CAP,
   WEIGHT_STEP,
@@ -117,6 +118,7 @@ export function WeightValueInput({
   const isEmpty = loadType !== "bodyweight" && value === "";
   // Faded suggestion only in a blank, plain-weight cell.
   const ghost = isEmpty && loadType === "external" && suggested != null && suggested > 0 ? suggested : null;
+  const other = displayedLoadOther(ghost ?? numeric, unit, loadType === "bodyweight");
 
   // Remembered values per load type — external weight and assistance never
   // borrow each other's number.
@@ -399,7 +401,7 @@ export function WeightValueInput({
           <button
             type="button"
             disabled={disabled}
-            aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}` : ariaLabel}
+            aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}${other ? ", " + other : ""}` : numeric != null && other ? `${ariaLabel}, ${numeric} ${unit}, ${other}` : ariaLabel}
             data-set-box
             onClick={() => startEditing()}
             className={cn(
@@ -419,15 +421,19 @@ export function WeightValueInput({
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}
           >
-            {ghost != null ? (
-              // the weight a tap on the set's number logs: said quietly, never as if typed
-              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-muted-foreground" data-testid="weight-suggested">
-                <Target className="h-3 w-3 shrink-0" aria-hidden="true" />
-                {ghost}
+            {other != null ? (
+              <span className="flex min-w-0 flex-col items-center justify-center leading-none tabular-nums">
+                {ghost != null ? (
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-muted-foreground" data-testid="weight-suggested">
+                    <Target className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    {ghost}<span className="text-[9px] font-normal">{unit}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-baseline gap-0.5">{shown}<span className="text-[9px] font-normal">{unit}</span></span>
+                )}
+                <span data-weight-other className="mt-0.5 text-[10px] font-normal text-muted-foreground">{other}</span>
               </span>
-            ) : (
-              shown
-            )}
+            ) : shown}
           </button>
         )}
         {/* Small secondary control — LOAD TYPE only (Weight / Bodyweight /

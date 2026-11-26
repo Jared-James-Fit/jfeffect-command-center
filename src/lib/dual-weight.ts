@@ -154,3 +154,13 @@ export function roundUpWeight(kg: number, incrementKg: number): number | null {
   if (Math.abs(ratio - Math.round(ratio)) < 1e-7) return null;
   return Number((Math.ceil(ratio) * incrementKg).toFixed(8));
 }
+
+/** Display the other unit for a numeric value already in the active unit.
+ * Bodyweight-only sets, empty values, and invalid numbers have no equivalent.
+ * This is display-only; the workout's original number and unit never change. */
+export function displayedLoadOther(value: string | number | null | undefined, unit: WeightUnit, bodyweight = false): string | null {
+  if (bodyweight || value == null || String(value).trim() === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return dualLoad(inputKg(n, unit), unit).secondary;
+}
