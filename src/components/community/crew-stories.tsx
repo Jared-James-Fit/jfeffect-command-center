@@ -24,6 +24,9 @@ import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonat
 import { useFollowState } from "@/lib/community-social";
 import { useAuth } from "@/lib/auth";
 import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
+import { GifPicker } from "@/components/gif-picker";
+import { mediaAttachment } from "@/lib/media/attachment";
+import type { MediaItem } from "@/lib/media/media";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { videoLimit } from "@/lib/video-edit/limits";
 import { feedback } from "@/lib/feedback";
@@ -1320,6 +1323,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
   const { isImpersonating } = useClientImpersonation();
   const react = useReact(post, viewerIsStaff);
   const send = useMessageAuthor();
+  const [gifOpen, setGifOpen] = useState(false);
   const frame = storyFrameKind(post);
   const win = frame === "win";
   const mine = post.my_reaction;
@@ -1362,7 +1366,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
     setCommentsOpen(true);
   };
   // typing, or a sheet open: the story waits, and carries on from the same spot when it's put away
-  const sheetOpen = commentsOpen || sharing === true;
+  // the GIF picker holds the story too
+  const sheetOpen = commentsOpen || sharing === true || gifOpen;
   useEffect(() => {
     onComposing(focused || text.trim().length > 0 || sheetOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1386,9 +1391,9 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
     feedback("like");
     react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
   };
-  const deliver = async (body: string, emoji?: string) => {
+  const deliver = async (body: string, emoji?: string, media?: MediaItem) => {
     const b = body.trim();
-    if (!b || send.isPending) return;
+    if ((!b && !media) || send.isPending) return;
     if (isImpersonating) return void toast.message(PREVIEW_ONLY_MESSAGE);
     if (full) return void toast.message(`You can message ${first} again once they reply`);
     if (emoji) {
@@ -1398,7 +1403,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
     input.current?.blur();
     setText("");
     try {
-      const r = await send.mutateAsync({ postId: post.id, body: b, story: true });
+      const r = await send.mutateAsync({ postId: post.id, body: b, story: true, media: media ? mediaAttachment(media) : null });
       if (!emoji) feedback("send");
       setSent(r.route === "direct" && r.status === "request" ? `Sent to ${first} as a message request` : `Sent to ${first}`);
     } catch (e: any) {
@@ -1519,12 +1524,18 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
                   Send
                 </button>
               ) : (
-                !full &&
-                quick.slice(0, 2).map((e) => (
+                !full && (
+                  <>
+                    <button type="button" onMouseDown={keepFocus} onClick={() => setGifOpen(true)} className="grid h-10 w-9 shrink-0 place-items-center rounded-full text-[10px] font-bold tracking-tight text-white active:scale-90" aria-label={`Send ${first} a GIF or sticker`} data-story-gif>
+                      <span className="rounded-[5px] border-[1.5px] border-current px-[3px] leading-[14px]">GIF</span>
+                    </button>
+                    {quick.slice(0, 1).map((e) => (
                   <button key={e} type="button" onMouseDown={keepFocus} onClick={() => void deliver(e, e)} className="grid h-10 w-9 shrink-0 place-items-center rounded-full text-[22px] leading-none active:scale-90" aria-label={`Send ${e} to ${first}`} data-story-emoji>
                     {e}
                   </button>
-                ))
+                    ))}
+                  </>
+                )
               )}
             </div>
           ) : (
@@ -1548,6 +1559,16 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
           )}
         </div>
       </div>
+      {gifOpen && (
+        <GifPicker
+          hideTrigger
+          asDialog
+          showSounds={false}
+          controlledOpen={gifOpen}
+          onControlledOpenChange={setGifOpen}
+          onPick={(m) => { setGifOpen(false); void deliver("", undefined, m); }}
+        />
+      )}
       {commentsMounted && (
         <Suspense fallback={null}>
           <CommentsSheet story open={commentsOpen} post={post} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsOpen(false)} onOpenAuthor={onOpenPerson} />
@@ -1579,7 +1600,7 @@ function momentLine(post: CommunityPost): string {
   if (words) return words;
   if (post.locked_in_at) return "Locked in";
   if (post.media_type) return post.media_type === "video" ? "A clip" : "A photo";
-  return post.gif_url ? "A GIF" : post.audio ? "A voice memo" : post.poll ? "A poll" : "A post";
+  return post.gif_url ? (post.gif_url.endsWith("#sticker") ? "A sticker" : "A GIF") : post.audio ? "A voice memo" : post.poll ? "A poll" : "A post";
 }
 
 /**

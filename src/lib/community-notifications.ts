@@ -57,7 +57,7 @@ export function communityNoticeText(n: CommunityNotice): { title: string; body: 
   const thing = THING[n.post_kind] ?? "post";
   const said = n.snippet?.trim()
     ? `“${n.snippet.trim()}”`
-    : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type ? "Photo" : "";
+    : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type === "sticker" ? "Sticker" : n.media_type ? "Photo" : "";
   switch (n.kind) {
     case "reaction": {
       // every reaction is a like; a PR or milestone reads as what it was for

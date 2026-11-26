@@ -55,9 +55,8 @@ import { cn } from "@/lib/utils";
 import { shouldSendOnEnter } from "@/lib/enter-to-send";
 import { formatReadReceipt, formatReceiptStamp } from "@/lib/read-receipt";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
-import { markRecent } from "@/lib/chat-gifs";
-import { GifThumb } from "@/components/gif-thumb";
-import { fallbackEmoji } from "@/lib/gif-fallback";
+import { SentMediaView } from "@/components/media/media-view";
+import { mediaAttachment } from "@/lib/media/attachment";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
@@ -655,23 +654,9 @@ function AttachmentView({
       />
     );
   }
-  if (att.kind === "gif") {
-    return (
-      <a href={att.url} target="_blank" rel="noreferrer"
-        className="block w-[220px] max-w-full overflow-hidden rounded-xl border border-border bg-secondary/40">
-        <GifThumb
-          src={att.url}
-          title={att.name}
-          category={att.category}
-          fallback={att.fallback_emoji}
-          className="aspect-square w-full"
-          emojiClassName="text-7xl"
-        />
-        {att.name && (
-          <div className="truncate px-2 py-1 text-[11px] text-muted-foreground">{att.name}</div>
-        )}
-      </a>
-    );
+  if (att.kind === "gif" || att.kind === "sticker") {
+    // a GIF / sticker: its own shape, no link-out (a tap shouldn't leave the chat)
+    return <SentMediaView m={att as any} max={220} className={att.kind === "gif" ? "border border-border" : undefined} />;
   }
   if (att.type === "image") return <ImageAttachment att={att} messageId={message?.id} mine={mine} />;
   if (att.type === "video")
@@ -1897,14 +1882,22 @@ export function MessageThread({
      * stays in the composer.
      */
     standalone?: boolean;
+    /**
+     * A GIF / sticker from the picker: sent on its own like a card (the box's
+     * words and files stay put) but still as a reply / note when one is set.
+     */
+    mediaOnly?: boolean;
     messageType?: string;
   }) => {
     if (!user) return null;
-    const standalone = !!opts?.standalone;
+    const mediaOnly = !!opts?.mediaOnly;
+    // standalone (and mediaOnly) never touch the composer's words or files
+    const standalone = !!opts?.standalone || mediaOnly;
+    const cardOnly = !!opts?.standalone;
     const text = (opts?.body ?? body).trim();
     const atts = standalone ? [...(opts?.extraAttachments ?? [])] : [...attachments, ...(opts?.extraAttachments ?? [])];
     const sendType = (opts?.messageType ?? messageType) as typeof messageType;
-    const asNote = role === "admin" && !standalone ? internalNote : false;
+    const asNote = role === "admin" && !cardOnly ? internalNote : false;
     if (!text && atts.length === 0 && !(opts?.withDrafts && uploads.drafts.length)) return null;
     // One composer send at a time until the composer has cleared: an Enter that
     // repeats or a double tap before the re-render would read the same words and
@@ -1940,7 +1933,7 @@ export function MessageThread({
       size: d.file.size,
       mime: d.file.type,
     }));
-    const replyTarget = !standalone && replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
+    const replyTarget = !cardOnly && replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
       ? replyingTo
       : null;
     const replyClip = replyTarget ? replyAtt : null;
@@ -1996,6 +1989,7 @@ export function MessageThread({
       // the composer is clear once this has rendered (a frame on): the next send reads fresh words
       window.requestAnimationFrame(() => window.setTimeout(releaseComposer, 0));
     }
+    if (mediaOnly && replyTarget) setReply(null);
     broadcastTyping(true);
     const releaseDrafts = () => {
       // Give the swapped-in server row a moment to render before freeing blobs.
@@ -2988,39 +2982,12 @@ export function MessageThread({
                   messageType: (att as any)?.kind === "form_request" ? "Form" : undefined,
                 });
               } : undefined}
-              onPickGif={async (g) => {
+              onPickGif={async (m) => {
                 if (!user) return;
-                if (!(await povGuard.confirm(`GIF: ${g.title}`))) return;
-                setSending(true);
-                try {
-                  await sendMessage({
-                    clientId,
-                    senderId: user.id,
-                    senderRole: role,
-                    body: "",
-                    attachments: [{
-                      type: g.media_type.startsWith("video") ? "video" : "image",
-                      url: g.media_url,
-                      name: g.title,
-                      mime: g.media_type,
-                      kind: "gif",
-                      category: g.category,
-                      fallback_emoji: fallbackEmoji(g.title, g.category),
-                    }],
-                    messageType,
-                    isInternalNote: role === "admin" ? internalNote : false,
-                    priority: role === "admin" ? priority : undefined,
-                    replyToMessageId: replyingTo?.id ?? null,
-                    replyPreview: replyingTo ? makeReplyPreview(replyingTo, replyAtt) : null,
-                  });
-                  setReply(null);
-                  qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                  try { await markRecent(user.id, g.id); } catch {}
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Failed to send GIF");
-                } finally {
-                  setSending(false);
-                }
+                // View-as-client: ask by name (doSend then doesn't ask again)
+                if (!(await povGuard.confirm(m.kind === "sticker" ? `Sticker: ${m.title}` : `GIF: ${m.title}`))) return;
+                // optimistic like any message: shows now, marked failed (with retry) if it can't send
+                await doSend({ body: "", extraAttachments: [mediaAttachment(m) as MessageAttachment], mediaOnly: true, povConfirmed: true });
               }}
               onPickSound={!canSendSounds ? undefined : async (s) => {
                 if (!user) return;

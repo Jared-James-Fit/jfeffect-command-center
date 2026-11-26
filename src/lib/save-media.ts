@@ -39,7 +39,7 @@ export function saveItemsOf(
   for (const raw of list) {
     const a = raw as Record<string, any> | null;
     if (!a || (a.type !== "image" && a.type !== "video")) continue;
-    if (a.kind === "gif" || a.kind === "sound") continue;
+    if (a.kind === "gif" || a.kind === "sticker" || a.kind === "sound") continue;
     const path = typeof a.storage_path === "string" && a.storage_path ? a.storage_path : null;
     const url = (path && opts.signed?.[path]) || (typeof a.url === "string" && a.url ? a.url : null);
     if (!path && !url) continue;

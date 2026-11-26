@@ -19,7 +19,8 @@ import { COMMENT_MAX, compactNumber, pinnedFirst, postTimeLabel, threadComments,
 import { QUICK_COMMENT_EMOJI, insertAtCursor } from "@/lib/comment-composer";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
 import { useVideoTrimmer } from "@/components/video-trimmer";
-import type { ChatGif } from "@/lib/chat-gifs";
+import type { MediaItem } from "@/lib/media/media";
+import { SentMediaView } from "@/components/media/media-view";
 import { GifPicker } from "@/components/gif-picker";
 import { MicButton, RecordingBar, VoiceMemoPlayer, useVoiceMemoRecorder, type RecordedVoice } from "@/components/community/voice-memo";
 import {
@@ -125,8 +126,8 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const trimmer = useVideoTrimmer();
-  // one attachment at a time: a photo / video, a GIF, or a voice memo
-  const [gif, setGif] = useState<ChatGif | null>(null);
+  // one attachment at a time: a photo / video, a GIF / sticker, or a voice memo
+  const [gif, setGif] = useState<MediaItem | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
   const [voice, setVoice] = useState<RecordedVoice | null>(null);
   const recorder = useVoiceMemoRecorder((v) => {
@@ -191,7 +192,8 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
     if (!canSend || !user?.id) return;
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const media = picked;
-    const g = gif ? { url: gif.media_url, thumb: gif.thumb_url } : null;
+    const picked_ = gif;
+    const g = gif ? { url: gif.url, thumb: gif.preview !== gif.url ? gif.preview : null, kind: gif.kind, width: gif.width, height: gif.height } : null;
     const v = voice;
     const to = replyTo;
     setText("");
@@ -220,6 +222,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
         setText((t) => t || body);
         if (media) setPicked((p) => p ?? media);
         if (v) setVoice((x) => x ?? v);
+        if (picked_) setGif((x) => x ?? picked_);
         if (to) setReplyTo((r) => r ?? to);
       })
       .finally(() =>
@@ -402,7 +405,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
         )}
         {(gif || voice) && (
           <div data-attach-preview className="relative mb-2 inline-block">
-            {gif ? <img src={gif.thumb_url ?? gif.media_url} alt={gif.title} className="h-20 rounded-xl bg-muted object-cover" /> : voice ? <VoiceMemoPlayer src={voice.url} duration={voice.duration} /> : null}
+            {gif ? <SentMediaView m={{ kind: gif.kind, url: gif.url, preview: gif.preview, still: gif.still, width: gif.width, height: gif.height, title: gif.title }} max={80} /> : voice ? <VoiceMemoPlayer src={voice.url} duration={voice.duration} /> : null}
             <button
               type="button"
               onClick={() => {
@@ -410,7 +413,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
                 setVoice(null);
               }}
               className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-foreground text-background shadow"
-              aria-label={gif ? "Remove GIF" : "Remove voice memo"}
+              aria-label={gif ? (gif.kind === "sticker" ? "Remove sticker" : "Remove GIF") : "Remove voice memo"}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -488,7 +491,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
                     type="button"
                     onClick={() => setGifOpen(true)}
                     className="grid h-9 w-9 place-items-center rounded-full text-[10px] font-bold tracking-tight text-muted-foreground hover:text-foreground"
-                    aria-label="Add a GIF"
+                    aria-label="Add a GIF or sticker"
                   >
                     <span className="rounded-[5px] border-[1.5px] border-current px-[3px] leading-[14px]">GIF</span>
                   </button>
@@ -579,14 +582,15 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
 /** "a photo" · "a video" · "a GIF" · "a voice memo" */
 function mediaWord(c: CommunityComment, cap = false): string {
   const t = c.media?.type;
-  const w = t === "video" ? "a video" : t === "gif" ? "a GIF" : t === "audio" ? "a voice memo" : "a photo";
+  const w = t === "video" ? "a video" : t === "gif" ? "a GIF" : t === "sticker" ? "a sticker" : t === "audio" ? "a voice memo" : "a photo";
   return cap ? w[0].toUpperCase() + w.slice(1) : w;
 }
 
 function urlFor(c: CommunityComment, urls: Record<string, string> | undefined): string | null {
   const m = c.media;
   if (!m) return null;
-  if (m.type === "audio" || m.type === "gif") return urls?.[m.path] ?? null;
+  if (m.type === "gif" || m.type === "sticker") return m.path;
+  if (m.type === "audio") return urls?.[m.path] ?? null;
   const p = m.thumb ?? (m.type === "image" ? m.path : null);
   return (p && urls?.[p]) || null;
 }
@@ -795,7 +799,13 @@ function CommentRow({
 function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | null; onOpen: (c: CommunityComment) => void }) {
   const m = c.media!;
   if (m.type === "audio") return <VoiceMemoPlayer src={c.local_preview ?? url} duration={m.duration} seed={c.id.length + (c.created_at?.length ?? 0)} className="mt-1.5" />;
-  if (m.type === "gif") return <img data-comment-gif src={m.path} alt="GIF" loading="lazy" decoding="async" className="mt-1.5 block max-h-40 max-w-[200px] rounded-2xl bg-muted object-cover" />;
+  if (m.type === "gif" || m.type === "sticker") {
+    return (
+      <div data-comment-gif className="mt-1.5">
+        <SentMediaView m={{ kind: m.type, url: m.path, preview: m.thumb, width: m.width, height: m.height }} max={m.type === "sticker" ? 150 : 200} />
+      </div>
+    );
+  }
   const ratio = m.width && m.height ? Math.min(Math.max(m.width / m.height, 0.6), 1.6) : 1;
   const local = c.local_preview ?? null;
   return (
