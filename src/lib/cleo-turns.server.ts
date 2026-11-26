@@ -538,16 +538,6 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
     await fail("That conversation is gone.");
     return { ok: false, status: "failed", reason: "no chat" };
   }
-  // A client's conversation sends their records to OpenAI: only with their permission (5.1.2(i),
-  // src/lib/ai-consent). Refused, the answer says why and nothing reaches the model.
-  if (chat.client_id) {
-    const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
-    const consent = await clientAllowsAi(chat.client_id);
-    if (!consent.ok) {
-      await fail(coachConsentMessage(consent.name));
-      return { ok: false, status: "failed", reason: "no AI consent" };
-    }
-  }
   let questionRow: ChatMessage | null = null;
   if (row.reply_to) {
     const { data } = await own.from("summer_messages").select(`${MESSAGE_COLS}`).eq("id", row.reply_to).maybeSingle();
@@ -556,6 +546,55 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
   if (!questionRow) {
     await fail("The question for this answer is gone.");
     return { ok: false, status: "failed", reason: "no question" };
+  }
+
+  // Explicit setup review commands use an internal, role-scoped read, never a model.
+  // Keep this allowlist narrow: arbitrary free text and previous chat history can contain personal data.
+  if (chat.client_id && !cleo.viewOnly && !(questionRow.attachments?.length) &&
+      /^(review (account|coaching) setup|what (access issues are|is still) outstanding|(?:show|review|check) (?:client )?(?:onboarding|intake|setup)(?: status)?|what(?:'s| is) (?:missing|left) (?:from|in) (?:onboarding|setup|intake))[?.!]*$/i.test(questionRow.content.trim())) {
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { assertRequesterReaches } = await import("@/lib/cleo-actions.server");
+      await assertRequesterReaches(supabaseAdmin, userId, chat.client_id);
+      const { isBasicInfoComplete } = await import("@/lib/basic-info");
+      const { isGoalsSetupComplete } = await import("@/lib/client-goals/schema");
+      const [client, goals, enrollments] = await Promise.all([
+        cleo.db.from("clients").select("id, user_id, last_signed_in_at, portal_access_disabled, profile_picture_url, first_name, last_name, phone, date_of_birth, height_cm, address, city, country, timezone, emergency_contact_name, emergency_contact_phone, training_schedule_completed").eq("id", chat.client_id).maybeSingle(),
+        cleo.db.from("client_goals_setup").select("*").eq("client_id", chat.client_id).maybeSingle(),
+        (supabaseAdmin as any).from("coaching_package_enrollments").select("coaching_packages!inner(slug)").eq("client_id", chat.client_id).eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)),
+      ]);
+      if (client.error || !client.data) throw new Error("Couldn't read the client's setup.");
+      const c = client.data;
+      const status = (done: boolean, label: string) => done ? "✓ " + label + " — complete" : "○ " + label + " — outstanding";
+      const lines = [
+        "Client setup (checked internally):",
+        c.portal_access_disabled ? "○ Account access — disabled" : status(!!c.last_signed_in_at, "Account sign-in"),
+        status(isBasicInfoComplete(c), "Basic information"),
+        status(!!c.profile_picture_url, "Account photo"),
+      ];
+      if (enrollments.error) lines.push("Service scope — couldn't verify; check the client profile.");
+      else {
+        const nutritionOnly = !!enrollments.data?.length && enrollments.data.every((e: any) => e.coaching_packages?.slug === "nutrition");
+        if (!nutritionOnly) lines.push(status(!!c.training_schedule_completed, "Training schedule"));
+        const label = nutritionOnly ? "Nutrition setup" : "Goals & setup";
+        lines.push(goals.error ? label + " — couldn't verify" : status(isGoalsSetupComplete(goals.data, nutritionOnly), label));
+      }
+      lines.push("Check the Client setup card for agreement status and to request outstanding details.");
+      await own.from("summer_messages").update({ content: lines.join("\n"), status: "done", progress: null, error: null }).eq("id", messageId).eq("status", "running");
+      return { ok: true, status: "done" };
+    } catch {
+      await fail("Couldn't verify setup right now. Open the client's setup card to review or request missing items.");
+      return { ok: false, status: "failed", reason: "setup read failed" };
+    }
+  }
+  // Free-text model requests can carry personal data, so consent remains required before model context is built.
+  if (chat.client_id) {
+    const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
+    const consent = await clientAllowsAi(chat.client_id);
+    if (!consent.ok) {
+      await fail(coachConsentMessage(consent.name) + " You can still ask 'Review account setup' for an internal setup check without AI processing.");
+      return { ok: false, status: "failed", reason: "no AI consent" };
+    }
   }
 
   // Stop: the row says so (checked every couple of seconds), and it doubles as a heartbeat.

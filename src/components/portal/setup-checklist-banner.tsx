@@ -37,19 +37,21 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const agreement = useCoachingAgreement();
   const scope = useGoalsServiceScope(clientId);
-  const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
+  const { data: client, isPending: clientPending, isFetched: clientFetched, isError: clientError, refetch: retryClient } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase.from("clients")
+      const { data, error } = await supabase.from("clients")
         .select("id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, preferred_name, phone, date_of_birth, sex, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, committed_training_frequency, committed_training_days")
         .eq("user_id", userId).maybeSingle();
+      if (error) throw error;
       return data;
     },
   });
-  const { data: goals, isPending: goalsPending, isFetched: goalsFetched } = useQuery({
+  const { data: goals, isPending: goalsPending, isFetched: goalsFetched, isError: goalsError, refetch: retryGoals } = useQuery({
     queryKey: ["client-goals-setup", clientId], enabled: !!clientId, staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await (supabase as any).from("client_goals_setup").select("*").eq("client_id", clientId).maybeSingle();
+      const { data, error } = await (supabase as any).from("client_goals_setup").select("*").eq("client_id", clientId).maybeSingle();
+      if (error) throw error;
       return data as ClientGoalsSetupRow | null;
     },
   });
@@ -107,7 +109,9 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
   const done = required.filter((i) => i.done).length;
-  if (!scope.ready || !clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
+  if (!clientId || !userId) return null;
+  if (scope.error || clientError || goalsError) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), retryGoals()]); }}>Try again</Button></Card>;
+  if (!scope.ready || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
   if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;

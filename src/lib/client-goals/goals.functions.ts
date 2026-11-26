@@ -272,9 +272,10 @@ export const getGoalsServiceScopeFn = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     await assertClientOwnerOrCoachOrAdmin(context, data.clientId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: enrollment, error } = await (supabaseAdmin as any).from("coaching_package_enrollments")
+    const { data: enrollments, error } = await (supabaseAdmin as any).from("coaching_package_enrollments")
       .select("coaching_packages!inner(slug)").eq("client_id", data.clientId)
-      .eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)).maybeSingle();
+      .eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10));
     if (error) throw new Error("Could not read service scope");
-    return { nutritionOnly: enrollment?.coaching_packages?.slug === "nutrition" };
+    // Multiple active services must not hide onboarding or omit training intake.
+    return { nutritionOnly: !!enrollments?.length && enrollments.every((e: any) => e.coaching_packages?.slug === "nutrition") };
   });
