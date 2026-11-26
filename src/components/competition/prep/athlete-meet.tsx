@@ -64,7 +64,7 @@ export function AthleteMeet({
   const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
   const [onboarding, setOnboarding] = useState<boolean>(!!startOnboarding);
-  const refresh = () => void qc.invalidateQueries({ queryKey: ["my-meet", competitionId] });
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ["my-meet", competitionId] }); void qc.invalidateQueries({ queryKey: ["goals-service-scope"] }); };
 
   const act = useMutation({
     mutationFn: (f: () => Promise<unknown>) => f(),
@@ -78,7 +78,7 @@ export function AthleteMeet({
   const c = m.competition;
   const today: string = m.today;
   const meetDay = c.status === "upcoming" && today >= String(c.meet_date) && today <= String(c.meet_end_date ?? c.meet_date);
-  const needsOnboarding = !!m.handling && !m.infoComplete;
+  const needsOnboarding = !!m.handling && m.handling.status !== "cancelled" && (!m.infoComplete || !m.handling.termsAcceptedAt);
   const showWizard = !previewing && (onboarding || needsOnboarding) && c.status === "upcoming";
   const plan = m.plan ? readGameplan(m.plan.doc) : null;
   const rules = readRules(c.rules, c.federation);
