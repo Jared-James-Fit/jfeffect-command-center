@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getFoodHistoryFn } from "@/lib/nutrition-ai-plans.functions";
+import { foodHistoryKey, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { Info, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -20,15 +23,19 @@ type Props = {
   anchor?: string;
   onReuse?: (plan: PlanRow) => void;
   showCleo?: boolean;
+  currentId?: string | null;
 };
 
 const number = (v: number | null | undefined) => v == null ? "—" : Math.round(v).toLocaleString();
 const difference = (a: number | null, b: number | null) => a == null || b == null ? "—" : (a > b ? "+" : "") + number(a - b);
 
-export function NutritionWeekSummary({ clientId, days, references, anchor, onReuse, showCleo = false }: Props) {
+export function NutritionWeekSummary({ clientId, days, references, anchor, onReuse, showCleo = false, currentId }: Props) {
   const [selected, setSelected] = useState("");
   const [detail, setDetail] = useState(0);
   const [showMeals, setShowMeals] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const readHistory = useServerFn(getFoodHistoryFn);
+  const statsQ = useQuery({ queryKey: foodHistoryKey(clientId), enabled: !!clientId && compareOpen, staleTime: 30_000, queryFn: () => readHistory({ data: { clientId } }) as Promise<{ history: FoodHistory }> });
   const [milestone, setMilestone] = useState<PlanMilestone | null>(null);
   const eventRefs = milestone ? plansOnDate(references, milestone.date, (p) => ({ start: p.start_date, end: p.end_date })) : [];
   const ref = references.find((p) => p.id === selected) ?? (milestone ? eventRefs.length === 1 ? eventRefs[0] : undefined : references[0]);
@@ -64,6 +71,10 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
   const currDay = current?.rows[detail]?.day;
   const prevDay = previous?.rows[detail]?.day;
   const delta = difference(total, previous?.total ?? null);
+  const referenceStats = statsQ.data?.history.plans.find((p) => p.id === ref?.id);
+  const currentStats = currentId ? statsQ.data?.history.plans.find((p) => p.id === currentId) : undefined;
+  const rate = (v: number | null | undefined) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)} kg/wk`;
+  const rating = (v: number | null | undefined) => v == null ? "—" : `${v.toFixed(1)}/5`;
 
   return (
     <section className="min-w-0 space-y-2 rounded-xl border border-border p-3" aria-label="Weekly nutrition comparison">
@@ -103,7 +114,7 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
           <div className="flex items-center justify-between gap-2 border-t border-border pt-2 text-xs">
             <span className="min-w-0 truncate text-muted-foreground">{ref ? "vs. " + planPeriod(ref) : "No previous plan"}</span><span className="shrink-0 font-medium tabular-nums">{ref ? delta + (delta === "—" ? "" : " kcal") : ""}</span>
           </div>
-          {references.length > 0 && <details className="group text-xs">
+          {references.length > 0 && <details className="group text-xs" onToggle={(e) => setCompareOpen(e.currentTarget.open)}>
             <summary className="flex cursor-pointer items-center gap-1.5 rounded-md py-2 font-medium"><History className="h-3.5 w-3.5" />Compare plans<span className="ml-auto text-muted-foreground">+</span></summary>
             <div className="space-y-3 pt-1">
               <label className="block text-muted-foreground">Reference plan
@@ -119,6 +130,18 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
                 <span className="col-span-3 mt-1 border-t border-border pt-2 text-muted-foreground">{dates[detail]} · {currDay?.day_label ?? "Unassigned"}</span>
                 {(["calories", "protein", "carbs", "fats", "steps"] as const).map((key) => <div key={key} className="contents"><span className="capitalize">{key}</span><span className="text-right">{number(prevDay?.[key])}</span><span className="text-right font-medium">{number(currDay?.[key])}</span></div>)}
               </div>
+              <details className="rounded-md border border-border p-2">
+                <summary className="cursor-pointer font-medium">Results during each plan</summary>
+                {statsQ.isError ? <p className="mt-2 text-muted-foreground">Results unavailable. <button type="button" className="underline" onClick={() => void statsQ.refetch()}>Retry</button></p> : statsQ.isLoading ? <p className="mt-2 text-muted-foreground">Reading recorded results…</p> : <div className="mt-2 grid grid-cols-[minmax(0,1fr)_repeat(2,minmax(0,1fr))] gap-2 tabular-nums">
+                  <span/><span className="text-right text-muted-foreground">Reference</span><span className="text-right text-muted-foreground">{currentId ? "This plan" : "Draft"}</span>
+                  <span>Observed dates</span><span className="text-right">{referenceStats ? referenceStats.start.slice(5) + "–" + referenceStats.end.slice(5) : "—"}</span><span className="text-right">{currentStats ? currentStats.start.slice(5) + "–" + currentStats.end.slice(5) : "—"}</span>
+                  <span>Weight trend</span><span className="text-right">{rate(referenceStats?.kgPerWeek)}</span><span className="text-right">{rate(currentStats?.kgPerWeek)}</span>
+                  <span>Nutrition rating</span><span className="text-right">{rating(referenceStats?.rating)}</span><span className="text-right">{rating(currentStats?.rating)}</span>
+                  <span>Check-ins</span><span className="text-right">{number(referenceStats?.checkins)}</span><span className="text-right">{number(currentStats?.checkins)}</span>
+                  <span>Hunger flags</span><span className="text-right">{number(referenceStats?.hunger)}</span><span className="text-right">{number(currentStats?.hunger)}</span>
+                  <span className="col-span-3 text-muted-foreground">Recorded results, not proof that the plan caused them. A draft has no results.</span>
+                </div>}
+              </details>
               <Button type="button" variant="ghost" size="sm" className="w-full" aria-expanded={showMeals} onClick={() => setShowMeals(!showMeals)}>{showMeals ? "Hide" : "Compare"} meal plan</Button>
               {showMeals && <div className="grid gap-2 sm:grid-cols-2">
                 <div className="min-w-0 rounded-md border border-border p-2"><p className="mb-1 font-medium">Reference · {prevDay?.day_label ?? "—"}</p><p className="whitespace-pre-wrap break-words text-muted-foreground">{prevDay?.notes || "No meal text recorded."}</p></div>
