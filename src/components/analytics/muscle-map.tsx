@@ -31,15 +31,16 @@ import { atlasView, type ViewKey } from "@/lib/pain/anatomy/atlas";
 import { muscleOfSite } from "@/lib/body3d/muscle-sites";
 import { BODY_THEME, MARK_COLORS, muscleAt, paintView, partShowsMark, type BodyMark } from "@/lib/body3d/paint";
 import { Segmented } from "@/components/analytics/viz";
+import { InfoTip } from "@/components/analytics/info-tip";
 import { claimGesture, heldByOther, isBackEdge, onGestureReset, releaseGesture } from "@/lib/gesture-arena";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
-export type MuscleMode = "distribution" | "fit" | "development";
+export type MuscleMode = "distribution" | "fit" | "development" | "change";
 export const MUSCLE_MODES: Array<{ key: MuscleMode; label: string }> = [
-  { key: "distribution", label: "Most trained" },
-  { key: "fit", label: "Your goal" },
+  { key: "distribution", label: "Volume" },
+  { key: "fit", label: "Goals" },
   { key: "development", label: "Progress" },
 ];
 
@@ -99,6 +100,7 @@ const ROLE_WORD = {
 
 /** What each reading means, said once under its legend. */
 export function modeMeans(mode: MuscleMode, reference: number): string {
+  if (mode === "change") return "Credited working sets compared with the immediately preceding equal-length period. No earlier logs means no comparison, not zero.";
   if (mode === "distribution")
     return "Colours compare your muscles with each other by the sets they got. They show training, not muscle size, strength or growth.";
   if (mode === "fit")
@@ -155,6 +157,12 @@ export function muscleColor(
   if (!row) return null;
   const p = PALETTE[dark ? "dark" : "light"];
   if (mode === "distribution") return levelColor(row.level, dark);
+  if (mode === "change") {
+    if (!row.period.before) return null;
+    const delta = row.period.total - row.period.before.total;
+    if (Math.abs(delta) < 0.5) return p.steady;
+    return delta > 0 ? "#36a6cf" : "#bf665d";
+  }
   if (mode === "fit") {
     const s = row.fit.status;
     return s === "unknown"
@@ -180,11 +188,13 @@ export function MuscleMap({
   coached,
   credit = DEFAULT_SUPPORT_CREDIT,
   onCredit,
+  onExercise,
 }: {
   read: MuscleRead;
   coached: boolean;
   credit?: SupportCredit;
   onCredit?: (c: SupportCredit) => void;
+  onExercise?: (name: string) => void;
 }) {
   const dark = useDark();
   const phone = useIsMobile();
@@ -234,12 +244,13 @@ export function MuscleMap({
           size="sm"
           className="flex-1"
         />
+        <button type="button" aria-pressed={mode === "change"} onClick={() => setMode(mode === "change" ? "distribution" : "change")} className={cn("min-h-10 rounded-lg px-2 text-xs font-medium", mode === "change" ? "bg-secondary text-foreground" : "text-muted-foreground")}>Compare</button>
         {onCredit && <MapSettings credit={credit} onCredit={onCredit} phone={phone} />}
       </div>
-      <ModeLegend mode={mode} dark={dark} />
-      <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground" data-muscle-means>
-        {modeMeans(mode, read.reference)}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <ModeLegend mode={mode} dark={dark} />
+        <InfoTip label="About muscle colours">{modeMeans(mode, read.reference)}</InfoTip>
+      </div>
       {credit !== DEFAULT_SUPPORT_CREDIT && onCredit && (
         <p className="mt-1 text-[12px] text-muted-foreground" data-muscle-credit-note>
           Supporting muscles count as{" "}
@@ -275,6 +286,7 @@ export function MuscleMap({
               coached={coached}
               credit={credit}
               enough={read.enoughData}
+              onExercise={onExercise}
               onClear={() => setPicked(null)}
             />
           )}
@@ -289,6 +301,7 @@ export function MuscleMap({
             onPick={setPicked}
             coached={coached}
             credit={credit}
+            onExercise={onExercise}
           />
           <button
             type="button"
@@ -325,6 +338,7 @@ export function MuscleMap({
                   coached={coached}
                   credit={credit}
                   enough={read.enoughData}
+                  onExercise={onExercise}
                   onClear={() => setSheetOpen(false)}
                   bare
                 />
@@ -472,7 +486,9 @@ function ModeLegend({ mode, dark }: { mode: MuscleMode; dark: boolean }) {
       className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground"
       data-muscle-legend
     >
-      {mode === "distribution"
+      {mode === "change"
+        ? [sw("#bf665d", "Fewer sets"), sw(p.steady, "Similar"), sw("#36a6cf", "More sets"), sw(skin, "No data", true)]
+        : mode === "distribution"
         ? MUSCLE_LEVELS.map((l) => sw(levelColor(l.level, dark) ?? skin, l.label, l.level === 0))
         : mode === "fit"
           ? [
@@ -985,6 +1001,7 @@ function MuscleDetail({
   credit,
   enough,
   onClear,
+  onExercise,
   bare = false,
 }: {
   row: MuscleReadRow | undefined;
@@ -993,6 +1010,7 @@ function MuscleDetail({
   credit: SupportCredit;
   enough: boolean;
   onClear: () => void;
+  onExercise?: (name: string) => void;
   bare?: boolean;
 }) {
   if (!row)
@@ -1008,7 +1026,9 @@ function MuscleDetail({
     );
   const p = row.period;
   const status =
-    mode === "fit"
+    mode === "change"
+      ? !row.period.before ? "No comparable prior period" : row.period.total > row.period.before.total ? "More training" : row.period.total < row.period.before.total ? "Less training" : "Similar training"
+      : mode === "fit"
       ? FIT_WORD[row.fit.status]
       : mode === "development"
         ? DEV_WORD[row.dev.status]
@@ -1044,9 +1064,7 @@ function MuscleDetail({
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3" data-muscle-stats>
         <Stat label="Total sets" value={fmtSets(p.total)} sub={row.perWeek > 0 ? `about ${fmtSets(row.perWeek)} a week` : undefined} />
         <Stat label="Direct sets" value={p.direct} sub="aimed at it" />
-        <Stat label="Supporting sets" value={p.supporting} sub={supportingSub} />
         <Stat label="Days trained" value={p.days} />
-        <Stat label="Exercises" value={p.exerciseCount} />
         <Stat
           label="Change"
           value={
@@ -1064,11 +1082,8 @@ function MuscleDetail({
           sub={p.before ? "vs the period before" : "nothing earlier to compare"}
         />
       </div>
-      {change && (
-        <p className="mt-3 text-[13px] text-foreground/85" data-muscle-change>
-          {change}
-        </p>
-      )}
+      {mode === "change" && change && <p className="mt-3 text-[13px] text-foreground/85" data-muscle-change>{change}</p>}
+      <details className="mt-2 text-xs text-muted-foreground"><summary className="min-h-9 cursor-pointer pt-2 font-medium">Set breakdown</summary><p>{p.direct} direct · {p.supporting} supporting ({supportingSub}) · {p.exerciseCount} exercises.</p></details>
       {mode === "fit" && <p className="mt-3 text-foreground/85">{row.fit.words}</p>}
       {mode === "development" && row.dev.why && (
         <p className="mt-3 text-foreground/85">{row.dev.why}</p>
@@ -1091,12 +1106,12 @@ function MuscleDetail({
           <div className="text-[12px] font-medium text-muted-foreground">Exercises that trained it</div>
           <ul className="mt-1 space-y-1">
             {row.exercises.map((e) => (
-              <li key={e.name} className="flex justify-between gap-3">
-                <span className="min-w-0 text-foreground">{e.name}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {e.sets} set{e.sets === 1 ? "" : "s"}
-                  {e.direct ? "" : " · supporting"}
-                </span>
+              <li key={e.name}>
+                <button type="button" disabled={!onExercise} onClick={() => onExercise?.(e.name)} className="flex min-h-10 w-full items-center justify-between gap-2 text-left">
+                  <span className="min-w-0 text-foreground">{e.name}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">{e.sets} set{e.sets === 1 ? "" : "s"}{e.direct ? "" : " · supporting"}{onExercise ? " ›" : ""}</span>
+                </button>
+                <div className="h-1 rounded-full bg-muted"><div className="h-1 rounded-full bg-foreground/40" style={{ width: `${100 * e.sets / Math.max(1, ...row.exercises.map((x) => x.sets))}%` }} /></div>
               </li>
             ))}
           </ul>
@@ -1126,6 +1141,7 @@ function MuscleList({
   onPick,
   coached,
   credit,
+  onExercise,
 }: {
   read: MuscleRead;
   mode: MuscleMode;
@@ -1134,6 +1150,7 @@ function MuscleList({
   onPick: (m: FineMuscle | null) => void;
   coached: boolean;
   credit: SupportCredit;
+  onExercise?: (name: string) => void;
 }) {
   const order: Record<string, number> = {
     gap: 0,
@@ -1187,7 +1204,9 @@ function MuscleList({
                 <span className="w-24 shrink-0 text-right text-[13px] tabular-nums text-muted-foreground">
                   {mode === "distribution"
                     ? `${fmtSets(r.period.total)} set${r.period.total === 1 ? "" : "s"}`
-                    : mode === "fit"
+                    : mode === "change"
+                      ? r.period.before ? `${r.period.total - r.period.before.total > 0 ? "+" : ""}${fmtSets(r.period.total - r.period.before.total)} sets` : "No data"
+                      : mode === "fit"
                       ? FIT_SHORT[r.fit.status]
                       : r.dev.status === "unknown" || r.dev.status === "steady"
                         ? `${fmtSets(r.period.total)} sets`
@@ -1202,6 +1221,7 @@ function MuscleList({
                     coached={coached}
                     credit={credit}
                     enough={read.enoughData}
+                    onExercise={onExercise}
                     onClear={() => onPick(null)}
                   />
                 </div>

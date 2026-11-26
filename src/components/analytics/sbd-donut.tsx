@@ -1,227 +1,220 @@
-/**
- * What the total is made of: a donut of squat, bench and deadlift with the
- * total in the middle (sbd-composition.ts). Switch between the estimated
- * total now, the last meet and each earlier meet; never a mix of them. Tap a
- * lift for its own numbers: its share against the athlete's own earlier
- * total, and every number on file for it, each said for what it is.
- */
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/today";
-import { COMP_LIFTS, COMP_LIFT_LABEL, type CompLift } from "@/lib/analytics/competition-strength";
-import { donutArcs, shareContext, type Composition } from "@/lib/analytics/sbd-composition";
-import type { MaxOnFile } from "@/lib/analytics/analytics-areas";
-import { arcPath, LB_PER_KG, LIFT_SERIES } from "@/components/analytics/viz";
+import { COMP_LIFTS, COMP_LIFT_LABEL, type CompLift, type MeetResult } from "@/lib/analytics/competition-strength";
+import type { LiftStrength } from "@/lib/analytics/lift-strength";
+import type { BodyweightPoint } from "@/lib/bodyweight";
+import { currentRing, competitionRing, gymRingRecords, gymRingBests, officialClass, ringTotal, type RingLifts } from "@/lib/analytics/performance-ring";
+import { normalizeWeights, weightReferences, weightContextAt, weightPeriods } from "@/lib/analytics/weight-context";
+import { dualLoad, loadNum, otherUnit, LB_PER_KG, type Unit } from "@/lib/analytics/units";
+import { arcPath, LIFT_SERIES, Segmented } from "@/components/analytics/viz";
+import { InfoTip } from "@/components/analytics/info-tip";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 const fmtDay = (d: string) => {
   const x = parseLocalDate(d);
-  return x ? format(x, x.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM d, yyyy") : d;
+  return x ? format(x, "MMM d, yyyy") : d;
 };
 
-export function SbdDonut({
-  compositions,
-  missing,
-  unit,
-  maxes = [],
-}: {
-  /** the estimate first (when there is one), then meets newest first */
-  compositions: Composition[];
-  /** the lifts with no current estimate (why there's no estimated total) */
-  missing: CompLift[];
-  unit: "lb" | "kg";
-  maxes?: MaxOnFile[];
-}) {
-  const [id, setId] = useState<string | null>(null);
-  const [lift, setLift] = useState<CompLift | null>(null);
-  const c = compositions.find((x) => x.id === id) ?? compositions[0] ?? null;
-  const ctx = useMemo(() => (c ? shareContext(c, compositions) : null), [c, compositions]);
-  if (!c) return null;
-  const conv = (lb: number) => (unit === "kg" ? lb / LB_PER_KG : lb);
-  const round = (v: number) => (unit === "kg" ? Math.round(v * 2) / 2 : Math.round(v));
-  const other = (lb: number) =>
-    unit === "kg" ? `${Math.round(lb)} lb` : `${Math.round((lb / LB_PER_KG) * 2) / 2} kg`;
-  const size = 200;
-  const R = 84;
-  const arcs = donutArcs(c);
-  const options = compositions.slice(0, 8);
-
-  return (
-    <div className="@container" data-sbd-donut data-sbd-kind={c.kind}>
-      {/* which total: the estimate, the last meet, earlier meets */}
-      <div
-        className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]"
-        role="group"
-        aria-label="Which total"
-      >
-        {options.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            aria-pressed={o.id === c.id}
-            onClick={() => {
-              setId(o.id);
-              setLift(null);
-            }}
-            className={cn(
-              "h-9 shrink-0 rounded-full border px-3 text-[13px] font-medium transition",
-              o.id === c.id
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {o.kind === "estimate"
-              ? "Estimated today"
-              : o === compositions.find((x) => x.kind === "meet")
-                ? `Last meet · ${fmtDay(o.day)}`
-                : fmtDay(o.day)}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col items-center gap-4 @[520px]:flex-row @[520px]:gap-6">
-        <div className="relative shrink-0" style={{ width: size, height: size }}>
-          <svg
-            width={size}
-            height={size}
-            viewBox={`0 0 ${size} ${size}`}
-            role="img"
-            aria-label={`Total ${Math.round(conv(c.totalLb))} ${unit}: ${COMP_LIFTS.map((l) => `${COMP_LIFT_LABEL[l]} ${c.lifts[l].share}%`).join(", ")}`}
-          >
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={R}
-              fill="none"
-              stroke="var(--muted)"
-              strokeWidth={22}
-            />
-            {arcs.map((a) => {
-              const on = lift == null || lift === a.lift;
-              return (
-                <path
-                  key={a.lift}
-                  d={arcPath(size / 2, size / 2, R, a.start, a.end)}
-                  fill="none"
-                  stroke={LIFT_SERIES[a.lift]}
-                  strokeWidth={lift === a.lift ? 28 : 22}
-                  strokeLinecap="butt"
-                  opacity={on ? 1 : 0.28}
-                  className="cursor-pointer transition-all duration-300 motion-reduce:transition-none"
-                  onClick={() => setLift(lift === a.lift ? null : a.lift)}
-                  data-donut-seg={a.lift}
-                />
-              );
-            })}
-          </svg>
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              {c.kind === "estimate" ? "Estimated total" : "Meet total"}
-            </span>
-            <span className="text-[30px] font-semibold leading-tight tabular-nums tracking-tight text-foreground">
-              {round(conv(c.totalLb)).toLocaleString()}
-              <span className="ml-0.5 text-[13px] font-medium text-muted-foreground">{unit}</span>
-            </span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">
-              {other(c.totalLb)}
-            </span>
-          </div>
-        </div>
-
-        <ul className="w-full min-w-0 space-y-1" aria-label="Lifts">
-          {COMP_LIFTS.map((l) => (
-            <li key={l}>
-              <button
-                type="button"
-                onClick={() => setLift(lift === l ? null : l)}
-                aria-expanded={lift === l}
-                className={cn(
-                  "flex min-h-11 w-full items-center gap-3 rounded-lg px-2 text-left transition hover:bg-muted/50",
-                  lift === l && "bg-muted/60",
-                )}
-                data-donut-lift={l}
-              >
-                <span
-                  className="h-3 w-3 shrink-0 rounded-[3px]"
-                  style={{ background: LIFT_SERIES[l] }}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-foreground">
-                  {COMP_LIFT_LABEL[l]}
-                </span>
-                <span className="shrink-0 whitespace-nowrap text-right tabular-nums">
-                  <span className="text-[15px] font-semibold text-foreground">
-                    {round(conv(c.lifts[l].lb))} {unit}
-                  </span>
-                  <span className="ml-2 inline-block w-11 text-[13px] text-muted-foreground">
-                    {c.lifts[l].share}%
-                  </span>
-                </span>
-              </button>
-              {lift === l && ctx && (
-                <LiftDetail
-                  lift={l}
-                  c={c}
-                  words={ctx[l].words}
-                  unit={unit}
-                  conv={conv}
-                  round={round}
-                  maxes={maxes.filter((m) => m.lift === l)}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-        {c.kind === "estimate"
-          ? "An estimate from your last six weeks of training, not a tested total."
-          : `Lifted at ${c.label}${c.bodyweightLb ? `, weighing ${round(conv(c.bodyweightLb))} ${unit}` : ""}.`}
-        {missing.length > 0 && c.kind !== "estimate"
-          ? ` No estimated total today: no recent hard ${missing.map((m) => COMP_LIFT_LABEL[m].toLowerCase()).join(" or ")} sets to go on.`
-          : ""}{" "}
-        A smaller share doesn't mean a lift is weak.
-      </p>
-    </div>
-  );
+const selectStyle = "h-10 min-w-0 rounded-lg border border-border bg-background px-2 text-xs font-medium text-foreground";
+const rangeText = (low: number, high: number, unit: Unit) => `${loadNum(low, unit)}–${loadNum(high, unit)} ${unit}`;
+const bwText = (kg: number, unit: Unit) => {
+  const primary = unit === "kg" ? kg : kg * LB_PER_KG;
+  const secondary = unit === "kg" ? kg * LB_PER_KG : kg;
+  return `${primary.toFixed(1)} ${unit} / ${secondary.toFixed(1)} ${otherUnit(unit)}`;
+};
+type View = "current" | "competition" | "gym";
+type Metric = "actual" | "estimated";
+function classes(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((x): x is string => !!x))].sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b) || a.localeCompare(b));
 }
 
-function LiftDetail({
-  lift,
-  c,
-  words,
+export function SbdDonut({
+  strength,
+  meets,
+  results,
+  bodyweights,
+  sex,
+  today,
   unit,
-  conv,
-  round,
-  maxes,
+  onRecords,
 }: {
-  lift: CompLift;
-  c: Composition;
-  words: string;
-  unit: string;
-  conv: (lb: number) => number;
-  round: (v: number) => number;
-  maxes: MaxOnFile[];
+  strength: Record<CompLift, LiftStrength>;
+  meets: MeetResult[];
+  results: any[];
+  bodyweights: readonly BodyweightPoint[];
+  sex: "male" | "female" | null;
+  today: string;
+  unit: Unit;
+  onRecords?: () => void;
 }) {
-  const kind: Record<MaxOnFile["kind"], string> = {
-    tested: "Tested max (1 rep)",
-    on_file: "Max (1 rep) entered by your coach",
-    training_max: "Training max (what your program's % use)",
-  };
+  const [view, setView] = useState<View>("current");
+  const [lift, setLift] = useState<CompLift | null>(null);
+  const [metric, setMetric] = useState<Metric>("actual");
+  const [classPick, setClassPick] = useState<string | null>(null);
+  const [meetPick, setMeetPick] = useState("latest");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [comparePick, setComparePick] = useState("latest");
+  const weights = useMemo(() => normalizeWeights(bodyweights), [bodyweights]);
+  const refs = useMemo(() => weightReferences(meets, sex), [meets, sex]);
+  const bw = useMemo(() => weightContextAt(weights, refs, today), [weights, refs, today]);
+  const timeline = useMemo(() => historyOpen ? weightPeriods(weights, refs) : [], [weights, refs, historyOpen]);
+  const projection = useMemo(() => currentRing(strength, today), [strength, today]);
+  const gymRecords = useMemo(() => (view === "gym" || compareOpen) ? gymRingRecords(results, strength, weights, refs, today) : [], [view, compareOpen, results, strength, weights, refs, today]);
+  const options = view === "competition" ? classes(meets.map(officialClass)) : classes(gymRecords.map((x) => x.classLabel));
+  const unknown = view === "competition" ? meets.some((m) => !officialClass(m)) : gymRecords.some((r) => !r.classLabel);
+  const defaultClass = view === "gym" && bw.category && options.includes(bw.category.label) ? bw.category.label : "all";
+  const classFilter = classPick && (classPick === "all" || classPick === "unknown" || options.includes(classPick)) ? classPick : defaultClass;
+  const competition = useMemo(() => competitionRing(meets, classFilter, meetPick), [meets, classFilter, meetPick]);
+  const gym = useMemo(() => gymRingBests(gymRecords, metric, classFilter), [gymRecords, metric, classFilter]);
+  const lifts: RingLifts = view === "current" ? projection.lifts : view === "competition" ? competition.lifts : gym;
+  const total = view === "current" ? projection.totalLb : view === "competition" ? competition.totalLb : ringTotal(gym);
+  const low = view === "current" ? projection.lowLb : null;
+  const title = view === "current" ? "Projected top end" : view === "competition" ? (meetPick === "individual" ? "Combined lift bests" : "Meet total") : "Combined gym bests";
+  const description = view === "current"
+    ? total == null ? "A current total needs recent usable training evidence for all three lifts. Past meet results and stale estimates are not substituted." : "Same-day conservative and optimistic scenarios from the shared strength engine. The top end assumes favourable execution across all three lifts; it is not a guaranteed total."
+    : view === "competition" && meetPick !== "individual"
+      ? "The successful lifts recorded at the selected meet."
+      : "Individual bests may have been achieved on different dates. Their sum is not an official or demonstrated single-session total.";
+  const changeView = (v: View) => { setView(v); setLift(null); setClassPick(null); setMeetPick("latest"); setMetric("actual"); };
+  const size = 208;
+  const radius = 87;
+  const sum = ringTotal(lifts);
+  const compareChoices = compareOpen ? [
+    { key: "latest", label: "Latest competition", ...competitionRing(meets, "all", "latest") },
+    ...classes(meets.map(officialClass)).map(c => ({key: "meet:" + c, label: c + " · best official total", ...competitionRing(meets, c, "best")})),
+    ...["all", ...classes(gymRecords.map(r => r.classLabel))].flatMap(c => (["actual", "estimated"] as const).map(m => {
+      const records = gymRingBests(gymRecords, m, c);
+      return { key: "gym:" + c + ":" + m, label: (c === "all" ? "All-time" : c) + (m === "actual" ? " · gym singles" : " · estimated gym bests"), lifts: records, totalLb: ringTotal(records), meet: null };
+    })),
+  ] : [];
+  const comparison = compareChoices.find(c => c.key === comparePick) ?? compareChoices[0];
+  const delta = (a: number, b: number) => (a >= b ? "+" : "−") + dualLoad(Math.abs(a-b),unit).main;
+  let at = 0;
+
   return (
-    <div
-      className="mb-1 ml-8 mt-0.5 space-y-1 text-[12px] text-muted-foreground"
-      data-donut-detail={lift}
-    >
-      <p className="text-foreground/85">{words}</p>
-      {c.kind === "estimate" && <p>Worked out from your {fmtDay(c.lifts[lift].basisDay)} workout.</p>}
-      {maxes.map((m) => (
-        <p key={`${m.kind}-${m.lb}`} className="tabular-nums">
-          {kind[m.kind]}: {round(conv(m.lb))} {unit}
-          {m.date ? ` · ${fmtDay(m.date)}` : ""}
-        </p>
-      ))}
+    <div className="@container space-y-3" data-sbd-donut data-sbd-kind={view}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[11px] text-muted-foreground">Current bodyweight</div>
+          <div className="text-sm font-semibold tabular-nums">{bw.latest ? bwText(bw.latest.kg, unit) : "Not logged"}</div>
+          {bw.latest && <div className="text-[11px] text-muted-foreground">{fmtDay(bw.latest.day)}</div>}
+        </div>
+        <button type="button" onClick={() => setHistoryOpen(true)} className="min-h-11 shrink-0 text-right" aria-label="Open weight history">
+          <span className="block text-[11px] text-muted-foreground">Closest weight class</span>
+          <span className="block text-sm font-semibold">{bw.category?.label ?? "—"}</span>
+          <span className="block text-[11px] text-muted-foreground">Weight history ›</span>
+        </button>
+      </div>
+      <Segmented<View> value={view} onChange={changeView} options={[{ key: "current", label: "Current" }, { key: "competition", label: "Competition" }, { key: "gym", label: "Gym PRs" }]} label="Performance view" size="sm" />
+      {view !== "current" && (
+        <div className="flex items-center gap-2">
+          {(options.length > 0 || unknown) && <select aria-label="Weight class" value={classFilter} className={cn(selectStyle, "flex-1")} onChange={(e) => { setClassPick(e.target.value); setMeetPick("latest"); setLift(null); }}>
+            <option value="all">All classes</option>
+            {options.map((c) => <option key={c} value={c}>{c}</option>)}
+            {unknown && <option value="unknown">Unclassified</option>}
+          </select>}
+          {view === "competition" ? (
+            <select aria-label="Competition selection" value={meetPick} className={cn(selectStyle, "flex-[2]")} onChange={(e) => { setMeetPick(e.target.value); setLift(null); }}>
+              <option value="latest">Latest meet</option>
+              <option value="best">Best total</option>
+              <option value="individual">Lift bests</option>
+              {competition.options.map((m) => <option value={m.id} key={m.id}>{m.label}</option>)}
+            </select>
+          ) : <Segmented<Metric> className="flex-1" value={metric} onChange={(v) => { setMetric(v); setLift(null); }} options={[{ key: "actual", label: "1RM" }, { key: "estimated", label: "e1RM" }]} label="Actual or estimated max" size="sm" />}
+        </div>
+      )}
+
+      <div className="flex flex-col items-center gap-3 @[520px]:flex-row @[520px]:gap-5">
+        <div className="relative shrink-0" style={{ width: size, height: size }}>
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={total == null ? "Total unavailable" : `${title}: ${dualLoad(total, unit).main}`}>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--muted)" strokeWidth={20} />
+            {total != null && sum != null && COMP_LIFTS.map((l) => {
+              const sweep = (lifts[l]!.lb / sum) * 360;
+              const start = at + Math.min(1.5, sweep / 4);
+              at += sweep;
+              const end = at - Math.min(1.5, sweep / 4);
+              return <path key={l} d={arcPath(size / 2, size / 2, radius, start, end)} fill="none" stroke={LIFT_SERIES[l]} strokeWidth={lift === l ? 26 : 20} opacity={lift == null || lift === l ? 1 : 0.28} className="cursor-pointer transition-all duration-300 motion-reduce:transition-none" onClick={() => setLift(lift === l ? null : l)} data-donut-seg={l} />;
+            })}
+          </svg>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+            <span className="text-[11px] font-medium text-muted-foreground">{title}</span>
+            <span className="text-[29px] font-semibold leading-tight tabular-nums tracking-tight">{total == null ? "—" : loadNum(total, unit)}{total != null && <span className="ml-0.5 text-xs font-medium text-muted-foreground">{unit}</span>}</span>
+            {total != null && <span className="text-xs tabular-nums text-muted-foreground">{dualLoad(total, unit).other}</span>}
+            {total != null && low != null && <>
+              <span className="mt-1 text-[11px] tabular-nums">{rangeText(low, total, unit)}</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{rangeText(low, total, otherUnit(unit))}</span>
+            </>}
+            {total == null && <span className="text-[11px] text-muted-foreground">Insufficient data</span>}
+          </div>
+        </div>
+        <ul className="w-full min-w-0 space-y-0.5" aria-label="Lifts">
+          {COMP_LIFTS.map((l) => {
+            const row = lifts[l];
+            return <li key={l} className={cn("flex items-center gap-1 rounded-lg", lift === l && "bg-muted/60")}>
+              <button type="button" onClick={() => setLift(lift === l ? null : l)} aria-pressed={lift === l} className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-muted/40" data-donut-lift={l}>
+                <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: LIFT_SERIES[l] }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{COMP_LIFT_LABEL[l]}</span>
+                  {row && row.lowLb != null ? <span className="block text-[10px] text-muted-foreground">{rangeText(row.lowLb, row.lb, unit)} · {rangeText(row.lowLb, row.lb, otherUnit(unit))}</span> : row && <span className="block text-[10px] text-muted-foreground">{row.stale ? "Last known · " : row.classLabel ? row.classLabel + " · " : ""}{fmtDay(row.day)}</span>}
+                </span>
+                <span className="shrink-0 text-right tabular-nums">
+                  <span className="block text-sm font-semibold">{row ? dualLoad(row.lb, unit).main : "—"}</span>
+                  {row && <span className="block text-[11px] text-muted-foreground">{dualLoad(row.lb, unit).other}</span>}
+                </span>
+              </button>
+              <InfoTip label={`About ${COMP_LIFT_LABEL[l].toLowerCase()}`} title={COMP_LIFT_LABEL[l]} className="mr-0.5">
+                <p>{row?.detail ?? "No qualifying record for this view."}</p>
+                {row?.bodyweightKg != null && <p>{bwText(row.bodyweightKg, unit)} bodyweight{row.classLabel ? ` · ${row.classLabel}` : ""}.</p>}
+              </InfoTip>
+            </li>;
+          })}
+        </ul>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>{view === "current" ? (total == null ? "Recent evidence needed" : `${projection.confidence} confidence · ${fmtDay(today)}`) : competition.meet && view === "competition" ? `${competition.meet.name ?? "Competition"} · ${fmtDay(competition.meet.date)}` : "Individual bests · different dates possible"}</span>
+        <InfoTip label="About this total">{description}</InfoTip>
+        {view === "gym" && onRecords && <button type="button" className="min-h-10 shrink-0 font-medium text-foreground" onClick={onRecords}>Records ›</button>}
+      </div>
+
+      <button type="button" className="min-h-10 w-full rounded-lg border border-border text-xs font-medium" onClick={() => setCompareOpen(true)}>Compare performance</button>
+      <Sheet open={compareOpen} onOpenChange={setCompareOpen}>
+        <SheetContent side="bottom" swipeToClose className="max-h-[82dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
+          <SheetTitle>Compare performance</SheetTitle>
+          <SheetDescription>Compare the selected view against a recorded historical result. Projected and achieved values are different types of evidence.</SheetDescription>
+          <select className={selectStyle} aria-label="Historical comparison" value={comparePick} onChange={e => setComparePick(e.target.value)}>
+            {compareChoices.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          {comparison && <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-xs"><div><div className="text-muted-foreground">{title}</div><strong>{total == null ? "—" : dualLoad(total,unit).main}</strong></div><div><div className="text-muted-foreground">{comparison.label}</div><strong>{comparison.totalLb == null ? "—" : dualLoad(comparison.totalLb,unit).main}</strong></div></div>
+            {COMP_LIFTS.map(l => {
+              const a = lifts[l], b = comparison.lifts[l];
+              const av = a && !a.stale ? a.lb : null, bv = b?.lb ?? null;
+              const max = Math.max(av ?? 0,bv ?? 0,1);
+              return <div key={l} className="space-y-1"><div className="flex justify-between text-sm"><span>{COMP_LIFT_LABEL[l]}</span><span>{av == null || bv == null ? "—" : delta(av,bv)}</span></div>
+                {[av,bv].map((v,i) => <div key={i} className="flex items-center gap-2"><div className="flex-1 rounded-full bg-muted"><div className={cn("h-2 rounded-full", i ? "bg-muted-foreground" : "bg-primary")} style={{width:(v ?? 0)/max*100+"%"}} /></div><span className="w-32 text-right text-xs">{v == null ? "—" : dualLoad(v,unit).main+" · "+dualLoad(v,unit).other}</span></div>)}
+                {b && <div className="text-[11px] text-muted-foreground">{b.classLabel ?? "Unclassified"} · {fmtDay(b.day)}{b.bodyweightKg == null ? "" : " · "+bwText(b.bodyweightKg,unit)}</div>}
+              </div>;
+            })}
+            <p className="text-xs text-muted-foreground">Individual gym bests can come from separate days. Differences are not proof of competition-day performance.</p>
+          </div>}
+          <Button variant="outline" onClick={() => setCompareOpen(false)}>Done</Button>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent side="bottom" swipeToClose className="max-h-[82dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
+          <SheetTitle>Weight history</SheetTitle>
+          <SheetDescription>Training categories use a seven-day average and the nearest known class reference; they are not official competition eligibility.</SheetDescription>
+          {timeline.length ? <ul className="divide-y divide-border">{timeline.map((p) => <li key={p.start + p.category} className="flex items-center justify-between gap-2 py-3">
+            <div><div className="text-sm font-semibold">{p.category}</div><div className="text-xs text-muted-foreground">{fmtDay(p.start)} – {fmtDay(p.end)}</div></div>
+            <div className="text-right text-xs tabular-nums">{bwText(p.averageKg, unit)}<div className="text-muted-foreground">{p.samples} weigh-ins</div></div>
+          </li>)}</ul> : <p className="py-4 text-sm text-muted-foreground">Not enough dated weigh-ins or known weight classes to build a timeline.</p>}
+          <Button variant="outline" onClick={() => setHistoryOpen(false)}>Done</Button>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

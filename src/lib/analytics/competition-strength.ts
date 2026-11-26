@@ -125,6 +125,11 @@ export type MeetResult = {
   lifts: Record<CompLift, number>;
   total: number;
   bodyweightLb: number | null;
+  /** Official classification as recorded; never inferred from a training weight. */
+  weightClass?: string | null;
+  federation?: string | null;
+  event?: string | null;
+  id?: string;
 };
 
 /** athlete_powerlifting_results rows (kg) → meets in lb, newest first. Incomplete meets are left out. */
@@ -142,6 +147,10 @@ export function meetsFromRows(rows: any[]): MeetResult[] {
       lifts: { squat: s * LB_PER_KG, bench: b * LB_PER_KG, deadlift: d * LB_PER_KG },
       total: (s + b + d) * LB_PER_KG,
       bodyweightLb: bw > 0 ? bw * LB_PER_KG : null,
+      weightClass: m.weight_class_kg == null ? null : String(m.weight_class_kg),
+      federation: m.federation ?? null,
+      event: m.event ?? null,
+      id: m.id == null ? undefined : String(m.id),
     });
   }
   return out.sort((a, b) => b.date.localeCompare(a.date));
