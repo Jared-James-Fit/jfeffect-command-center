@@ -86,7 +86,19 @@ export type GoalRow = {
   approved_at: string | null;
   approved_by: string | null;
   /** the read when it was approved: what was projected and where they were (learning) */
-  approved_read: { expectedKg: number | null; nowKg: number | null; score: number | null; confidence: Confidence | null; at: string } | null;
+  approved_read: {
+    expectedKg: number | null;
+    nowKg: number | null;
+    score: number | null;
+    confidence: Confidence | null;
+    /** what the projection was read from at approval (older rows don't say) */
+    source?: "meet_forecast" | "training_trend" | "bodyweight_trend" | null;
+    at: string;
+  } | null;
+  /** the profile's own bodyweight goal type (lose, gain, maintain, performance_cut, custom), when it came from there */
+  profile_type?: "lose" | "gain" | "maintain" | "performance_cut" | "custom" | null;
+  /** the top of a maintain range, in approved_unit */
+  approved_value_max?: number | null;
   deadline: string | null;
   competition_id: string | null;
   event_title: string | null;

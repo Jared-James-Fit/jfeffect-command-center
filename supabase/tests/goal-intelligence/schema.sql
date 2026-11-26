@@ -29,6 +29,7 @@ create table coaches (id uuid primary key default gen_random_uuid(), user_id uui
 create table clients (
   id uuid primary key default gen_random_uuid(), user_id uuid, first_name text, archived boolean not null default false,
   service_tier text not null default 'coaching', assigned_coach_id uuid references coaches(id),
+  preferred_weight_unit text not null default 'lb',
   bodyweight_goal_type text check (bodyweight_goal_type in ('lose','gain','maintain','performance_cut','custom')),
   bodyweight_goal_value numeric, bodyweight_goal_value_max numeric,
   bodyweight_goal_unit text check (bodyweight_goal_unit in ('lb','kg')), bodyweight_goal_date date, bodyweight_goal_set_at timestamptz);

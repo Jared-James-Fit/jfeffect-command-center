@@ -170,11 +170,59 @@ export function mergeChanges(existing: OutboxChange[], incoming: OutboxChange): 
   return latestPerGoal([...existing, incoming]);
 }
 
-/** Which changes are still what the goal says now (approved, same version). */
-export function currentChanges(changes: OutboxChange[], goals: Array<{ id: string; status: string; version: number; approved_kg: number | null; client_facing: boolean }>): OutboxChange[] {
+/** What the outbox needs of a goal to judge a waiting change against it. */
+export type CurrentGoal = {
+  id: string;
+  status: string;
+  version: number;
+  approved_kg: number | null;
+  approved_text?: string | null;
+  deadline?: string | null;
+  event_title?: string | null;
+  client_facing: boolean;
+};
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, " ");
+
+/**
+ * Which changes still say what the approved goal says now: still approved,
+ * still for the client, and the same approved target. Only the approved
+ * target decides: the client's own number moving, a read, a note or the
+ * goal's version never makes an approved change outdated. The meet's date and
+ * name are taken as they are now (a moved meet is said with its new date).
+ */
+export function currentChanges(changes: OutboxChange[], goals: CurrentGoal[]): OutboxChange[] {
   const by = new Map(goals.map((g) => [g.id, g]));
-  return latestPerGoal(changes).filter((c) => {
+  const out: OutboxChange[] = [];
+  for (const c of latestPerGoal(changes)) {
     const g = by.get(c.goalId);
-    return !!g && g.status === "active" && g.client_facing && g.version === c.version && (c.targetKg == null || (g.approved_kg != null && Math.abs(Number(g.approved_kg) - c.targetKg) < 0.05));
+    if (!g || g.status !== "active" || !g.client_facing) continue;
+    const same =
+      c.targetKg != null
+        ? g.approved_kg != null && Math.abs(Number(g.approved_kg) - c.targetKg) < 0.05
+        : g.approved_kg == null && (g.approved_text === undefined || norm(g.approved_text) === norm(c.targetText));
+    if (!same) continue;
+    out.push({
+      ...c,
+      deadline: g.deadline !== undefined ? g.deadline : c.deadline,
+      eventTitle: g.event_title !== undefined ? g.event_title : c.eventTitle,
+    });
+  }
+  return out;
+}
+
+/** Did anything the message says move (a line dropped, a date or a meet's name)? Then the words are rebuilt. */
+export function changesMoved(before: OutboxChange[], now: OutboxChange[]): boolean {
+  const a = latestPerGoal(before);
+  if (a.length !== now.length) return true;
+  const by = new Map(now.map((c) => [c.goalId, c]));
+  return a.some((c) => {
+    const n = by.get(c.goalId);
+    return !n || n.deadline !== c.deadline || n.eventTitle !== c.eventTitle;
   });
 }
+
+/** Send failures before a waiting update is handed to the coach (waits never count). */
+export const MAX_SEND_FAILURES = 3;
+/** A claim this old with no send recorded was cut off part way: pick it up again. */
+export const STALE_SENDING_MS = 10 * 60_000;

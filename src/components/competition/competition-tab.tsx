@@ -152,8 +152,11 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
     queryFn: () => read({ data: { clientId, competitionId } }),
     staleTime: 30_000,
   });
-  const invalidate = () =>
+  // a competition's target and date are also the goal ledger's (sync triggers): the Goals card reads again
+  const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
+    void qc.invalidateQueries({ queryKey: ["client-goals", clientId] });
+  };
   const saveSchedule = useServerFn(saveScheduleFn);
   const tickChecklist = useServerFn(tickChecklistFn);
   const reviewChanges = useServerFn(reviewChangesFn);

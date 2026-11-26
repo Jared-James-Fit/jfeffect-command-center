@@ -105,22 +105,20 @@ export async function loadGoalContext(sb: Db, clientId: string, opts: { goals?: 
         ).data ?? [],
       [] as any[],
     ),
-    needBw && client.user_id ? safe(() => readWeighIns(sb, clientId, client.user_id, today), [] as WeighIn[]) : Promise.resolve([] as WeighIn[]),
+    // a client with no login still has the coach's weigh-ins
+    needBw ? safe(() => readWeighIns(sb, clientId, client.user_id, today), [] as WeighIn[]) : Promise.resolve([] as WeighIn[]),
     safe(async () => {
       const { loadPainEntries } = await import("@/lib/pain/load");
       const { buildPainHistory } = await import("@/lib/pain/history");
       const entries = await loadPainEntries(sb, [clientId]);
       return buildPainHistory(entries.get(clientId) ?? [], today);
     }, null as any),
+    // planned workouts the last 4 weeks (the app's own rule for a workout's date) and how many of those they did
     safe(async () => {
-      const from = addDays(today, -28);
-      const [sched, done] = await Promise.all([
-        sb.from("pl_scheduled_workouts").select("id", { count: "exact", head: true }).eq("client_id", clientId).gte("scheduled_date", from).lt("scheduled_date", today),
-        sb.from("pl_day_completions").select("id", { count: "exact", head: true }).eq("client_id", clientId).not("completed_at", "is", null).gte("completed_at", `${from}T00:00:00Z`),
-      ]);
-      const p = typeof (sched as any)?.count === "number" ? (sched as any).count : null;
-      const d = typeof (done as any)?.count === "number" ? (done as any).count : null;
-      return p && p >= 3 && d != null ? Math.min(100, Math.round((d / p) * 100)) : null;
+      const { loadDatedWorkouts } = await import("@/lib/cleo-schedule.server");
+      const planned = (await loadDatedWorkouts(sb, { clientIds: [clientId], from: addDays(today, -28), to: addDays(today, -1) })).filter((w) => w.visible && !w.optional);
+      if (planned.length < 3) return null;
+      return Math.round((planned.filter((w) => w.done).length / planned.length) * 100);
     }, null as number | null),
     safe(
       async () =>
@@ -194,7 +192,12 @@ export async function loadGoalContext(sb: Db, clientId: string, opts: { goals?: 
   }
 
   // learning: their own resolved goals
-  const calibration = calibrationFrom(goals.filter((g) => g.outcome && (g.kind === "lift" || g.kind === "total") && g.feasibility?.projection?.source === "training_trend").map((g) => g.outcome!));
+  // (only targets projected from the training line: a meet forecast measures something else)
+  const calibration = calibrationFrom(
+    goals
+      .filter((g) => g.outcome && (g.kind === "lift" || g.kind === "total") && (g.approved_read?.source ? g.approved_read.source === "training_trend" : !g.competition_id && g.feasibility?.projection?.source === "training_trend"))
+      .map((g) => g.outcome!),
+  );
 
   const level = experienceLevel(goalsSetup?.training_experience ?? client.intake_training_experience ?? null);
   const strength: Partial<Record<Lift, StrengthRead>> = {};
@@ -227,10 +230,12 @@ export async function loadGoalContext(sb: Db, clientId: string, opts: { goals?: 
 }
 
 /** Their weigh-ins, the app's log and the coach's older entries, one a day (the app's wins), kg. */
-async function readWeighIns(sb: Db, clientId: string, userId: string, today: string): Promise<WeighIn[]> {
+async function readWeighIns(sb: Db, clientId: string, userId: string | null, today: string): Promise<WeighIn[]> {
   const since = addDays(today, -120);
   const [canon, legacy] = await Promise.all([
-    sb.from("progress_bodyweight").select("logged_date, weight_value, weight_unit").eq("user_id", userId).gte("logged_date", since).order("logged_date").limit(400),
+    userId
+      ? sb.from("progress_bodyweight").select("logged_date, weight_value, weight_unit").eq("user_id", userId).gte("logged_date", since).order("logged_date").limit(400)
+      : Promise.resolve({ data: [] }),
     sb.from("progress_metrics").select("entry_date, bodyweight, bodyweight_unit").eq("client_id", clientId).not("bodyweight", "is", null).gte("entry_date", since).order("entry_date").limit(400),
   ]);
   const byDay = new Map<string, number>();

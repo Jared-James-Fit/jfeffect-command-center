@@ -111,7 +111,7 @@ export type GoalSpec = Pick<
   | "approved_approach"
   | "client_text"
   | "approved_text"
-> & { baselineKg?: number | null; direction?: "up" | "down" | null };
+> & { baselineKg?: number | null; direction?: "up" | "down" | null; profile_type?: GoalRow["profile_type"]; approved_value?: number | null; approved_value_max?: number | null };
 
 /* ------------------------------------------------------------------ */
 
@@ -263,21 +263,40 @@ export function trainingProjection(
   return { range: { lowKg: r1(low), expectedKg: r1(expected), highKg: r1(high) }, confidence: conf, basis, demonstratedPct: demonstrated != null ? r2(demonstrated) : null };
 }
 
+const NINE = "(?:9 ?\\/ ?9|9 for 9|nine for nine)";
+/** They said they want to make every attempt / not take risks ("play it safe", "go 9 for 9", "conservative"). */
+export function prefersSafe(p: string): boolean {
+  const t = p.toLowerCase();
+  if (/\b(play(?:ing)? it safe|conservative|not (?:too |be )?aggressive|no (?:big )?risks?|careful|safely)\b/.test(t)) return true;
+  if (new RegExp(NINE).test(t) && !new RegExp(`(don.?t care|rather than|\\bnot\\b|\\bover\\b|instead of)[^.]{0,30}${NINE}`).test(t)) return true;
+  return false;
+}
+/** They said they want the top end ("top end over 9/9", "send it", "go for a PR"). */
+export function wantsTopEnd(p: string): boolean {
+  const t = p.toLowerCase();
+  if (prefersSafe(t)) return false;
+  return (
+    /\b(top end|top-end|maxim[iu][sz]e|max out|aggressive|send it|pr|prs|personal best|go(?:ing)? for (?:it|broke|the top|a pr|prs|the top end))\b/.test(t) ||
+    new RegExp(`(don.?t care|rather than|\\bover\\b)[^.]{0,30}${NINE}`).test(t)
+  );
+}
+
 /** The approach that fits this athlete now, and why (short). */
 export function recommendApproach(x: {
   confidence: Confidence;
   concerns: GoalContext["concerns"];
-  lift: Lift | null;
+  /** the lifts the goal loads (a total: all three; bodyweight: none, so only general concerns) */
+  lifts: Lift[];
   adherencePct: number | null;
   preferences: string[];
   meetSoon: boolean;
 }): { key: ApproachKey; why: string } {
-  const mine = x.concerns.filter((c) => (c.lift === x.lift || c.lift == null) && c.severity !== "watch");
+  const mine = x.concerns.filter((c) => (c.lift == null || x.lifts.includes(c.lift)) && c.severity !== "watch");
   if (mine.length) return { key: "conservative", why: mine[0].text.replace(/\.$/, "") + ": that comes first" };
   if (x.confidence === "low") return { key: "conservative", why: "Low confidence: more recent training data is needed" };
   if (x.adherencePct != null && x.adherencePct < 70) return { key: "conservative", why: `About ${Math.round(x.adherencePct)}% of planned training done lately` };
-  const wantsTop = x.preferences.some((p) => /\b(top end|top-end|go for|max(imi[sz]e)?|aggressive|pr|personal best|send it|9 ?\/ ?9.*(don|not)|don.?t care.*9)/i.test(p));
-  if (wantsTop && x.meetSoon) return { key: "high", why: "They said they want the top end, and nothing on file argues against it" };
+  if (x.preferences.some(prefersSafe)) return { key: "conservative", why: "They said they want to play it safe" };
+  if (x.preferences.some(wantsTopEnd) && x.meetSoon) return { key: "high", why: "They said they want the top end, and nothing on file argues against it" };
   return { key: "moderate", why: "Their projection's middle: what training supports now" };
 }
 
@@ -338,6 +357,15 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
   const target = goal.approved_kg ?? goal.client_kg_max ?? goal.client_kg ?? null;
   const judged: Feasibility["judged"] = goal.approved_kg != null ? "approved" : target != null ? "client" : null;
 
+  // its date has passed: nothing to plan any more, only the result to record
+  if (goal.deadline && goal.deadline < ctx.today) {
+    return {
+      ...none(goal.kind === "bodyweight" ? "Date passed: waiting for the weigh-ins around it." : goal.competition_id ? "The meet has passed: waiting for the results." : "Date passed: waiting for the result.", "none"),
+      targetKg: target,
+      judged,
+    };
+  }
+
   /* -------------------- bodyweight -------------------- */
   if (goal.kind === "bodyweight") {
     const bw = ctx.bodyweight;
@@ -350,9 +378,12 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
     base.targetKg = target;
     base.judged = judged;
     if (target == null) return none("No number yet.", "none");
-    const direction: "up" | "down" = target >= bw.currentKg ? "up" : "down";
+    const holding = goal.profile_type === "maintain";
+    // the goal's own direction (a cut stays a cut even once they're under it); else read from where they are
+    const direction: "up" | "down" = goal.direction ?? (goal.profile_type === "gain" ? "up" : goal.profile_type === "lose" || goal.profile_type === "performance_cut" ? "down" : target >= bw.currentKg ? "up" : "down");
     const weeks = goal.deadline ? daysBetween(ctx.today, goal.deadline) / 7 : null;
-    const ctxKind: WeightGoalContext = ctx.weightContext ?? (direction === "up" ? "gain" : "fat_loss");
+    const ctxKind: WeightGoalContext =
+      goal.competition_id || goal.profile_type === "performance_cut" ? "powerlifting_class" : holding ? "maintain" : ctx.weightContext ?? (direction === "up" ? "gain" : "fat_loss");
     const rates =
       direction === "up"
         ? GAIN_RATES[ctx.level ?? "intermediate"]
@@ -366,9 +397,14 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
       base.progress = { pct: Math.round(pct), line: `${fmtWeight(start, unit)} → ${fmtWeight(bw.currentKg, unit)} of ${fmtWeight(target, unit)}` };
     };
     progressOf();
+    const tol = Math.max(0.3, target * 0.005);
+    const top = holding && goal.approved_value_max != null && goal.approved_kg != null && goal.approved_value != null ? (target * goal.approved_value_max) / goal.approved_value : target;
+    const reached = holding ? bw.currentKg >= target - tol && bw.currentKg <= Math.max(top, target) + tol : direction === "up" ? bw.currentKg >= target - tol : bw.currentKg <= target + tol;
+    if (reached) {
+      return { ...base, confidence: conf, headline: holding ? "In the range: hold it." : "At the goal: hold it.", action: rec(goal.status === "proposed" ? "approve" : "maintain", goal.status === "proposed" ? "Review: they're already there." : "Hold the weight there.", null, null) };
+    }
     if (weeks == null || weeks <= 0) {
-      const reached = direction === "up" ? bw.currentKg >= target : bw.currentKg <= target;
-      return { ...base, confidence: conf, headline: reached ? "At the goal: hold it." : "No date: judged once a date is set.", action: rec(reached ? "maintain" : "none", reached ? "Hold the weight there." : "Add a date to judge the pace.", null, null) };
+      return { ...base, confidence: conf, headline: "No date: judged once a date is set.", action: rec(goal.status === "proposed" ? "approve" : "none", goal.status === "proposed" ? "Review: keep it as a goal, or let it go." : "Add a date to judge the pace.", null, null) };
     }
     // the pace each approach takes, % of bodyweight a week
     const paces: Record<ApproachKey, number> = {
@@ -380,9 +416,11 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
       extreme: rates.limit * 1.4,
     };
     const s = direction === "up" ? 1 : -1;
+    // each approach's change, capped at what's sane over any time (never a weight that isn't a person's)
+    const capPct = direction === "up" ? 15 : 20;
     const anchors = Object.fromEntries(
       APPROACHES.map((a) => {
-        return [a.key, r1(bw.currentKg * (1 + (s * paces[a.key] * weeks) / 100))];
+        return [a.key, r1(bw.currentKg * (1 + (s * Math.min(paces[a.key] * weeks, capPct)) / 100))];
       }),
     ) as Record<ApproachKey, number>;
     const requiredPct = ((target - bw.currentKg) / bw.currentKg / weeks) * 100;
@@ -399,12 +437,12 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
     base.band = band;
     base.approaches = APPROACHES.map((a) => ({ key: a.key, label: a.label, targetKg: anchors[a.key], score: ANCHOR_SCORE[a.key], line: `${r2(paces[a.key])}% of bodyweight a week` }));
     if (goal.approved_kg != null && goal.client_kg != null) base.clientScore = scoreAgainst(goal.client_kg_max ?? goal.client_kg, anchors, direction).score;
-    const recd = recommendApproach({ confidence: conf, concerns: ctx.concerns, lift: null, adherencePct: ctx.adherencePct, preferences: [], meetSoon: false });
+    const recd = recommendApproach({ confidence: conf, concerns: ctx.concerns, lifts: [], adherencePct: ctx.adherencePct, preferences: [], meetSoon: false });
     // bodyweight: a powerlifter's class cut never goes past the comfortable pace on its own
     base.recommended = recd.key === "moderate" && direction === "down" && ctxKind === "powerlifting_class" ? "conservative" : recd.key;
     base.recommendedWhy = recd.key === base.recommended ? recd.why : "A class cut keeps strength best at a steady pace";
     reasons.push(`Needs ${Math.abs(r2(requiredPct))}% of bodyweight a week (comfortable up to ${rates.comfortable}%, limit ${rates.limit}%)`);
-    const action = decideAction({ goal, score, band, conf, anchors, recommended: base.recommended, weeks, direction, unit, projection: base.projection });
+    const action = decideBodyweightAction({ goal, score, band, conf, anchors, recommended: base.recommended, requiredPct, rates, unit });
     return { ...base, confidence: conf, headline: `${score}/100 feasibility: ${bwLine(score, requiredPct, rates)}`, action };
   }
 
@@ -465,7 +503,7 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
   const recd = recommendApproach({
     confidence: conf,
     concerns,
-    lift: goal.kind === "lift" ? goal.lift : null,
+    lifts,
     adherencePct: ctx.adherencePct,
     preferences: goal.competition_id ? ctx.preferences[goal.competition_id] ?? [] : [],
     meetSoon: !!meet && weeks != null && weeks <= 3,
@@ -504,6 +542,36 @@ function bwLine(score: number, requiredPct: number, rates: { comfortable: number
   if (a <= rates.comfortable) return "A pace that keeps strength and muscle.";
   if (a <= rates.limit) return "Doable, but no room to fall behind.";
   return score < 30 ? "Very high risk: past the safe pace for this goal." : "High risk: faster than the safe pace.";
+}
+
+/**
+ * A bodyweight goal's advice: a pace past the safe limit changes the target
+ * or the date, never the training (and never "faster"); a pace inside it keeps
+ * the plan. A bodyweight target is never raised: under-reaching a weight is
+ * not a goal to push.
+ */
+export function decideBodyweightAction(x: {
+  goal: GoalSpec;
+  score: number;
+  band: ApproachKey;
+  conf: Confidence;
+  anchors: Record<ApproachKey, number>;
+  recommended: ApproachKey;
+  requiredPct: number;
+  rates: { comfortable: number; limit: number };
+  unit: Unit;
+}): Recommendation {
+  const w = (kg: number) => fmtWeight(kg, x.unit);
+  const pace = Math.abs(x.requiredPct);
+  const safe = x.recommended === "moderate" ? "moderate" : x.recommended;
+  if (x.goal.status === "proposed") {
+    if (pace <= x.rates.limit) return rec("approve", `Review: their target fits a safe pace (${x.score}/100).`, null, null);
+    return rec("approve", `Review: their target needs ${r2(pace)}% a week, past the safe ${x.rates.limit}%. ${APPROACH_LABEL[safe]} is ${w(x.anchors[safe])}.`, x.anchors[safe], safe);
+  }
+  if (x.conf === "low") return rec("collect_data", "Low confidence: a few more weigh-ins are needed before changing anything.", null, null);
+  if (pace > x.rates.limit) return rec("adjust_target", `Adjust target: at a safe pace it's ${w(x.anchors[safe])} by then, or give it more time.`, x.anchors[safe], safe);
+  if (pace > x.rates.comfortable) return rec("maintain", "Maintain plan: doable at this pace, with no room to fall behind.", null, null);
+  return rec("maintain", "Maintain plan: the pace fits.", null, null);
 }
 
 /** What to do now, from the score, the band and the evidence. */

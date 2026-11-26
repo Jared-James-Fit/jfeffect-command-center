@@ -45,30 +45,46 @@ const LIFT_WORDS: Array<{ lift: Lift | "total"; re: RegExp }> = [
 const BODYWEIGHT = /\b(body ?weight|weigh(?:ing)? in|weigh-in|weight class|make weight|cut (?:down )?to|get down to|drop to|bulk to|weigh (?:about|around)?)\b/i;
 const UNIT_KG = /^(kg|kgs|kilo|kilos|kilogram|kilograms)$/i;
 const UNIT_LB = /^(lb|lbs|pound|pounds)$/i;
+const SAID_KG = /\b(kgs?|kilos?|kilograms?)\b|\dkgs?\b/i;
+const SAID_LB = /\b(lbs?|pounds?)\b|\dlbs?\b/i;
 const HEDGES = /\b(maybe|might|probably|i think|thinking|hopefully|hoping|we ?ll see|not sure|could|try|around|about|ish)\b/i;
+/** Saying a goal: a past result ("hit", "PR") alone never is. */
 const GOAL_VERBS =
-  /\b(goal|aim(?:ing)?|want(?:s|ed)? to|wanna|hoping to|trying to|target|get (?:to|up to|down to)|hit(?:ting)?|pr|personal best|by (?:the )?(?:meet|summer|end of|next)|third|3rd|opener|attempt|thirds)\b/i;
+  /\b(goal|aim(?:ing)?|want(?:s|ed)? to|wanna|hoping to|trying to|target|get (?:to|up to|down to)|by (?:the )?(?:meet|summer|end of|next)|third|3rd|opener|attempt|thirds|plan(?:ning)? (?:to|for|on))\b/i;
+/** A coach's notes count only under goal or attempt words. */
+const NOTE_GOAL_WORDS = /\b(goals?|targets?|third|thirds|3rd|openers?|attempts?|aim(?:ing)?|wants?|plan(?:ning)? (?:to|for))\b/i;
 
-/** Numbers that sit next to reps, sets, RPE, a percentage, a time or a date are never targets. */
-const NOT_A_LOAD_AFTER = /^\s*(%|percent|reps?|sets?|x\b|×|rpe|rir|weeks?|wks?|days?|months?|minutes?|mins?|sec|seconds?|hours?|kg\s*\/\s*week|lbs?\s*\/\s*week|am|pm|th\b|st\b|nd\b|rd\b)/i;
-const NOT_A_LOAD_BEFORE = /(@|\brpe|\brir|(?:^|[\s\d])x|×|#|\$|\bweeks?|\bdays?|\/)\s*$/i;
+/** Numbers that sit next to reps, sets, RPE, a percentage, food, a time or a date are never targets. */
+const NOT_A_LOAD_AFTER =
+  /^\s*(?:kg|kgs|lbs?)?\s*(%|percent|reps?\b|sets?\b|x\s*\d|x\b|×|@\s*(?:\d|rpe)|rpe|rir|weeks?|wks?|days?|months?|minutes?|mins?|sec|seconds?|hours?|kg\s*\/\s*week|lbs?\s*\/\s*week|am\b|pm\b|th\b|st\b|nd\b|rd\b|g\b|grams?|cals?\b|kcals?|calories|carbs?|protein|fats?\b|steps|for\s+(?:a\s+)?(?:\d|single|double|triple|reps?|sets?|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen))/i;
+const NOT_A_LOAD_BEFORE = /(@|\brpe|\brir|(?:^|[\s\d])x|×|#|\$|\bweeks?|\bdays?|\/|\+)\s*$/i;
+/** A change, not a target ("up 20 lbs", "add 10", "lose 5 kg"). */
+const CHANGE_BEFORE = /\b(up|add(?:ing|ed)?|another|extra|gain(?:ed)?|lose|lost|drop(?:ped)?|increase(?:d)?(?: by)?|by)\s*$/i;
+/** A working set ("3x5 at 405", "5 reps at 140"). */
+const SET_BEFORE = /\d\s*(?:[x×]\s*\d+\s*)?(?:reps?\s*|sets?\s*)?(?:at|@)\s*$/i;
+const MONTH_BEFORE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s*$/i;
+/** Where they are now, or were: never a target ("currently 170", "I weigh 185 right now", "520 last meet"). */
+const CURRENT_BEFORE = /\b(currently|right now|at the moment|now at|i(?:'m| am) at|was|used to|last (?:meet|time|week|block|year))\b[^.;,\n]{0,20}$/i;
+const CURRENT_AFTER = /^\s*(?:kgs?|lbs?|pounds?)?\s*(?:right now|currently|now\b|at the moment|today|yesterday|ago\b|as of|last (?:meet|time|week|block|year|month))/i;
 
 type NumHit = { value: number; index: number; end: number; unit: Unit | null };
 
 /** The numbers in a piece of text that could be a load or a bodyweight, with any unit right after. */
 export function loadNumbers(text: string): NumHit[] {
   const out: NumHit[] = [];
-  const re = /(\d{2,4}(?:[.,]\d{1,2})?)/g;
+  // "1,500" is one number; "180,190" two; "102,5" a decimal; never a piece of a longer number
+  const re = /(?<![\d.])([1-9],\d{3}(?!\d)|\d{2,4}(?:\.\d{1,2}|,\d(?!\d))?(?!\d))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    const raw = m[1].replace(",", ".");
+    const raw = /^\d,\d{3}$/.test(m[1]) ? m[1].replace(",", "") : m[1].replace(",", ".");
     const value = Number(raw);
-    const before = text.slice(Math.max(0, m.index - 8), m.index);
-    const after = text.slice(m.index + m[1].length, m.index + m[1].length + 14);
+    const before = text.slice(Math.max(0, m.index - 16), m.index);
+    const after = text.slice(m.index + m[1].length, m.index + m[1].length + 24);
     // a year, a time, a date
     if (/^\d{4}$/.test(m[1]) && value >= 1900 && value <= 2100) continue;
     if (/^\s*[:\/]\d/.test(after) || /\d[:\/]\s*$/.test(before)) continue;
-    if (NOT_A_LOAD_AFTER.test(after) || NOT_A_LOAD_BEFORE.test(before)) continue;
+    if (NOT_A_LOAD_AFTER.test(after) || NOT_A_LOAD_BEFORE.test(before.slice(-8))) continue;
+    if (CHANGE_BEFORE.test(before) || SET_BEFORE.test(before) || MONTH_BEFORE.test(before)) continue;
     if (!Number.isFinite(value) || value < 20 || value > 1500) continue;
     const u = after.match(/^\s*([a-z]+)/i)?.[1] ?? "";
     const unit: Unit | null = UNIT_KG.test(u) ? "kg" : UNIT_LB.test(u) ? "lb" : null;
@@ -77,6 +93,13 @@ export function loadNumbers(text: string): NumHit[] {
   return out;
 }
 
+/** Is this number where they are (or were), not where they want to be? */
+function isCurrent(text: string, n: NumHit): boolean {
+  return CURRENT_BEFORE.test(text.slice(Math.max(0, n.index - 48), n.index)) || CURRENT_AFTER.test(text.slice(n.end, n.end + 30));
+}
+
+const RANGE_BETWEEN = /^\s*(kg|kgs|lbs?|pounds?|kilos?)?\s*(to|-|–|—|or|,\s*(maybe|or)?|\/|and)\s*$/i;
+
 /** "220 to 225", "220-225", "110, maybe 115", "anywhere from 264 to 280": one range. Else the first number. */
 function valuesFrom(seg: string, nums: NumHit[]): { values: number[]; unit: Unit | null } | null {
   if (!nums.length) return null;
@@ -84,7 +107,7 @@ function valuesFrom(seg: string, nums: NumHit[]): { values: number[]; unit: Unit
   const b = nums[1];
   if (b) {
     const between = seg.slice(a.end, b.index);
-    if (/^\s*(kg|kgs|lbs?|pounds?|kilos?)?\s*(to|-|–|—|or|,\s*(maybe|or)?|\/|and)\s*$/i.test(between) && b.value >= a.value && b.value <= a.value * 1.25) {
+    if (RANGE_BETWEEN.test(between) && b.value >= a.value && b.value <= a.value * 1.25) {
       return { values: [a.value, b.value], unit: b.unit ?? a.unit };
     }
   }
@@ -94,56 +117,112 @@ function valuesFrom(seg: string, nums: NumHit[]): { values: number[]; unit: Unit
 const timingOf = (t: string): GoalCandidate["timing"] =>
   /\b(third|3rd|thirds)\b/i.test(t) ? "third" : /\b(second|2nd)\s+attempt/i.test(t) ? "second" : /\b(opener|first attempt)\b/i.test(t) ? "opener" : /\b(meet|comp|competition|platform|attempt)\b/i.test(t) ? "meet" : null;
 
+type Hit = { what: Lift | "total" | "bodyweight"; index: number; end: number };
+
+function findHits(t: string): Hit[] {
+  const all: Hit[] = [];
+  for (const { lift, re } of LIFT_WORDS) {
+    const g = new RegExp(re.source, "gi");
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(t))) all.push({ what: lift, index: m.index, end: m.index + m[0].length });
+  }
+  const b = new RegExp(BODYWEIGHT.source, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = b.exec(t))) all.push({ what: "bodyweight", index: m.index, end: m.index + m[0].length });
+  all.sort((x, y) => x.index - y.index || y.end - x.end);
+  // overlapping words are one hit (the first)
+  return all.filter((h, i) => !all.slice(0, i).some((p) => h.index < p.end));
+}
+
+/** A number right before a lift on the same line ("a 405 squat", "83kg bodyweight"), with a range before it. */
+function numberBefore(t: string, h: Hit, nums: NumHit[]): { values: number[]; unit: Unit | null; used: NumHit[] } | null {
+  const k = nums.findIndex((n, i) => n.end <= h.index && (nums[i + 1]?.end ?? Infinity) > h.index);
+  if (k < 0) return null;
+  const n = nums[k];
+  if (!/^[ \t]*-?[ \t]*(?:kg|kgs|kilos?|lbs?|pounds?)?[ \t]*-?[ \t]*$/i.test(t.slice(n.end, h.index))) return null;
+  const p = nums[k - 1];
+  if (p && RANGE_BETWEEN.test(t.slice(p.end, n.index)) && !/\n/.test(t.slice(p.end, n.index)) && n.value >= p.value && n.value <= p.value * 1.25) {
+    return { values: [p.value, n.value], unit: n.unit ?? p.unit, used: [p, n] };
+  }
+  return { values: [n.value], unit: n.unit, used: [n] };
+}
+
 /**
- * The measurable goals in a line of text: each lift named with a number after
- * it (before the next lift is named), the total, a bodyweight. Several lifts
- * in one line ("squat 220-225, bench 110-115, deadlift 264-280") are several
- * goals.
+ * The measurable goals in a line of text: each lift (the total, a bodyweight)
+ * with its number, whether the number comes after the word ("squat 220-225")
+ * or before it ("a 405 squat", "500 total, 180 squat"): which way the text
+ * reads is decided by its first lift. Several lifts in one line are several
+ * goals; a number only ever belongs to one of them. Where they are now, a
+ * change ("up 20"), a working set and a date are never the number.
  */
 export function measurableGoals(text: string, quote = text): GoalCandidate[] {
   const t = String(text ?? "");
   if (!t.trim()) return [];
-  const hits = LIFT_WORDS.flatMap(({ lift, re }) => {
-    const g = new RegExp(re.source, "gi");
-    const xs: Array<{ lift: Lift | "total"; index: number; end: number }> = [];
-    let m: RegExpExecArray | null;
-    while ((m = g.exec(t))) xs.push({ lift, index: m.index, end: m.index + m[0].length });
-    return xs;
-  }).sort((a, b) => a.index - b.index);
+  const hits = findHits(t);
+  if (!hits.length) return [];
+  const nums = loadNumbers(t).filter((n) => !isCurrent(t, n));
+  const q = String(quote ?? t);
+  const separateQuote = q.trim() !== t.trim();
   const out: GoalCandidate[] = [];
-  const tentative = HEDGES.test(quote) || HEDGES.test(t);
   const timing = timingOf(t);
   const seen = new Set<string>();
+  const before = new Map<Hit, NonNullable<ReturnType<typeof numberBefore>>>();
+  for (const h of hits) {
+    const b = numberBefore(t, h, nums);
+    if (b) before.set(h, b);
+  }
+  const usedBefore = new Set(Array.from(before.values()).flatMap((b) => b.used));
+  const after = (h: Hit, i: number) => nums.filter((n) => n.index >= h.end && n.index < (hits[i + 1]?.index ?? t.length));
+  // which way the text reads: the first lift that has a number decides
+  const firstIdx = hits.findIndex((h, i) => before.has(h) || after(h, i).length > 0);
+  const numberFirst = firstIdx >= 0 && before.has(hits[firstIdx]);
   for (let i = 0; i < hits.length; i++) {
     const h = hits[i];
-    const segEnd = hits[i + 1]?.index ?? t.length;
-    const seg = t.slice(h.end, segEnd);
-    const nums = loadNumbers(seg);
-    const v = valuesFrom(seg, nums);
+    let v: { values: number[]; unit: Unit | null } | null = null;
+    if (numberFirst && before.has(h)) v = before.get(h)!;
+    else {
+      const own = after(h, i).filter((n) => !(numberFirst && usedBefore.has(n)));
+      const end = hits[i + 1]?.index ?? t.length;
+      v = valuesFrom(t.slice(h.end, end), own.map((n) => ({ ...n, index: n.index - h.end, end: n.end - h.end })));
+    }
     if (!v) continue;
-    const key = `${h.lift}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (h.what === "bodyweight" && (v.values[0] < 30 || v.values[0] > 400)) continue;
+    if (seen.has(h.what)) continue;
+    seen.add(h.what);
+    // a unit counts as said only when the words said it (an analysis's own paraphrase doesn't)
+    let unit = v.unit;
+    if (unit && separateQuote && !(unit === "kg" ? SAID_KG : SAID_LB).test(q)) unit = null;
+    const qNums = (q.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+    const inQuote = !separateQuote || v.values.every((x) => qNums.includes(x));
     out.push({
-      kind: h.lift === "total" ? "total" : "lift",
-      lift: h.lift === "total" ? null : h.lift,
+      kind: h.what === "total" ? "total" : h.what === "bodyweight" ? "bodyweight" : "lift",
+      lift: h.what === "total" || h.what === "bodyweight" ? null : h.what,
       values: v.values,
-      unit: v.unit,
-      timing,
+      unit,
+      timing: h.what === "bodyweight" ? null : timing,
       text: t.trim().slice(0, 300),
-      quote: String(quote ?? t).trim().slice(0, 600),
-      tentative,
+      quote: q.trim().slice(0, 600),
+      tentative: HEDGES.test(q) || HEDGES.test(t) || !inQuote,
     });
   }
-  if (!out.length && BODYWEIGHT.test(t)) {
-    const m = t.match(BODYWEIGHT)!;
-    const nums = loadNumbers(t.slice(m.index ?? 0));
-    const v = valuesFrom(t.slice(m.index ?? 0), nums);
-    if (v && v.values[0] >= 30 && v.values[0] <= 400) {
-      out.push({ kind: "bodyweight", lift: null, values: v.values, unit: v.unit, timing: null, text: t.trim().slice(0, 300), quote: String(quote).trim().slice(0, 600), tentative });
-    }
-  }
   return out;
+}
+
+/** The parts of a coach's call notes that are about goals or attempts (a header like "Thirds:" covers the lines under it). */
+export function goalNotes(notes: string): string {
+  const keep: string[] = [];
+  let section = false;
+  for (const raw of String(notes ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/:\s*$/.test(line)) {
+      section = NOTE_GOAL_WORDS.test(line);
+      if (section) keep.push(line);
+      continue;
+    }
+    if (section || NOTE_GOAL_WORDS.test(line)) keep.push(line);
+  }
+  return keep.join("\n");
 }
 
 const PREFERENCE = /\b(top end|top-end|9 ?\/ ?9|nine for nine|go for it|play it safe|safe(?:ly)?|conservative|aggressive|send it|no expectations|don.?t care about)\b/i;
@@ -176,8 +255,8 @@ export function statedGoals(text: string): GoalCandidate[] {
   // one sentence at a time, so a quote is the sentence it was said in
   for (const sentence of t.split(/(?<=[.!?\n])\s+/)) {
     if (!GOAL_VERBS.test(sentence)) continue;
-    // past results aren't goals ("hit 100 last week", "got 225 today")
-    if (/\b(last (?:week|time|session)|yesterday|today i|just hit|got|did|made|hit it|smoked)\b/i.test(sentence) && !/\b(want|goal|aim|hoping|next)\b/i.test(sentence)) continue;
+    // past results aren't goals ("hit 100 last week", "got 225 today", "new PR")
+    if (/\b(last (?:week|time|session)|yesterday|today i|just hit|hit|got|did|made|hit it|smoked|pr|prs|pr'd|personal best|felt)\b/i.test(sentence) && !/\b(want|goal|aim|hoping|next|target|plan)\b/i.test(sentence)) continue;
     for (const c of measurableGoals(sentence, sentence)) out.push(c);
   }
   return out;

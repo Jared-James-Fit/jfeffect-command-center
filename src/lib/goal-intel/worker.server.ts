@@ -6,13 +6,14 @@
  * the coach), and read every open goal again when it's due (6 hours), which
  * also settles a passed goal's outcome. Deterministic: no model is called.
  */
-import { assessDueClients, deliverOutbox, extractFromCheckin, extractFromMeeting, extractFromMessages, settingJson } from "./goals.server";
+import { assessDueClients, deliverOutbox, extractFromCheckin, extractFromMeeting, extractFromMessages, recoverStaleSending, settingJson } from "./goals.server";
 
 type Db = any;
 
 export type GoalTickReport = {
+  recovered: number;
   sent: Record<string, number>;
-  meetings: Array<{ id: string; created: number; updated: number } | { id: string; error: string }>;
+  meetings: Array<{ id: string; created: number; updated: number; unchanged?: boolean } | { id: string; error: string }>;
   checkins: number;
   messages: number | null;
   assessed: Array<{ clientId: string; ok: boolean; error?: string }>;
@@ -21,7 +22,10 @@ export type GoalTickReport = {
 export async function runGoalIntelTick(sb: Db, opts: { budgetMs?: number } = {}): Promise<GoalTickReport> {
   const started = Date.now();
   const left = () => (opts.budgetMs ?? 90_000) - (Date.now() - started);
-  const report: GoalTickReport = { sent: {}, meetings: [], checkins: 0, messages: null, assessed: [] };
+  const report: GoalTickReport = { recovered: 0, sent: {}, meetings: [], checkins: 0, messages: null, assessed: [] };
+
+  // 0. a send that was cut off part way: marked sent if it went, else waiting again
+  report.recovered = await recoverStaleSending(sb).catch(() => 0);
 
   // 1. client updates whose window (or retry) is up
   const { data: due } = await sb
@@ -38,52 +42,25 @@ export async function runGoalIntelTick(sb: Db, opts: { budgetMs?: number } = {})
     report.sent[r] = (report.sent[r] ?? 0) + 1;
   }
 
-  // 2. meetings read since they were last scanned (the backfill too: every analysed meeting on file)
-  const { data: sessions } = await sb
-    .from("coaching_sessions")
-    .select("id, updated_at")
-    .eq("analysis_status", "ready")
-    .gte("updated_at", new Date(Date.now() - 180 * 86_400_000).toISOString())
-    .order("updated_at", { ascending: true })
-    .limit(50);
-  if (sessions?.length) {
-    const { data: scanned } = await sb
-      .from("client_goal_sources")
-      .select("source_id, scanned_at")
-      .eq("source_kind", "meeting")
-      .in("source_id", sessions.map((s: any) => s.id));
-    const at = new Map(((scanned ?? []) as any[]).map((r) => [r.source_id, r.scanned_at]));
-    for (const s of sessions as any[]) {
-      if (left() < 20_000) break;
-      const prev = at.get(s.id);
-      if (prev && Date.parse(prev) >= Date.parse(s.updated_at)) continue;
-      try {
-        report.meetings.push({ id: s.id, ...(await extractFromMeeting(sb, s.id)) });
-      } catch (e: any) {
-        report.meetings.push({ id: s.id, error: String(e?.message ?? e).slice(0, 200) });
-      }
+  // 2. meetings not read since they last changed (the database picks them, oldest first, never the same ones again)
+  const { data: sessions, error: sErr } = await sb.rpc("goal_intel_meetings_to_scan", { _limit: 50 });
+  if (sErr) report.meetings.push({ id: "-", error: sErr.message.slice(0, 200) });
+  for (const s of (sessions ?? []) as any[]) {
+    if (left() < 20_000) break;
+    try {
+      report.meetings.push({ id: s.id, ...(await extractFromMeeting(sb, s.id)) });
+    } catch (e: any) {
+      report.meetings.push({ id: s.id, error: String(e?.message ?? e).slice(0, 200) });
     }
   }
 
   // 3. weekly check-ins not read yet
-  const { data: checkins } = await sb
-    .from("messenger_checkins")
-    .select("id, client_id, answers, submitted_at")
-    .eq("task_type", "weekly_checkin")
-    .eq("status", "completed")
-    .gte("submitted_at", new Date(Date.now() - 14 * 86_400_000).toISOString())
-    .order("submitted_at", { ascending: true })
-    .limit(60);
-  if (checkins?.length) {
-    const { data: scanned } = await sb
-      .from("client_goal_sources")
-      .select("source_id")
-      .eq("source_kind", "checkin")
-      .in("source_id", checkins.map((c: any) => c.id));
-    const done = new Set(((scanned ?? []) as any[]).map((r) => r.source_id));
-    for (const c of checkins as any[]) {
+  const { data: ids } = await sb.rpc("goal_intel_checkins_to_scan", { _limit: 60 });
+  const checkinIds = ((ids ?? []) as any[]).map((r) => (typeof r === "string" ? r : r?.goal_intel_checkins_to_scan ?? r?.id)).filter(Boolean);
+  if (checkinIds.length) {
+    const { data: checkins } = await sb.from("messenger_checkins").select("id, client_id, answers, submitted_at").in("id", checkinIds).order("submitted_at", { ascending: true });
+    for (const c of (checkins ?? []) as any[]) {
       if (left() < 15_000) break;
-      if (done.has(c.id)) continue;
       report.checkins += await extractFromCheckin(sb, c).catch(() => 0);
     }
   }

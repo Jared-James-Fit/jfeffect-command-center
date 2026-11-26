@@ -8,16 +8,18 @@
  * review window in the outbox.
  */
 import { assessGoal, meaningfulChange, resolveOutcome } from "./feasibility";
-import { dedupeKey, goalTitle, inferUnit, measurableGoals, statedGoals, wordedGoal, type GoalCandidate } from "./extract";
+import { dedupeKey, goalNotes, goalTitle, inferUnit, measurableGoals, statedGoals, wordedGoal, type GoalCandidate } from "./extract";
 import { loadGoalContext, localToday, readGoals, type GoalClient, type LoadedGoalContext } from "./load.server";
 import {
   DEFAULT_REVIEW_MINUTES,
   MAX_REVIEW_MINUTES,
   MIN_REVIEW_MINUTES,
+  MAX_SEND_FAILURES,
+  STALE_SENDING_MS,
   buildUpdateMessage,
+  changesMoved,
   currentChanges,
   inQuiet,
-  latestPerGoal,
   mergeChanges,
   presenceOf,
   sendDecision,
@@ -150,8 +152,26 @@ async function settleOutcome(sb: Db, g: GoalRow, loaded: LoadedGoalContext): Pro
     actual = r1(bw.currentKg);
     source = "bodyweight_trend";
   } else return null;
-  const direction = g.kind === "bodyweight" ? (g.direction ?? (target < (actual ?? target) ? "down" : "up")) : "up";
-  const result = resolveOutcome({ kind: g.kind, targetKg: target, actualKg: actual, direction });
+  let direction: "up" | "down" | "hold" = "up";
+  if (g.kind === "bodyweight") {
+    const type = g.profile_type;
+    // from where they started (the approval's read), never from where they ended up
+    const start = g.approved_read?.nowKg ?? g.feasibility?.baselineKg ?? null;
+    const d =
+      type === "maintain"
+        ? "hold"
+        : g.direction ?? (type === "gain" ? "up" : type === "lose" || type === "performance_cut" ? "down" : start != null && Math.abs(target - start) >= 0.3 ? (target < start ? "down" : "up") : null);
+    if (!d) return null; // can't tell a cut from a gain: the coach records it
+    direction = d;
+  }
+  const result =
+    direction === "hold"
+      ? actual == null
+        ? null
+        : Math.abs(actual - target) <= Math.max(1, target * 0.02)
+          ? "achieved"
+          : "missed"
+      : resolveOutcome({ kind: g.kind, targetKg: target, actualKg: actual, direction });
   if (!result) return null;
   const outcome = {
     result,
@@ -219,17 +239,30 @@ export async function upsertCandidate(
   const clientKg = lo != null && unit ? r1(toKg(lo, unit)) : null;
   const clientKgMax = hi != null && unit ? r1(toKg(hi, unit)) : null;
   const isNumber = cand.values.length > 0;
-  const { data: existing } = await sb
+  const { data: rows, error: readErr } = await sb
     .from("client_goals")
     .select("*")
     .eq("client_id", client.id)
     .eq("dedupe_key", key)
-    .in("status", OPEN_STATUSES)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (readErr) throw new Error(readErr.message);
+  const sameKey = (rows ?? []) as GoalRow[];
+  const existing = sameKey.find((g) => OPEN_STATUSES.includes(g.status)) ?? null;
   const context = [meta.context, note].filter(Boolean).join(" ").slice(0, 1200) || null;
   const tentative = !!(cand.tentative || meta.tentative);
+  const saidAt = Date.parse(meta.sourceAt ?? "") || null;
+  if (!existing) {
+    // what the coach dismissed or closed isn't proposed again from the same words, or from anything said before they closed it
+    const closedBefore = sameKey.find((g) => !OPEN_STATUSES.includes(g.status) && (g.source_id === meta.sourceId || (saidAt != null && saidAt <= Date.parse(g.updated_at))));
+    if (closedBefore) return "skipped";
+  }
   if (existing) {
     const g = existing as GoalRow;
+    // a coach's note from a call is context, never the client's own number
+    if (meta.speaker === "coach" && g.source_speaker !== "coach") return "same";
+    // something said earlier never replaces something said later (an old meeting read after a newer message)
+    if (g.source_id !== meta.sourceId && saidAt != null && g.source_at && saidAt < Date.parse(g.source_at)) return "same";
     const same = isNumber
       ? g.client_value != null && Number(g.client_value) === lo && (g.client_value_max == null ? hi == null : Number(g.client_value_max) === hi) && (g.client_unit === unit || unitSource === "inferred")
       : (g.client_text ?? "").trim() === cand.text.trim();
@@ -277,8 +310,8 @@ export async function upsertCandidate(
     competition_id: competitionId,
     event_title: competitionId ? meta.eventTitle : null,
     status: "proposed",
-    // a preference isn't a target to tell them about
-    client_facing: cand.kind !== "preference",
+    // only a number is told to them: a preference, and a goal in words (the analysis's words, not theirs), never are
+    client_facing: isNumber && cand.kind !== "preference",
     source_kind: meta.sourceKind,
     source_id: meta.sourceId,
     source_quote: cand.quote.slice(0, 600),
@@ -297,8 +330,28 @@ export async function upsertCandidate(
   return "created";
 }
 
-/** The goals a meeting's analysis (and the coach's notes from the call) say, into the ledger. */
-export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ created: number; updated: number }> {
+/** What a meeting's goals are read from (its analysis's goal lines and the coach's goal notes), as one fingerprint. */
+export function meetingContentHash(s: { analysis: any; live: any }): string {
+  const a = s.analysis ?? {};
+  const parts = JSON.stringify([
+    ((a.items ?? []) as any[]).filter((it) => it?.kind === "goal" || it?.kind === "objective").map((it) => [it.text, it.quote, it.speaker, it.due, it.basis]),
+    ((a.intelligence ?? []) as any[]).filter((it) => it?.kind === "goal").map((it) => [it.text, it.quote, it.speaker, it.expiresOn]),
+    goalNotes(String(s.live?.notes ?? "")),
+  ]);
+  let h = 2166136261;
+  for (let i = 0; i < parts.length; i++) {
+    h ^= parts.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `fnv1a:${(h >>> 0).toString(16)}:${parts.length}`;
+}
+
+/**
+ * The goals a meeting's analysis (and the coach's goal notes from the call)
+ * say, into the ledger. Read again only when those words change: opening the
+ * meeting or any other write to it never proposes a dismissed goal again.
+ */
+export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ created: number; updated: number; unchanged?: boolean }> {
   const { data: s, error } = await sb
     .from("coaching_sessions")
     .select("id, client_id, competition_id, event, analysis, analysis_status, live, updated_at, scheduled_at, created_at")
@@ -306,6 +359,13 @@ export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ c
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!s) return { created: 0, updated: 0 };
+  const contentHash = meetingContentHash(s);
+  const { data: prev, error: prevErr } = await sb.from("client_goal_sources").select("content_hash").eq("source_kind", "meeting").eq("source_id", s.id).maybeSingle();
+  if (prevErr) throw new Error(prevErr.message);
+  if (prev?.content_hash === contentHash) {
+    await sb.from("client_goal_sources").update({ scanned_at: new Date().toISOString() }).eq("source_kind", "meeting").eq("source_id", s.id);
+    return { created: 0, updated: 0, unchanged: true };
+  }
   const { data: client } = await sb.from("clients").select("id, user_id, first_name, preferred_name, full_name, preferred_weight_unit, timezone, sex, intake_training_experience, last_active_at, assigned_coach_id, service_tier, archived").eq("id", s.client_id).maybeSingle();
   let created = 0;
   let updated = 0;
@@ -339,8 +399,8 @@ export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ c
       const w = wordedGoal(text, quote);
       if (w && w.kind !== "preference") cands.push({ c: w, speaker: it.speaker === "coach" || it.speaker === "athlete" ? it.speaker : "unclear", due: it.expiresOn ?? null, context: text, tentative: false });
     }
-    // the coach's own notes from the call ("squat 220-225, bench 110-115 …")
-    const notes = String((s.live as any)?.notes ?? "");
+    // the coach's own notes from the call, only where they're about goals or attempts ("Thirds: squat 220-225 …")
+    const notes = goalNotes(String((s.live as any)?.notes ?? ""));
     for (const c of measurableGoals(notes, notes)) cands.push({ c, speaker: "coach", due: compDate, context: "From the coach's notes in the call", tentative: c.tentative });
 
     const needsEvidence = cands.some((x) => x.c.values.length && !x.c.unit);
@@ -368,7 +428,8 @@ export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ c
       if (r === "updated") updated++;
     }
   }
-  await sb.from("client_goal_sources").upsert({ source_kind: "meeting", source_id: s.id, client_id: s.client_id, goals: created + updated, scanned_at: new Date().toISOString() });
+  const { error: srcErr } = await sb.from("client_goal_sources").upsert({ source_kind: "meeting", source_id: s.id, client_id: s.client_id, content_hash: contentHash, goals: created + updated, scanned_at: new Date().toISOString() });
+  if (srcErr) throw new Error(srcErr.message);
   return { created, updated };
 }
 
@@ -391,24 +452,40 @@ export async function extractFromCheckin(sb: Db, checkin: { id: string; client_i
   return n;
 }
 
+/** A message the app made for them (a workout note, a pain report, a card), not words they typed to the coach. */
+export function isCardMessage(m: { body?: string | null; attachments?: unknown }): boolean {
+  const atts = Array.isArray(m.attachments) ? (m.attachments as any[]) : [];
+  return atts.some((a) => a && typeof a === "object" && typeof a.kind === "string") || /^\s*📝/.test(String(m.body ?? ""));
+}
+
+const MESSAGE_PAGE = 500;
+
 /** Clients' own chat messages since the last read: strict, numbers only, coaching clients only. */
 export async function extractFromMessages(sb: Db): Promise<number> {
-  const { data: setting } = await sb.from("app_settings").select("value").eq("key", "goal_intel_scan").maybeSingle();
+  const { data: setting, error: setErr } = await sb.from("app_settings").select("value").eq("key", "goal_intel_scan").maybeSingle();
+  if (setErr) throw new Error(setErr.message);
   const scan = settingJson(setting?.value);
   const since = typeof scan.messages_at === "string" ? scan.messages_at : new Date(Date.now() - 7 * 86_400_000).toISOString();
+  // messages at exactly the watermark that were already read (several can share one time)
+  const readAtMark = new Set<string>(Array.isArray(scan.messages_ids) ? scan.messages_ids : []);
   const startedAt = new Date().toISOString();
-  const { data: msgs } = await sb
+  const { data: msgs, error } = await sb
     .from("messages")
-    .select("id, client_id, body, created_at, is_internal_note, deleted_at")
+    .select("id, client_id, body, attachments, created_at, is_internal_note, deleted_at")
     .eq("sender_role", "client")
-    .gt("created_at", since)
+    .gte("created_at", since)
     .lte("created_at", startedAt)
     .order("created_at", { ascending: true })
-    .limit(500);
+    .order("id", { ascending: true })
+    .limit(MESSAGE_PAGE);
+  // a read that failed moves nothing: that window is read next time
+  if (error) throw new Error(error.message);
   let n = 0;
   const clients = new Map<string, GoalClient | null>();
-  for (const m of (msgs ?? []) as any[]) {
-    if (m.is_internal_note || m.deleted_at || !m.client_id) continue;
+  const list = (msgs ?? []) as any[];
+  for (const m of list) {
+    if (m.created_at === since && readAtMark.has(m.id)) continue;
+    if (m.is_internal_note || m.deleted_at || !m.client_id || isCardMessage(m)) continue;
     const cands = statedGoals(String(m.body ?? ""));
     if (!cands.length) continue;
     if (!clients.has(m.client_id)) {
@@ -424,8 +501,16 @@ export async function extractFromMessages(sb: Db): Promise<number> {
     }
     await sb.from("client_goal_sources").upsert({ source_kind: "message", source_id: m.id, client_id: m.client_id, goals: cands.length, scanned_at: new Date().toISOString() });
   }
-  const last = (msgs ?? []).length === 500 ? (msgs as any[])[499].created_at : startedAt;
-  await sb.from("app_settings").upsert({ key: "goal_intel_scan", value: JSON.stringify({ ...scan, messages_at: last }) }, { onConflict: "key" });
+  // a full page: carry on from its last message next time (keeping which ones at that moment were read)
+  let mark = startedAt;
+  let ids: string[] = [];
+  if (list.length === MESSAGE_PAGE) {
+    mark = list[list.length - 1].created_at;
+    ids = list.filter((m) => m.created_at === mark).map((m) => m.id);
+    if (mark === since) ids = Array.from(new Set([...readAtMark, ...ids]));
+  }
+  const { error: saveErr } = await sb.from("app_settings").upsert({ key: "goal_intel_scan", value: JSON.stringify({ ...scan, messages_at: mark, messages_ids: ids.slice(-2000) }) }, { onConflict: "key" });
+  if (saveErr) throw new Error(saveErr.message);
   return n;
 }
 
@@ -433,7 +518,17 @@ export async function extractFromMessages(sb: Db): Promise<number> {
 /* The coach's decisions                                              */
 
 export type GoalDecision =
-  | { action: "approve"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
+  | {
+      action: "approve";
+      value?: number | null;
+      unit?: Unit | null;
+      approach?: ApproachKey | null;
+      /** the approach's target the coach was shown, kg (the read can move under an open card) */
+      approachKg?: number | null;
+      deadline?: string | null;
+      text?: string | null;
+      clientFacing?: boolean | null;
+    }
   | { action: "dismiss" }
   | { action: "archive" }
   | { action: "reopen" }
@@ -451,9 +546,28 @@ export async function clientIdOfGoal(sb: Db, goalId: string): Promise<string> {
   return (await goalById(sb, goalId)).client_id;
 }
 
+const sameKg = (a: number | string | null | undefined, b: number | string | null | undefined) =>
+  a == null || b == null ? a == null && b == null : Math.abs(Number(a) - Number(b)) < 0.05;
+
+/**
+ * A bodyweight target's direction and the profile's type when it's approved:
+ * the direction already on the goal wins (a cut stays a cut), else it's read
+ * from where they started; a maintain goal stays a maintain goal, and a type
+ * the new target contradicts is dropped so the mirror reads it from the goal.
+ */
+function bodyweightApproval(g: GoalRow, kg: number): Record<string, unknown> {
+  const start = g.feasibility?.baselineKg ?? g.feasibility?.nowKg ?? null;
+  const direction = g.direction ?? (start != null && Math.abs(kg - start) >= 0.3 ? (kg < start ? "down" : "up") : null);
+  const type = g.profile_type;
+  const fits = type == null || type === "maintain" || type === "custom" || (direction === "down" && (type === "lose" || type === "performance_cut")) || (direction === "up" && type === "gain");
+  return { ...(direction ? { direction } : {}), ...(fits ? {} : { profile_type: null }) };
+}
+
 /** Approve, dismiss or close a goal. An approved, client-facing change joins the client's waiting update. */
-export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor: Actor): Promise<GoalRow> {
+export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor: Actor, opts: { expectVersion?: number | null } = {}): Promise<GoalRow> {
   const g = await goalById(sb, goalId);
+  // the card was rendered from this version: a goal that changed since is checked again, never approved blind
+  if (opts.expectVersion != null && opts.expectVersion !== g.version) throw new Error("This goal changed since you opened it. Check it again.");
   const { data: client } = await sb.from("clients").select("id, user_id, first_name, preferred_name, full_name, preferred_weight_unit, timezone, sex, intake_training_experience, last_active_at, assigned_coach_id, service_tier, archived").eq("id", g.client_id).maybeSingle();
   const unitPref: Unit = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
   let patch: Record<string, unknown> = {};
@@ -471,6 +585,7 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
       } else if (d.approach) {
         const opt = g.feasibility?.approaches?.find((a) => a.key === d.approach);
         if (!opt) throw new Error("That approach isn't in the latest read. Refresh and try again.");
+        if (d.approachKg != null && Math.abs(opt.targetKg - d.approachKg) >= 0.05) throw new Error("The projection moved since you opened it. Check it again.");
         unit = g.client_unit ?? unitPref;
         value = cleanValue(opt.targetKg, unit);
         kg = r1(toKg(value, unit));
@@ -497,13 +612,21 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
       approved_approach: d.approach ?? null,
       approved_at: new Date().toISOString(),
       approved_by: actor.userId,
-      approved_read: { expectedKg: g.feasibility?.projection?.expectedKg ?? null, nowKg: g.feasibility?.nowKg ?? null, score: g.feasibility?.score ?? null, confidence: g.feasibility?.confidence ?? null, at: new Date().toISOString() },
+      approved_read: {
+        expectedKg: g.feasibility?.projection?.expectedKg ?? null,
+        nowKg: g.feasibility?.nowKg ?? null,
+        score: g.feasibility?.score ?? null,
+        confidence: g.feasibility?.confidence ?? null,
+        // what the projection was read from (a meet forecast never calibrates training trends)
+        source: g.feasibility?.projection?.source ?? null,
+        at: new Date().toISOString(),
+      },
       ...(d.deadline !== undefined ? { deadline: d.deadline } : {}),
       ...(d.clientFacing != null ? { client_facing: d.clientFacing } : {}),
       // a unit the coach approved is a unit confirmed
       ...(g.client_unit_source === "inferred" && unit && g.client_unit === unit ? { client_unit_source: "coach" } : {}),
       recommendation_status: g.recommendation_status === "open" ? "approved" : g.recommendation_status,
-      ...(g.kind === "bodyweight" && kg != null && g.feasibility?.nowKg != null ? { direction: kg < g.feasibility.nowKg ? "down" : "up" } : {}),
+      ...(g.kind === "bodyweight" && kg != null ? bodyweightApproval(g, kg) : {}),
     };
     action = g.status === "active" ? "edited" : "approved";
   } else if (d.action === "dismiss") {
@@ -533,8 +656,11 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
   // fresh read with the new target
   await assessClient(sb, g.client_id, { force: true }).catch((e) => console.warn("[goal-intel] reread failed", e?.message));
   const fresh = await goalById(sb, g.id);
-  // tell the client about an approved, client-facing change (after the review window)
-  const changedTarget = next.status === "active" && (Number(g.approved_kg ?? NaN) !== Number(next.approved_kg ?? NaN) || (g.approved_text ?? "") !== (next.approved_text ?? "") || g.status !== "active");
+  // tell the client about an approved, client-facing change (after the review window); a switch or a note is never news
+  const changedTarget =
+    (d.action === "approve" || d.action === "reopen") &&
+    next.status === "active" &&
+    (g.status !== "active" || !sameKg(g.approved_kg, next.approved_kg) || (g.approved_text ?? "").trim() !== (next.approved_text ?? "").trim());
   if (changedTarget && next.client_facing && client?.user_id && next.kind !== "preference") {
     await enqueueUpdate(sb, fresh, g.status === "active" ? (g.approved_kg != null ? Number(g.approved_kg) : null) : null, actor, client as GoalClient).catch((e) => console.warn("[goal-intel] update not queued", e?.message));
   }
@@ -554,6 +680,8 @@ export async function addGoal(
   if (measurable && !(x.value && x.value > 0)) throw new Error("Give it a number.");
   if (x.kind === "lift" && !x.lift) throw new Error("Pick the lift.");
   if (!measurable && !(x.text ?? "").trim()) throw new Error("Say what the goal is.");
+  // only a lift or the total is tied to a meet here (that's what the form offers)
+  if (x.kind !== "lift" && x.kind !== "total") x = { ...x, competitionId: null };
   let comp: { name: string; meet_date: string } | null = null;
   if (x.competitionId) {
     const { data } = await sb.from("competitions").select("name, meet_date, client_id").eq("id", x.competitionId).maybeSingle();
@@ -596,11 +724,11 @@ export async function addGoal(
   await goalEvent(sb, g, actor, "created", { from: "coach" });
   const { goals } = await assessClient(sb, clientId, { force: true });
   const fresh = goals.find((x) => x.id === g.id) ?? g;
+  // a bodyweight goal's direction once there's a read (it's how its outcome is judged later)
+  if (fresh.kind === "bodyweight" && kg != null && fresh.feasibility?.nowKg != null && !fresh.direction && Math.abs(kg - fresh.feasibility.nowKg) >= 0.3) {
+    await sb.from("client_goals").update({ direction: kg < fresh.feasibility.nowKg ? "down" : "up" }).eq("id", fresh.id);
+  }
   if (fresh.client_facing && client.user_id) {
-    // a bodyweight goal's direction once there's a read
-    if (fresh.kind === "bodyweight" && kg != null && fresh.feasibility?.nowKg != null && !fresh.direction) {
-      await sb.from("client_goals").update({ direction: kg < fresh.feasibility.nowKg ? "down" : "up" }).eq("id", fresh.id);
-    }
     await enqueueUpdate(sb, fresh, null, actor, client as GoalClient).catch((e) => console.warn("[goal-intel] update not queued", e?.message));
   }
   return fresh;
@@ -615,12 +743,13 @@ export async function addGoal(
 export async function decideRecommendation(
   sb: Db,
   goalId: string,
-  d: { action: "approve" | "dismiss" | "maintain"; value?: number | null; unit?: Unit | null },
+  d: { action: "approve" | "dismiss" | "maintain"; value?: number | null; unit?: Unit | null; expectKey?: string | null },
   actor: Actor,
 ): Promise<{ goal: GoalRow; handoff: string | null }> {
   const g = await goalById(sb, goalId);
   const rec = g.recommendation;
   if (!rec) throw new Error("There's no recommendation on this goal.");
+  if (d.expectKey != null && d.expectKey !== rec.key) throw new Error("Cleo's recommendation changed since you opened it. Check it again.");
   if (d.action === "dismiss" || d.action === "maintain") {
     const { data, error } = await sb.from("client_goals").update({ recommendation_status: d.action === "dismiss" ? "dismissed" : "maintained" }).eq("id", g.id).select("*").maybeSingle();
     if (error) throw new Error(error.message);
@@ -631,7 +760,7 @@ export async function decideRecommendation(
   if ((rec.kind === "adjust_target" || rec.kind === "raise_target" || rec.kind === "protect") && (d.value != null || rec.suggestedKg != null)) {
     const unit = d.unit ?? g.approved_unit ?? g.client_unit ?? "kg";
     const value = d.value ?? cleanValue(rec.suggestedKg as number, unit);
-    await decideGoal(sb, g.id, { action: "approve", value, unit, approach: d.value != null ? null : rec.approach }, actor);
+    await decideGoal(sb, g.id, { action: "approve", value, unit, approach: d.value != null ? null : rec.approach }, actor, { expectVersion: g.version });
   } else if (rec.kind === "adjust_program") {
     const f = g.feasibility;
     const unit = (f?.unit ?? "kg") as Unit;
@@ -699,44 +828,56 @@ export async function enqueueUpdate(sb: Db, g: GoalRow, beforeKg: number | null,
   const settings = await readUpdateSettings(sb);
   const unit = unitOf(client);
   const change = changeFor(g, beforeKg, unit);
-  const now = new Date();
-  const sendAfter = new Date(now.getTime() + settings.reviewMinutes * 60_000).toISOString();
-  const { data: open } = await sb.from("client_update_outbox").select("*").eq("client_id", g.client_id).in("status", ["pending", "held"]).maybeSingle();
-  if (open) {
-    const changes = mergeChanges((open.changes ?? []) as OutboxChange[], change);
-    const edited = !!open.edited_at;
-    const patch: Record<string, unknown> = {
-      changes,
-      last_change_at: now.toISOString(),
-      review_minutes: settings.reviewMinutes,
-      send_after: sendAfter,
-      next_attempt_at: null,
-      wait_reason: "window",
-      status_line: null,
-    };
-    if (edited) {
-      // the coach's own words stay theirs: a newer change holds it for them to check
-      Object.assign(patch, { status: "held", hold_reason: "changed_after_edit", status_line: "A newer change came in after your edit: check it and send." });
-    } else {
-      Object.assign(patch, { status: "pending", hold_reason: null, body: buildUpdateMessage({ firstName: firstName(client), changes }) });
+  // a few tries: another request can open or change the waiting update at the same moment
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const now = new Date();
+    const sendAfter = new Date(now.getTime() + settings.reviewMinutes * 60_000).toISOString();
+    const { data: open, error: readErr } = await sb.from("client_update_outbox").select("*").eq("client_id", g.client_id).in("status", ["pending", "held"]).maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (open) {
+      const changes = mergeChanges((open.changes ?? []) as OutboxChange[], change);
+      const edited = !!open.edited_at;
+      const patch: Record<string, unknown> = {
+        changes,
+        last_change_at: now.toISOString(),
+        review_minutes: settings.reviewMinutes,
+        send_after: sendAfter,
+        next_attempt_at: null,
+      };
+      if (edited) {
+        // the coach's own words stay theirs: a newer change holds it for them to check
+        Object.assign(patch, { status: "held", hold_reason: "changed_after_edit", wait_reason: null, status_line: "A newer change came in after your edit: check it and send." });
+      } else if (open.status === "held" && open.hold_reason !== "changed_after_edit" && open.hold_reason !== "nothing_current") {
+        // held stays held (the coach's Hold, a send that failed, presence nobody can read): the words follow the new change
+        Object.assign(patch, {
+          body: buildUpdateMessage({ firstName: firstName(client), changes }),
+          status_line: open.hold_reason === "coach" ? "Held, with a newer change added: it won't go until you send it." : open.status_line,
+        });
+      } else {
+        Object.assign(patch, { status: "pending", hold_reason: null, wait_reason: "window", status_line: null, body: buildUpdateMessage({ firstName: firstName(client), changes }) });
+      }
+      // only over the row as it was read (a send or the coach's action in between: read again)
+      const { data: joined, error } = await sb.from("client_update_outbox").update(patch).eq("id", open.id).eq("updated_at", open.updated_at).in("status", ["pending", "held"]).select("id").maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!joined) continue;
+      await goalEvent(sb, g, actor, "client_update_queued", { outbox_id: open.id, joined: true });
+      return;
     }
-    const { error } = await sb.from("client_update_outbox").update(patch).eq("id", open.id).in("status", ["pending", "held"]);
-    if (error) throw new Error(error.message);
-    await goalEvent(sb, g, actor, "client_update_queued", { outbox_id: open.id, joined: true });
+    const body = buildUpdateMessage({ firstName: firstName(client), changes: [change] });
+    const { data, error } = await sb
+      .from("client_update_outbox")
+      .insert({ client_id: g.client_id, sender_id: actor.userId, status: "pending", body, changes: [change], review_minutes: settings.reviewMinutes, send_after: sendAfter, wait_reason: "window", last_change_at: now.toISOString() })
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      // another request opened one at the same moment: join it
+      if (/duplicate key/i.test(error.message)) continue;
+      throw new Error(error.message);
+    }
+    await goalEvent(sb, g, actor, "client_update_queued", { outbox_id: data?.id });
     return;
   }
-  const body = buildUpdateMessage({ firstName: firstName(client), changes: [change] });
-  const { data, error } = await sb
-    .from("client_update_outbox")
-    .insert({ client_id: g.client_id, sender_id: actor.userId, status: "pending", body, changes: [change], review_minutes: settings.reviewMinutes, send_after: sendAfter, wait_reason: "window", last_change_at: now.toISOString() })
-    .select("id")
-    .maybeSingle();
-  if (error) {
-    // another request opened one at the same moment: join it
-    if (/duplicate key/i.test(error.message)) return enqueueUpdate(sb, g, beforeKg, actor, client);
-    throw new Error(error.message);
-  }
-  await goalEvent(sb, g, actor, "client_update_queued", { outbox_id: data?.id });
+  throw new Error("The client's update kept changing: try again.");
 }
 
 export type OutboxAction = { action: "edit"; body: string } | { action: "hold" } | { action: "resume" } | { action: "cancel" } | { action: "send_now" };
@@ -746,28 +887,34 @@ export async function outboxAction(sb: Db, outboxId: string, a: OutboxAction, ac
   const { data: o, error } = await sb.from("client_update_outbox").select("*").eq("id", outboxId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!o) throw new Error("That update wasn't found.");
-  if (!["pending", "held"].includes(o.status)) throw new Error(`It's already ${o.status}.`);
+  if (!["pending", "held"].includes(o.status)) throw new Error(o.status === "sending" ? "It's sending right now." : `It's already ${o.status}.`);
   const evt = (action: string, detail: Record<string, unknown> = {}) => goalEvent(sb, { id: null, client_id: o.client_id }, actor, action, { outbox_id: o.id, ...detail });
+  // never over a send that started in between
+  const write = async (patch: Record<string, unknown>) => {
+    const { data, error: e } = await sb.from("client_update_outbox").update(patch).eq("id", o.id).in("status", ["pending", "held"]).select("id").maybeSingle();
+    if (e) throw new Error(e.message);
+    if (!data) throw new Error("It changed or started sending a moment ago. Check it again.");
+  };
   if (a.action === "edit") {
     const body = a.body.trim();
     if (body.length < 2) throw new Error("The message is empty.");
-    await sb.from("client_update_outbox").update({ body: body.slice(0, 2000), edited_at: new Date().toISOString(), edited_by: actor.userId, ...(o.hold_reason === "changed_after_edit" ? { status: "pending", hold_reason: null, status_line: null } : {}) }).eq("id", o.id);
+    await write({ body: body.slice(0, 2000), edited_at: new Date().toISOString(), edited_by: actor.userId, ...(o.hold_reason === "changed_after_edit" ? { status: "pending", hold_reason: null, status_line: null } : {}) });
     await evt("client_update_edited");
     return { status: o.hold_reason === "changed_after_edit" ? "pending" : o.status };
   }
   if (a.action === "hold") {
-    await sb.from("client_update_outbox").update({ status: "held", hold_reason: "coach", status_line: "Held: it won't go until you send it." }).eq("id", o.id);
+    await write({ status: "held", hold_reason: "coach", status_line: "Held: it won't go until you send it." });
     await evt("client_update_held");
     return { status: "held" };
   }
   if (a.action === "resume") {
     const settings = await readUpdateSettings(sb);
-    await sb.from("client_update_outbox").update({ status: "pending", hold_reason: null, status_line: null, wait_reason: "window", send_after: new Date(Date.now() + settings.reviewMinutes * 60_000).toISOString(), next_attempt_at: null }).eq("id", o.id);
+    await write({ status: "pending", hold_reason: null, status_line: null, wait_reason: "window", send_after: new Date(Date.now() + settings.reviewMinutes * 60_000).toISOString(), next_attempt_at: null, send_failures: 0 });
     await evt("client_update_resumed");
     return { status: "pending" };
   }
   if (a.action === "cancel") {
-    await sb.from("client_update_outbox").update({ status: "cancelled", closed_by: actor.userId, status_line: "Cancelled" }).eq("id", o.id);
+    await write({ status: "cancelled", closed_by: actor.userId, status_line: "Cancelled" });
     await evt("client_update_cancelled");
     return { status: "cancelled" };
   }
@@ -795,10 +942,18 @@ async function quietFor(sb: Db, userId: string, tz: string | null): Promise<{ no
   return { now: quiet, endsAt: quiet ? quietEndsAt(zone, end).getTime() : null };
 }
 
+/** The message already sent for an update, by its outbox id (a send is never made twice). */
+async function sentMessageFor(sb: Db, o: { id: string; client_id: string }): Promise<string | null> {
+  const { data, error } = await sb.from("messages").select("id").eq("client_id", o.client_id).contains("attachments", JSON.stringify([{ kind: "goal_update", outbox_id: o.id }])).limit(1);
+  if (error) throw new Error(error.message);
+  return data?.[0]?.id ?? null;
+}
+
 /**
  * Process one waiting update: drop anything outdated, check the window, their
  * quiet hours and whether they're in the app, and send it (by itself, or now
- * when the coach tapped Send). Claimed before sending, never twice.
+ * when the coach tapped Send). Claimed from the row exactly as it was read, so
+ * a Hold, an edit or a newer change landing in between always wins; never twice.
  */
 export async function deliverOutbox(sb: Db, outboxId: string, opts: { manualBy?: string | null } = {}): Promise<string> {
   const { data: o } = await sb.from("client_update_outbox").select("*").eq("id", outboxId).maybeSingle();
@@ -807,18 +962,21 @@ export async function deliverOutbox(sb: Db, outboxId: string, opts: { manualBy?:
   const { data: client } = await sb.from("clients").select("id, user_id, first_name, preferred_name, full_name, preferred_weight_unit, timezone, last_active_at, assigned_coach_id, service_tier, archived").eq("id", o.client_id).maybeSingle();
   const changes = (o.changes ?? []) as OutboxChange[];
   const goalIds = Array.from(new Set(changes.map((c) => c.goalId)));
-  const { data: goals } = goalIds.length ? await sb.from("client_goals").select("id, status, version, approved_kg, client_facing").in("id", goalIds) : { data: [] };
+  const { data: goals } = goalIds.length
+    ? await sb.from("client_goals").select("id, status, version, approved_kg, approved_text, deadline, event_title, client_facing").in("id", goalIds)
+    : { data: [] };
   const current = currentChanges(changes, (goals ?? []) as any[]);
   const now = Date.now();
-  const update = (patch: Record<string, unknown>) => sb.from("client_update_outbox").update({ ...patch, attempts: (o.attempts ?? 0) + 1 }).eq("id", o.id).in("status", ["pending", "held"]);
+  // a wait or hold is written only over the row as it was read (waits are never counted as failures)
+  const update = (patch: Record<string, unknown>) => sb.from("client_update_outbox").update(patch).eq("id", o.id).eq("updated_at", o.updated_at).in("status", ["pending", "held"]);
   if (!client?.user_id || client.archived || client.service_tier !== "coaching") {
     await update({ status: "cancelled", status_line: "They no longer have a coaching login to tell." });
     return "cancelled";
   }
-  // outdated or withdrawn lines drop out; the words follow (unless the coach wrote them)
+  // outdated or withdrawn lines drop out, a moved meet's date follows; the words follow (unless the coach wrote them)
   const edited = !!o.edited_at;
   let body: string = o.body;
-  if (current.length !== latestPerGoal(changes).length && current.length) {
+  if (current.length && changesMoved(changes, current)) {
     if (edited) {
       await update({ status: "held", hold_reason: "changed_after_edit", status_line: "Something in it changed after your edit: check it and send." });
       return "held";
@@ -855,20 +1013,21 @@ export async function deliverOutbox(sb: Db, outboxId: string, opts: { manualBy?:
     await update({ status: "cancelled", status_line: "Nothing in it is current any more." });
     return "cancelled";
   }
-  // claim it, then send once
+  // claim it from exactly what was read (by itself: only a pending one), then send once
   const { data: claimed } = await sb
     .from("client_update_outbox")
-    .update({ status: "sending", body, changes: current })
+    .update({ status: "sending", body, changes: current, claimed_at: new Date().toISOString() })
     .eq("id", o.id)
-    .in("status", ["pending", "held"])
+    .eq("updated_at", o.updated_at)
+    .in("status", opts.manualBy ? ["pending", "held"] : ["pending"])
     .select("id")
     .maybeSingle();
   if (!claimed) return "busy";
+  let messageId: string | null = null;
   try {
     const senderId = o.sender_id ?? opts.manualBy ?? (await coachUserOf(sb, client.assigned_coach_id));
     if (!senderId) throw new Error("No coach to send it as.");
-    const { data: same } = await sb.from("messages").select("id").eq("client_id", o.client_id).contains("attachments", JSON.stringify([{ kind: "goal_update", outbox_id: o.id }])).limit(1);
-    let messageId: string | null = same?.[0]?.id ?? null;
+    messageId = await sentMessageFor(sb, o);
     if (!messageId) {
       const at = new Date().toISOString();
       const { data: msg, error } = await sb
@@ -881,8 +1040,8 @@ export async function deliverOutbox(sb: Db, outboxId: string, opts: { manualBy?:
           attachments: [{ kind: "goal_update", outbox_id: o.id, automatic: !opts.manualBy }],
           message_type: "Goals",
           is_internal_note: false,
-          // waited out the coach's window; never presented as typed right now
-          is_automated: !opts.manualBy,
+          // a prepared update, never a reply: it doesn't close their check-ins or forms (the attachment says who sent it)
+          is_automated: true,
           delivery_status: "sent",
           sent_at: at,
           read_by_admin_at: at,
@@ -898,14 +1057,66 @@ export async function deliverOutbox(sb: Db, outboxId: string, opts: { manualBy?:
         console.warn("[goal-intel] push failed", e?.message);
       }
     }
-    await sb.from("client_update_outbox").update({ status: "sent", message_id: messageId, sent_at: new Date().toISOString(), sent_by: opts.manualBy ?? null, status_line: opts.manualBy ? "Sent" : "Sent automatically", wait_reason: null, hold_reason: null }).eq("id", o.id);
+    const { error: doneErr } = await sb
+      .from("client_update_outbox")
+      .update({ status: "sent", message_id: messageId, sent_at: new Date().toISOString(), sent_by: opts.manualBy ?? null, status_line: opts.manualBy ? "Sent" : "Sent automatically", wait_reason: null, hold_reason: null })
+      .eq("id", o.id)
+      .eq("status", "sending");
+    if (doneErr) throw new Error(doneErr.message);
     for (const c of current) await goalEvent(sb, { id: c.goalId, client_id: o.client_id }, { userId: opts.manualBy ?? null, kind: opts.manualBy ? "coach" : "system" }, "client_told", { outbox_id: o.id, message_id: messageId, version: c.version });
     return "sent";
   } catch (e: any) {
-    await sb.from("client_update_outbox").update({ status: "pending", next_attempt_at: new Date(Date.now() + 15 * 60_000).toISOString(), status_line: `Couldn't send: ${String(e?.message ?? e).slice(0, 120)}` }).eq("id", o.id).eq("status", "sending");
-    if ((o.attempts ?? 0) >= 5) await sb.from("client_update_outbox").update({ status: "failed" }).eq("id", o.id).eq("status", "pending");
+    const why = String(e?.message ?? e).slice(0, 120);
+    // the message went but its record didn't: the next pass finds it by its outbox id and marks it sent
+    const failures = (o.send_failures ?? 0) + (messageId ? 0 : 1);
+    const handBack = failures >= MAX_SEND_FAILURES;
+    await sb
+      .from("client_update_outbox")
+      .update(
+        handBack
+          ? { status: "held", hold_reason: "send_failed", send_failures: failures, claimed_at: null, status_line: `Couldn't send (${why}). Send it yourself or cancel.` }
+          : { status: "pending", send_failures: failures, claimed_at: null, next_attempt_at: new Date(Date.now() + 15 * 60_000).toISOString(), status_line: `Couldn't send yet: ${why}` },
+      )
+      .eq("id", o.id)
+      .eq("status", "sending");
     return "failed";
   }
+}
+
+/**
+ * A send that was claimed and never finished (the request was cut off): if its
+ * message went, it's marked sent; otherwise it goes back to waiting, joining
+ * the client's newer update if one opened meanwhile. Nothing is sent twice.
+ */
+export async function recoverStaleSending(sb: Db): Promise<number> {
+  const { data: rows, error } = await sb.from("client_update_outbox").select("*").eq("status", "sending").limit(50);
+  if (error) throw new Error(error.message);
+  const cutoff = Date.now() - STALE_SENDING_MS;
+  let n = 0;
+  for (const o of (rows ?? []) as any[]) {
+    if ((Date.parse(o.claimed_at ?? o.updated_at ?? "") || 0) >= cutoff) continue;
+    const messageId = await sentMessageFor(sb, o).catch(() => null);
+    if (messageId) {
+      await sb.from("client_update_outbox").update({ status: "sent", message_id: messageId, sent_at: new Date().toISOString(), status_line: "Sent", claimed_at: null }).eq("id", o.id).eq("status", "sending");
+      n++;
+      continue;
+    }
+    const { data: open } = await sb.from("client_update_outbox").select("*").eq("client_id", o.client_id).in("status", ["pending", "held"]).maybeSingle();
+    if (open) {
+      // a newer update opened meanwhile: this one's changes join it
+      let changes = (open.changes ?? []) as OutboxChange[];
+      for (const c of (o.changes ?? []) as OutboxChange[]) if (!changes.some((x) => x.goalId === c.goalId)) changes = [...changes, c];
+      const { data: client } = await sb.from("clients").select("first_name, preferred_name, full_name").eq("id", o.client_id).maybeSingle();
+      const patch: Record<string, unknown> = { changes };
+      if (!open.edited_at) patch.body = buildUpdateMessage({ firstName: client ? firstName(client) : null, changes });
+      const { data: joined } = await sb.from("client_update_outbox").update(patch).eq("id", open.id).eq("updated_at", open.updated_at).select("id").maybeSingle();
+      if (joined) await sb.from("client_update_outbox").update({ status: "cancelled", status_line: "Joined the newer update", claimed_at: null }).eq("id", o.id).eq("status", "sending");
+    } else {
+      await sb.from("client_update_outbox").update({ status: "pending", claimed_at: null, next_attempt_at: new Date().toISOString(), status_line: "Trying again" }).eq("id", o.id).eq("status", "sending");
+    }
+    n++;
+  }
+  return n;
 }
 
 async function coachUserOf(sb: Db, coachId: string | null): Promise<string | null> {
@@ -950,7 +1161,18 @@ export async function goalsView(sb: Db, clientId: string, opts: { refresh?: bool
   }
   const [client, outbox, history, comps, settings] = await Promise.all([
     loaded ? Promise.resolve(loaded.client) : sb.from("clients").select("id, first_name, preferred_name, full_name, preferred_weight_unit, timezone").eq("id", clientId).maybeSingle().then((r: any) => r.data),
-    sb.from("client_update_outbox").select("*").eq("client_id", clientId).in("status", ["pending", "held", "sending"]).maybeSingle().then((r: any) => r.data ?? null),
+    // the waiting update (a send in flight only when there's nothing waiting)
+    sb
+      .from("client_update_outbox")
+      .select("*")
+      .eq("client_id", clientId)
+      .in("status", ["pending", "held", "sending"])
+      .order("created_at", { ascending: false })
+      .limit(3)
+      .then((r: any) => {
+        const rows = (r.data ?? []) as any[];
+        return rows.find((o) => o.status !== "sending") ?? rows[0] ?? null;
+      }),
     sb.from("client_goal_events").select("goal_id, actor, action, detail, at").eq("client_id", clientId).order("at", { ascending: false }).limit(60).then((r: any) => r.data ?? []),
     sb.from("competitions").select("id, name, meet_date").eq("client_id", clientId).eq("status", "upcoming").order("meet_date").limit(10).then((r: any) => r.data ?? []),
     readUpdateSettings(sb),

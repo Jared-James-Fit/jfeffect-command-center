@@ -11,7 +11,7 @@
  * client update, which waits in its review window with Preview, Edit, Hold,
  * Cancel and Send now.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -145,7 +145,7 @@ export function GoalSummary({
         ))}
       </ul>
 
-      {view.outbox && <OutboxRow key={`${view.outbox.id}:${view.outbox.updated_at}`} view={view} />}
+      {view.outbox && <OutboxRow key={view.outbox.id} view={view} />}
 
       {closed.length > 0 && (
         <div className="mt-2">
@@ -189,12 +189,12 @@ function useGoalMutations(clientId: string) {
     qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
   };
   const goal = useMutation({
-    mutationFn: (x: { goalId: string; decision: any }) => decide({ data: x }),
+    mutationFn: (x: { goalId: string; decision: any; expectVersion?: number | null }) => decide({ data: x }),
     onSuccess: done,
     onError: (e: any) => toast.error(e?.message ?? "That didn't save."),
   });
   const rec = useMutation({
-    mutationFn: (x: { goalId: string; action: "approve" | "dismiss" | "maintain"; value?: number | null; unit?: Unit | null }) => decideRec({ data: x }),
+    mutationFn: (x: { goalId: string; action: "approve" | "dismiss" | "maintain"; value?: number | null; unit?: Unit | null; expectKey?: string | null }) => decideRec({ data: x }),
     onSuccess: done,
     onError: (e: any) => toast.error(e?.message ?? "That didn't save."),
   });
@@ -213,7 +213,8 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
   const recOpen = g.recommendation_status === "open" && g.recommendation;
   const first = view.firstName ?? "them";
 
-  const approveAs = (decision: any, msg: string) => goal.mutate({ goalId: g.id, decision }, { onSuccess: () => toast.success(msg) });
+  // the version this card shows: a goal that changed since is checked again, never approved blind
+  const approveAs = (decision: any, msg: string) => goal.mutate({ goalId: g.id, decision, expectVersion: g.version }, { onSuccess: () => toast.success(msg) });
 
   return (
     <li className="py-3" data-goal={g.kind} data-goal-status={g.status}>
@@ -273,7 +274,12 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
               variant="outline"
               className="h-9"
               disabled={busy}
-              onClick={() => approveAs({ action: "approve", approach: f.recommended }, `Approved ${APPROACH_LABEL[f.recommended as ApproachKey]}`)}
+              onClick={() =>
+                approveAs(
+                  { action: "approve", approach: f.recommended, approachKg: f.approaches?.find((a) => a.key === f.recommended)?.targetKg ?? null },
+                  `Approved ${APPROACH_LABEL[f.recommended as ApproachKey]}`,
+                )
+              }
               data-goal-approve-recommended
             >
               {APPROACH_LABEL[f.recommended]} {fmtWeight(f.approaches.find((a) => a.key === f.recommended)?.targetKg ?? null, g.client_unit ?? unit)}
@@ -310,7 +316,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
               disabled={busy}
               onClick={() =>
                 rec.mutate(
-                  { goalId: g.id, action: "approve" },
+                  { goalId: g.id, action: "approve", expectKey: g.recommendation?.key ?? null },
                   {
                     onSuccess: (out: any) => {
                       if (out?.handoff) {
@@ -330,7 +336,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
                 Edit
               </Button>
             )}
-            <Button size="sm" variant="outline" className="h-9" disabled={busy} onClick={() => rec.mutate({ goalId: g.id, action: "maintain" }, { onSuccess: () => toast.success("Keeping the current plan") })}>
+            <Button size="sm" variant="outline" className="h-9" disabled={busy} onClick={() => rec.mutate({ goalId: g.id, action: "maintain", expectKey: g.recommendation?.key ?? null }, { onSuccess: () => toast.success("Keeping the current plan") })}>
               Keep plan
             </Button>
             <Button size="sm" variant="ghost" className="h-9" disabled={busy} onClick={() => rec.mutate({ goalId: g.id, action: "dismiss" }, { onSuccess: () => toast.success("Dismissed") })}>
@@ -381,7 +387,7 @@ function GoalDetails({ g, view, unit, busy, onApprove, first }: { g: GoalRow; vi
                 </span>
                 <span className="flex shrink-0 items-center gap-2 tabular-nums">
                   {fmtWeight(a.targetKg, g.client_unit ?? unit)} · {a.score}
-                  <Button size="sm" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onApprove({ action: "approve", approach: a.key }, `Approved ${a.label}`)}>
+                  <Button size="sm" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onApprove({ action: "approve", approach: a.key, approachKg: a.targetKg }, `Approved ${a.label}`)}>
                     Use
                   </Button>
                 </span>
@@ -554,6 +560,8 @@ function AddGoalDialog({ view, competitionId, onClose }: { view: View; competiti
   const [text, setText] = useState("");
   const [tell, setTell] = useState(true);
   const measurable = kind === "lift" || kind === "total" || kind === "bodyweight";
+  // only a lift or the total is tied to a meet (that's the only kind the meet picker shows for)
+  const atMeet = (kind === "lift" || kind === "total") && comp !== "none";
   const m = useMutation({
     mutationFn: () =>
       add({
@@ -563,8 +571,8 @@ function AddGoalDialog({ view, competitionId, onClose }: { view: View; competiti
           lift: kind === "lift" ? lift : null,
           value: measurable ? Number(value) : null,
           unit: measurable ? u : null,
-          deadline: comp !== "none" ? null : deadline || null,
-          competitionId: comp !== "none" ? comp : null,
+          deadline: atMeet ? null : deadline || null,
+          competitionId: atMeet ? comp : null,
           text: measurable ? null : text,
           clientFacing: tell,
         },
@@ -639,7 +647,7 @@ function AddGoalDialog({ view, competitionId, onClose }: { view: View; competiti
               </SelectContent>
             </Select>
           )}
-          {comp === "none" && <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-label="By" className="h-10" />}
+          {!atMeet && <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-label="By" className="h-10" />}
           <label className="flex min-h-9 items-center justify-between gap-2">
             <span>Tell {view.firstName ?? "them"} (after your review window)</span>
             <Switch checked={tell} onCheckedChange={setTell} />
@@ -667,9 +675,15 @@ function OutboxRow({ view }: { view: View }) {
   const saveSettings = useServerFn(setGoalUpdateSettingsFn);
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState<string>(o?.body ?? "");
+  // the words follow the saved update until the coach starts changing them (a refresh never wipes an edit)
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) setBody(o?.body ?? "");
+  }, [o?.body, dirty]);
   const m = useMutation({
     mutationFn: (action: any) => act({ data: { outboxId: o.id, clientId: view.clientId, action } }),
     onSuccess: (r: any, action: any) => {
+      setDirty(false);
       qc.invalidateQueries({ queryKey: clientGoalsKey(view.clientId) });
       toast.success(action.action === "send_now" ? (r?.status === "sent" ? "Sent" : `Not sent: ${r?.status}`) : action.action === "edit" ? "Saved" : action.action === "hold" ? "Held" : action.action === "cancel" ? "Cancelled" : "Back on its window");
     },
@@ -706,7 +720,20 @@ function OutboxRow({ view }: { view: View }) {
       </button>
       {open && (
         <div className="mt-2 space-y-2">
-          <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className="text-sm" aria-label="Message" />
+          <Textarea
+            value={body}
+            onChange={(e) => {
+              setBody(e.target.value);
+              setDirty(true);
+            }}
+            rows={6}
+            className="text-sm"
+            aria-label="Message"
+            disabled={o.status === "sending"}
+          />
+          {o.status === "sending" ? (
+            <p className="text-[11px] text-muted-foreground">It's going out now. If it doesn't, it comes back here to send again.</p>
+          ) : (
           <div className="flex flex-wrap gap-1.5">
             <Button size="sm" className="h-9" disabled={m.isPending} onClick={() => m.mutate(body !== o.body ? { action: "edit", body } : { action: "send_now" })}>
               {body !== o.body ? "Save" : "Send now"}
@@ -724,6 +751,7 @@ function OutboxRow({ view }: { view: View }) {
               Cancel
             </Button>
           </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <span>Review window</span>
             <Select value={String(view.settings.reviewMinutes)} onValueChange={(v) => s.mutate({ reviewMinutes: Number(v), autoSend: view.settings.autoSend })}>

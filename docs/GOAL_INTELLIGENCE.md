@@ -48,6 +48,24 @@ So Competition Intelligence, Generate Next Program, weight management and the
 nutrition roadmap keep reading their own fields and always see the approved
 target. Dismissing a goal clears what it wrote.
 
+Rules the sync keeps (20270602130000_goal_intelligence_fixes.sql):
+
+- the mirror writes only when what the goal says changed (status, the approved
+  or the client's number, the date, the meet, the direction), never on a read;
+- one bodyweight goal is active at a time (approving another archives the
+  old one), and the profile's own type and maintain range are kept on the goal
+  (`profile_type`, `approved_value_max`), so a maintain goal stays a maintain
+  goal;
+- the bodyweight back-sync is for coaching clients only (a member's goal stays
+  theirs); a write with nobody signed in is never an approval; a profile goal
+  with no unit is read in the client's own unit;
+- a target cleared on a competition un-approves the goal (their own number
+  stays, as a proposal) and never comes back; a cancelled meet closes its
+  goals and clears what they wrote, and putting it back on reopens them;
+- the athlete's own total on a competition is written only from what the
+  athlete (or the competition) said, never a coach's note;
+- an account purge deletes the goal history (`jf.allow_history_delete`).
+
 ## Feasibility (`src/lib/goal-intel/feasibility.ts`, pure)
 
 Never a probability and never a model's guess. The projection reuses engines
@@ -85,9 +103,25 @@ Deterministic, no model call. The worker reads:
 - clients' own coach-chat messages (every 30 minutes, from a watermark).
 
 Everything lands `proposed`. A number needs a lift (or total / bodyweight)
-next to it; reps, sets, RPE, percentages, days and dates are never targets; a
-range stays a range; a goal in words stays in words; how they want to get
-there ("top end over nine for nine") is a `preference`.
+next to it, before or after it ("squat 220-225", "a 405 squat", "500 total,
+180 squat"); a number belongs to one lift only. Reps, sets, RPE, percentages,
+food, days and dates are never targets, and neither are where they are now
+("currently 170", "520 last meet", "I weigh 185 right now"), a result ("hit
+405 for a double", "new PR"), a working set ("3x5 at 405") or a change ("up 20
+lbs"). A range stays a range; a goal in words stays in words; how they want to
+get there ("top end over nine for nine") is a `preference`. A unit counts as
+said only when the person's own words said it (an analysis's paraphrase
+doesn't), and a number their words don't contain is tentative.
+
+A meeting is read again only when its goal words change (its analysis's goal
+lines and the coach's goal notes, `client_goal_sources.content_hash`), so
+opening it never proposes anything again; a goal the coach dismissed or closed
+is never proposed again from the same source or from anything said before it
+was closed; something said earlier never replaces something said later; a
+coach's call notes count only under goal or attempt words ("Thirds:") and
+never rewrite the client's own number. Messages the app made for them (a
+workout note, a pain card) aren't read. A goal in words read from a meeting
+is kept for the coach but isn't sent to the client (`client_facing` off).
 
 ## Background work
 
@@ -122,19 +156,30 @@ from the athlete's own data and name no coach.
 
 ## Client updates (`client_update_outbox`, `outbox.ts`)
 
-When the coach approves a client-facing change, one short message is prepared
-from the approved targets only (never a score, projection, quote or note) and
-waits out the review window (`app_settings.goal_updates`: 30 minutes by
+When the coach approves (or reopens) a client-facing change, one short
+message is prepared from the approved targets only (never a score,
+projection, quote or note) and waits out the review window (`app_settings.goal_updates`: 30 minutes by
 default, 5 minutes to 24 hours). The coach can preview, edit, hold, cancel or
 send now. A related change joins the waiting message and restarts the window;
 one arriving after the coach edited it holds it for the coach. Right before
 sending, every rule is checked again (`sendDecision`): each change still
 approved and current, automatic sending on, outside their quiet hours, and
 the client offline (no app heartbeat in 4 minutes). Presence nobody can read
-waits, then holds for the coach after a day. One waiting update per client;
-delivery is claimed first and deduped by `outbox_id` on the message, so it
-never goes twice. It goes in their coach chat as `message_type` Goals with
-the usual push (their notification settings apply).
+waits, then holds for the coach after a day. One waiting update per client
+(pending or held); a held update stays held when a newer change joins it.
+A change goes stale only when its approved target does (the client's own
+number moving, a read or a new version never cancels it), and a moved meet's
+date is said as it is now. Delivery is claimed from the row exactly as it was
+read (a Hold, an edit or a newer change in between always wins) and deduped by
+`outbox_id` on the message, so it never goes twice; a send cut off part way is
+picked up after 10 minutes (marked sent if its message went, else back to
+waiting); waits never count as failures, and three failed sends hand it to the
+coach (held, `send_failed`). It goes in their coach chat as `message_type`
+Goals, `is_automated` (a prepared update never closes their check-ins or
+forms; the attachment says whether the coach tapped Send), with the usual push
+(their notification settings apply). Approvals carry what the card showed
+(the goal's version, an approach's number, the recommendation's key): a goal
+that changed under an open card is checked again, never approved blind.
 
 ## Rollback
 
@@ -148,6 +193,7 @@ app's own fields stays and keeps working.
   outbox rules and the message.
 - `src/test/goal-intel-worker.test.ts`: the worker end to end on an in-memory
   database (extraction, approval, the outbox, delivery, dedupe).
-- `supabase/tests/goal-intelligence/run.sh`: the migration twice on Postgres
-  16, backfill, both-way sync, identity, version, append-only history, RLS,
-  `goal_intel_due()`, purge and rollback.
+- `supabase/tests/goal-intelligence/run.sh`: the migration and its fixes twice
+  on Postgres 16, backfill, both-way sync, identity, version, append-only
+  history, RLS, `goal_intel_due()`, purge and rollback; `fixes.sql` holds each
+  case the Nov 26 review found.

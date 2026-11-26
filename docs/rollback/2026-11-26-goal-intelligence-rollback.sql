@@ -1,4 +1,5 @@
--- Rollback for 20270601095000_goal_intelligence.sql (Goal & Performance Intelligence).
+-- Rollback for 20270601095000_goal_intelligence.sql (Goal & Performance Intelligence)
+-- and its fixes, 20270602130000_goal_intelligence_fixes.sql.
 -- Removes the goal ledger, its history, the outbox, the sync triggers and the
 -- schedule. What the sync already wrote to competitions (target totals), the
 -- clients' bodyweight goals and the long-term goal stays as it is: those are
@@ -17,6 +18,8 @@ DROP FUNCTION IF EXISTS public.tg_competitions_goal_sync();
 DROP FUNCTION IF EXISTS public.tg_clients_bodyweight_goal_sync();
 DROP FUNCTION IF EXISTS public.tg_intel_profile_goal_sync();
 DROP FUNCTION IF EXISTS public.goal_intel_due();
+DROP FUNCTION IF EXISTS public.goal_intel_meetings_to_scan(integer);
+DROP FUNCTION IF EXISTS public.goal_intel_checkins_to_scan(integer);
 DROP TABLE IF EXISTS public.client_update_outbox;
 DROP TABLE IF EXISTS public.client_goal_sources;
 DROP TABLE IF EXISTS public.client_goal_events;

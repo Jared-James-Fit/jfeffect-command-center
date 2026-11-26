@@ -51,6 +51,7 @@ const decision = z.discriminatedUnion("action", [
     value: z.number().positive().max(3000).nullable().optional(),
     unit: unit.nullable().optional(),
     approach: approach.nullable().optional(),
+    approachKg: z.number().positive().max(3000).nullable().optional(),
     deadline: day.nullable().optional(),
     text: z.string().trim().max(600).nullable().optional(),
     clientFacing: z.boolean().nullable().optional(),
@@ -65,11 +66,12 @@ const decision = z.discriminatedUnion("action", [
 /** Approve (as said, an approach, or edited), dismiss, close, or record how it went. */
 export const decideGoalFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ goalId: uuid, decision }).parse(d))
+  .inputValidator((d: unknown) => z.object({ goalId: uuid, decision, expectVersion: z.number().int().positive().nullable().optional() }).parse(d))
   .handler(async ({ data, context }) => {
     const { sb, userId } = await reachGoal(context, data.goalId);
     const { decideGoal } = await import("./goals.server");
-    return decideGoal(sb, data.goalId, data.decision as any, { userId, kind: "coach" });
+    // the version the card showed: a goal that changed under an open card is checked again, never approved blind
+    return decideGoal(sb, data.goalId, data.decision as any, { userId, kind: "coach" }, { expectVersion: data.expectVersion ?? null });
   });
 
 /** A goal the coach sets directly: approved at once. */
@@ -100,7 +102,16 @@ export const addGoalFn = createServerFn({ method: "POST" })
 export const decideGoalRecommendationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ goalId: uuid, action: z.enum(["approve", "dismiss", "maintain"]), value: z.number().positive().max(3000).nullable().optional(), unit: unit.nullable().optional() }).parse(d),
+    z
+      .object({
+        goalId: uuid,
+        action: z.enum(["approve", "dismiss", "maintain"]),
+        value: z.number().positive().max(3000).nullable().optional(),
+        unit: unit.nullable().optional(),
+        /** the recommendation the card showed */
+        expectKey: z.string().max(200).nullable().optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { sb, userId } = await reachGoal(context, data.goalId);

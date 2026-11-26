@@ -5,6 +5,7 @@ select t_as_service();
 do $$ begin
   assert to_regclass('public.client_goals') is null, 'client_goals gone';
   assert to_regclass('public.client_update_outbox') is null, 'outbox gone';
+  assert to_regprocedure('public.goal_intel_meetings_to_scan(integer)') is null, 'worker queries gone';
   assert not exists (select 1 from pg_trigger where tgname in ('competitions_goal_sync', 'clients_bodyweight_goal_sync', 'program_intel_profiles_goal_sync')), 'sync triggers gone';
   assert (select target_total_kg from competitions where id = '00000000-0000-0000-0000-00000000cc02') = 300, 'competitions untouched';
   assert (select long_term_goal ->> 'text' from program_intel_profiles where client_id = '00000000-0000-0000-0000-0000000000c1') = 'Podium at worlds', 'long-term goal kept';

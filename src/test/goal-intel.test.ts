@@ -5,6 +5,8 @@ import {
   calibrationFrom,
   decideAction,
   meaningfulChange,
+  prefersSafe,
+  wantsTopEnd,
   recommendApproach,
   resolveOutcome,
   scoreAgainst,
@@ -12,9 +14,10 @@ import {
   type GoalContext,
   type GoalSpec,
 } from "@/lib/goal-intel/feasibility";
-import { dedupeKey, goalTitle, inferUnit, loadNumbers, measurableGoals, statedGoals, wordedGoal } from "@/lib/goal-intel/extract";
+import { dedupeKey, goalNotes, goalTitle, inferUnit, loadNumbers, measurableGoals, statedGoals, wordedGoal } from "@/lib/goal-intel/extract";
 import {
   buildUpdateMessage,
+  changesMoved,
   currentChanges,
   inQuiet,
   mergeChanges,
@@ -259,7 +262,7 @@ describe("feasibility", () => {
     expect(decideAction({ ...base, score: 40, band: "very_aggressive", conf: "high", weeks: 3 }).kind).toBe("adjust_target");
     expect(decideAction({ ...base, score: 95, band: "easy", conf: "high", weeks: 12 }).kind).toBe("raise_target");
     expect(decideAction({ ...base, score: 95, band: "easy", conf: "low", weeks: 12 }).kind).toBe("collect_data");
-    expect(recommendApproach({ confidence: "high", concerns: [], lift: "squat", adherencePct: 55, preferences: [], meetSoon: false }).key).toBe("conservative");
+    expect(recommendApproach({ confidence: "high", concerns: [], lifts: ["squat"], adherencePct: 55, preferences: [], meetSoon: false }).key).toBe("conservative");
   });
 });
 
@@ -297,7 +300,9 @@ describe("client updates", () => {
   it("drops outdated or withdrawn changes before sending", () => {
     const goals = [{ id: "g1", status: "active", version: 2, approved_kg: toKg(225, "lb"), client_facing: true }];
     expect(currentChanges([change()], goals)).toHaveLength(1);
-    expect(currentChanges([change()], [{ ...goals[0], version: 3 }])).toHaveLength(0);
+    // a new version that didn't move the approved target (their own number, a read) is still current
+    expect(currentChanges([change()], [{ ...goals[0], version: 3 }])).toHaveLength(1);
+    expect(currentChanges([change()], [{ ...goals[0], version: 3, approved_kg: toKg(230, "lb") }])).toHaveLength(0);
     expect(currentChanges([change()], [{ ...goals[0], status: "dismissed" }])).toHaveLength(0);
     expect(currentChanges([change()], [{ ...goals[0], client_facing: false }])).toHaveLength(0);
   });
@@ -346,5 +351,149 @@ describe("what the AI reads", () => {
     expect(t).toMatch(/client said: 220–225 lb \(unit inferred, unconfirmed\) \(tentative\) · not reviewed by the coach yet/);
     expect(fmtClientTarget({ client_value: 110, client_value_max: 115, client_unit: "lb", client_text: null })).toBe("110–115 lb");
     expect(timeLeftLine(TODAY, "2027-02-08").line).toBe("11 weeks");
+  });
+});
+
+/* The review of Nov 26 2026: each finding that was real, as a case that must stay fixed. */
+describe("review fixes: reading goals from words", () => {
+  const read = (t: string, q?: string) => measurableGoals(t, q).map((g) => [g.kind === "lift" ? g.lift : g.kind, g.values, g.unit]);
+
+  it("binds a number to the lift on either side, never the next lift's number or a date's day", () => {
+    expect(read("Goals for nationals: 500 total, 180 squat, 120 bench, 200 deadlift")).toEqual([
+      ["total", [500], null],
+      ["squat", [180], null],
+      ["bench", [120], null],
+      ["deadlift", [200], null],
+    ]);
+    expect(read("My goal is a 405 squat and 315 bench by summer")).toEqual([
+      ["squat", [405], null],
+      ["bench", [315], null],
+    ]);
+    expect(read("I want to hit a 200 squat by March 21")).toEqual([["squat", [200], null]]);
+    expect(read("My target is 83kg bodyweight and a 250kg deadlift")).toEqual([
+      ["bodyweight", [83], "kg"],
+      ["deadlift", [250], "kg"],
+    ]);
+    // the coach's usual way still reads the same
+    expect(read("squat 220-225 bench 110-115 deadlift 264-280")).toEqual([
+      ["squat", [220, 225], null],
+      ["bench", [110, 115], null],
+      ["deadlift", [264, 280], null],
+    ]);
+  });
+
+  it("never takes where they are now, a result, a working set or an increase as the target", () => {
+    expect(read("Currently squat 170, want to hit 180 at the meet")).toEqual([["squat", [180], null]]);
+    expect(read("Total 520 last meet; aiming for 540 at nationals")).toEqual([["total", [540], null]]);
+    expect(read("Squat felt great, hit 405 for a double!")).toEqual([]);
+    expect(read("I want to squat 3x5 at 405")).toEqual([]);
+    expect(read("Goal this week: deadlift 180x3 @ 8")).toEqual([]);
+    expect(read("I want to bench 225 for 10 reps")).toEqual([]);
+    expect(read("I want to get my bench up 20 lbs this block")).toEqual([]);
+    expect(read("Goal: get down to 150g carbs on rest days")).toEqual([]);
+    expect(read("Goal is to lean out, I weigh 185 right now")).toEqual([]);
+    expect(statedGoals("New squat PR 200kg!!")).toEqual([]);
+    expect(statedGoals("Bench PR today 140kg")).toEqual([]);
+  });
+
+  it("reads thousands and decimals as numbers, never pieces of them", () => {
+    expect(read("I want to total 1,500 lb")).toEqual([["total", [1500], "lb"]]);
+    expect(read("squats 180,190")).toEqual([["squat", [180, 190], null]]);
+    expect(read("squat 12000")).toEqual([]);
+    expect(read("bench 102,5 kg at the meet")).toEqual([["bench", [102.5], "kg"]]);
+  });
+
+  it("a unit counts as said only when the words said it, and a number not in the quote is tentative", () => {
+    const [g] = measurableGoals("Squat third attempt around 225 kg", "I think 225 for a third");
+    expect(g).toMatchObject({ unit: null, values: [225] });
+    const [h] = measurableGoals("Squat third attempt 102.5 kg", "squat third at like 100");
+    expect(h.tentative).toBe(true);
+  });
+
+  it("a coach's call notes count only under goal or attempt words", () => {
+    expect(goalNotes("Squat 180x3 @8 felt good, bench stalled at 120, total 520 at provincials")).toBe("");
+    expect(goalNotes("Thinking for thirds:\n\nsquat 220 - 225\n\nbench 110-115\nOther:\nbench 100 felt slow")).toBe("Thinking for thirds:\nsquat 220 - 225\nbench 110-115");
+  });
+});
+
+describe("review fixes: feasibility", () => {
+  it("reads 'play it safe' as safe and 'top end over 9/9' as the top end", () => {
+    expect(prefersSafe("Wants to play it safe at Provincials and go 9 for 9")).toBe(true);
+    expect(prefersSafe("Prefers a conservative day")).toBe(true);
+    expect(wantsTopEnd("Wants to play it safe at Provincials and go 9 for 9")).toBe(false);
+    expect(wantsTopEnd("Prefers a conservative day")).toBe(false);
+    expect(wantsTopEnd("Priority is not aggressive attempts")).toBe(false);
+    expect(wantsTopEnd("top end over 9/9")).toBe(true);
+    expect(wantsTopEnd("Want to hit top end don't care about going 9/9")).toBe(true);
+    const safe = ctx({ preferences: { comp1: ["Wants to play it safe at Provincials and go 9 for 9"] } });
+    expect(assessGoal(spec({ competition_id: "comp1", deadline: "2026-12-05" }), safe).recommended).toBe("conservative");
+  });
+
+  it("a total protects a lift that hurts", () => {
+    const pain = ctx({ concerns: [{ lift: "squat", severity: "serious", text: "Left knee getting worse" }] });
+    const f = assessGoal(spec({ kind: "total", lift: null, status: "active", approved_kg: 287.5, competition_id: "comp1", deadline: "2026-12-05" }), pain);
+    expect(f.recommended).toBe("conservative");
+    expect(f.action.kind).toBe("protect");
+  });
+
+  it("a passed date waits for the result instead of changing the target", () => {
+    const f = assessGoal(spec({ status: "active", approved_kg: 207.5, competition_id: "comp1", deadline: "2026-11-21" }), ctx({ meets: {} }));
+    expect(f.action.kind).toBe("none");
+    expect(f.headline).toMatch(/waiting for the results/);
+    const bw = assessGoal(spec({ kind: "bodyweight", lift: null, status: "active", approved_kg: 57, deadline: "2026-11-20" }), ctx());
+    expect(bw.headline).toMatch(/Date passed/);
+  });
+
+  it("a bodyweight goal past the safe pace changes the target or the date, never the training", () => {
+    const fast = assessGoal(
+      spec({ kind: "bodyweight", lift: null, status: "active", approved_kg: 80, deadline: "2027-02-04" }),
+      ctx({ weightContext: null, bodyweight: { currentKg: 90, trendKgPerWeek: -0.5, trendClear: true, seKgPerWeek: 0.05, noiseKg: 0.4, weighInsLast14: 10, stale: false } }),
+    );
+    expect(fast.action.kind).toBe("adjust_target");
+    expect(fast.action.line).not.toMatch(/faster|programming/);
+  });
+
+  it("a cut already under its target holds; it's never read as a gain or told to aim heavier", () => {
+    const f = assessGoal(
+      spec({ kind: "bodyweight", lift: null, status: "active", approved_kg: 83, deadline: "2027-01-28", direction: "down" }),
+      ctx({ bodyweight: { currentKg: 82.4, trendKgPerWeek: -0.3, trendClear: true, seKgPerWeek: 0.05, noiseKg: 0.4, weighInsLast14: 10, stale: false } }),
+    );
+    expect(f.headline).toMatch(/hold it/);
+    expect(f.action.kind).toBe("maintain");
+    expect(f.action.suggestedKg).toBeNull();
+  });
+
+  it("a maintain goal or a long, gentle cut is never told to aim 20% lighter, and no approach is ever under 0", () => {
+    const keep = assessGoal(
+      spec({ kind: "bodyweight", lift: null, status: "active", approved_kg: 80, deadline: "2027-05-27", profile_type: "maintain" }),
+      ctx({ bodyweight: { currentKg: 80.4, trendKgPerWeek: 0, trendClear: false, seKgPerWeek: 0.05, noiseKg: 0.4, weighInsLast14: 10, stale: false } }),
+    );
+    expect(keep.headline).toMatch(/hold it/);
+    expect(keep.action.kind).not.toBe("raise_target");
+    const slow = assessGoal(
+      spec({ kind: "bodyweight", lift: null, status: "active", approved_kg: 90, deadline: "2028-04-05", direction: "down" }),
+      ctx({ weightContext: null, bodyweight: { currentKg: 100, trendKgPerWeek: -0.2, trendClear: true, seKgPerWeek: 0.05, noiseKg: 0.4, weighInsLast14: 10, stale: false } }),
+    );
+    expect(slow.action.kind).not.toBe("raise_target");
+    expect(Math.min(...slow.approaches.map((a) => a.targetKg))).toBeGreaterThanOrEqual(79);
+  });
+
+  it("a class cut tied to a meet is judged at a powerlifter's class rates", () => {
+    const f = assessGoal(
+      spec({ kind: "bodyweight", lift: null, status: "active", approved_kg: 83, deadline: "2027-03-04", competition_id: "comp1", direction: "down" }),
+      ctx({ weightContext: null, bodyweight: { currentKg: 92, trendKgPerWeek: -0.4, trendClear: true, seKgPerWeek: 0.05, noiseKg: 0.4, weighInsLast14: 10, stale: false } }),
+    );
+    expect(f.pace.usualPctPerWeek).toEqual([0.5, 1]);
+  });
+});
+
+describe("review fixes: client updates", () => {
+  it("a moved meet is said with its new date, and that moves the words", () => {
+    const c: OutboxChange = { goalId: "g1", version: 2, kind: "lift", lift: "squat", title: "Squat · Winter Open", eventTitle: "Winter Open", deadline: "2026-12-05", targetKg: 100, targetText: null, unit: "kg", beforeKg: null };
+    const now = currentChanges([c], [{ id: "g1", status: "active", version: 4, approved_kg: 100, approved_text: null, deadline: "2026-12-12", event_title: "Winter Open", client_facing: true }]);
+    expect(now).toHaveLength(1);
+    expect(now[0].deadline).toBe("2026-12-12");
+    expect(changesMoved([c], now)).toBe(true);
+    expect(changesMoved([c], [c])).toBe(false);
   });
 });

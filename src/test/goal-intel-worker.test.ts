@@ -56,11 +56,29 @@ function makeDb() {
   const base = memorySb(tables);
   return {
     ...base,
+    // the database's own picks of what hasn't been read (goal_intel_meetings_to_scan / _checkins_to_scan)
+    rpc: async (fn: string) => {
+      if (fn === "goal_intel_meetings_to_scan")
+        return {
+          data: tables.coaching_sessions
+            .filter((s) => s.analysis_status === "ready" && !tables.client_goal_sources.some((x) => x.source_kind === "meeting" && x.source_id === s.id && x.scanned_at >= s.updated_at))
+            .map((s) => ({ id: s.id, updated_at: s.updated_at })),
+          error: null,
+        };
+      if (fn === "goal_intel_checkins_to_scan") return { data: [], error: null };
+      return { data: null, error: null };
+    },
     from: (t: string) => {
       const q: any = base.from(t);
       // as Supabase does: what a read hands back is a copy, never the stored row itself
       const then = q.then.bind(q);
       q.then = (ok: any, bad: any) => then((r: any) => (ok ? ok({ ...r, data: r.data == null ? r.data : JSON.parse(JSON.stringify(r.data)) }) : r), bad);
+      // jsonb containment as Postgres does it (the outbox finds a message it already sent by its outbox id)
+      q.contains = (c: string, v: any) => {
+        const want = typeof v === "string" ? JSON.parse(v) : v;
+        (q as any).filters.push((r: any) => Array.isArray(want) && want.every((w: any) => (Array.isArray(r[c]) ? r[c] : []).some((a: any) => Object.entries(w).every(([k, x]) => a?.[k] === x))));
+        return q;
+      };
       if (t !== "client_goals") return q;
       const insert = q.insert.bind(q);
       q.insert = (row: any) => {
@@ -151,7 +169,7 @@ describe("goals from a meeting", () => {
     expect(tables.client_goals.some((g) => /morning/.test(g.client_text ?? ""))).toBe(false);
     // read again: nothing new
     const again = await extractFromMeeting(db, SESSION);
-    expect(again).toEqual({ created: 0, updated: 0 });
+    expect(again).toMatchObject({ created: 0, updated: 0, unchanged: true });
     // her name never becomes part of a goal's identity
     expect(tables.client_goals.every((g) => !/ana/.test(g.dedupe_key))).toBe(true);
   });
@@ -253,7 +271,8 @@ describe("approving and telling the client", () => {
     const o = tables.client_update_outbox[0];
     const r = await outboxAction(db, o.id, { action: "send_now" }, { userId: COACH_USER, kind: "coach" });
     expect(r.status).toBe("sent");
-    expect(tables.messages[0]).toMatchObject({ is_automated: false, attachments: [{ kind: "goal_update", automatic: false }] });
+    // a prepared update, never a reply that closes their check-ins: the attachment says the coach sent it
+    expect(tables.messages[0]).toMatchObject({ is_automated: true, attachments: [{ kind: "goal_update", automatic: false }] });
     expect(o.sent_by).toBe(COACH_USER);
   });
 
@@ -287,5 +306,142 @@ describe("goal settings in app_settings", () => {
     const db = memorySb({ app_settings: [{ key: "goal_updates", value: '{"review_minutes":3,"auto_send":false}' }] } as any);
     // clamped to the 5-minute floor; off means the coach sends it
     expect(await readUpdateSettings(db as any)).toEqual({ reviewMinutes: 5, autoSend: false });
+  });
+});
+
+/* The review of Nov 26 2026: the outbox and the ledger's writes, end to end. */
+describe("review fixes: the waiting update", () => {
+  async function approvedOffline() {
+    const g = await import("@/lib/goal-intel/goals.server");
+    await g.extractFromMeeting(db, SESSION);
+    await g.assessClient(db, CLIENT, { force: true });
+    await g.decideGoal(db, lift("squat").id, { action: "approve" }, { userId: COACH_USER, kind: "coach" });
+    tables.app_sessions.push({ user_id: "client-user-1", last_seen_at: iso(40 * 60_000) });
+    tables.clients[0].last_active_at = iso(41 * 60_000);
+    return g;
+  }
+
+  it("the coach's Hold survives a newer approval, and the held update never goes by itself", async () => {
+    const { outboxAction, decideGoal, deliverOutbox } = await approvedOffline();
+    const o = tables.client_update_outbox[0];
+    await outboxAction(db, o.id, { action: "hold" }, { userId: COACH_USER, kind: "coach" });
+    await decideGoal(db, lift("bench").id, { action: "approve", value: 115, unit: "lb" }, { userId: COACH_USER, kind: "coach" });
+    expect(o).toMatchObject({ status: "held", hold_reason: "coach" });
+    expect(o.body).toContain("Bench: 115 lb");
+    o.send_after = iso(60_000);
+    expect(await deliverOutbox(db, o.id)).toBe("held");
+    expect(tables.messages).toHaveLength(0);
+  });
+
+  it("a send left half done never blocks the next approval, and is picked up again without sending twice", async () => {
+    const { decideGoal, recoverStaleSending } = await approvedOffline();
+    const o = tables.client_update_outbox[0];
+    // the request was cut off right after claiming it
+    Object.assign(o, { status: "sending", claimed_at: iso(20 * 60_000), updated_at: iso(20 * 60_000) });
+    await decideGoal(db, lift("bench").id, { action: "approve", value: 115, unit: "lb" }, { userId: COACH_USER, kind: "coach" });
+    const open = tables.client_update_outbox.filter((x) => x.status === "pending");
+    expect(open).toHaveLength(1);
+    // nothing went: the stuck one joins the newer update
+    expect(await recoverStaleSending(db)).toBe(1);
+    expect(o.status).toBe("cancelled");
+    expect(open[0].changes.map((c: any) => c.lift).sort()).toEqual(["bench", "squat"]);
+    expect(open[0].body).toContain("Squat: 225 lb");
+  });
+
+  it("a send whose message went but whose record didn't is marked sent, never sent again", async () => {
+    const { recoverStaleSending } = await approvedOffline();
+    const o = tables.client_update_outbox[0];
+    Object.assign(o, { status: "sending", claimed_at: iso(20 * 60_000) });
+    tables.messages.push({ id: "m-sent", client_id: CLIENT, attachments: [{ kind: "goal_update", outbox_id: o.id, automatic: true }] });
+    await recoverStaleSending(db);
+    expect(o).toMatchObject({ status: "sent", message_id: "m-sent" });
+    expect(tables.messages).toHaveLength(1);
+  });
+
+  it("waits are never counted as failures; repeated send failures hand it to the coach", async () => {
+    const { deliverOutbox } = await approvedOffline();
+    const o = tables.client_update_outbox[0];
+    o.send_after = iso(60_000);
+    const failing = {
+      ...db,
+      from: (t: string) => {
+        const q: any = db.from(t);
+        if (t === "messages") q.insert = () => ({ select: () => ({ single: async () => ({ data: null, error: { message: "timeout" } }) }) });
+        return q;
+      },
+    };
+    for (let i = 0; i < 3; i++) {
+      expect(await deliverOutbox(failing, o.id)).toBe("failed");
+      if (o.status === "pending") o.next_attempt_at = null;
+    }
+    expect(o).toMatchObject({ status: "held", hold_reason: "send_failed", send_failures: 3 });
+    expect(o.status_line).toMatch(/Send it yourself/);
+  });
+
+  it("the client saying a new number never cancels the approved update waiting for them", async () => {
+    const { upsertCandidate, deliverOutbox } = await approvedOffline();
+    const o = tables.client_update_outbox[0];
+    const sq = lift("squat");
+    const client = tables.clients[0];
+    await upsertCandidate(db, client, { kind: "lift", lift: "squat", values: [230], unit: "lb", timing: "third", text: "squat third 230 lb", quote: "goal squat third 230 lb", tentative: false }, { sourceKind: "message", sourceId: "msg-new", sourceAt: new Date().toISOString(), speaker: "athlete", context: null, competitionId: COMP, eventTitle: "Winter Open", deadline: "2026-12-05" }, null);
+    expect(lift("squat").client_value).toBe(230);
+    expect(lift("squat").id).toBe(sq.id);
+    o.send_after = iso(60_000);
+    expect(await deliverOutbox(db, o.id)).toBe("sent");
+    expect(tables.messages[0].body).toContain("Squat: 225 lb");
+  });
+
+  it("turning 'tell them' off and on is never news, and an approval the card didn't see is refused", async () => {
+    const { decideGoal } = await approvedOffline();
+    const before = tables.client_update_outbox.length;
+    const ev = tables.client_goal_events.filter((e) => e.action === "client_update_queued").length;
+    await decideGoal(db, lift("squat").id, { action: "client_facing", clientFacing: false }, { userId: COACH_USER, kind: "coach" });
+    await decideGoal(db, lift("squat").id, { action: "client_facing", clientFacing: true }, { userId: COACH_USER, kind: "coach" });
+    expect(tables.client_update_outbox).toHaveLength(before);
+    expect(tables.client_goal_events.filter((e) => e.action === "client_update_queued").length).toBe(ev);
+    const b = lift("bench");
+    await expect(decideGoal(db, b.id, { action: "approve" }, { userId: COACH_USER, kind: "coach" }, { expectVersion: b.version + 5 })).rejects.toThrow(/changed since you opened it/);
+  });
+});
+
+describe("review fixes: what's read for goals", () => {
+  it("a goal in the analysis's words is kept as a goal but never sent to the client as a message", async () => {
+    const { extractFromMeeting, decideGoal } = await import("@/lib/goal-intel/goals.server");
+    await extractFromMeeting(db, SESSION);
+    const phys = tables.client_goals.find((g) => g.kind === "physique");
+    expect(phys.client_facing).toBe(false);
+    await decideGoal(db, phys.id, { action: "approve" }, { userId: COACH_USER, kind: "coach" });
+    expect(tables.client_update_outbox).toHaveLength(0);
+  });
+
+  it("a dismissed goal never comes back from the same meeting, even when its words are read again", async () => {
+    const { extractFromMeeting, decideGoal } = await import("@/lib/goal-intel/goals.server");
+    await extractFromMeeting(db, SESSION);
+    await decideGoal(db, lift("squat").id, { action: "dismiss" }, { userId: COACH_USER, kind: "coach" });
+    // the meeting is opened and touched: nothing to read
+    tables.coaching_sessions[0].updated_at = new Date().toISOString();
+    expect(await extractFromMeeting(db, SESSION)).toMatchObject({ unchanged: true });
+    // its words change (a re-read): still not proposed again
+    tables.coaching_sessions[0].analysis.items[1].text = "Ana is thinking her bench third attempt will be around 112 to 115.";
+    await extractFromMeeting(db, SESSION);
+    expect(lift("squat")).toBeUndefined();
+  });
+
+  it("a coach's note never rewrites the client's own number, and an older source never replaces a newer one", async () => {
+    const { upsertCandidate, extractFromMeeting } = await import("@/lib/goal-intel/goals.server");
+    await extractFromMeeting(db, SESSION);
+    const client = tables.clients[0];
+    const meta = { sourceKind: "meeting" as const, competitionId: COMP, eventTitle: "Winter Open", deadline: "2026-12-05", context: null };
+    const cand = (v: number) => ({ kind: "lift" as const, lift: "squat" as const, values: [v], unit: "lb" as const, timing: "third" as const, text: `squat ${v}`, quote: `squat ${v}`, tentative: false });
+    expect(await upsertCandidate(db, client, cand(240), { ...meta, sourceId: "s-notes", sourceAt: new Date().toISOString(), speaker: "coach" }, null)).toBe("same");
+    expect(lift("squat").client_value).toBe(220);
+    expect(await upsertCandidate(db, client, cand(200), { ...meta, sourceId: "s-old", sourceAt: iso(400 * 86_400_000), speaker: "athlete" }, null)).toBe("same");
+    expect(lift("squat").client_value).toBe(220);
+  });
+
+  it("a message the app made for them (a workout note, a pain card) is never read as a goal", async () => {
+    const { isCardMessage } = await import("@/lib/goal-intel/goals.server");
+    expect(isCardMessage({ body: "📝 Competition Bench: hit 100 for a triple", attachments: [{ kind: "workout_note" }] })).toBe(true);
+    expect(isCardMessage({ body: "Goal is to bench 100 kg at nationals", attachments: [] })).toBe(false);
   });
 });
