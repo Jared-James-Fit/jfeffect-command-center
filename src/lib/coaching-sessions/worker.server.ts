@@ -165,6 +165,14 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
       .update({ analysis: { ...a.analysis, model: a.model, at: new Date().toISOString(), source: a.source, clipped: a.clipped }, analysis_status: "ready", analysis_error: null, progress: dropKey(progress, job), locked_at: null })
       .eq("id", s.id);
     await log(sb, s, "analysis_ready", { model: a.model, items: a.analysis.items.length, recommendations: a.analysis.recommendations.length, dropped: a.analysis.dropped.length });
+    // the goals it names go to the goal ledger as proposed (goal-intel; the 5-minute tick catches any this misses)
+    try {
+      const { extractFromMeeting, assessClient } = await import("@/lib/goal-intel/goals.server");
+      const g = await extractFromMeeting(sb, s.id);
+      if (g.created || g.updated) await assessClient(sb, s.client_id);
+    } catch (e: any) {
+      console.warn("[coaching-sessions] goals not read yet", e?.message);
+    }
     return "ready";
   } catch (e: any) {
     const { WaitingForModel } = await import("@/lib/ai/staged-call.server");

@@ -241,7 +241,7 @@ const addDaysIso = (iso: string, n: number) => {
  */
 export async function loadMeetingExtras(supabase: any, clientId: string, today: string, unit: "kg" | "lb"): Promise<MeetingExtras> {
   const from = addDaysIso(today, -28);
-  const [blocks, msgs, videos, cardioT, cardioC, last, done] = await Promise.all([
+  const [blocks, msgs, videos, cardioT, cardioC, last, done, goalRows] = await Promise.all([
     safe(async () => {
       const { data, error } = await supabase
         .from("pl_blocks")
@@ -312,6 +312,17 @@ export async function loadMeetingExtras(supabase: any, clientId: string, today: 
         .limit(6);
       return (data ?? []) as any[];
     }, [] as any[]),
+    // the goal ledger (goal-intel): what they're working toward, approved or waiting on the coach
+    safe(async () => {
+      const { data } = await supabase
+        .from("client_goals")
+        .select("*")
+        .eq("client_id", clientId)
+        .in("status", ["proposed", "active"])
+        .order("created_at", { ascending: true })
+        .limit(20);
+      return (data ?? []) as any[];
+    }, [] as any[]),
   ]);
   // the program on the calendar today, and the one after it
   const live = (blocks as any[]).filter((b) => b.client_visible !== false && b.status !== "Draft");
@@ -345,7 +356,31 @@ export async function loadMeetingExtras(supabase: any, clientId: string, today: 
     cardio,
     lastMeeting: last ? { date: String(last.scheduled_at ?? last.created_at).slice(0, 10), summary: last.analysis?.summary ? String(last.analysis.summary).slice(0, 280) : null } : null,
     doneCommitments: (done as any[]).map((d) => ({ owner: d.owner, text: d.text, closedOn: d.closed_at ? String(d.closed_at).slice(0, 10) : null })),
+    goals: await meetingGoals(goalRows as any[]),
   };
+}
+
+/** The goal ledger as the meeting prep reads it: each target already in words, the three numbers apart. */
+async function meetingGoals(rows: any[]): Promise<NonNullable<MeetingExtras["goals"]>> {
+  if (!rows.length) return [];
+  const { fmtClientTarget, fmtWeight } = await import("@/lib/goal-intel/types");
+  return rows.map((g) => {
+    const unit = (g.feasibility?.unit ?? g.approved_unit ?? g.client_unit ?? "kg") as "kg" | "lb";
+    const f = g.feasibility;
+    return {
+      id: g.id,
+      title: g.title,
+      status: g.status,
+      clientTarget: fmtClientTarget(g),
+      unitInferred: g.client_unit_source === "inferred",
+      tentative: !!g.tentative,
+      approved: g.approved_kg != null ? fmtWeight(Number(g.approved_kg), unit) : g.approved_text ?? null,
+      projection: f?.projection ? `${fmtWeight(f.projection.expectedKg, unit)} (${fmtWeight(f.projection.lowKg, unit)}–${fmtWeight(f.projection.highKg, unit)})` : null,
+      score: f?.score ?? null,
+      action: f?.action && !["none", "approve", "maintain"].includes(f.action.kind) ? f.action.line : null,
+      clientFacing: g.client_facing !== false,
+    };
+  });
 }
 
 /**

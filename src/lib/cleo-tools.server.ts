@@ -413,6 +413,31 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
 
+    goals: tool({
+      description:
+        "A client's goal ledger: each goal's own target (what they said, with the unit marked when it was inferred), the coach-approved target, Cleo's projection with its range and confidence, the feasibility score out of 100 (where the target sits in their own projected range: never a probability), the six approaches from easy to extremely aggressive with their targets, the recommended approach and why, the read's recommended action, time left, and outcomes of past goals. Use it before answering whether a target is realistic or what to aim for.",
+      inputSchema: z.object({ client_id: clientId, details: z.boolean().optional().describe("Include each goal's six approaches and reasons.") }),
+      execute: safe("goals", async ({ client_id, details }) => {
+        const c = await clientRow(db, client_id);
+        const unit = liftUnit(c);
+        const { data, error } = await db.from("client_goals").select("*").eq("client_id", client_id).order("created_at", { ascending: true }).limit(60);
+        if (error) throw new Error(error.message);
+        const { goalsText } = await import("@/lib/goal-intel/rules");
+        const { APPROACH_LABEL, fmtWeight } = await import("@/lib/goal-intel/types");
+        const rows = (data ?? []) as any[];
+        const text = goalsText(rows, unit);
+        if (!text) return `${clientName(c)} has no goals on file yet. Goals come from meetings, check-ins and their messages (proposed for the coach), or the coach adds them on their profile.`;
+        const lines = [`${clientName(c)} goals (${unit}):`, text];
+        if (details) {
+          for (const g of rows.filter((r) => (r.status === "active" || r.status === "proposed") && r.feasibility?.approaches?.length)) {
+            const f = g.feasibility;
+            lines.push(`${g.title}: ${f.approaches.map((a: any) => `${a.label} ${fmtWeight(a.targetKg, unit)}`).join(" · ")}${f.recommended ? ` · recommended ${APPROACH_LABEL[f.recommended as keyof typeof APPROACH_LABEL]} (${f.recommendedWhy})` : ""}${f.reasons?.length ? ` · ${f.reasons.join("; ")}` : ""}${f.missing?.length ? ` · missing: ${f.missing.join("; ")}` : ""}`);
+          }
+        }
+        return lines.join("\n");
+      }),
+    }),
+
     openipf: tool({
       description:
         "A coaching client's OpenIPF: whether a profile is linked and its meets, any matches or new meets waiting for the coach, and with search: true it looks them up on OpenIPF / OpenPowerlifting by name right now (takes up to 25 seconds). To link a profile, propose link_openipf with its link; never link a lifter the lookup didn't find or the person didn't give you. Free members are never looked up.",

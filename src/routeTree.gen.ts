@@ -285,6 +285,7 @@ import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/p
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
+import { Route as ApiPublicHooksGoalIntelTickRouteImport } from './routes/api/public/hooks/goal-intel-tick'
 import { Route as ApiPublicHooksJfLibraryInstallRouteImport } from './routes/api/public/hooks/jf-library-install'
 import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/public/hooks/lead-replies-tick'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
@@ -1925,6 +1926,12 @@ const ApiPublicHooksGcalSessionImportRoute =
     path: '/api/public/hooks/gcal-session-import',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksGoalIntelTickRoute =
+  ApiPublicHooksGoalIntelTickRouteImport.update({
+    id: '/api/public/hooks/goal-intel-tick',
+    path: '/api/public/hooks/goal-intel-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksJfLibraryInstallRoute =
   ApiPublicHooksJfLibraryInstallRouteImport.update({
     id: '/api/public/hooks/jf-library-install',
@@ -2530,6 +2537,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2861,6 +2869,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -3198,6 +3207,7 @@ export interface FileRoutesById {
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -3535,6 +3545,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -3866,6 +3877,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -4202,6 +4214,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -4358,6 +4371,7 @@ export interface RootRouteChildren {
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
+  ApiPublicHooksGoalIntelTickRoute: typeof ApiPublicHooksGoalIntelTickRoute
   ApiPublicHooksJfLibraryInstallRoute: typeof ApiPublicHooksJfLibraryInstallRoute
   ApiPublicHooksLeadRepliesTickRoute: typeof ApiPublicHooksLeadRepliesTickRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
@@ -6335,6 +6349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGcalSessionImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/goal-intel-tick': {
+      id: '/api/public/hooks/goal-intel-tick'
+      path: '/api/public/hooks/goal-intel-tick'
+      fullPath: '/api/public/hooks/goal-intel-tick'
+      preLoaderRoute: typeof ApiPublicHooksGoalIntelTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/jf-library-install': {
       id: '/api/public/hooks/jf-library-install'
       path: '/api/public/hooks/jf-library-install'
@@ -7518,6 +7539,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
+  ApiPublicHooksGoalIntelTickRoute: ApiPublicHooksGoalIntelTickRoute,
   ApiPublicHooksJfLibraryInstallRoute: ApiPublicHooksJfLibraryInstallRoute,
   ApiPublicHooksLeadRepliesTickRoute: ApiPublicHooksLeadRepliesTickRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
