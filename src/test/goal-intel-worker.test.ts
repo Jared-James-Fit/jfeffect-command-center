@@ -116,7 +116,7 @@ beforeEach(() => {
     messages: [],
     app_sessions: [],
     push_notification_preferences: [],
-    app_settings: [{ key: "goal_updates", value: { review_minutes: 30, auto_send: true } }],
+    app_settings: [{ key: "goal_updates", value: JSON.stringify({ review_minutes: 30, auto_send: true }) }],
     pl_scheduled_workouts: [],
     pl_day_completions: [],
     progress_bodyweight: [],
@@ -268,5 +268,24 @@ describe("approving and telling the client", () => {
     expect(out.handoff).toMatch(/smallest change/);
     expect((db.writes as any[]).filter((w) => w.table.startsWith("pl_")).length).toBe(writesBefore);
     expect(lift("squat").recommendation_status).toBe("approved");
+  });
+});
+
+describe("goal settings in app_settings", () => {
+  it("reads the text column's JSON, an object, or nothing", async () => {
+    const { settingJson } = await import("@/lib/goal-intel/goals.server");
+    // production stores app_settings.value as text holding JSON
+    expect(settingJson('{"review_minutes":45,"auto_send":false}')).toEqual({ review_minutes: 45, auto_send: false });
+    expect(settingJson({ messages_at: "2026-11-26T00:00:00Z" })).toEqual({ messages_at: "2026-11-26T00:00:00Z" });
+    expect(settingJson(null)).toEqual({});
+    expect(settingJson("not json")).toEqual({});
+    expect(settingJson("[1,2]")).toEqual({});
+  });
+
+  it("the review window and auto-send read from the stored text", async () => {
+    const { readUpdateSettings } = await import("@/lib/goal-intel/goals.server");
+    const db = memorySb({ app_settings: [{ key: "goal_updates", value: '{"review_minutes":3,"auto_send":false}' }] } as any);
+    // clamped to the 5-minute floor; off means the coach sends it
+    expect(await readUpdateSettings(db as any)).toEqual({ reviewMinutes: 5, autoSend: false });
   });
 });
