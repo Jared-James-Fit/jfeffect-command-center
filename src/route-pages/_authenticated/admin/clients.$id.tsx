@@ -1950,7 +1950,6 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
     }
   }
   const incomplete = steps.filter((step) => step.state !== "Completed");
-  if (!incomplete.length) return null;
   const completed = steps.length - incomplete.length;
   return (
     <Card className="md:col-span-3 space-y-2 p-4" data-client-onboarding-status>
@@ -2000,11 +1999,11 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
       </AlertDialog>
       {agreementOpen && <SendAgreementDialog clientId={clientId} clientName={form.full_name || "the client"} alreadySigned={!!agreement.data?.signatures?.length} open={agreementOpen} onOpenChange={setAgreementOpen} />}
       <ul className="divide-y divide-border">
-        {incomplete.map((step) => (
+        {steps.map((step) => (
           <li key={step.label}>
             <button type="button" onClick={() => onGoToTab(step.tab)} className="flex min-h-10 w-full items-center justify-between gap-3 py-2 text-left text-sm">
-              <span>{step.label}</span>
-              <span className={cn("shrink-0 text-xs", step.state === "Not sent" || step.state === "Needs review" ? "text-warning" : "text-muted-foreground")}>{step.state} ›</span>
+              <span className={cn(step.state === "Completed" && "line-through text-muted-foreground")}>{step.label}</span>
+              <span className={cn("shrink-0 text-xs", step.state === "Completed" ? "text-emerald-600 dark:text-emerald-400" : step.state === "Not sent" || step.state === "Needs review" ? "text-warning" : "text-muted-foreground")}>{step.state === "Completed" ? "✓ Completed" : `${step.state} ›`}</span>
             </button>
           </li>
         ))}
