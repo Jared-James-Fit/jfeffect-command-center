@@ -27,6 +27,6 @@ jobs:
         run: |
           sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
           bun install --frozen-lockfile --ignore-scripts
-      - run: bun run test src/test/compact-goal-weight.test.ts src/test/goal-intel.test.ts src/test/post-dual-weights.test.ts
+      - run: bun run test src/test/compact-goal-weight.test.ts src/test/goal-intel.test.ts src/test/post-dual-weights.test.ts src/test/coaching-sessions.test.ts src/test/cleo-chats.test.ts src/test/client-workspace-tabs.test.ts
       - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
       - run: npm run build

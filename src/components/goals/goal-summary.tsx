@@ -150,8 +150,10 @@ export function GoalSummary({
       )}
 
       <ul className="mt-2 divide-y divide-border">
-        {ordered.map((g) => (
-          <GoalItem key={g.id} g={g} view={view} unit={unit} compact={compact} onOpenTraining={onOpenTraining} />
+        {groupCompetitionGoals(ordered).map((group) => group.length === 1 ? (
+          <GoalItem key={group[0].id} g={group[0]} view={view} unit={unit} compact={compact} onOpenTraining={onOpenTraining} />
+        ) : (
+          <CompetitionGoalGroup key={group[0].competition_id} goals={group} view={view} unit={unit} onOpenTraining={onOpenTraining} />
         ))}
       </ul>
 
@@ -181,6 +183,67 @@ export function GoalSummary({
       {adding && <AddGoalDialog view={view} competitionId={competitionId ?? null} onClose={() => setAdding(false)} />}
     </Card>
   );
+}
+
+function groupCompetitionGoals(goals: GoalRow[]): GoalRow[][] {
+  const seen = new Set<string>();
+  const result: GoalRow[][] = [];
+  for (const g of goals) {
+    if (seen.has(g.id)) continue;
+    const group = g.competition_id && g.kind === "lift"
+      ? goals.filter(x => x.kind === "lift" && x.competition_id === g.competition_id)
+      : [g];
+    // Keep ambiguous or duplicate lifts individual rather than implying a total.
+    const unique = group.every(x => x.lift) && new Set(group.map(x => x.lift)).size === group.length;
+    const rows = unique && group.length > 1
+      ? [...group].sort((a, b) => ["squat", "bench", "deadlift"].indexOf(a.lift ?? "") - ["squat", "bench", "deadlift"].indexOf(b.lift ?? ""))
+      : [g];
+    rows.forEach(x => seen.add(x.id));
+    result.push(rows);
+  }
+  return result;
+}
+
+function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: GoalRow[]; view: View; unit: Unit; onOpenTraining?: () => void }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const first = goals[0];
+  const comp = view.competitions.find(c => c.id === first.competition_id);
+  const projected = goals.map(g => g.feasibility?.projection?.expectedKg ?? null);
+  const approved = goals.map(g => g.status === "active" ? sourceKg(g.approved_value, g.approved_unit, g.approved_kg) : null);
+  const total = (xs: Array<number | null>) => goals.length === 3 && xs.every(x => x != null)
+    ? goalWeight(xs.reduce<number>((sum, x) => sum + (x ?? 0), 0), "kg") : null;
+  const sources = [...new Set(goals.map(g => g.source_kind ? (SOURCE_WORD[g.source_kind] ?? "On file") + (g.source_at ? " · " + ago(g.source_at) : "") : null).filter(Boolean))];
+  return <li className="py-3" data-competition-goal-group>
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold">{first.event_title ?? "Competition targets"}</p>
+        {sources.length > 0 && <p className="mt-0.5 text-xs text-muted-foreground">Source: {sources.join(" / ")}</p>}
+      </div>
+      <span className="shrink-0 text-xs text-muted-foreground">{first.feasibility?.timeLeft?.line ?? ""}</span>
+    </div>
+    <div className="mt-2 overflow-x-auto">
+      <table className="w-full min-w-[300px] text-left text-xs tabular-nums">
+        <thead className="text-muted-foreground"><tr><th className="py-1 font-normal">Lift</th><th className="py-1 font-normal">Discussed</th><th className="py-1 font-normal">Projected</th><th className="py-1 font-normal">Approved</th><th><span className="sr-only">Review</span></th></tr></thead>
+        <tbody>
+          {goals.map((g, i) => {
+            const discussed = g.client_unit ? goalWeight(sourceKg(g.client_value, g.client_unit, g.client_kg), "kg", sourceKg(g.client_value_max, g.client_unit, g.client_kg_max), g.client_unit) : null;
+            const proj = goalWeight(projected[i], "kg");
+            const target = goalWeight(approved[i], "kg");
+            return <tr key={g.id} className="border-t border-border align-top">
+              <th className="py-2 pr-2 font-medium capitalize">{g.lift}</th>
+              <td className="py-2 pr-2">{discussed ? <>{discussed.primary}<span className="block text-muted-foreground">{discussed.secondary}{g.client_unit_source === "inferred" ? " · inferred" : ""}</span></> : fmtClientTarget(g) ?? "—"}</td>
+              <td className="py-2 pr-2">{proj ? <>{proj.primary}<span className="block text-muted-foreground">{proj.secondary}</span></> : "—"}</td>
+              <td className="py-2 pr-2">{target ? <>{target.primary}<span className="block text-muted-foreground">{target.secondary}</span></> : "Pending"}</td>
+              <td className="py-1 text-right"><Button variant="ghost" size="sm" className="h-8 px-2" aria-expanded={selected === g.id} onClick={() => setSelected(selected === g.id ? null : g.id)}>{selected === g.id ? "Close" : g.status === "proposed" ? "Review" : "Edit"}</Button></td>
+            </tr>;
+          })}
+          {goals.length === 3 && <tr className="border-t border-border"><th className="py-2 font-semibold">Total</th><td>—</td><td><WeightWords weight={total(projected)} /></td><td><WeightWords weight={total(approved)} /></td><td /></tr>}
+        </tbody>
+      </table>
+    </div>
+    {selected && goals.some(g => g.id === selected) && <ul className="mt-1 rounded-lg border border-border px-3"><GoalItem key={selected} g={goals.find(g => g.id === selected)!} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul>}
+    {comp && <p className="mt-1 text-[11px] text-muted-foreground">Review each target before approval. Projections are not confirmed attempts.</p>}
+  </li>;
 }
 
 function rank(g: GoalRow) {
