@@ -49,7 +49,7 @@ const decision = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("approve"),
     expectedVersion: z.number().int().positive().optional(),
-    confirmedSourceUnit: unit.optional(),
+    confirmedSourceUnit: unit.nullable().optional(),
     changeReason: z.enum(["round_up", "restore"]).optional(),
     value: z.number().positive().max(3000).nullable().optional(),
     unit: unit.nullable().optional(),
@@ -58,9 +58,9 @@ const decision = z.discriminatedUnion("action", [
     text: z.string().trim().max(600).nullable().optional(),
     clientFacing: z.boolean().nullable().optional(),
   }),
-  z.object({ action: z.literal("dismiss") }),
+  z.object({ action: z.literal("dismiss"), expectedVersion: z.number().int().positive().optional() }),
   z.object({ action: z.literal("archive") }),
-  z.object({ action: z.literal("reopen") }),
+  z.object({ action: z.literal("reopen"), expectedVersion: z.number().int().positive().optional() }),
   z.object({ action: z.literal("client_facing"), clientFacing: z.boolean() }),
   z.object({ action: z.literal("result"), result: z.enum(["achieved", "missed"]), actualValue: z.number().positive().max(3000).nullable().optional(), unit: unit.nullable().optional() }),
 ]);

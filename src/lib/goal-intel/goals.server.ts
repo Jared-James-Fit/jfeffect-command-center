@@ -448,10 +448,10 @@ export async function extractFromMessages(sb: Db): Promise<number> {
 /* The coach's decisions                                              */
 
 export type GoalDecision =
-  | { action: "approve"; expectedVersion?: number; confirmedSourceUnit?: Unit; changeReason?: "round_up" | "restore"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
-  | { action: "dismiss" }
+  | { action: "approve"; expectedVersion?: number; confirmedSourceUnit?: Unit | null; changeReason?: "round_up" | "restore"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
+  | { action: "dismiss"; expectedVersion?: number }
   | { action: "archive" }
-  | { action: "reopen" }
+  | { action: "reopen"; expectedVersion?: number }
   | { action: "client_facing"; clientFacing: boolean }
   | { action: "result"; result: "achieved" | "missed"; actualValue?: number | null; unit?: Unit | null };
 
@@ -473,8 +473,8 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
   const unitPref: Unit = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
   let patch: Record<string, unknown> = {};
   let action: string = d.action;
+  if ("expectedVersion" in d && d.expectedVersion != null && g.version !== d.expectedVersion) throw new Error("The goal changed since you opened it. Refresh and try again.");
   if (d.action === "approve") {
-    if (d.expectedVersion != null && g.version !== d.expectedVersion) throw new Error("The goal changed since you opened it. Refresh and try again.");
     if (d.confirmedSourceUnit && (d.expectedVersion == null || g.client_unit !== d.confirmedSourceUnit || g.client_unit_source !== "inferred")) throw new Error("The discussed unit changed. Refresh and confirm again.");
     const measurable = g.kind === "lift" || g.kind === "total" || g.kind === "bodyweight";
     let kg: number | null = null;
@@ -518,7 +518,7 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
       ...(d.deadline !== undefined ? { deadline: d.deadline } : {}),
       ...(d.clientFacing != null ? { client_facing: d.clientFacing } : {}),
       // a unit the coach approved is a unit confirmed
-      ...(g.client_unit_source === "inferred" && (d.confirmedSourceUnit === g.client_unit || (unit && g.client_unit === unit)) ? { client_unit_source: "coach" } : {}),
+      ...(g.client_unit_source === "inferred" && (d.confirmedSourceUnit === g.client_unit && d.confirmedSourceUnit != null || (d.confirmedSourceUnit === undefined && unit && g.client_unit === unit)) ? { client_unit_source: "coach" } : {}),
       recommendation_status: g.recommendation_status === "open" ? "approved" : g.recommendation_status,
       ...(g.kind === "bodyweight" && kg != null && g.feasibility?.nowKg != null ? { direction: kg < g.feasibility.nowKg ? "down" : "up" } : {}),
     };
@@ -554,7 +554,7 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
   const fresh = await goalById(sb, g.id);
   // tell the client about an approved, client-facing change (after the review window)
   const changedTarget = next.status === "active" && (Number(g.approved_kg ?? NaN) !== Number(next.approved_kg ?? NaN) || (g.approved_text ?? "") !== (next.approved_text ?? "") || g.status !== "active");
-  if (changedTarget && next.client_facing && client?.user_id && next.kind !== "preference") {
+  if (d.action === "approve" && changedTarget && next.client_facing && client?.user_id && next.kind !== "preference") {
     await enqueueUpdate(sb, fresh, g.status === "active" ? (g.approved_kg != null ? Number(g.approved_kg) : null) : null, actor, client as GoalClient).catch((e) => console.warn("[goal-intel] update not queued", e?.message));
   }
   return fresh;
