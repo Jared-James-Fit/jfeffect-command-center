@@ -1,7 +1,24 @@
 import { ShieldCheck, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "@tanstack/react-router";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { endPovFn } from "@/lib/pov/pov-session.functions";
 import { supabase } from "@/integrations/supabase/client";
+
+export function AgreementExitButton() {
+  const { client, isImpersonating, stop, returnTo } = useClientImpersonation();
+  const navigate = useNavigate();
+  return <Button variant="ghost" size="sm" onClick={async () => {
+    if (isImpersonating) {
+      if (client?.pov) void endPovFn({ data: { sessionId: client.pov.id, why: "exit" } }).catch(() => {});
+      stop();
+      navigate({ to: returnTo ?? `/admin/clients/${client?.id}` });
+      return;
+    }
+    await supabase.auth.signOut(); window.location.href = "/auth";
+  }}>{isImpersonating ? "Exit POV" : "Sign out"}</Button>;
+}
 
 /** A focused, safe-area aware account-setup screen, with no portal navigation. */
 export function AgreementAccessScreen({ title, description, checking, retry, children }: {
@@ -18,7 +35,7 @@ export function AgreementAccessScreen({ title, description, checking, retry, chi
         {children}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
           <a href="mailto:support@jfeffect.com" className="text-sm underline text-muted-foreground">Contact support</a>
-          <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/auth"; }}>Sign out</Button>
+          <AgreementExitButton />
         </div>
       </div>
     </main>

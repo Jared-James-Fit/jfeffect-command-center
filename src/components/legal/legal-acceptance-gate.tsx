@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listMyLegalStatus } from "@/lib/legal.functions";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { listMyLegalStatus, previewLegalStatus } from "@/lib/legal.functions";
 import { ClientLegalSafety } from "./client-legal-safety";
 import { useAuth } from "@/lib/auth";
 import { SIGNUP_LEGAL_SLUGS } from "@/lib/legal-signup";
@@ -14,10 +15,12 @@ import type { ReactNode } from "react";
 export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const fn = useServerFn(listMyLegalStatus);
+  const preview = useServerFn(previewLegalStatus);
+  const { client, isImpersonating } = useClientImpersonation();
   const q = useQuery({
-    queryKey: ["legal-status", user?.id ?? "anon"],
-    enabled: !!user?.id,
-    queryFn: () => fn(),
+    queryKey: isImpersonating ? ["legal-status", "pov", client?.pov?.id, client?.id] : ["legal-status", user?.id ?? "anon"],
+    enabled: !!user?.id && (!isImpersonating || !!client?.pov?.id),
+    queryFn: () => isImpersonating ? preview({ data: { clientId: client!.id } }) : fn(),
     staleTime: 0,
     refetchOnWindowFocus: true,
     retry: 1,

@@ -1,3 +1,4 @@
+import { AccountAgreementStatus, useProfileMembershipAgreement } from "@/components/legal/account-agreement-status";
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { PovAccessLogDialog } from "@/components/pov/pov-access-log";
@@ -1179,6 +1180,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
+          <AccountAgreementStatus clientId={id} linked={!!form.user_id} />
           {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="sms" label="Membership SMS history" />}
           {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="summary" label="Advanced membership settings" />}
           {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="access" label="Membership access and feature grants" />}
@@ -1891,6 +1893,7 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
  * used by the athlete's Home setup checklist. Unknown reads never count as complete. */
 function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup, onTextSetup, memberSetup, memberSetupUnknown }: { memberSetup?: { applies: boolean; missing: string[] } | null; memberSetupUnknown?: boolean; form: any; clientId: string; onGoToTab: (tab: TabValue) => void; onSendSetup: () => Promise<void>; onCopySetup: () => Promise<void>; onTextSetup: () => Promise<void> }) {
   const coaching = form.service_tier !== "self_serve";
+  const membershipAgreement = useProfileMembershipAgreement(clientId, !coaching && !!form.user_id);
   const agreementFn = useServerFn(adminClientAgreementDetail);
   const scope = useGoalsServiceScope(clientId);
   const [agreementOpen, setAgreementOpen] = useState(false);
@@ -1958,6 +1961,8 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   const steps: Step[] = [
     { label: "Account access", state: form.portal_access_disabled || form.needs_admin_help ? "Needs review" : signedIn ? "Completed" : access.stage === "setup_expired" || (!invite && !form.user_id) ? "Not sent" : "Awaiting client", tab: "account" },
   ];
+  if (!coaching && membershipAgreement.data?.applicable) steps.push({ label: "Membership agreement", state: membershipAgreement.data.needsSigning ? "Awaiting client" : "Completed", tab: "account" });
+  if (!coaching && !!form.user_id && !membershipAgreement.data) steps.push({ label: "Membership agreement", state: "Check status", tab: "account" });
   if (!coaching && !scope.ready && memberSetup?.applies) steps.push({ label: "Membership setup", state: memberSetup.missing.length ? "Awaiting client" : "Completed", tab: "info" });
   if (!coaching && !scope.ready && memberSetupUnknown && !memberSetup?.applies) steps.push({ label: "Membership setup", state: "Check status", tab: "account" });
   if (coaching) {
