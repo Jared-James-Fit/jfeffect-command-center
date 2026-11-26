@@ -19,12 +19,16 @@ describe("one analytics experience for the coach and the athlete", () => {
     expect(read("src/routes/_authenticated/portal/workouts.analytics.tsx")).not.toMatch(/\bcoach\b\s*\n/);
   });
 
-  it("the page is four sections, one at a time, its place kept in the address (old addresses land on Training)", () => {
-    for (const v of ['["overview", "Overview"]', '["strength", "Strength"]', '["training", "Training"]', '["records", "Records"]']) expect(dash).toContain(v);
-    const flat = dash.replace(/\s+/g, " ");
-    expect(flat).toContain('const LEGACY_VIEW: Record<string, AnalyticsView> = { volume: "training", consistency: "training", recovery: "training", calendar: "overview", lifetime: "records", };');
-    // a #recovery link still lands where recovery lives
-    expect(dash).toContain('window.location.hash === "#recovery") return "training"');
+  it("exposes two primary destinations and routes older links to overview", () => {
+    for (const v of ['["overview", "Overview"]', '["strength", "Exercise Metrics"]']) expect(dash).toContain(v);
+    expect(dash).not.toContain('["training", "Training"]');
+    expect(dash).not.toContain('["records", "Records"]');
+    for (const v of ["training", "records", "volume", "consistency", "recovery", "calendar", "lifetime"]) expect(dash).toContain(v + ': "overview"');
+    expect(dash).toContain('window.location.hash === "#recovery") return "overview"');
+    expect(dash).toContain('label="Records & competitions"');
+    expect(dash).toContain('data-training-muscles');
+    expect(dash).toContain("detailed");
+    expect(read("src/components/analytics/lift-progress-card.tsx")).toContain("(!bare || detailed)");
     for (const f of ["src/routes/_authenticated/portal/workouts.analytics.tsx", "src/routes/_authenticated/admin/client-programs.$clientId.analytics.tsx"]) {
       expect(read(f), f).toContain("onViewChange={(v) => navigate(");
       expect(read(f), f).toContain("viewFromSearch(search.view)");
