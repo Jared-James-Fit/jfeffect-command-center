@@ -202,13 +202,13 @@ describe("competition review clarity", () => {
 
 
 describe("internal competition isolation", () => {
-  it("excludes explicitly marked test meets from normal coach and athlete lists", () => {
+  it("excludes named rehearsal fixtures but preserves actual meets with test delivery protection", () => {
     const workspace = readFileSync("src/lib/competition/workspace.server.ts", "utf8");
     const coach = workspace.slice(workspace.indexOf("export async function loadWorkspace"), workspace.indexOf("export async function loadOverview"));
     const overview = workspace.slice(workspace.indexOf("export async function loadOverview"));
     const fn = readFileSync("src/lib/competition/competition.functions.ts", "utf8");
     const athlete = fn.slice(fn.indexOf("export const getMyCompetitionsFn"));
-    for (const source of [coach, overview, athlete]) expect(source).toContain('.eq("internal_test", false)');
+    for (const source of [coach, overview, athlete]) expect(source).toContain('.or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")');
     expect(coach).toContain('String(c.meet_end_date ?? c.meet_date) >= today');
   });
   it("does not use test results for real forecast calibration", () => {
