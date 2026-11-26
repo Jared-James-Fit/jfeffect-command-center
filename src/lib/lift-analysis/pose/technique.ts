@@ -231,7 +231,8 @@ export function readTechnique(raw: PoseTrack, a: LiftAnalysis, lift: GuideLift):
   // track pixels → mm at the plate's distance (the body is further away: approximate); the bar read's
   // scale is per pixel of its own working frame, the same picture at a.frame.h / track.frame.h the size
   const frameK = a.frame.h > 0 && track.frame.h > 0 ? a.frame.h / track.frame.h : 1;
-  const mmPerPx = a.units === "mm" ? a.calibration.mmPerPxY * frameK : null;
+  const mmPerPx =
+    a.units === "mm" && a.calibration.mmPerPxY != null ? a.calibration.mmPerPxY * frameK : null;
   const mmToCm = (px: number | null) =>
     px == null || mmPerPx == null ? null : Math.round((px * mmPerPx) / 10);
 
