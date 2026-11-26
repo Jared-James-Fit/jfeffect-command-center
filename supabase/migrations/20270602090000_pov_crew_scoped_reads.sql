@@ -33,7 +33,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Client account preview unavailable' USING ERRCODE = '42501';
   END IF;
-  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices')
+  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts')
      OR jsonb_typeof(_args) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Unknown account view read' USING ERRCODE = '22023';
   END IF;
@@ -56,6 +56,15 @@ BEGIN
     WHEN 'post' THEN v_result := public.community_post((_args->>'_post_id')::uuid);
     WHEN 'follows' THEN v_result := public.community_follow_state();
     WHEN 'activity' THEN v_result := public.community_activity();
+    WHEN 'follow_list' THEN v_result := public.community_follow_list((_args->>'_user_id')::uuid, _args->>'_kind');
+    WHEN 'archived' THEN v_result := public.community_my_archived();
+    WHEN 'saved_albums' THEN v_result := public.community_saved_albums((_args->>'_post_id')::uuid);
+    WHEN 'saved_posts' THEN v_result := public.community_saved_posts(
+      (_args->>'_album_id')::uuid, coalesce((_args->>'_limit')::integer, 24),
+      (_args->>'_before_at')::timestamptz, (_args->>'_before_id')::uuid);
+    WHEN 'reposts' THEN v_result := public.community_user_reposts(
+      (_args->>'_user_id')::uuid, coalesce((_args->>'_limit')::integer, 24),
+      (_args->>'_before_at')::timestamptz, (_args->>'_before_id')::uuid);
     WHEN 'crew_notices' THEN
       SELECT coalesce(jsonb_agg(n || jsonb_build_object('unread',
         NOT EXISTS (SELECT 1 FROM public.notification_state st
