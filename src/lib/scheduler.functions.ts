@@ -65,10 +65,12 @@ function settingsToValue(s: ReturnType<typeof parseSettings>) {
 export const getSchedulerStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: isCoach } = await context.supabase.rpc("is_coach_or_admin", {
+    // every client's scheduled forms and the allowlisted test recipients: the admin's
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
       _user_id: context.userId,
+      _role: "admin",
     });
-    if (!isCoach) throw new Error("Forbidden");
+    if (!isAdmin) throw new Error("Forbidden");
     const sb = await admin();
 
     const { data: setting } = await sb

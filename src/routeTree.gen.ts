@@ -61,6 +61,7 @@ import { Route as PersonalTrainerSelkirkApplyRouteImport } from './routes/person
 import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
+import { Route as AuthenticatedAdminAccessLogRouteImport } from './routes/_authenticated/admin/access-log'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_authenticated/admin/appointments'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
@@ -610,6 +611,12 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminAccessLogRoute =
+  AuthenticatedAdminAccessLogRouteImport.update({
+    id: '/access-log',
+    path: '/access-log',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminAccountRoute =
   AuthenticatedAdminAccountRouteImport.update({
     id: '/account',
@@ -2350,6 +2357,7 @@ export interface FileRoutesByFullPath {
   '/signup/jf': typeof SignupJfRoute
   '/challenges/': typeof ChallengesIndexRoute
   '/coaching/': typeof CoachingIndexRoute
+  '/admin/access-log': typeof AuthenticatedAdminAccessLogRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -2686,6 +2694,7 @@ export interface FileRoutesByTo {
   '/signup/jf': typeof SignupJfRoute
   '/challenges': typeof ChallengesIndexRoute
   '/coaching': typeof CoachingIndexRoute
+  '/admin/access-log': typeof AuthenticatedAdminAccessLogRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -3026,6 +3035,7 @@ export interface FileRoutesById {
   '/signup/jf': typeof SignupJfRoute
   '/challenges/': typeof ChallengesIndexRoute
   '/coaching/': typeof CoachingIndexRoute
+  '/_authenticated/admin/access-log': typeof AuthenticatedAdminAccessLogRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
@@ -3367,6 +3377,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/challenges/'
     | '/coaching/'
+    | '/admin/access-log'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/apps'
@@ -3703,6 +3714,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/challenges'
     | '/coaching'
+    | '/admin/access-log'
     | '/admin/account'
     | '/admin/appointments'
     | '/admin/apps'
@@ -4042,6 +4054,7 @@ export interface FileRouteTypes {
     | '/signup/jf'
     | '/challenges/'
     | '/coaching/'
+    | '/_authenticated/admin/access-log'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
     | '/_authenticated/admin/apps'
@@ -4818,6 +4831,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/access-log': {
+      id: '/_authenticated/admin/access-log'
+      path: '/access-log'
+      fullPath: '/admin/access-log'
+      preLoaderRoute: typeof AuthenticatedAdminAccessLogRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/account': {
@@ -6984,6 +7004,7 @@ const AuthenticatedAdminClientsIdRouteWithChildren =
   )
 
 interface AuthenticatedAdminRouteRouteChildren {
+  AuthenticatedAdminAccessLogRoute: typeof AuthenticatedAdminAccessLogRoute
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
   AuthenticatedAdminAppointmentsRoute: typeof AuthenticatedAdminAppointmentsRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
@@ -7118,6 +7139,7 @@ interface AuthenticatedAdminRouteRouteChildren {
 
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
   {
+    AuthenticatedAdminAccessLogRoute: AuthenticatedAdminAccessLogRoute,
     AuthenticatedAdminAccountRoute: AuthenticatedAdminAccountRoute,
     AuthenticatedAdminAppointmentsRoute: AuthenticatedAdminAppointmentsRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,

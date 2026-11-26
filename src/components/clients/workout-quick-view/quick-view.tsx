@@ -23,7 +23,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   AlertTriangle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  ExternalLink, Eye, Loader2, MessageSquare, PencilLine, Star, UserRound,
+  ExternalLink, Eye, Loader2, MessageSquare, PencilLine, Star, UserRound, X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -43,10 +43,11 @@ import { useAuth } from "@/lib/auth";
 import { todayLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import {
-  addDaysIso, buildPeekDay, clockLine, DEFAULT_REASON_WORDS, feedbackLine, jumpList, painLine, peekEntries, pickForClient,
-  placeLine, relativeDay, shortDay, stepEntry, trainingDaysLine, weekDays, weekLabel, weekStartIso,
-  type DefaultReason, type PeekDay, type PeekEntry,
+  addDaysIso, buildPeekDay, clockLine, DEFAULT_REASON_WORDS, exerciseState, feedbackLine, jumpList, painLine, peekEntries, pickForClient,
+  placeLine, relativeDay, shortDay, splitLoggedLine, stepEntry, trainingDaysLine, weekDays, weekLabel, weekStartIso,
+  type DefaultReason, type ExerciseState, type PeekDay, type PeekEntry, type PeekExercise,
 } from "@/lib/workout-peek";
+import { noteAccessAttempt } from "@/lib/pov/access-check";
 import { peekClientQuery, peekDayQuery, peekProfileQuery, peekScheduleQuery, type PeekClientRecord, type PeekProfile } from "./data";
 import { usePeekLoadGuides } from "./load-guides";
 import type { CardGuide } from "@/lib/workouts/card-suggestion";
@@ -132,6 +133,12 @@ export default function WorkoutQuickView({ client, onClose, onSwitch, onOpenProf
   const schedule = useQuery({ ...peekScheduleQuery(scheduleFn, clientId ?? ""), enabled: !!clientId });
   const record = useQuery({ ...peekClientQuery(clientId ?? ""), enabled: !!clientId });
   const entries = useMemo(() => peekEntries(schedule.data, today), [schedule.data, today]);
+  // An athlete this login can't reach (reassigned, a stale star or link): nothing about them shows,
+  // and the attempt is on the access record.
+  const noAccess = !!clientId && record.isSuccess && !record.data;
+  useEffect(() => {
+    if (noAccess) noteAccessAttempt(clientId, "quick_view");
+  }, [noAccess, clientId]);
 
   const pick = useMemo(() => {
     if (!clientId || !entries.length) return null;
@@ -220,7 +227,7 @@ export default function WorkoutQuickView({ client, onClose, onSwitch, onOpenProf
     return () => window.removeEventListener("keydown", onKey);
   }, [open, tab, prev, next, goTo, stepAthlete]);
 
-  const name = record.data?.full_name ?? client?.full_name ?? "Client";
+  const name = noAccess ? "Athlete" : record.data?.full_name ?? client?.full_name ?? "Client";
   const photo = record.data?.profile_picture_url ?? client?.profile_picture_url ?? null;
   const starred = clientId ? stars.isStarred(clientId) : false;
 
@@ -232,35 +239,31 @@ export default function WorkoutQuickView({ client, onClose, onSwitch, onOpenProf
         className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-[36rem] lg:max-w-[40rem]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {/* Header: who, the starred athletes, the two tabs */}
-        <div className="shrink-0 border-b border-border" style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}>
-          <div className="flex min-h-10 items-center gap-2 pl-[6.25rem] pr-3">
-            <UserAvatar src={photo} name={name} size={36} className="shrink-0" expandable={false} />
-            <div className="min-w-0 flex-1">
-              <SheetTitle className="truncate text-base leading-tight">{name}</SheetTitle>
-              <SheetDescription className="sr-only">Their workout and profile, without leaving the Clients list</SheetDescription>
-            </div>
-            {stars.canStar && clientId && client && (
-              <button
-                type="button"
-                onClick={() => stars.toggle(client)}
-                aria-pressed={starred}
-                aria-label={starred ? `Unstar ${name}` : `Star ${name}`}
+        {/* Header: who, the starred athletes, Workout · Profile */}
+        <div className="shrink-0 border-b border-border" style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)" }}>
+          <div className="flex min-h-10 items-center gap-2 pl-[6.25rem] pr-2">
+            <UserAvatar src={noAccess ? null : photo} name={name} size={32} className="shrink-0" expandable={false} />
+            <SheetTitle className="min-w-0 flex-1 truncate text-[15px] leading-tight">{name}</SheetTitle>
+            <SheetDescription className="sr-only">Their workout and profile, without leaving the Clients list</SheetDescription>
+            {stars.canStar && clientId && client && !noAccess && (
+              <IconButton
+                label={starred ? `Unstar ${name}` : `Star ${name}`}
                 title={starred ? "Starred" : "Star to switch to them here"}
-                className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                pressed={starred}
+                onClick={() => stars.toggle(client)}
               >
-                <Star className={cn("h-5 w-5", starred && "fill-foreground text-foreground")} aria-hidden />
-              </button>
+                <Star className={cn("h-[18px] w-[18px]", starred && "fill-foreground text-foreground")} aria-hidden />
+              </IconButton>
             )}
-            {clientId && (
+            {clientId && !noAccess && (
               <ProfileLink
                 clientId={clientId}
                 onOpen={onOpenProfile}
                 aria-label={`Open ${name}'s profile`}
                 title="Open client"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <UserRound className="h-5 w-5" aria-hidden />
+                <UserRound className="h-[18px] w-[18px]" aria-hidden />
               </ProfileLink>
             )}
           </div>
@@ -269,72 +272,93 @@ export default function WorkoutQuickView({ client, onClose, onSwitch, onOpenProf
             list={switcher}
             currentId={clientId}
             starredIds={stars.ids}
-            canStar={stars.canStar}
             onPick={switchTo}
             onHover={(c) => void qc.prefetchQuery(peekScheduleQuery(scheduleFn, c.id))}
           />
 
-          <div className="px-3 pb-2.5 pt-2" role="group" aria-label="Show">
-            <div className="grid grid-cols-2 rounded-lg bg-muted p-0.5">
-              {(["workout", "profile"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={tab === t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    "h-9 cursor-pointer rounded-md text-sm font-semibold transition-colors",
-                    tab === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {t === "workout" ? "Workout" : "Profile"}
-                </button>
-              ))}
+          {!noAccess && (
+            <div className="px-3 pb-2 pt-1.5" role="group" aria-label="Show">
+              <div className="grid grid-cols-2 rounded-lg bg-muted p-0.5">
+                {(["workout", "profile"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={tab === t}
+                    onClick={() => setTab(t)}
+                    className={cn(
+                      "h-8 cursor-pointer rounded-md text-[13px] font-semibold transition-colors",
+                      tab === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {t === "workout" ? "Workout" : "Profile"}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-quick-view-scroll>
-          {clientId && tab === "workout" && (
-            <WorkoutTab
-              clientId={clientId}
-              name={name}
-              record={record.data ?? null}
-              entries={entries}
-              entry={entry}
-              reason={reason}
-              prev={prev}
-              next={next}
-              loading={schedule.isLoading}
-              error={schedule.isError}
-              onRetry={() => void schedule.refetch()}
-              onGo={goTo}
-              jumpOpen={jumpOpen}
-              setJumpOpen={setJumpOpen}
-              today={today}
-              onOpenProfile={onOpenProfile}
-            />
+          {noAccess ? (
+            <div className="flex flex-col items-center gap-2 p-8 text-center" data-quick-view-no-access>
+              <UserRound className="h-8 w-8 text-muted-foreground" aria-hidden />
+              <p className="text-sm font-semibold">You don't have access to this athlete</p>
+              <p className="max-w-xs text-xs text-muted-foreground">They may have moved to another coach.</p>
+            </div>
+          ) : (
+            <>
+              {clientId && tab === "workout" && (
+                <WorkoutTab
+                  clientId={clientId}
+                  name={name}
+                  record={record.data ?? null}
+                  entries={entries}
+                  entry={entry}
+                  reason={reason}
+                  prev={prev}
+                  next={next}
+                  loading={schedule.isLoading}
+                  error={schedule.isError}
+                  onRetry={() => void schedule.refetch()}
+                  onGo={goTo}
+                  jumpOpen={jumpOpen}
+                  setJumpOpen={setJumpOpen}
+                  today={today}
+                  onOpenProfile={onOpenProfile}
+                />
+              )}
+              {clientId && tab === "profile" && <ProfileTab clientId={clientId} record={record.data ?? null} loading={record.isLoading} today={today} />}
+            </>
           )}
-          {clientId && tab === "profile" && <ProfileTab clientId={clientId} record={record.data ?? null} loading={record.isLoading} today={today} />}
         </div>
-
-        <p className="hidden shrink-0 border-t border-border px-4 py-2 text-[11px] text-muted-foreground [@media(pointer:fine)]:block">
-          <kbd className="font-sans">←</kbd> <kbd className="font-sans">→</kbd> workouts · <kbd className="font-sans">[</kbd> <kbd className="font-sans">]</kbd> athletes · <kbd className="font-sans">Esc</kbd> back to the list
-        </p>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function IconButton({ label, title, pressed, onClick, children }: { label: string; title?: string; pressed?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      aria-label={label}
+      title={title ?? label}
+      className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      {children}
+    </button>
   );
 }
 
 /* ───────────────────────────── The switcher ───────────────────────────── */
 
 function AthleteSwitcher({
-  list, currentId, starredIds, canStar, onPick, onHover,
+  list, currentId, starredIds, onPick, onHover,
 }: {
   list: QuickViewClient[];
   currentId: string | null;
   starredIds: ReadonlySet<string>;
-  canStar: boolean;
   onPick: (c: QuickViewClient) => void;
   onHover: (c: QuickViewClient) => void;
 }) {
@@ -344,21 +368,14 @@ function AthleteSwitcher({
     const el = rowRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
     el?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [currentId]);
-  if (list.length < 2) {
-    return canStar ? (
-      <p className="flex items-center gap-1.5 px-3 pt-2 text-xs text-muted-foreground" data-switcher-hint>
-        <Star className="h-3.5 w-3.5" aria-hidden />
-        Star athletes to switch between them here.
-      </p>
-    ) : null;
-  }
+  if (list.length < 2) return null;
   return (
     <div
       ref={rowRef}
       role="group"
-      aria-label="Starred athletes"
+      aria-label="Starred athletes ([ ] to switch)"
       data-athlete-switcher
-      className="flex gap-1.5 overflow-x-auto px-3 pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex gap-1 overflow-x-auto px-3 pt-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {list.map((c) => {
         const on = c.id === currentId;
@@ -372,11 +389,11 @@ function AthleteSwitcher({
             onFocus={() => onHover(c)}
             title={c.full_name ?? undefined}
             className={cn(
-              "inline-flex h-10 shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-[13px] font-medium transition-colors",
+              "inline-flex h-8 shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-[12.5px] font-medium transition-colors",
               on ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:border-foreground/30",
             )}
           >
-            <UserAvatar src={c.profile_picture_url} name={c.full_name ?? "Client"} size={28} expandable={false} />
+            <UserAvatar src={c.profile_picture_url} name={c.full_name ?? "Client"} size={24} expandable={false} />
             {firstName(c.full_name)}
             {!starredIds.has(c.id) && <span className="sr-only">(not starred)</span>}
           </button>
@@ -440,54 +457,42 @@ function WorkoutTab({
       <div className="flex flex-col items-center gap-2 p-8 text-center">
         <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
         <p className="text-sm font-semibold">No workouts on {firstName(name)}'s calendar</p>
-        <p className="max-w-xs text-xs text-muted-foreground">
-          Nothing dated in a program they can see. Assign or place one from their Training tab.
-        </p>
-        <Button asChild variant="outline" size="sm" className="mt-2 h-10">
+        <Button asChild variant="outline" size="sm" className="mt-1 h-10">
           <ProfileLink clientId={clientId} tab="training" onOpen={onOpenProfile}>Open Training</ProfileLink>
         </Button>
       </div>
     );
   }
 
-  const days = trainingDaysLine(record?.committed_training_days);
+  const rel = relativeDay(entry.date, today);
+  const short = shortDay(entry.date, today);
   return (
     <div className="pb-4">
-      {/* ‹ the workout's day › — stays put while the exercises scroll */}
-      <div className="sticky top-0 z-10 border-b border-border/60 bg-background px-2 py-1.5 dark:bg-card">
-        <div className="flex items-center gap-1">
-          <NavButton label="Previous workout" disabled={!prev} onClick={() => prev && onGo(prev.key)}>
+      {/* ‹ the workout's day › and its week, stays put while the exercises scroll */}
+      <div className="sticky top-0 z-10 border-b border-border/60 bg-background dark:bg-card">
+        <div className="flex items-center gap-0.5 px-1.5 pt-1">
+          <NavButton label="Previous workout (←)" disabled={!prev} onClick={() => prev && onGo(prev.key)}>
             <ChevronLeft className="h-5 w-5" />
           </NavButton>
           <button
             type="button"
             onClick={() => setJumpOpen(!jumpOpen)}
             aria-expanded={jumpOpen}
-            className="flex min-h-11 min-w-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-lg px-2 hover:bg-muted/60"
+            className="flex min-h-10 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg px-2 text-sm hover:bg-muted/60"
             data-quick-view-date
           >
-            <span className="flex items-center gap-1 text-sm font-semibold">
-              {relativeDay(entry.date, today)}
-              {relativeDay(entry.date, today) !== shortDay(entry.date, today) && (
-                <span className="font-normal text-muted-foreground">· {shortDay(entry.date, today)}</span>
-              )}
-              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", jumpOpen && "rotate-180")} aria-hidden />
-            </span>
-            {reason && reason !== "today" && <span className="text-[11px] text-muted-foreground">{DEFAULT_REASON_WORDS[reason]}</span>}
+            <span className="font-semibold">{rel}</span>
+            {rel !== short && <span className="text-muted-foreground">· {short}</span>}
+            {reason && reason !== "today" && <span className="truncate text-xs text-muted-foreground">· {DEFAULT_REASON_WORDS[reason]}</span>}
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", jumpOpen && "rotate-180")} aria-hidden />
           </button>
-          <NavButton label="Next workout" disabled={!next} onClick={() => next && onGo(next.key)}>
+          <NavButton label="Next workout (→)" disabled={!next} onClick={() => next && onGo(next.key)}>
             <ChevronRight className="h-5 w-5" />
           </NavButton>
         </div>
+        <WeekStrip entries={entries} entry={entry} today={today} onGo={onGo} />
         {jumpOpen && <JumpList entries={entries} current={entry.key} today={today} onGo={onGo} />}
       </div>
-
-      <WeekStrip entries={entries} entry={entry} today={today} onGo={onGo} />
-      {days && (
-        <p className="px-4 pb-1 text-xs text-muted-foreground" data-training-days>
-          Trains {days}
-        </p>
-      )}
 
       <div key={entry.key} className="animate-in fade-in-0 duration-150">
         <WorkoutSummary entry={entry} day={day} name={name} loading={dayQ.isLoading} error={dayQ.isError} onRetry={() => void dayQ.refetch()} today={today} />
@@ -496,11 +501,11 @@ function WorkoutTab({
       </div>
 
       {/* The deliberate ways to change anything: their app on that day, or the program. */}
-      <div className="mt-4 flex flex-wrap gap-2 px-4" data-quick-view-actions>
+      <div className="mt-3 flex flex-wrap gap-2 px-3" data-quick-view-actions>
         {pov.canPov && (
           <Button
             variant="outline"
-            className="h-11 min-w-0 flex-1"
+            className="h-10 min-w-0 flex-1"
             disabled={pov.busy}
             onClick={() => void pov.enter(clientId, { to: clientWorkoutHref(entry.date), fallbackName: name })}
             title="Open this day in their app, to log or change it as they would"
@@ -510,7 +515,7 @@ function WorkoutTab({
           </Button>
         )}
         {!viewOnly && entry.blockId && (
-          <Button asChild variant="outline" className="h-11 min-w-0 flex-1">
+          <Button asChild variant="outline" className="h-10 min-w-0 flex-1">
             <Link
               to="/admin/blocks/$blockId"
               params={{ blockId: entry.blockId }}
@@ -534,7 +539,7 @@ function NavButton({ label, disabled, onClick, children }: { label: string; disa
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+      className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
     >
       {children}
     </button>
@@ -543,34 +548,23 @@ function NavButton({ label, disabled, onClick, children }: { label: string; disa
 
 const WEEKDAY_LETTER = ["M", "T", "W", "T", "F", "S", "S"];
 
-/** Monday to Sunday with a mark under each day that has a workout; « » step weeks, a day opens its workout. */
+/** Monday to Sunday in one row, « » stepping weeks at its ends; a day opens its workout. */
 function WeekStrip({ entries, entry, today, onGo }: { entries: PeekEntry[]; entry: PeekEntry; today: string; onGo: (key: string) => void }) {
   const [start, setStart] = useState(() => weekStartIso(entry.date));
   // follow the workout on screen into its week
   useEffect(() => setStart(weekStartIso(entry.date)), [entry.date]);
   const week = weekDays(entries, start);
   return (
-    <div className="px-2 pb-2 pt-2" data-quick-view-week>
-      <div className="mb-1 flex items-center justify-between px-1">
-        <button
-          type="button"
-          aria-label="Previous week"
-          onClick={() => setStart(addDaysIso(start, -7))}
-          className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <ChevronsLeft className="h-4 w-4" />
-        </button>
-        <span className="text-xs font-medium text-muted-foreground">{weekLabel(start)}</span>
-        <button
-          type="button"
-          aria-label="Next week"
-          onClick={() => setStart(addDaysIso(start, 7))}
-          className="grid h-9 w-9 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <ChevronsRight className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 gap-0.5">
+    <div className="flex items-center gap-0.5 px-1 pb-1.5" data-quick-view-week title={weekLabel(start)}>
+      <button
+        type="button"
+        aria-label={`Previous week (${weekLabel(addDaysIso(start, -7))})`}
+        onClick={() => setStart(addDaysIso(start, -7))}
+        className="grid h-9 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <ChevronsLeft className="h-4 w-4" />
+      </button>
+      <div className="grid min-w-0 flex-1 grid-cols-7 gap-0.5">
         {week.map((d, i) => {
           const first = d.entries.find((e) => e.status !== "done") ?? d.entries[0];
           const selected = d.entries.some((e) => e.key === entry.key);
@@ -583,12 +577,12 @@ function WeekStrip({ entries, entry, today, onGo }: { entries: PeekEntry[]; entr
               onClick={() => first && onGo(selected && d.entries.length > 1 ? d.entries[(d.entries.findIndex((e) => e.key === entry.key) + 1) % d.entries.length].key : first.key)}
               aria-pressed={selected}
               aria-label={`${relativeDay(d.date, today)}${first ? `: ${first.name}` : ", no workout"}`}
-              className="flex min-h-14 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg py-1 disabled:cursor-default"
+              className="flex min-h-11 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg disabled:cursor-default"
             >
-              <span className="text-[10px] font-medium text-muted-foreground">{WEEKDAY_LETTER[i]}</span>
+              <span className="text-[10px] font-medium leading-none text-muted-foreground">{WEEKDAY_LETTER[i]}</span>
               <span
                 className={cn(
-                  "grid h-7 w-7 place-items-center rounded-full text-[13px] tabular-nums",
+                  "grid h-6 w-6 place-items-center rounded-full text-[12px] tabular-nums",
                   selected ? "bg-foreground font-semibold text-background" : isToday ? "font-semibold ring-1 ring-foreground/50" : first ? "text-foreground" : "text-muted-foreground/60",
                 )}
               >
@@ -599,6 +593,14 @@ function WeekStrip({ entries, entry, today, onGo }: { entries: PeekEntry[]; entr
           );
         })}
       </div>
+      <button
+        type="button"
+        aria-label={`Next week (${weekLabel(addDaysIso(start, 7))})`}
+        onClick={() => setStart(addDaysIso(start, 7))}
+        className="grid h-9 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <ChevronsRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -609,7 +611,7 @@ function JumpList({ entries, current, today, onGo }: { entries: PeekEntry[]; cur
   const section = (title: string, list: PeekEntry[]) =>
     list.length ? (
       <div>
-        <p className="px-2 pb-1 pt-2 text-[11px] font-semibold text-muted-foreground">{title}</p>
+        <p className="px-2 pb-0.5 pt-2 text-[11px] font-semibold text-muted-foreground">{title}</p>
         <ul>
           {list.map((e) => (
             <li key={e.key}>
@@ -618,7 +620,7 @@ function JumpList({ entries, current, today, onGo }: { entries: PeekEntry[]; cur
                 onClick={() => onGo(e.key)}
                 aria-current={e.key === current ? "true" : undefined}
                 className={cn(
-                  "flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 text-left text-sm hover:bg-muted/60",
+                  "flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 text-left text-sm hover:bg-muted/60",
                   e.key === current && "bg-muted",
                 )}
               >
@@ -635,7 +637,7 @@ function JumpList({ entries, current, today, onGo }: { entries: PeekEntry[]; cur
       </div>
     ) : null;
   return (
-    <div className="mt-1 max-h-72 overflow-y-auto border-t border-border/60 pb-1" data-quick-view-jump>
+    <div className="max-h-72 overflow-y-auto border-t border-border/60 px-1.5 pb-1" data-quick-view-jump>
       {section("Coming up", ahead)}
       {section("Recent", recent)}
     </div>
@@ -659,58 +661,66 @@ function statusSentence(entry: PeekEntry, day: PeekDay | null, today: string): {
 function WorkoutSummary({
   entry, day, name, loading, error, onRetry, today,
 }: { entry: PeekEntry; day: PeekDay | null; name: string; loading: boolean; error: boolean; onRetry: () => void; today: string }) {
+  const [notesOpen, setNotesOpen] = useState(false);
   const s = statusSentence(entry, day, today);
   const review = feedbackLine(day?.feedback);
   const pain = painLine(day?.feedback);
+  const athleteWords = day?.feedback?.client_note?.trim() || null;
   // against the plan only once it's over: mid-session every set still to come would read as "fewer"
   const over = entry.status === "done" || entry.status === "missed" || entry.status === "optional" || entry.date < today;
   const vs = over ? day?.vsPlan : null;
   // the count says something once anything's logged or the session's under way, never "0 of 12" for one ahead
   const showSets = !!day && day.setsPlanned > 0 && (day.setsLogged > 0 || entry.status === "in_progress" || entry.status === "done");
   const pct = day && day.setsPlanned ? Math.min(100, Math.round((day.setsLogged / day.setsPlanned) * 100)) : 0;
+  const notes = [day?.dayNote ? 1 : 0, day?.athleteNote ? 1 : 0].reduce((a, b) => a + b, 0);
+  const meta = [placeLine(entry) || null, (day?.focus ?? entry.focus) || null].filter(Boolean).join(" · ");
   return (
-    <section className="mx-4 mt-1 space-y-2.5 rounded-2xl border border-border bg-card p-4" data-quick-view-summary>
-      <div>
-        {placeLine(entry) && (
-          <p className="mb-0.5 text-xs text-muted-foreground" data-quick-view-place>
-            {placeLine(entry)}
-          </p>
-        )}
-        <h3 className="text-[17px] font-semibold leading-snug">{day?.name ?? entry.name}</h3>
-        {(day?.focus ?? entry.focus) && <p className="text-sm text-muted-foreground">{day?.focus ?? entry.focus}</p>}
-      </div>
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className={cn("inline-flex items-center gap-1.5 font-semibold", s.tone)}>
+    <section className="mx-3 mt-2 space-y-2 rounded-xl border border-border bg-card px-3 py-2.5" data-quick-view-summary>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-semibold leading-snug">{day?.name ?? entry.name}</h3>
+          {meta && (
+            <p className="truncate text-xs text-muted-foreground" data-quick-view-place>
+              {meta}
+            </p>
+          )}
+        </div>
+        <span className={cn("mt-0.5 inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold", s.tone)} data-quick-view-status>
           <WorkoutStatusMark mark={coachMark(entry.status)} />
           {s.word}
+          {entry.optional && <span className="font-normal text-muted-foreground">· Optional</span>}
         </span>
-        {s.detail && <span className="text-muted-foreground">{s.detail}</span>}
-        {entry.optional && <span className="text-muted-foreground">· Optional</span>}
-      </p>
+      </div>
+
       {loading ? (
-        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-3 w-40" />
       ) : error ? (
         <p className="text-sm text-muted-foreground">
           Couldn't load this workout.{" "}
           <button type="button" onClick={onRetry} className="cursor-pointer font-semibold text-foreground underline-offset-2 hover:underline">Try again</button>
         </p>
-      ) : day && showSets ? (
-        <div className="space-y-1" data-quick-view-sets>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {day.setsLogged} of {day.setsPlanned} sets logged
-          </p>
-          <span className="block h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-            <span className={cn("block h-full rounded-full", pct >= 100 ? "bg-success" : "bg-foreground/50")} style={{ width: `${pct}%` }} />
-          </span>
+      ) : (showSets || s.detail) ? (
+        <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground" data-quick-view-sets>
+          {showSets && day && (
+            <>
+              <span className="shrink-0 font-medium text-foreground">
+                {day.setsLogged}/{day.setsPlanned} sets
+              </span>
+              <span className="block h-1 min-w-12 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                <span className={cn("block h-full rounded-full", pct >= 100 ? "bg-success" : "bg-foreground/50")} style={{ width: `${pct}%` }} />
+              </span>
+            </>
+          )}
+          {s.detail && <span className="shrink-0">{s.detail}</span>}
         </div>
       ) : null}
 
       {vs && (vs.asPlanned ? (
-        <p className="flex items-center gap-1.5 text-sm font-medium text-success" data-quick-view-vs>
+        <p className="flex items-center gap-1.5 text-[13px] font-medium text-success" data-quick-view-vs>
           <Check className="h-4 w-4" aria-hidden /> Done as planned
         </p>
       ) : vs.lines.length ? (
-        <ul className="space-y-1 text-sm" data-quick-view-vs>
+        <ul className="space-y-0.5 text-[13px]" data-quick-view-vs>
           {vs.lines.slice(0, 3).map((l, i) => (
             <li key={i} className="flex items-start gap-2">
               <span aria-hidden className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", l.kind === "easier" || l.kind === "extra" ? "bg-muted-foreground" : "bg-amber-500")} />
@@ -720,42 +730,54 @@ function WorkoutSummary({
         </ul>
       ) : null)}
 
-      {(review || day?.feedback?.client_note || pain) && (
-        <div className="space-y-1 border-t border-border/60 pt-2.5 text-sm" data-quick-view-review>
+      {(review || athleteWords || pain) && (
+        <div className="space-y-0.5 text-[13px]" data-quick-view-review>
+          {pain && (
+            <p className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> Pain: {pain}
+            </p>
+          )}
           {review && (
             <p>
               <span className="text-muted-foreground">Review </span>
               <span className="font-medium">{review}</span>
             </p>
           )}
-          {day?.feedback?.client_note?.trim() && <p className="text-muted-foreground">“{day.feedback.client_note.trim()}”</p>}
-          {pain && (
-            <p className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> Pain: {pain}
-            </p>
-          )}
+          {athleteWords && <p className="line-clamp-2 text-muted-foreground">“{athleteWords}”</p>}
         </div>
       )}
 
-      {(day?.dayNote || day?.athleteNote) && (
-        <div className="space-y-2 border-t border-border/60 pt-2.5 text-sm">
-          {day?.dayNote && (
-            <NoteLine label={day.dayNote.visible ? "Your note · they see it" : "Your note · only you"} text={day.dayNote.text} />
+      {notes > 0 && (
+        <div className="text-[13px]">
+          <button
+            type="button"
+            onClick={() => setNotesOpen((o) => !o)}
+            aria-expanded={notesOpen}
+            className="inline-flex min-h-8 cursor-pointer items-center gap-1 font-medium text-muted-foreground hover:text-foreground"
+            data-quick-view-day-notes
+          >
+            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+            {notes === 1 ? "1 note" : `${notes} notes`}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", notesOpen && "rotate-180")} aria-hidden />
+          </button>
+          {notesOpen && (
+            <div className="mt-1 space-y-2">
+              {day?.dayNote && (
+                <NoteLine label={day.dayNote.visible ? "Your note · they see it" : "Your note · only you"} text={day.dayNote.text} />
+              )}
+              {day?.athleteNote && <NoteLine label={`${firstName(name)}'s note`} text={day.athleteNote} />}
+            </div>
           )}
-          {day?.athleteNote && <NoteLine label={`${firstName(name)}'s note`} text={day.athleteNote} icon />}
         </div>
       )}
     </section>
   );
 }
 
-function NoteLine({ label, text, icon }: { label: string; text: string; icon?: boolean }) {
+function NoteLine({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <p className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-        {icon && <MessageSquare className="h-3 w-3" aria-hidden />}
-        {label}
-      </p>
+      <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
       <p className="whitespace-pre-line leading-snug">{text}</p>
     </div>
   );
@@ -765,19 +787,15 @@ function ExerciseList({ day, name, entry, today, guides, equipment }: { day: Pee
   if (!day.exercises.length) {
     return <p className="mx-4 mt-3 text-sm text-muted-foreground">No exercises written for this workout.</p>;
   }
-  // An exercise short of its sets is news only in a workout that's over and was trained: today's or
-  // one ahead is still to come, and a missed one already says so once at the top.
-  const over = entry.status === "done" || entry.status === "missed" || entry.date < today;
-  const flagShort = over && day.setsLogged > 0;
   return (
-    <ol className="mt-3 space-y-2 px-4" data-quick-view-exercises>
+    <ol className="mx-3 mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" data-quick-view-exercises>
       {day.exercises.map((ex, i) => (
         <ExerciseItem
           key={ex.id}
           ex={ex}
           n={i + 1}
           name={name}
-          flagShort={flagShort}
+          state={exerciseState(ex, entry, today, day.setsLogged)}
           guide={guides.get(ex.id) ?? null}
           // what their card is on, and how it's set up (cardSetupView: the logged sets', else today's pick)
           setup={ex.exerciseId ? cardSetupView(equipment, ex.exerciseId, ex.sets) : null}
@@ -787,180 +805,199 @@ function ExerciseList({ day, name, entry, today, guides, equipment }: { day: Pee
   );
 }
 
-function ExerciseItem({ ex, n, name, flagShort, guide, setup }: {
-  ex: PeekDay["exercises"][number];
+/** The mark beside an exercise: ✓ done, n/m partial, a word for skipped or missed, its number while still to come. */
+function ExerciseMark({ state, n, ex }: { state: ExerciseState; n: number; ex: PeekExercise }) {
+  if (state === "done") {
+    return (
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-success/15 text-success" aria-label="Done">
+        <Check className="h-3.5 w-3.5" aria-hidden />
+      </span>
+    );
+  }
+  if (state === "partial") {
+    return (
+      <span
+        className="grid h-6 min-w-6 shrink-0 place-items-center rounded-full bg-amber-500/15 px-1 text-[10.5px] font-semibold tabular-nums text-amber-700 dark:text-amber-400"
+        aria-label={`${ex.setsLogged} of ${ex.setsPlanned} sets logged`}
+      >
+        {ex.setsLogged}/{ex.setsPlanned}
+      </span>
+    );
+  }
+  if (state === "missed" || state === "skipped") {
+    return (
+      <span
+        className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border border-dashed text-[10px] font-semibold", state === "missed" ? "border-rose-400 text-rose-600 dark:text-rose-400" : "border-muted-foreground/50 text-muted-foreground")}
+        aria-label={state === "missed" ? "Missed" : "Skipped"}
+      >
+        <X className="h-3 w-3" aria-hidden />
+      </span>
+    );
+  }
+  return <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold tabular-nums text-muted-foreground">{n}</span>;
+}
+
+const STATE_WORD: Partial<Record<ExerciseState, string>> = { skipped: "Skipped", missed: "Missed" };
+
+function ExerciseItem({ ex, n, name, state, guide, setup }: {
+  ex: PeekExercise;
   n: number;
   name: string;
-  flagShort: boolean;
+  state: ExerciseState;
   guide: CardGuide | null;
   setup: ReturnType<typeof cardSetupView> | null;
 }) {
   const [open, setOpen] = useState(false);
-  const hasDetails = !!(ex.details.muscle || ex.details.equipment || ex.details.cues || ex.details.demo);
-  const complete = ex.setsPlanned ? ex.setsLogged >= ex.setsPlanned : ex.setsLogged > 0;
-  const partial = ex.setsLogged > 0 && !complete;
+  const noteCount = (ex.coachNote ? 1 : 0) + ex.athleteNotes.length;
+  const restText = ex.rest ? restWords(ex.rest.seconds) : null;
+  const hasMore = !!(noteCount || ex.details.equipment || ex.details.cues || ex.details.demo);
   return (
-    <li className="rounded-xl border border-border bg-card p-3" data-quick-view-exercise>
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">{n}</span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 text-[15px] font-semibold leading-snug">
-              {ex.name}
-              {ex.role && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{ex.role}</span>}
-              {ex.cardio && <span className="ml-1.5 text-xs font-normal text-muted-foreground">Cardio</span>}
-            </p>
-            {hasDetails && (
-              <button
-                type="button"
-                onClick={() => setOpen(!open)}
-                aria-expanded={open}
-                aria-label={`${open ? "Hide" : "Show"} details for ${ex.name}`}
-                className="-mr-1 -mt-1 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
-              </button>
-            )}
-          </div>
-
-          <dl className="mt-1.5 grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-sm">
-            {setup?.summary && (
-              <>
-                <dt className="text-xs leading-5 text-muted-foreground">Setup</dt>
-                <dd className="leading-5" data-setup>
-                  {/* the parts never break mid-phrase: "J-hooks 9" stays together */}
-                  {setup.summary.split(" · ").map((part, i) => (
-                    <span key={i}>
-                      {i > 0 && <span className="text-muted-foreground"> · </span>}
-                      <span className="whitespace-nowrap font-medium">{part}</span>
-                    </span>
-                  ))}
-                  {setup.equipment?.archived_at && <span className="text-xs text-muted-foreground"> · retired</span>}
-                  {setupPhotos(setup.setup).length > 0 && <SetupPhotoLink path={setupPhotos(setup.setup)[0]} count={setupPhotos(setup.setup).length} />}
-                </dd>
-              </>
-            )}
-            <dt className="text-xs leading-5 text-muted-foreground">Plan</dt>
-            <dd className="leading-5 text-muted-foreground" data-plan>{ex.plan || "–"}</dd>
-            {guide && <GuideRow guide={guide} name={name} />}
-            {ex.rest && (
-              <>
-                <dt className="text-xs leading-5 text-muted-foreground">Rest</dt>
-                <dd className="leading-5" data-rest={ex.rest.usual ? "usual" : "program"}>
-                  <span className="font-medium tabular-nums">{(restWords(ex.rest.seconds) ?? "").replace(/^Rest /, "")}</span>
-                  {ex.rest.usual && <span className="text-xs text-muted-foreground"> · the usual for this lift</span>}
-                </dd>
-              </>
-            )}
-            <dt className="text-xs leading-5 text-muted-foreground">Logged</dt>
-            <dd className="leading-5" data-logged>
-              {ex.logged.length ? (
-                <span className="flex items-start gap-1.5">
-                  <span className="min-w-0 space-y-0.5">
-                    {ex.logged.map((l, i) => (
-                      <span key={i} className="block font-medium tabular-nums">{l}</span>
-                    ))}
+    <li data-quick-view-exercise data-exercise-state={state}>
+      <button
+        type="button"
+        onClick={() => hasMore && setOpen((o) => !o)}
+        aria-expanded={hasMore ? open : undefined}
+        aria-label={hasMore ? `${open ? "Hide" : "Show"} details for ${ex.name}` : undefined}
+        className={cn("flex w-full items-start gap-2.5 px-3 py-2 text-left", hasMore ? "cursor-pointer hover:bg-muted/40" : "cursor-default")}
+      >
+        <span className="pt-0.5"><ExerciseMark state={state} n={n} ex={ex} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-1.5">
+            <span className="min-w-0 text-[14.5px] font-semibold leading-snug">{ex.name}</span>
+            {ex.role && <span className="shrink-0 text-[11px] text-muted-foreground">{ex.role}</span>}
+            {ex.cardio && <span className="shrink-0 text-[11px] text-muted-foreground">Cardio</span>}
+          </span>
+          {/* what to do: the prescription and the weight to lift */}
+          <span className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] leading-snug">
+            <span className="text-foreground/80" data-plan>{ex.plan || "–"}</span>
+            {guide && <GuideInline guide={guide} name={name} />}
+          </span>
+          {/* what they did */}
+          {ex.logged.length > 0 ? (
+            <span className="mt-0.5 block text-[13px] leading-snug" data-logged>
+              {ex.logged.map((l, i) => {
+                const p = splitLoggedLine(l);
+                return (
+                  <span key={i} className="block tabular-nums">
+                    {p.sets && (
+                      <span className="mr-1 text-[11px] text-muted-foreground">
+                        {/[–-]/.test(p.sets) ? "Sets" : "Set"} {p.sets}
+                        <span className="sr-only">: </span>
+                      </span>
+                    )}
+                    <span className="font-medium">{p.text}</span>
                   </span>
-                  {complete ? (
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-label="All sets logged" />
-                  ) : partial && ex.setsPlanned ? (
-                    <span className={cn("shrink-0 text-xs tabular-nums", flagShort ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
-                      {ex.setsLogged}/{ex.setsPlanned}
-                    </span>
-                  ) : null}
-                </span>
-              ) : (
-                <span className={cn("text-sm", flagShort && !ex.cardio ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
-                  {flagShort ? "Not logged" : "–"}
+                );
+              })}
+            </span>
+          ) : STATE_WORD[state] ? (
+            <span className={cn("mt-0.5 block text-[12px] font-medium", state === "missed" ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground")} data-logged>
+              {STATE_WORD[state]}
+            </span>
+          ) : null}
+          {/* secondary: rest and muscles */}
+          {(restText || ex.details.muscle) && (
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
+              {ex.rest && restText && (
+                <span data-rest={ex.rest.usual ? "usual" : "program"} title={ex.rest.usual ? "The usual rest for this lift (none written)" : undefined}>
+                  {restText}{ex.rest.usual ? " (usual)" : ""}
                 </span>
               )}
-            </dd>
-          </dl>
-
-          {(ex.coachNote || ex.athleteNotes.length > 0) && (
-            <div className="mt-2 space-y-1.5 text-[13px] leading-snug">
-              {ex.coachNote && (
-                <p className="text-muted-foreground">
-                  <span className="font-semibold text-foreground/80">Note: </span>
-                  {ex.coachNote}
-                </p>
-              )}
-              {ex.athleteNotes.map((t, i) => (
-                <p key={i}>
-                  <span className="font-semibold">{firstName(name)}: </span>
-                  {t}
-                </p>
-              ))}
-            </div>
+              {restText && ex.details.muscle && " · "}
+              {ex.details.muscle}
+            </span>
           )}
+        </span>
+        <span className="flex shrink-0 items-center gap-1 pt-0.5 text-muted-foreground">
+          {noteCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium" aria-label={noteCount === 1 ? "1 note" : `${noteCount} notes`} data-exercise-notes>
+              <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+              {noteCount > 1 ? noteCount : null}
+            </span>
+          )}
+          {hasMore && <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />}
+        </span>
+      </button>
 
-          {open && hasDetails && (
-            <div className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[13px] text-muted-foreground" data-quick-view-details>
-              {(ex.details.muscle || ex.details.equipment) && (
-                <p>{[ex.details.muscle, ex.details.equipment].filter(Boolean).join(" · ")}</p>
-              )}
-              {ex.details.cues && <p className="whitespace-pre-line">{ex.details.cues}</p>}
-              {ex.details.demo && (
-                <a
-                  href={ex.details.demo}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-h-9 items-center gap-1 font-semibold text-foreground underline-offset-2 hover:underline"
-                >
-                  Demo video <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                </a>
-              )}
-            </div>
+      {/* how their card is set up (rack height, J-hooks, seat): set up the next lift without their app */}
+      {setup?.summary && (
+        <p className="-mt-1.5 px-3 pb-2 pl-[2.875rem] text-[11.5px] leading-snug text-muted-foreground" data-setup>
+          {setup.summary.split(" · ").map((part, i) => (
+            <span key={i}>
+              {i > 0 && " · "}
+              <span className="whitespace-nowrap font-medium text-foreground/75">{part}</span>
+            </span>
+          ))}
+          {setup.equipment?.archived_at && " · retired"}
+          {setupPhotos(setup.setup).length > 0 && <SetupPhotoLink path={setupPhotos(setup.setup)[0]} count={setupPhotos(setup.setup).length} />}
+        </p>
+      )}
+
+      {open && hasMore && (
+        <div className="space-y-1.5 px-3 pb-2.5 pl-[2.875rem] text-[13px] leading-snug" data-quick-view-details>
+          {ex.coachNote && (
+            <p className="whitespace-pre-line">
+              <span className="font-semibold text-muted-foreground">Note: </span>
+              {ex.coachNote}
+            </p>
+          )}
+          {ex.athleteNotes.map((t, i) => (
+            <p key={i} className="whitespace-pre-line">
+              <span className="font-semibold">{firstName(name)}: </span>
+              {t}
+            </p>
+          ))}
+          {ex.details.equipment && <p className="text-muted-foreground">{ex.details.equipment}</p>}
+          {ex.details.cues && <p className="whitespace-pre-line text-muted-foreground">{ex.details.cues}</p>}
+          {ex.details.demo && (
+            <a
+              href={ex.details.demo}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-8 items-center gap-1 font-semibold text-foreground underline-offset-2 hover:underline"
+            >
+              Demo video <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            </a>
           )}
         </div>
-      </div>
+      )}
     </li>
   );
 }
 
 /**
- * The weight line under the plan: the number the athlete's Suggested shows (a
- * range to pick within on the first heavy set of a main lift), the weight a
- * coach's % comes to today, or, once every set is in, where next time starts.
+ * The weight to lift beside the prescription: the number the athlete's Suggested shows (a range
+ * to pick within on the first heavy set of a main lift), the weight a coach's % comes to today,
+ * or, once every set is in, where next time starts.
  */
-function GuideRow({ guide, name }: { guide: CardGuide; name: string }) {
-  const label = guide.kind === "planned" ? "Load" : guide.kind === "next" ? "Next time" : "Suggested";
+function GuideInline({ guide, name }: { guide: CardGuide; name: string }) {
+  if (guide.kind === "pending") {
+    return (
+      <span className="text-[12px] text-muted-foreground" title={`No recent logs of this lift with an RPE: ${firstName(name)}'s first set sets it`} data-load-guide="pending">
+        {guide.note}
+      </span>
+    );
+  }
+  if (guide.kind === "planned") {
+    return (
+      <span data-load-guide="planned">
+        {guide.value ? <span className="font-semibold tabular-nums">{guide.value}</span> : <span className="text-muted-foreground">{guide.waiting ?? "–"}</span>}
+        <span className="text-[11.5px] text-muted-foreground"> · {guide.label}{guide.capped ? " · capped" : ""}</span>
+      </span>
+    );
+  }
+  const label = guide.kind === "next" ? "Next" : "Suggested";
   return (
-    <>
-      <dt className="text-xs leading-5 text-muted-foreground">{label}</dt>
-      <dd className="leading-5" data-load-guide={guide.kind}>
-        {guide.kind === "suggested" ? (
-          <span>
-            <span className="font-semibold tabular-nums">{guide.shown} {guide.unit}</span>
-            {guide.plan && (
-              // "× 11 @ 8" reads on from the weight; a progression's change ("+5 lb", "same weight · build to 12") is its own phrase
-              <span className="tabular-nums text-muted-foreground">{guide.plan.startsWith("×") ? " " : " · "}{guide.plan}</span>
-            )}
-            {guide.note && (
-              <span className={cn("text-xs", guide.live ? "text-success" : "text-muted-foreground")}> · {guide.note}</span>
-            )}
-          </span>
-        ) : guide.kind === "pending" ? (
-          <span className="text-muted-foreground" title={`No recent logs of this lift with an RPE: ${firstName(name)}'s first set sets it`}>
-            {guide.note}
-          </span>
-        ) : guide.kind === "planned" ? (
-          <span>
-            {guide.value ? (
-              <span className="font-semibold tabular-nums">{guide.value}</span>
-            ) : (
-              <span className="text-muted-foreground">{guide.waiting ?? "–"}</span>
-            )}
-            <span className="text-xs text-muted-foreground"> · {guide.label}{guide.capped ? " · capped" : ""}</span>
-          </span>
-        ) : (
-          <span>
-            <span className="font-semibold tabular-nums">{guide.shown} {guide.unit}</span>
-            {guide.note && <span className="text-xs text-muted-foreground"> · {guide.note}</span>}
-          </span>
-        )}
-      </dd>
-    </>
+    <span data-load-guide={guide.kind}>
+      <span className="text-[11.5px] text-muted-foreground">{label} </span>
+      <span className="font-semibold tabular-nums">{guide.shown} {guide.unit}</span>
+      {guide.kind === "suggested" && guide.plan && (
+        <span className="tabular-nums text-muted-foreground">{guide.plan.startsWith("×") ? " " : " · "}{guide.plan}</span>
+      )}
+      {guide.note && (
+        <span className={cn("text-[11.5px]", guide.kind === "suggested" && guide.live ? "text-success" : "text-muted-foreground")}> · {guide.note}</span>
+      )}
+    </span>
   );
 }
 
@@ -1088,9 +1125,9 @@ function ProfileTab({ clientId, record, loading, today }: { clientId: string; re
   const summary = ci?.ai_status === "ready" && !ci.ai_analysis?.fallback ? (ci.ai_analysis?.summary ?? "").trim() : "";
 
   return (
-    <div className="space-y-3 p-4" data-quick-view-profile>
+    <div className="space-y-2 p-3" data-quick-view-profile>
       <Card title="Essentials">
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
           {facts.filter(([, v]) => v).map(([k, v]) => (
             <div key={k} className="min-w-0">
               <dt className="text-[11px] text-muted-foreground">{k}</dt>
@@ -1196,8 +1233,8 @@ function ProfileTab({ clientId, record, loading, today }: { clientId: string; re
 
 function Card({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <section className="rounded-xl border border-border bg-card px-3 py-2.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {action}
       </div>
