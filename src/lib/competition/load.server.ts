@@ -177,6 +177,8 @@ export function readCompetitionFacts(c: any): CompetitionFacts {
     liftingStart: c.lifting_start ?? null,
     weighInAt: c.weigh_in_at ?? null,
     flight: c.flight ?? null,
+    sessionLabel: c.session_label ?? null,
+    equipmentEvent: c.equipment_event ?? null,
     location: c.location ?? null,
     rules: readRules(c.rules, c.federation),
     athleteGoalTotal: c.athlete_goal_total_kg != null ? Number(c.athlete_goal_total_kg) : null,
