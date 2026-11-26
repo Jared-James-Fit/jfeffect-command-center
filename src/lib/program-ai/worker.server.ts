@@ -265,6 +265,17 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       }
     }
 
+    // Historical blocks are reference-only, never added to the writable program snapshot.
+    if (edit.target_kind === "client" && athleteId) {
+      const ids = [...new Set(Array.from(String(edit.instruction ?? "").matchAll(/\bblock ID ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi), (m) => m[1]))];
+      if (ids.length > 4) throw new Error("Choose up to four reference blocks.");
+      if (ids.length) {
+        const { readTrainingReferences } = await import("@/lib/program-ai/plan-reference.server");
+        const reference = await readTrainingReferences(admin, athleteId, ids);
+        otherPlans = [otherPlans, reference].filter(Boolean).join("\n\n");
+      }
+    }
+
     const user = editUserPrompt({
       target: snap.kind === "client" ? `Client: ${snap.title}` : `Template: ${snap.title}`,
       templateNote,

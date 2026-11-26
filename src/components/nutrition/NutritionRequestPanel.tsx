@@ -468,7 +468,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       <CardHeader
         icon={ClipboardList}
         title="Nutrition check-in"
-        info="The client’s feedback form and plan created from it. Separate from edits to the live plan."
+        info="The client’s nutrition feedback form and the plan created from it. This is separate from edits made directly to the current plan."
         chip={status ? <StatusChip tone={status.tone}>{status.label}</StatusChip> : null}
         actions={
           <DropdownMenu>

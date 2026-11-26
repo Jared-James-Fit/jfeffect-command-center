@@ -46,7 +46,7 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
   const latestEdit = samePlanEdits[0];
   const todayEdits = samePlanEdits.filter((p) => toLocalISO(new Date(p.revision_captured_at)) === today);
   const firstToday = todayEdits[todayEdits.length - 1];
-  const latestReference = latestEdit ?? references[0];
+  const latestReference = latestEdit ?? references.find((p) => !p.scheduled_reference);
   const ref = references.find((p) => p.id === selected) ?? (milestone ? eventRefs.length === 1 ? eventRefs[0] : undefined : latestReference);
   const changes = ref ? days.map((d) => ({ current: d, prior: (ref.nutrition_target_days ?? []).find((p) => String(p.day_label).trim().toLowerCase() === String(d.day_label).trim().toLowerCase()) })) : [];
   const date = parseLocalDate(anchor || today) ?? parseLocalDate(today)!;
@@ -126,6 +126,7 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
             {(ref.nutrition_target_days ?? []).filter((p) => !changes.some((c) => c.prior === p)).map((p, i) => <div key={p.day_label + i} className="contents"><span>{p.day_label} (removed)</span><span className="text-right">{number(p.calories)}</span><span className="text-right">—</span><span className="text-right">—</span></div>)}
           </div>
           {compareOpen && <details className="rounded-md border border-border p-2"><summary className="cursor-pointer font-medium">Macros and meals by day type</summary><div className="mt-2 space-y-3">{changes.map(({current,prior},i) => <div key={String(current.day_label ?? "unassigned") + i} className="space-y-1"><p className="font-medium">{current.day_label || "Unassigned day"}</p><div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,0.7fr))] gap-1 tabular-nums"><span/><span className="text-right text-muted-foreground">Before</span><span className="text-right text-muted-foreground">Now</span><span className="text-right text-muted-foreground">Change</span>{(["protein","carbs","fats","fibre","steps"] as const).map(key=><div className="contents" key={key}><span className="capitalize">{key}{key==="steps"?"":" (g)"}</span><span className="text-right">{number(prior?.[key])}</span><span className="text-right">{number(current[key])}</span><span className="text-right">{difference(current[key]??null,prior?.[key]??null)}</span></div>)}</div><details><summary className="cursor-pointer text-muted-foreground">Meal plan</summary><div className="mt-1 grid gap-2 sm:grid-cols-2">{[{label:"Before",notes:prior?.notes},{label:"Now",notes:current.notes}].map(side=><div key={side.label} className="min-w-0 rounded border border-border p-2"><p className="font-medium">{side.label}</p><p className="whitespace-pre-wrap break-words text-muted-foreground">{side.notes||"No saved meals."}</p></div>)}</div></details></div>)}</div></details>}
+          {ref.scheduled_reference && <p className="text-muted-foreground">Future draft · not published or followed yet.</p>}
           {ref.revision_partial && <p className="text-muted-foreground">Saved targets and meals only. Other historical plan settings were not recorded.</p>}
         </>}
       </div>}
@@ -179,8 +180,8 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
                 <div className="min-w-0 rounded-md border border-border p-2"><p className="mb-1 font-medium">This plan · {currDay?.day_label ?? "—"}</p><p className="whitespace-pre-wrap break-words text-muted-foreground">{currDay?.notes || "No meal text recorded."}</p></div>
               </div>}
               <div className="flex flex-wrap gap-2">
-                {ref && !ref.revision_partial && onReuse && <Button type="button" variant="outline" size="sm" onClick={() => onReuse(ref)}>Use as draft</Button>}
-                {ref && showCleo && <Button type="button" variant="outline" size="sm" onClick={() => prefillPlanAiChange(clientId, "Compare the current nutrition plan to the reference plan " + referenceLabel(ref) + (ref.revision_partial ? " (legacy edit ID " : ref.revision_of ? " (revision ID " : " (plan ID ") + ref.id + "). Use the saved reference if available; do not guess missing details.")}>Ask Cleo to compare</Button>}
+                {ref && !ref.revision_partial && !ref.scheduled_reference && onReuse && <Button type="button" variant="outline" size="sm" onClick={() => onReuse(ref)}>Use as draft</Button>}
+                {ref && showCleo && <Button type="button" variant="outline" size="sm" onClick={() => prefillPlanAiChange(clientId, "Compare the current nutrition plan to the reference plan " + referenceLabel(ref) + (ref.scheduled_reference ? " (scheduled draft ID " : ref.revision_partial ? " (legacy edit ID " : ref.revision_of ? " (revision ID " : " (plan ID ") + ref.id + "). Use the saved reference if available; do not guess missing details.")}>Ask Cleo to compare</Button>}
               </div>
             </div>
           </div>}

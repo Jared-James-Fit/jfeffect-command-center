@@ -311,7 +311,7 @@ export const undoPlanEditFn = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ editId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     if (!(await canSeeEdit(context.supabase, context.userId, data.editId))) throw new Error("Coach access required");
-    return (await planEdits()).undoPlanEdit(await admin(), data.editId);
+    return (await planEdits()).undoPlanEdit(await admin(), data.editId, context.userId);
   });
 
 /** Put a written or failed change away without applying it. */

@@ -1,7 +1,3 @@
-import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
-import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
-import { clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
-import { splitPlans } from "@/lib/nutrition-targets/plan-history";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion } from "@/components/ui/accordion";
@@ -41,7 +37,11 @@ import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/Pla
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
-import { archiveReplacedPlans, syncPlanCardio } from "@/lib/nutrition-targets/plan-publish";
+import { publishNutritionPlanAtomic, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
+import { copyPlanDays, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
+import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
+import { manageScheduledNutrition, scheduledNutritionKey, scheduledNutritionQuery, scheduledPlanReference, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
+import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 
 const QUICK_DAY_TYPES = [
@@ -81,6 +81,9 @@ type Props = {
   clientId?: string;
   clients?: Array<{ id: string; full_name: string }>;
   initial?: any;
+  /** A historical prescription copied into a new, unsaved editor. */
+  copyFrom?: PlanRow;
+  scheduled?: ScheduledNutrition;
   /** New targets pre-filled from an AI nutrition plan (ignored when `initial` is set). */
   prefill?: {
     days: Day[];
@@ -97,7 +100,7 @@ type Props = {
   onSaved?: (targetId: string) => void;
 };
 
-export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved }: Props) {
+export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved, copyFrom, scheduled }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
@@ -123,7 +126,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     setPhaseSource(null);
     setPhaseFrom(null);
     setOpenDays([]);
-    if (initial) {
+    if (scheduled) {
+      setForm({ ...scheduled.payload, client_id: scheduled.client_id, start_date: scheduled.start_date, status: "Active" });
+      setDays(scheduled.days.map((d, i) => ({ ...d, sort_order: i })) as Day[]);
+      setPhasePicked(true);
+    } else if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {
         setDays((data ?? []) as Day[]);
@@ -147,7 +154,12 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         pdf_name: "",
         water: "3.5 L",
       };
-      if (prefill) {
+      if (copyFrom) {
+        for (const key of ["phase", "custom_phase", "goal", "custom_goal", "structure", "client_notes", "admin_notes", "food_weighing_rules", "water", "supplements"] as const) {
+          if (copyFrom[key] !== undefined) Object.assign(f, { [key]: copyFrom[key] });
+        }
+        setPhasePicked(true);
+      } else if (prefill) {
         Object.assign(f, {
           structure: prefill.structure ?? "Custom",
           ...(prefill.phase ? { phase: prefill.phase, goal: PHASE_GOAL[prefill.phase] ?? f.goal } : {}),
@@ -162,15 +174,15 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       }
       if (prefill?.supplements) Object.assign(f, { supplements: prefill.supplements });
       setForm(f);
-      setDays(prefill?.days.length
+      setDays(copyFrom ? copyPlanDays(copyFrom.nutrition_target_days) as Day[] : prefill?.days.length
         ? prefill.days.map((d, i) => ({ ...d, sort_order: i }))
         : DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
     }
-  }, [open, initial, clientId, prefill]);
+  }, [open, initial, clientId, prefill, copyFrom, scheduled]);
 
   // New targets start on the phase the client is actually working toward
   // (suggestTargetsPhase), never the default "Maintenance".
-  const suggestFor = open && !initial ? (form?.client_id || clientId || null) : null;
+  const suggestFor = open && !initial && !copyFrom && !scheduled ? (form?.client_id || clientId || null) : null;
   const listRequests = useServerFn(listNutritionRequestsFn);
   const requestsQ = useQuery({
     queryKey: ["nutrition-requests", suggestFor],
@@ -267,11 +279,13 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cardioQ.data, days, cardioClient, initial?.id]);
 
-  const historyClient = form?.client_id || clientId || "";
-  const historyQ = useQuery({ ...clientPlansQuery(historyClient), enabled: open && !!historyClient });
-  const revisionsQ = useQuery({ ...nutritionRevisionQuery(historyClient), enabled: open && !!historyClient });
+  const historyClient = open ? (form?.client_id || clientId || "") : "";
+  const historyQ = useQuery({ ...clientPlansQuery(historyClient), enabled: !!historyClient });
+  const revisionsQ = useQuery({ ...nutritionRevisionQuery(historyClient), enabled: !!historyClient });
+  const scheduledQ = useQuery(scheduledNutritionQuery(historyClient));
   const history = splitPlans(historyQ.data ?? []);
-  const historyRefs = [...history.current.filter(p => p.id !== form?.id), ...orderPlanReferences(history.previous, revisionsQ.data ?? [])].filter(p => p.id !== form?.id);
+  const references = [...history.current.filter((p) => p.id !== form?.id), ...orderPlanReferences(history.previous, revisionsQ.data ?? []), ...(scheduledQ.data ?? []).filter((d) => d.id !== scheduled?.id).map(scheduledPlanReference)].filter((p) => p.id !== form?.id);
+
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
@@ -322,8 +336,12 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     setDays(days.filter((_, idx) => idx !== i));
   };
 
-  const save = async () => {
+  const save = async (draftOnly = false) => {
     if (!form.client_id) return toast.error("Pick a client first");
+    const future = form.status !== "Archived" && form.start_date > todayLocalISO();
+    if (future && form.id) return toast.error("Build a new scheduled plan instead of moving the live plan.");
+    if ((scheduled || future) && form.status !== "Active") return toast.error("Choose Active for a scheduled plan.");
+    if (scheduled && !future && !draftOnly && !confirm("Publish this reviewed plan now? It replaces the current plan from today.")) return;
     setSaving(true);
     const payload: any = {
       client_id: form.client_id,
@@ -348,36 +366,54 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       supplements: supplementsOf(form).items.length || supplementsOf(form).notes.length ? supplementsOf(form) : null,
     };
     let targetId = form.id;
-    if (targetId) {
-      const { error } = await supabase.from("nutrition_targets").update(payload).eq("id", targetId);
-      if (error) { setSaving(false); return toast.error(error.message); }
-      await supabase.from("nutrition_target_days").delete().eq("target_id", targetId);
-    } else {
-      const { data, error } = await supabase.from("nutrition_targets").insert(payload).select("id").single();
-      if (error || !data) { setSaving(false); return toast.error(error?.message ?? "Failed"); }
-      targetId = data.id;
-    }
-    if (days.length) {
-      const rows = days.map((d, i) => {
-        const { id: _omit, cardio: _cardio, ...rest } = d as any;
-        delete (rest as any).created_at;
-        delete (rest as any).updated_at;
-        delete (rest as any).target_id;
-        return { ...rest, notes: plainOrNull(rest.notes ?? null), target_id: targetId, sort_order: i };
-      });
-      const { error } = await supabase.from("nutrition_target_days").insert(rows);
-      if (error) { setSaving(false); return toast.error(error.message); }
-    }
-    // A new current plan replaces the one before it: archived with its dates, never deleted.
-    let replacedMsg = "";
-    if (form.status === "Active" && (!form.id || initial?.status === "Archived")) {
+    let archived = 0;
+    const dayPayload = days.map((d, i) => {
+      const { id: _omit, cardio: _cardio, ...rest } = d as any;
+      delete rest.created_at;
+      delete rest.updated_at;
+      delete rest.target_id;
+      return { ...rest, notes: plainOrNull(rest.notes ?? null), sort_order: i };
+    });
+    if ((future || draftOnly) && !targetId) {
       try {
-        const n = await archiveReplacedPlans(form.client_id, targetId, form.start_date);
-        if (n) replacedMsg = " · the old plan is in Previous plans";
+        await manageScheduledNutrition(form.client_id, scheduled ?? null, "save", payload, days.map((d, i) => ({ ...dayPayload[i], cardio: d.cardio })));
+        void qc.invalidateQueries({ queryKey: scheduledNutritionKey(form.client_id) });
+        toast.success("Scheduled draft saved · current plan unchanged");
+        onOpenChange(false);
+      } catch (e: any) { toast.error(e?.message ?? "Couldn't save draft"); }
+      finally { setSaving(false); }
+      return;
+    }
+    if (scheduled) {
+      try {
+        const result = await manageScheduledNutrition(form.client_id, scheduled, "activate", payload, dayPayload);
+        targetId = result.targetId;
+        archived = result.archived ?? 0;
+        void qc.invalidateQueries({ queryKey: scheduledNutritionKey(form.client_id) });
+      } catch (e: any) { setSaving(false); return toast.error(e?.message ?? "Couldn't activate plan"); }
+    } else if (targetId) {
+      // Save and history are one transaction. Do not fall back to the old
+      // delete/insert sequence if the migration isn't present.
+      const { error } = await (supabase as any).rpc("update_nutrition_plan_revision", {
+        _target_id: targetId,
+        _client_id: form.client_id,
+        _expected_updated_at: initial?.last_updated_at ?? initial?.updated_at ?? null,
+        _patch: payload,
+        _days: dayPayload,
+        _source: "coach",
+      });
+      if (error) { setSaving(false); return toast.error(error.message); }
+    } else {
+      try {
+        const result = await publishNutritionPlanAtomic(payload, dayPayload);
+        targetId = result.targetId;
+        archived = result.archived;
       } catch (e: any) {
-        toast.error(`Saved, but the old plan wasn't archived: ${e?.message ?? "error"}`);
+        setSaving(false);
+        return toast.error(e?.message ?? "Couldn't save the plan");
       }
     }
+    const replacedMsg = archived ? " · the old plan is in Previous plans" : "";
     // Cardio follows the plan the client is on: only an Active plan changes it.
     let cardioMsg = "";
     if (form.status === "Active" && cardioQ.data) {
@@ -395,6 +431,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     toast.success(`${form.id ? "Updated" : "Created"}${replacedMsg}${cardioMsg}`);
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["nutrition-plan-revisions", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["food-history", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
     // Let the client know their plan changed (only when they can see it).
     if (form.visible_to_client && form.status === "Active") fireAppEvent("nutrition_targets_updated", form.client_id);
@@ -426,7 +464,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-3xl sm:p-0" data-plan-editor>
         <DialogHeader className="shrink-0 space-y-0.5 border-b border-border py-2 pr-4 sm:pr-6">
-          <DialogTitle>{form.id ? "Edit nutrition plan" : "New nutrition plan"}</DialogTitle>
+          <DialogTitle>{scheduled ? "Review scheduled plan" : form.id ? "Edit nutrition plan" : "New nutrition plan"}</DialogTitle>
           <DialogDescription className="text-[13px]">
             {[phaseText, form.start_date ? (form.end_date ? `${format(parseISO(form.start_date), "MMM d")} – ${format(parseISO(form.end_date), "MMM d")}` : `from ${format(parseISO(form.start_date), "MMM d")}, ongoing`) : null].filter(Boolean).join(" · ")}
           </DialogDescription>
@@ -499,8 +537,17 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </div>
           </div>
 
-          {open && historyClient && <NutritionWeekSummary key={historyClient} clientId={historyClient} days={days} references={historyRefs} historyUnavailable={historyQ.isError || revisionsQ.isError} historyLoading={historyQ.isLoading || revisionsQ.isLoading} currentId={form.id} anchor={form.start_date} />}
-          <Accordion type="single" collapsible defaultValue={!initial && !prefill ? "paste" : undefined} className="rounded-xl border border-border">
+          {open && historyClient && <NutritionWeekSummary
+            key={historyClient}
+            clientId={historyClient}
+            days={days}
+            references={references}
+            historyUnavailable={historyQ.isError || revisionsQ.isError || scheduledQ.isError}
+            historyLoading={historyQ.isLoading || revisionsQ.isLoading || scheduledQ.isLoading}
+            currentId={form.id}
+            anchor={form.start_date > todayLocalISO() ? form.start_date : undefined}
+          />}
+          <Accordion type="single" collapsible defaultValue={!initial && !prefill && !copyFrom ? "paste" : undefined} className="rounded-xl border border-border">
             <Section value="paste" icon={ClipboardPaste} title="Paste a meal plan" meta="Fills the days">
               <MealPlanBulkPaste
                 clientId={form.client_id || clientId || null}
@@ -555,7 +602,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                         ))}
                       </div>
                       <DayNumbersCheck day={d} onUseCalories={(kcal) => updateDay(i, "calories", String(kcal))} />
-                      <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active"} />
+                      <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active" && form.start_date <= todayLocalISO()} />
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
                           <Label className="text-[13px] text-muted-foreground">Meals</Label>
@@ -699,7 +746,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <div className="flex shrink-0 gap-2 border-t border-border bg-background px-4 py-3 dark:bg-card sm:justify-end sm:px-6">
           <Button variant="outline" className="h-11 flex-1 sm:flex-none" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button className="h-11 flex-1 sm:flex-none" onClick={save} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Save plan"}</Button>
+          {scheduled && form.start_date <= todayLocalISO() && <Button variant="outline" disabled={saving} onClick={() => void save(true)}>Save draft</Button>}
+          <Button className="h-11 flex-1 sm:flex-none" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : form.start_date > todayLocalISO() && form.status !== "Archived" ? "Save scheduled draft" : scheduled ? "Publish now" : "Save plan"}</Button>
         </div>
       </DialogContent>
     </Dialog>
