@@ -11,6 +11,7 @@ import { dualLoad, loadNum, otherUnit, LB_PER_KG, type Unit } from "@/lib/analyt
 import { arcPath, LIFT_SERIES, Segmented } from "@/components/analytics/viz";
 import { InfoTip } from "@/components/analytics/info-tip";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { compareInsights, lifterProfile, type PerformanceVersion } from "@/lib/analytics/coach-analysis";
 import { Button } from "@/components/ui/button";
 
 const fmtDay = (d: string) => {
@@ -40,6 +41,8 @@ export function SbdDonut({
   today,
   unit,
   onRecords,
+  periods = [],
+  hideBodyweight = false,
 }: {
   strength: Record<CompLift, LiftStrength>;
   meets: MeetResult[];
@@ -49,6 +52,8 @@ export function SbdDonut({
   today: string;
   unit: Unit;
   onRecords?: () => void;
+  periods?: Array<{id: string; name: string; start: string; end: string}>;
+  hideBodyweight?: boolean;
 }) {
   const [view, setView] = useState<View>("current");
   const [lift, setLift] = useState<CompLift | null>(null);
@@ -58,10 +63,13 @@ export function SbdDonut({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [comparePick, setComparePick] = useState("latest");
+  const [compareA, setCompareA] = useState("current");
+  const [allowMixed, setAllowMixed] = useState(false);
+  const scouting = useMemo(() => lifterProfile(meets, sex), [meets, sex]);
   const weights = useMemo(() => normalizeWeights(bodyweights), [bodyweights]);
   const refs = useMemo(() => weightReferences(meets, sex), [meets, sex]);
   const bw = useMemo(() => weightContextAt(weights, refs, today), [weights, refs, today]);
-  const timeline = useMemo(() => historyOpen ? weightPeriods(weights, refs) : [], [weights, refs, historyOpen]);
+  const timeline = useMemo(() => (historyOpen || compareOpen) ? weightPeriods(weights, refs) : [], [weights, refs, historyOpen, compareOpen]);
   const projection = useMemo(() => currentRing(strength, today), [strength, today]);
   const gymRecords = useMemo(() => (view === "gym" || compareOpen) ? gymRingRecords(results, strength, weights, refs, today) : [], [view, compareOpen, results, strength, weights, refs, today]);
   const options = view === "competition" ? classes(meets.map(officialClass)) : classes(gymRecords.map((x) => x.classLabel));
@@ -83,21 +91,31 @@ export function SbdDonut({
   const size = 208;
   const radius = 87;
   const sum = ringTotal(lifts);
-  const compareChoices = compareOpen ? [
-    { key: "latest", label: "Latest competition", ...competitionRing(meets, "all", "latest") },
-    ...classes(meets.map(officialClass)).map(c => ({key: "meet:" + c, label: c + " · best official total", ...competitionRing(meets, c, "best")})),
-    ...["all", ...classes(gymRecords.map(r => r.classLabel))].flatMap(c => (["actual", "estimated"] as const).map(m => {
-      const records = gymRingBests(gymRecords, m, c);
-      return { key: "gym:" + c + ":" + m, label: (c === "all" ? "All-time" : c) + (m === "actual" ? " · gym singles" : " · estimated gym bests"), lifts: records, totalLb: ringTotal(records), meet: null };
+  const selectedKind = view === "current" ? "projected" : view === "competition" && meetPick !== "individual" ? "official" : view === "gym" && metric === "estimated" ? "estimated" : "actual";
+  const selectedVersion: PerformanceVersion = {key:"selected",label:title,kind:selectedKind,lifts,totalLb:total,bodyweightKg:view==="current"?bw.averageKg: view==="competition"&&competition.meet?.bodyweightLb?competition.meet.bodyweightLb/LB_PER_KG:null,category:view==="current"?bw.category?.label:classFilter==="all"?null:classFilter};
+  const compareChoices: PerformanceVersion[] = compareOpen ? [
+    selectedVersion,
+    {key:"current",label:"Current projection",kind:"projected",lifts:projection.lifts,totalLb:projection.totalLb,end:today,bodyweightKg:bw.averageKg,category:bw.category?.label},
+    ...meets.filter(m=>!m.event||m.event.toUpperCase()==="SBD").map(m=>({key:"meet:"+ (m.id??m.date+":"+m.name),label:(m.name??"Competition")+" · "+m.date,kind:"official" as const,lifts:competitionRing([m],"all","latest").lifts,totalLb:m.total,start:m.date,end:m.date,bodyweightKg:m.bodyweightLb?m.bodyweightLb/LB_PER_KG:null,category:officialClass(m)})),
+    ...["all", ...classes(gymRecords.map(r=>r.classLabel))].flatMap(category=>(["actual","estimated"] as const).map(kind=>{
+      const ls=gymRingBests(gymRecords,kind,category);
+      return {key:"gym:"+category+":"+kind,label:(category==="all"?"All-time":category)+" · "+(kind==="actual"?"gym singles":"gym e1RM"),kind,lifts:ls,totalLb:ringTotal(ls),category};
     })),
-  ] : [];
-  const comparison = compareChoices.find(c => c.key === comparePick) ?? compareChoices[0];
+    ...[...timeline.map(p=>({id:"weight:"+p.start,name:p.category,start:p.start,end:p.end})),...periods].flatMap(p=>(["actual","estimated"] as const).map(kind=>{
+      const ls=gymRingBests(gymRecords.filter(r=>r.day>=p.start&&r.day<=p.end),kind,"all");
+      return {key:p.id+":"+kind,label:p.name+" · "+p.start+" – "+p.end+" · "+(kind==="actual"?"singles":"e1RM"),kind,lifts:ls,totalLb:ringTotal(ls),start:p.start,end:p.end};
+    })),
+  ].filter(v=>COMP_LIFTS.some(l=>v.lifts[l]&&!v.lifts[l]?.stale)||v.key==="selected"||v.key==="current") : [];
+  const versionA=compareChoices.find(c=>c.key===compareA)??compareChoices[0];
+  const compatible=compareChoices.filter(c=>c.key!==versionA?.key&&(allowMixed||c.kind===versionA?.kind));
+  const comparison=compatible.find(c=>c.key===comparePick)??compatible[0];
+  const insights=versionA&&comparison?compareInsights(versionA,comparison):[];
   const delta = (a: number, b: number) => (a >= b ? "+" : "−") + dualLoad(Math.abs(a-b),unit).main;
   let at = 0;
 
   return (
     <div className="@container space-y-3" data-sbd-donut data-sbd-kind={view}>
-      <div className="flex items-start justify-between gap-2">
+      {!hideBodyweight && <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[11px] text-muted-foreground">Current bodyweight</div>
           <div className="text-sm font-semibold tabular-nums">{bw.latest ? bwText(bw.latest.kg, unit) : "Not logged"}</div>
@@ -108,7 +126,7 @@ export function SbdDonut({
           <span className="block text-sm font-semibold">{bw.category?.label ?? "—"}</span>
           <span className="block text-[11px] text-muted-foreground">Weight history ›</span>
         </button>
-      </div>
+      </div>}
       <Segmented<View> value={view} onChange={changeView} options={[{ key: "current", label: "Current" }, { key: "competition", label: "Competition" }, { key: "gym", label: "Gym PRs" }]} label="Performance view" size="sm" />
       {view !== "current" && (
         <div className="flex items-center gap-2">
@@ -180,37 +198,38 @@ export function SbdDonut({
         {view === "gym" && onRecords && <button type="button" className="min-h-10 shrink-0 font-medium text-foreground" onClick={onRecords}>Records ›</button>}
       </div>
 
-      <button type="button" className="min-h-10 w-full rounded-lg border border-border text-xs font-medium" onClick={() => setCompareOpen(true)}>Compare performance</button>
+      {view==="current" && <div className="border-t border-border pt-3 space-y-1" data-lifter-identity>
+        <div className="flex items-center justify-between"><strong className="text-sm">{scouting.identity}</strong><InfoTip label="About lifter identity">{scouting.evidence}</InfoTip></div>
+        <p className="text-xs"><span className="font-medium">Weapon: </span>{scouting.weapon}</p>
+        <p className="text-xs"><span className="font-medium">Vulnerability: </span>{scouting.vulnerability}</p>
+        <details className="text-xs text-muted-foreground"><summary className="min-h-9 pt-2 cursor-pointer">Game-day strategy</summary>{scouting.strategy}</details>
+      </div>}
+      <button type="button" className="min-h-10 w-full rounded-lg border border-border text-xs font-medium" onClick={()=>{setCompareA("selected");setCompareOpen(true)}}>Compare performance</button>
       <Sheet open={compareOpen} onOpenChange={setCompareOpen}>
-        <SheetContent side="bottom" swipeToClose className="max-h-[82dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
+        <SheetContent side="bottom" swipeToClose className="max-h-[85dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
           <SheetTitle>Compare performance</SheetTitle>
-          <SheetDescription>Compare the selected view against a recorded historical result. Projected and achieved values are different types of evidence.</SheetDescription>
-          <select className={selectStyle} aria-label="Historical comparison" value={comparePick} onChange={e => setComparePick(e.target.value)}>
-            {compareChoices.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          {comparison && <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-xs"><div><div className="text-muted-foreground">{title}</div><strong>{total == null ? "—" : dualLoad(total,unit).main}</strong></div><div><div className="text-muted-foreground">{comparison.label}</div><strong>{comparison.totalLb == null ? "—" : dualLoad(comparison.totalLb,unit).main}</strong></div></div>
-            {COMP_LIFTS.map(l => {
-              const a = lifts[l], b = comparison.lifts[l];
-              const av = a && !a.stale ? a.lb : null, bv = b?.lb ?? null;
-              const max = Math.max(av ?? 0,bv ?? 0,1);
-              return <div key={l} className="space-y-1"><div className="flex justify-between text-sm"><span>{COMP_LIFT_LABEL[l]}</span><span>{av == null || bv == null ? "—" : delta(av,bv)}</span></div>
-                {[av,bv].map((v,i) => <div key={i} className="flex items-center gap-2"><div className="flex-1 rounded-full bg-muted"><div className={cn("h-2 rounded-full", i ? "bg-muted-foreground" : "bg-primary")} style={{width:(v ?? 0)/max*100+"%"}} /></div><span className="w-32 text-right text-xs">{v == null ? "—" : dualLoad(v,unit).main+" · "+dualLoad(v,unit).other}</span></div>)}
-                {b && <div className="text-[11px] text-muted-foreground">{b.classLabel ?? "Unclassified"} · {fmtDay(b.day)}{b.bodyweightKg == null ? "" : " · "+bwText(b.bodyweightKg,unit)}</div>}
-              </div>;
+          <SheetDescription>Choose two versions. Gym bests may come from different sessions.</SheetDescription>
+          <label className="text-xs text-muted-foreground">Version A<select className={selectStyle+" block w-full mt-1"} value={versionA?.key??""} onChange={e=>setCompareA(e.target.value)}>{compareChoices.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
+          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={allowMixed} onChange={e=>setAllowMixed(e.target.checked)}/> Allow different evidence types (e.g. projected vs achieved)</label>
+          <label className="text-xs text-muted-foreground">Version B<select className={selectStyle+" block w-full mt-1"} value={comparison?.key??""} onChange={e=>setComparePick(e.target.value)}>{!compatible.length&&<option value="">No comparable version</option>}{compatible.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
+          {versionA && comparison ? <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-xs">{[versionA,comparison].map((v,i)=><div key={i}><div className="text-muted-foreground">{i===0?"A":"B"} · {v.kind}</div><strong className="text-lg">{v.totalLb==null?"—":dualLoad(v.totalLb,unit).main}</strong>{v.totalLb!=null&&<div>{dualLoad(v.totalLb,unit).other}</div>}<div className="text-muted-foreground">{v.category??""} {v.bodyweightKg?bwText(v.bodyweightKg,unit):""}</div>{v.end&&<div className="text-muted-foreground">{v.start&&v.start!==v.end?v.start+" – ":""}{v.end}</div>}</div>)}</div>
+            {COMP_LIFTS.map(l=>{
+              const a=versionA.lifts[l],b=comparison.lifts[l],av=a&&!a.stale?a.lb:null,bv=b&&!b.stale?b.lb:null,max=Math.max(av??0,bv??0,1);
+              return <div key={l} className="space-y-1"><div className="flex justify-between text-sm"><span>{COMP_LIFT_LABEL[l]}</span><span>{av==null||bv==null?"—":delta(av,bv)+" · "+((av-bv)/bv*100).toFixed(1)+"%"}</span></div>{[a,b].map((v,i)=><div key={i}><div className="flex items-center gap-2"><div className="flex-1 rounded-full bg-muted"><div className="h-2 rounded-full" style={{background:i?"#71717a":LIFT_SERIES[l],width:(v&&!v.stale?v.lb:0)/max*100+"%"}}/></div><span className="text-right text-xs">{!v||v.stale?"—":dualLoad(v.lb,unit).main+" · "+dualLoad(v.lb,unit).other}</span></div>{v&&<div className="text-[10px] text-muted-foreground">{fmtDay(v.day)} {v.classLabel??""}</div>}</div>)}</div>;
             })}
-            <p className="text-xs text-muted-foreground">Individual gym bests can come from separate days. Differences are not proof of competition-day performance.</p>
-          </div>}
-          <Button variant="outline" onClick={() => setCompareOpen(false)}>Done</Button>
+            {insights.length>0&&<div className="border-t border-border pt-3 space-y-2"><strong className="text-sm">Coach’s analysis</strong>{insights.map(i=><div key={i.label} className="text-xs"><strong>{i.label}: </strong>{i.text}</div>)}</div>}
+          </div>:<p className="text-xs text-muted-foreground">Choose another version or explicitly enable mixed evidence.</p>}
+          <Button variant="outline" onClick={()=>setCompareOpen(false)}>Done</Button>
         </SheetContent>
       </Sheet>
-      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+      <Sheet open={historyOpen && !hideBodyweight} onOpenChange={setHistoryOpen}>
         <SheetContent side="bottom" swipeToClose className="max-h-[82dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
           <SheetTitle>Weight history</SheetTitle>
           <SheetDescription>Training categories use a seven-day average and the nearest known class reference; they are not official competition eligibility.</SheetDescription>
           {timeline.length ? <ul className="divide-y divide-border">{timeline.map((p) => <li key={p.start + p.category} className="flex items-center justify-between gap-2 py-3">
             <div><div className="text-sm font-semibold">{p.category}</div><div className="text-xs text-muted-foreground">{fmtDay(p.start)} – {fmtDay(p.end)}</div></div>
-            <div className="text-right text-xs tabular-nums">{bwText(p.averageKg, unit)}<div className="text-muted-foreground">{p.samples} weigh-ins</div></div>
+            <div className="text-right text-xs tabular-nums">{bwText(p.averageKg, unit)}<div className="text-muted-foreground">{bwText(p.lowKg,unit)} – {bwText(p.highKg,unit)}</div><div className="text-muted-foreground">{p.samples} weigh-ins · {Math.round((Date.parse(p.end)-Date.parse(p.start))/86400000)+1} days</div></div>
           </li>)}</ul> : <p className="py-4 text-sm text-muted-foreground">Not enough dated weigh-ins or known weight classes to build a timeline.</p>}
           <Button variant="outline" onClick={() => setHistoryOpen(false)}>Done</Button>
         </SheetContent>
