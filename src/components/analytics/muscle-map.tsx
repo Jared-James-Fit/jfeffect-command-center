@@ -237,7 +237,7 @@ export function MuscleMap({
     <div data-muscle-map data-muscle-mode={mode}>
       <div className="flex items-center gap-2">
         <Segmented
-          value={mode === "change" ? "distribution" : mode}
+          value={mode}
           onChange={setMode}
           options={MUSCLE_MODES}
           label="What the colours show"
