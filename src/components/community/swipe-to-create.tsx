@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Images, RefreshCcw, Type, X } from "lucide-react";
 import { feedback } from "@/lib/feedback";
+import { claimGesture, heldByOther, onGestureReset, releaseGesture, targetOwns } from "@/lib/gesture-arena";
 import {
   CAMERA_ENTER_EVENT,
   CAMERA_LEAVE_EVENT,
@@ -167,6 +168,8 @@ export function useSwipeToCreate({ enabled, onOpen }: { enabled: boolean; onOpen
       const target = e.target as Element | null;
       if (!target?.closest?.("[data-feed-pager]")) return;
       if (target.closest(CREATE_NO_START) || screenBusy()) return;
+      // something under the finger slides sideways itself (the gesture arena): it keeps the finger
+      if (targetOwns(target, "x")) return;
       const { clientX: x, clientY: y } = e.touches[0];
       if (inSafariTab() && x < SAFARI_EDGE_PX) return;
       // a finger on a clip's scrub bar is the bar's
@@ -185,7 +188,7 @@ export function useSwipeToCreate({ enabled, onOpen }: { enabled: boolean; onOpen
       if (drag.state === "wait") {
         const intent = createSwipeIntent(dx, y - drag.y0, Math.abs(window.scrollY - drag.sy) > 2);
         if (intent === "wait") return;
-        if (intent === "theirs") {
+        if (intent === "theirs" || heldByOther("crew-create") || !claimGesture("crew-create")) {
           drag = null;
           return;
         }
@@ -212,6 +215,7 @@ export function useSwipeToCreate({ enabled, onOpen }: { enabled: boolean; onOpen
     const end = (e: TouchEvent) => {
       const d = drag;
       drag = null;
+      releaseGesture("crew-create");
       if (!d || d.state !== "mine") return;
       swallowClick();
       const speed = swipeSpeed(d.points);
@@ -258,6 +262,7 @@ export function useSwipeToCreate({ enabled, onOpen }: { enabled: boolean; onOpen
     const cancel = () => {
       const d = drag;
       drag = null;
+      releaseGesture("crew-create");
       if (!d || d.state !== "mine") return;
       settling = true;
       const ms = reduce() ? 0 : 200;
@@ -301,7 +306,11 @@ export function useSwipeToCreate({ enabled, onOpen }: { enabled: boolean; onOpen
     document.addEventListener("touchcancel", cancel, { capture: true });
     window.addEventListener(CAMERA_ENTER_EVENT, onEnter);
     window.addEventListener(CAMERA_LEAVE_EVENT, onLeave);
+    // the app went away mid-pull: the feed slides back
+    const stopReset = onGestureReset(cancel);
     return () => {
+      stopReset();
+      releaseGesture("crew-create");
       document.removeEventListener("touchstart", start, { capture: true });
       document.removeEventListener("touchmove", move, { capture: true });
       document.removeEventListener("touchend", end, { capture: true });

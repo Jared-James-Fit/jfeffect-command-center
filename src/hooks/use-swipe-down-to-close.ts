@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react";
 import { sheetDragCloses, sheetDragGrows, sheetDragMode, sheetFullRelease } from "@/lib/post-sheet";
+import { claimGesture, heldByOther, onGestureReset, releaseGesture, targetOwns } from "@/lib/gesture-arena";
+
+/** Who holds the finger while a sheet follows it (the gesture arena). */
+const ARENA_ID = "sheet-drag";
 
 /** Where a drag never starts: typing, a slider, or anything that opts out. */
 const NO_DRAG = "input, textarea, select, [contenteditable='true'], [role='slider'], [data-no-sheet-drag]";
@@ -39,7 +43,9 @@ export type SheetExpand = {
  * (sheetDragCloses) closes it from where it is, else it springs back. A swipe
  * up or sideways is the sheet's own (its list, tabs, a carousel), and so is a
  * pull down that starts in a list scrolled down (it scrolls back up first),
- * on a text box or a slider, or inside [data-no-sheet-drag].
+ * on a text box or a slider, inside [data-no-sheet-drag], or on anything that owns up-and-down
+ * drags itself (the gesture arena: `touch-action: none`, a map, a drawing pad), which keeps the
+ * finger; while something else holds the finger (the arena) the sheet never moves.
  */
 export function useSwipeDownToClose(el: HTMLElement | null, active: boolean, close: () => void, expand?: SheetExpand | null): void {
   const closeRef = useRef(close);
@@ -102,7 +108,7 @@ export function useSwipeDownToClose(el: HTMLElement | null, active: boolean, clo
       unfollow();
       if (e.touches.length !== 1) return;
       const t = e.target as Element | null;
-      if (t?.closest?.(NO_DRAG)) return;
+      if (t?.closest?.(NO_DRAG) || targetOwns(t, "y", el)) return;
       scrolled = scrolledDown(t, el);
       const ex = expandRef.current;
       // scrolled down with nowhere to grow: the touch is the list's (it scrolls back up first)
@@ -118,10 +124,21 @@ export function useSwipeDownToClose(el: HTMLElement | null, active: boolean, clo
       if (mode === "idle") return;
       const d = e.touches[0].clientY - startY;
       if (mode === "maybe") {
+        // something under the finger took it (a drag in the sheet): never the sheet's
+        if (heldByOther(ARENA_ID)) {
+          mode = "idle";
+          unfollow();
+          return;
+        }
         const ex = expandRef.current;
         const intent = sheetDragMode(e.touches[0].clientX - startX, d, { canGrow: !!ex?.enabled && !ex.full });
         if (intent === "wait") return;
         if (intent === "pass" || (intent === "drag" && scrolled)) {
+          mode = "idle";
+          unfollow();
+          return;
+        }
+        if (!claimGesture(ARENA_ID)) {
           mode = "idle";
           unfollow();
           return;
@@ -146,6 +163,7 @@ export function useSwipeDownToClose(el: HTMLElement | null, active: boolean, clo
     };
     const onEnd = (e: TouchEvent) => {
       unfollow();
+      releaseGesture(ARENA_ID);
       const was = mode;
       mode = "idle";
       const ms = e.timeStamp - startT;
@@ -166,13 +184,20 @@ export function useSwipeDownToClose(el: HTMLElement | null, active: boolean, clo
     };
     const onCancel = () => {
       unfollow();
+      releaseGesture(ARENA_ID);
       if (mode === "drag") settle();
       if (mode === "grow") setFull(false);
       mode = "idle";
     };
     el.addEventListener("touchstart", onStart, { passive: true });
+    // the app went away mid-drag: the sheet goes back to where it belongs
+    const stopReset = onGestureReset(() => {
+      if (mode !== "idle") onCancel();
+    });
     return () => {
       el.removeEventListener("touchstart", onStart);
+      stopReset();
+      releaseGesture(ARENA_ID);
       unfollow();
       // the transform stays: a sheet closed by a swipe slides out from where the finger left it
     };

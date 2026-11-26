@@ -6,7 +6,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 describe("the app-wide standard: dashboards summarize, full-screen pages to interact", () => {
   const page = read("src/components/full-screen-page.tsx");
   it("a full-screen page has one header with Back, Escape, the phone's Back and a swipe back", () => {
-    expect(page).toContain("<SwipeBack enabled target={layer}");
+    expect(page).toContain("<SwipeBack enabled closes target={layer}");
     expect(page).toContain('if (e.key !== "Escape" || e.defaultPrevented) return;');
     expect(page).toContain("data-full-screen-back");
     // never a dialog: SwipeBack stands down for dialogs, and sheets opened from it must stack above
