@@ -367,13 +367,16 @@ export const getAssessmentFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { sb } = await reachAssessment(context, data.assessmentId);
     const { markOpened } = await import("./release.server");
-    if (data.markOpened) return markOpened(sb, data.assessmentId, context.userId);
-    const { data: row } = await sb
-      .from("competition_assessments")
-      .select("*")
-      .eq("id", data.assessmentId)
+    const row = data.markOpened
+      ? await markOpened(sb, data.assessmentId, context.userId)
+      : (await sb.from("competition_assessments").select("*").eq("id", data.assessmentId).maybeSingle()).data;
+    if (!row) return row;
+    const { data: competition } = await sb
+      .from("competitions")
+      .select("id, name, meet_date, weight_class")
+      .eq("id", row.competition_id)
       .maybeSingle();
-    return row;
+    return { ...row, competition_context: competition ?? null };
   });
 
 export const assessmentActionFn = createServerFn({ method: "POST" })
