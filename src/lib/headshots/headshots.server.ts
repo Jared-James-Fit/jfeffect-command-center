@@ -634,6 +634,26 @@ export async function sendDueReminder(db: Admin, c: ClientRow, now = new Date(),
   return true;
 }
 
+/** Finish a previously checked self-capture without waiting for the hourly worker.
+ * Called only after real owner or staff access has been checked. Never invoked by POV.
+ * The atomic RPC independently checks the current account owner and stored evidence.
+ */
+export async function recoverPendingHeadshot(db: Admin, c: ClientRow | null, now = new Date()): Promise<boolean> {
+  if (!c || !headshotApplies(c)) return false;
+  const { data: h, error } = await (db as any).from("account_headshots")
+    .select("id,user_id,method,flags,server_checks")
+    .eq("client_id", c.id).eq("status", "pending").eq("method", "guided")
+    .order("submitted_at", { ascending: false }).limit(1).maybeSingle();
+  if (error || !h || h.user_id !== c.user_id || !canAutoSaveHeadshot(h.method, h.flags, h.server_checks)) return false;
+  try {
+    await decide(db, { headshotId: h.id, actor: h.user_id, decision: "accept", note: null, automatic: true }, now);
+    return true;
+  } catch (e) {
+    console.warn("[headshots] pending capture recovery failed", h.id, e);
+    return false;
+  }
+}
+
 /** The hourly tick: onboarding requests, due reminders, expired sessions, evidence past retention. */
 export async function runHeadshotTick(db: Admin, now = new Date()): Promise<{ reminders: number; purged: number; expired: number }> {
   const s = await loadPhotoSettings(db);
