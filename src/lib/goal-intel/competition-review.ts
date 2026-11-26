@@ -55,3 +55,16 @@ export function targetDifficulty(g: Pick<GoalRow, "feasibility" | "client_unit" 
   const summary = (Math.abs(delta) < 0.05 ? "At forecast" : `${dualLoadText(Math.abs(delta), "kg")} ${delta > 0 ? "above" : "below"} forecast`) + (range ? " · " + range.replace("the discussed range", "discussed range") : "") + (f?.confidence === "low" ? " · Low confidence" : "");
   return { band, label: APPROACH_LABEL[band], summary, brief: `${dualLoadText(kg,"kg")} ${deltaText === "matches the forecast" ? deltaText : "is " + deltaText}${range ? " and " + (deltaText === "matches the forecast" ? "is " : "") + range : ""}. ${confidence}` };
 }
+
+/** Each menu entry is judged at its actual rounded load, using this client's
+ * forecast rather than a generic description of the approach. */
+export function goalApproachOptions(g: Pick<GoalRow, "feasibility" | "client_unit" | "client_value" | "client_value_max">, increment: number) {
+  const seen = new Set<number>();
+  return (g.feasibility?.approaches ?? []).flatMap(a => {
+    const kg = nearestMeetTarget(a.targetKg, increment);
+    if (kg == null || seen.has(kg)) return [];
+    seen.add(kg);
+    const rating = targetDifficulty(g, kg);
+    return [{ key: a.key, kg, ...rating }];
+  });
+}

@@ -46,7 +46,7 @@ it("distinguishes a supported Cleo option from the discussed fallback", () => {
   expect(reviewTarget({...g,feasibility:{...g.feasibility!,confidence:"low"}},2.5,"cleo").basis).toBe("Discussed range");
 });
 
-import { targetDifficulty } from "@/lib/goal-intel/competition-review";
+import { targetDifficulty, goalApproachOptions } from "@/lib/goal-intel/competition-review";
 import { APPROACHES } from "@/lib/goal-intel/types";
 import type { Feasibility } from "@/lib/goal-intel/types";
 describe("live competition target rating", () => {
@@ -61,6 +61,16 @@ describe("live competition target rating", () => {
     expect(targetDifficulty(g,120).band).toBe("moderate");
     expect(targetDifficulty(g,137.5).band).toBe("extreme");
     expect(targetDifficulty(g,137.5).brief).toContain("above the discussed range");
+  });
+  it("explains each menu choice using the actual rounded load and client forecast", () => {
+    const rows = goalApproachOptions(g, 2.5);
+    expect(rows).toHaveLength(6);
+    expect(rows.find(a => a.key === "easy")?.summary).toContain("below forecast");
+    expect(rows.find(a => a.key === "high")?.summary).toContain("2.5 kg (5.5 lb) above forecast");
+    expect(rows.find(a => a.key === "extreme")?.summary).toContain("above discussed range");
+    expect(goalApproachOptions({...g, feasibility:{...f, confidence:"low"}},2.5).every(a => a.summary.includes("Low confidence"))).toBe(true);
+    expect(goalApproachOptions(g, 5).every(a => validMeetIncrement(a.kg,5))).toBe(true);
+    expect(new Set(goalApproachOptions(g, 5).map(a=>a.kg)).size).toBe(goalApproachOptions(g, 5).length);
   });
   it("does not invent a rating without a complete forecast", () => {
     expect(targetDifficulty({...g,feasibility:null},120).label).toBe("Not rated");

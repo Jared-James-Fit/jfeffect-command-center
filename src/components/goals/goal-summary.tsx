@@ -16,8 +16,10 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, MessageSquare, Plus, Target } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, MessageSquare, Plus, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -29,7 +31,7 @@ import { CompactWeightInput, draftKg, type WeightDraft } from "@/components/comp
 import { dualRange, dualLoadText, inputKg, type DualWeight } from "@/lib/dual-weight";
 import { WeightOther } from "@/components/dual-weight";
 import { handOffToCleo } from "@/lib/cleo-handoff";
-import { discussedKg, inferredUnitKey, reviewTarget, reviewedSourceUnit, validMeetIncrement, nearestMeetTarget, targetDifficulty } from "@/lib/goal-intel/competition-review";
+import { discussedKg, inferredUnitKey, reviewTarget, reviewedSourceUnit, validMeetIncrement, nearestMeetTarget, targetDifficulty, goalApproachOptions } from "@/lib/goal-intel/competition-review";
 import {
   addGoalFn,
   decideGoalFn,
@@ -226,9 +228,27 @@ const DIFFICULTY_GUIDE: Record<ApproachKey, string> = {
 function DifficultyLabel({ band, label }: { band: ApproachKey | null; label: string }) {
   return <span className={cn("inline-flex items-center gap-1.5 font-medium", band ? DIFFICULTY_TONE[band] : "text-muted-foreground")}><span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />{label}</span>;
 }
-function GoalComparisonValue({ label, weight, fallback, className }: { label: string; weight: DualWeight | null; fallback?: string | null; className?: string }) {
+
+const COMPARISON_HELP = {
+  Discussed: "What the athlete or coach recorded or discussed. It is a goal, not evidence that the lift is ready.",
+  Projected: "Expected meet-day performance estimated from available training and competition evidence. Not a guarantee.",
+  Target: "The working goal for review. It can be a Cleo suggestion, a rounded discussed target, a coach edit or an approved goal. It is not a confirmed platform attempt.",
+} as const;
+function ComparisonHelp({ label }: { label: keyof typeof COMPARISON_HELP }) {
+  const [open, setOpen] = useState(false);
+  return <span className="inline-flex items-center gap-0.5">
+    {label}
+    <TooltipProvider delayDuration={180}><Popover open={open} onOpenChange={setOpen}><Tooltip>
+      <TooltipTrigger asChild><PopoverTrigger asChild><button type="button" aria-label={`What does ${label} mean?`} className="inline-flex size-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:@min-[680px]:size-6"><Info className="size-3.5" aria-hidden /></button></PopoverTrigger></TooltipTrigger>
+      {!open && <TooltipContent className="max-w-[250px] whitespace-normal border bg-popover text-popover-foreground shadow-md">{COMPARISON_HELP[label]}</TooltipContent>}
+      <PopoverContent className="w-64 max-w-[calc(100vw-2rem)] p-3 text-xs leading-relaxed">{COMPARISON_HELP[label]}</PopoverContent>
+    </Tooltip></Popover></TooltipProvider>
+  </span>;
+}
+
+function GoalComparisonValue({ label, weight, fallback, className }: { label: keyof typeof COMPARISON_HELP; weight: DualWeight | null; fallback?: string | null; className?: string }) {
   return <div className={cn("min-w-0 [overflow-wrap:anywhere]", className)}>
-    <div className="text-[11px] text-muted-foreground md:@min-[680px]:sr-only">{label}</div>
+    <div className="text-[11px] text-muted-foreground md:@min-[680px]:hidden"><ComparisonHelp label={label} /></div>
     {weight ? <><div className="font-medium tabular-nums">{weight.primary}</div><div className="text-xs text-muted-foreground tabular-nums">{weight.secondary}</div></> : <div>{fallback ?? "—"}</div>}
   </div>;
 }
@@ -337,7 +357,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
     </div>
     {proposed.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-1.5">
       {hasCleo && <Button size="sm" variant={mode === "cleo" ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("cleo")}>Cleo suggested</Button>}
-      <Button size="sm" variant={mode === "discussed" || !hasCleo ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("discussed")}>Discussed target</Button>
+      <Button size="sm" variant={mode === "discussed" || !hasCleo ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("discussed")}>Discussed upper end</Button>
 
     </div>}
     <details className="mt-1 text-xs text-muted-foreground">
@@ -358,7 +378,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
 
     )}
     <div className="mt-2 min-w-0" data-goal-responsive-comparison>
-      <div aria-hidden className={cn(GOAL_GRID, "hidden pb-1 text-xs text-muted-foreground md:@min-[680px]:grid")}><span>Lift</span><span>Discussed</span><span>Projected</span><span>Target</span><span /></div>
+      <div className={cn(GOAL_GRID, "hidden items-center pb-1 text-xs text-muted-foreground md:@min-[680px]:grid")}><span>Lift</span><ComparisonHelp label="Discussed" /><ComparisonHelp label="Projected" /><ComparisonHelp label="Target" /><span /></div>
           {goals.map((g, i) => {
             const discussed = goalWeight(discussedKg(g, false), "kg", discussedKg(g), g.client_unit ?? undefined);
             const proj = goalWeight(projected[i], "kg");
@@ -368,10 +388,8 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
             const rating = targetDifficulty(g, targets[i]);
             const source = g.status === "active" ? "Approved" : edited ? "Edited" : suggestion.approach ? "Cleo" : "Discussed";
             const isOpen = selected === g.id;
-            const exactApproach = g.feasibility?.approaches?.find(a => {
-              const kg = nearestMeetTarget(a.targetKg, increment);
-              return kg != null && targets[i] != null && Math.abs(kg - targets[i]!) < 1e-6;
-            })?.key ?? "custom";
+            const approachOptions = goalApproachOptions(g, increment);
+            const exactApproach = approachOptions.find(a => targets[i] != null && Math.abs(a.kg - targets[i]!) < 1e-6)?.key ?? "custom";
             return <Fragment key={g.id}>
               <div className={cn(GOAL_GRID, "border-t border-border py-3 text-sm md:@min-[680px]:py-2 md:@min-[680px]:text-xs", isOpen && "bg-muted/30")} data-goal-review-row={g.id}>
                 <div className="col-start-1 row-start-1 min-w-0 self-center md:@min-[680px]:self-start">
@@ -392,10 +410,20 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
                   {g.status === "proposed" ? <>
                     <div className="flex flex-wrap items-center justify-between gap-1"><p className="font-medium">Edit target</p>{edited && <Button size="sm" variant="ghost" className="h-7 px-2" disabled={batch.isPending} onClick={() => clearDraft(g.id)}>Reset draft</Button>}</div>
                     <div className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-2">
-                      {g.feasibility?.approaches?.length ? <div className="min-w-0 w-full md:@min-[680px]:w-auto">
-                        <Select value={exactApproach} disabled={batch.isPending} onValueChange={key => { const a = g.feasibility?.approaches.find(o => o.key === key); if (!a) return; const kg = nearestMeetTarget(a.targetKg, increment); if (kg != null) setDrafts(old => ({...old,[g.id]:{draft:{value:String(kg),unit:"kg"},version:g.version}})); }}>
-                          <SelectTrigger aria-label={`${g.lift} approach`} className="h-11 min-w-0 max-w-full text-xs md:@min-[680px]:h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent className="max-w-[calc(100vw-2rem)]"><SelectItem value="custom" disabled>Custom target</SelectItem>{g.feasibility.approaches.map(a => {const kg = nearestMeetTarget(a.targetKg, increment); return kg == null ? null : <SelectItem key={a.key} value={a.key}><span className="inline-flex flex-wrap items-center gap-x-2"><span className={DIFFICULTY_TONE[a.key]}>{a.label}</span><span className="tabular-nums">{dualLoadText(kg,"kg")}</span></span></SelectItem>;})}</SelectContent>
+                      {approachOptions.length > 0 ? <div className="min-w-0 w-full md:@min-[680px]:w-auto">
+                        <Select value={exactApproach} disabled={batch.isPending} onValueChange={key => { const a = approachOptions.find(o => o.key === key); if (a) setDrafts(old => ({...old,[g.id]:{draft:{value:String(a.kg),unit:"kg"},version:g.version}})); }}>
+                          <SelectTrigger aria-label={`${g.lift} approach`} className="h-11 min-w-0 max-w-full text-xs md:@min-[680px]:h-9">
+                            <SelectValue>{exactApproach === "custom" ? "Custom target" : <span className="inline-flex items-center gap-2"><DifficultyLabel band={rating.band} label={rating.label} /><span className="tabular-nums">{targets[i] != null ? dualLoadText(targets[i]!, "kg") : "—"}</span></span>}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="w-[340px] max-w-[calc(100vw-2rem)]" collisionPadding={12}>
+                            {exactApproach === "custom" && <SelectItem value="custom" disabled>Custom target</SelectItem>}
+                            {approachOptions.map(a => <SelectItem key={a.key} value={a.key} className="min-h-12 whitespace-normal py-2" textValue={a.label}>
+                              <span className="block min-w-0">
+                                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><DifficultyLabel band={a.band} label={a.label} /><span className="tabular-nums font-medium">{dualLoadText(a.kg,"kg")}</span></span>
+                                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground [overflow-wrap:anywhere]">{a.summary}</span>
+                              </span>
+                            </SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </div> : null}
                       <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({...old,[g.id]:{draft,rounded,version:g.version}}))} incrementKg={increment} confirmed={rulesReady} disabled={batch.isPending} />
