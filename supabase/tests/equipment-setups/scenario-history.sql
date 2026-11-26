@@ -1,4 +1,4 @@
--- Setup photos, earlier versions and restore (20270602090000_setup_autosave_history_photos.sql).
+-- Setup photos, earlier versions and restore (20270602091000_setup_autosave_history_photos.sql).
 -- Run after schema.sql, both migrations and scenario.sql (see README.md).
 \set ON_ERROR_STOP 1
 set client_min_messages = notice;

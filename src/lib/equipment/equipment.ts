@@ -69,7 +69,7 @@ export type ExerciseSetup = {
   notes: string | null;
   /** The first photo (kept for older readers); `photo_paths` holds them all. */
   photo_path: string | null;
-  /** Up to 4 photos, in order (20270602090000_setup_autosave_history_photos.sql). */
+  /** Up to 4 photos, in order (20270602091000_setup_autosave_history_photos.sql). */
   photo_paths?: string[] | null;
   source: "athlete" | "coach";
   last_used_at: string | null;
