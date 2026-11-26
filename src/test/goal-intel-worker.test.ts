@@ -182,6 +182,32 @@ describe("goals from a meeting", () => {
   });
 });
 
+describe("recoverable goal decisions", () => {
+  it("sets aside and restores the same proposed goal with source and audit history intact", async () => {
+    const { extractFromMeeting, decideGoal } = await import("@/lib/goal-intel/goals.server");
+    await extractFromMeeting(db, SESSION);
+    const before = {...lift("squat")};
+    const actor = {userId: COACH_USER, kind: "coach" as const};
+    await expect(decideGoal(db,before.id,{action:"dismiss",expectedVersion:before.version+1},actor)).rejects.toThrow("changed");
+    const saved = await decideGoal(db,before.id,{action:"dismiss",expectedVersion:before.version},actor);
+    expect(saved).toMatchObject({id:before.id,status:"dismissed",source_id:before.source_id,source_quote:before.source_quote,client_value:220,client_value_max:225});
+    expect(tables.client_update_outbox).toHaveLength(0);
+    const restored = await decideGoal(db,saved.id,{action:"reopen",expectedVersion:saved.version},actor);
+    expect(restored).toMatchObject({id:before.id,status:"proposed",source_id:before.source_id,source_quote:before.source_quote,client_value:220,client_value_max:225});
+    expect(tables.client_goals.filter(g=>g.id===before.id)).toHaveLength(1);
+    expect(tables.client_goal_events.some(e=>e.goal_id===before.id&&e.action==="dismiss")).toBe(true);
+    expect(tables.client_goal_events.some(e=>e.goal_id===before.id&&e.action==="reopen")).toBe(true);
+    expect(tables.client_update_outbox).toHaveLength(0);
+  });
+  it("approves a rounded kilogram target after explicit confirmation of the original pounds", async () => {
+    const { extractFromMeeting, decideGoal } = await import("@/lib/goal-intel/goals.server");
+    await extractFromMeeting(db, SESSION);
+    const g = lift("squat");
+    const saved = await decideGoal(db,g.id,{action:"approve",expectedVersion:g.version,confirmedSourceUnit:"lb",value:105,unit:"kg"},{userId:COACH_USER,kind:"coach"});
+    expect(saved).toMatchObject({status:"active",approved_kg:105,approved_unit:"kg",client_unit:"lb",client_unit_source:"coach",client_value:220,client_value_max:225});
+  });
+});
+
 describe("approving and telling the client", () => {
   async function approved() {
     const { extractFromMeeting, assessClient, decideGoal } = await import("@/lib/goal-intel/goals.server");
