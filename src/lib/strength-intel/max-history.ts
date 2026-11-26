@@ -207,3 +207,60 @@ export function historyLine(e: MaxHistoryEntry): string {
   if ((b.lift ?? "") !== (a.lift ?? "")) parts.push(`renamed from ${b.lift}`);
   return parts.length ? parts.join(", ") : "Details changed";
 }
+
+/** One change as `pl_client_max_changes_since` hands it over: only what a load is worked out from. */
+export type MaxChange = {
+  max_id: string;
+  op: "insert" | "update" | "delete";
+  before: MaxRowLike | null;
+  after: MaxRowLike | null;
+  changed_at: string;
+};
+
+/**
+ * The maxes as they stood at `at` (a finished workout's moment), so its % loads
+ * read what was planned rather than what the coach changed since: every max
+ * changed later is put back to how its first later change found it, one added
+ * later is left out, one removed later comes back. History starts on Nov 26
+ * 2026: changes before that weren't kept, so an older workout reads the maxes as
+ * they were then onward.
+ */
+export function maxesAsOf<T extends MaxRowLike & { id: string }>(current: T[], changes: MaxChange[], at: string): T[] {
+  const t = Date.parse(at);
+  if (!Number.isFinite(t) || !changes.length) return current;
+  const later = changes
+    .map((c, i) => ({ c, i, ts: Date.parse(c.changed_at) }))
+    .filter((x) => Number.isFinite(x.ts) && x.ts > t)
+    .sort((a, b) => a.ts - b.ts || a.i - b.i);
+  const firstAfter = new Map<string, MaxChange>();
+  for (const { c } of later) if (!firstAfter.has(c.max_id)) firstAfter.set(c.max_id, c);
+  if (!firstAfter.size) return current;
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const row of current) {
+    seen.add(row.id);
+    const c = firstAfter.get(row.id);
+    if (!c) out.push(row);
+    else if (c.op !== "insert" && c.before) out.push({ ...row, ...c.before, id: row.id } as T);
+  }
+  for (const [id, c] of firstAfter) {
+    if (seen.has(id) || c.op === "insert" || !c.before) continue;
+    out.push({ ...(c.before as object), id } as T);
+  }
+  return out;
+}
+
+/**
+ * A running block kept on a max as it was before the coach changed it: the old
+ * numbers copied onto a row for that block only (buildMaxIndex: a block's row
+ * wins), so the block's % loads don't move mid-block.
+ */
+export function keepBlockOnRow(old: MaxRowLike, blockId: string, day: string): MaxRowLike {
+  const row: MaxRowLike = { lift: old.lift };
+  for (const k of RESTORE_FIELDS) (row as any)[k] = (old as any)[k] ?? null;
+  row.block_id = blockId;
+  row.active = true;
+  if (row.manual_override == null) row.manual_override = false;
+  row.notes = `Kept on the earlier numbers for this block when the max changed on ${day}.`;
+  return row;
+}

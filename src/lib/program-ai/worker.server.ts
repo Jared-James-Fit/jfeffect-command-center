@@ -10,6 +10,7 @@
  * to the program here.
  */
 import { fetchStrengthIntel } from "@/lib/strength-intel/read";
+import { planningRefs } from "@/lib/strength-intel/planning";
 import { strengthText } from "@/lib/strength-intel/describe";
 import { programGuideText } from "./program-guide";
 import { buildBrief, setupText } from "@/lib/program-intel/brief";
@@ -119,7 +120,7 @@ async function logCall(admin: Db, editId: string, x: { label: string; model: str
 }
 
 /** The athlete as Program Intelligence reads them (the generator's brief, minus its setup sections). */
-async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string; unit: "kg" | "lb"; maxSessionMinutes: number | null; maxLifts: string[]; warnings: string[]; chars: number; signals: NonNullable<EngineCtx["signals"]>; missing: Array<{ field: string; why: string; where: string }> }> {
+async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string; unit: "kg" | "lb"; maxSessionMinutes: number | null; maxLifts: string[]; pctRefs: { est_1rm: string[]; comp_pr: string[] } | null; warnings: string[]; chars: number; signals: NonNullable<EngineCtx["signals"]>; missing: Array<{ field: string; why: string; where: string }> }> {
   const rec = await loadIntelRecords(admin, clientId, { kind: "history" });
   const intel = buildGeneratorIntel(rec);
   const setup = intel.recommendation.setup;
@@ -137,12 +138,20 @@ async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string
   const flags = conflicts.length ? `\n\n## Things the data flags\n${conflicts.map((c: any) => `- [${c.severity}] ${c.title}. ${c.detail}`).join("\n")}` : "";
   const text = `${b.text}${flags}\n\n## What the data recommends for their training (a reference, not a requirement)\n${setupText(setup)}`;
   const maxLifts = intel.history.lifts.filter((l: any) => l.maxOnFileKg != null).map((l: any) => String(l.lift).toLowerCase());
+  // what a % of Est. 1RM or of their competition PR can read (the logger's own references)
+  const refs = strengthRead ? planningRefs(strengthRead) : null;
+  const pctRefs = refs
+    ? {
+        est_1rm: (["squat", "bench", "deadlift"] as const).filter((f) => refs.e1rm[f]),
+        comp_pr: (["squat", "bench", "deadlift"] as const).filter((f) => refs.compPr[f]),
+      }
+    : null;
   // what the records say about each exercise: the editor warns when a change goes against it
   const signals: NonNullable<EngineCtx["signals"]> = new Map();
   for (const p of intel.development.progression) if (p.exerciseId) signals.set(p.exerciseId, { decision: p.decision, why: p.why, lastKg: p.lastKg, pain: p.pain });
   // the brief writes every load in this unit (context.ts), so the program it's read beside must too
   const unit: "kg" | "lb" = rec.client.preferred_weight_unit === "kg" ? "kg" : "lb";
-  return { text, unit, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, warnings: b.warnings, chars: text.length, signals, missing: intel.development.missing };
+  return { text, unit, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, pctRefs, warnings: b.warnings, chars: text.length, signals, missing: intel.development.missing };
 }
 
 function ctxFrom(catalog: CatalogExercise[], extra: Map<string, CatalogExercise> = new Map()): EngineCtx {
@@ -208,6 +217,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       if (snap.kind === "client") {
         snap.maxSessionMinutes = a.maxSessionMinutes;
         snap.maxLifts = a.maxLifts;
+        if (a.pctRefs) snap.pctRefs = a.pctRefs;
       }
       // a template personalized for someone reads in their unit: its "lb" default sat beside a
       // brief in kg, so a load with no unit was read as lb for a kg lifter

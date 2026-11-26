@@ -112,6 +112,35 @@ export type Work = {
   newId: () => string;
 };
 
+/**
+ * What a % set the change writes can't be worked out from, in words, or null
+ * when it can (the logger's references: a max on file for 1RM / TM, the
+ * strength read's plannable estimate or competition PR for the others). A %
+ * of an estimate that isn't ready falls back to the set's RPE, so with an RPE
+ * it's no warning. A variation's own estimate is the logger's to judge.
+ */
+export function pctReadWarning(
+  basis: string | null | undefined,
+  lift: "squat" | "bench" | "deadlift" | null,
+  snap: Pick<ProgramSnapshot, "maxLifts" | "pctRefs">,
+  hasEffort: boolean,
+): string | null {
+  const b = String(basis ?? "1rm");
+  if (b === "top_set" || b === "prev_set" || b === "var_e1rm") return null;
+  const stored = !!lift && !!snap.maxLifts?.includes(lift);
+  if (b === "comp_pr") {
+    if (lift && snap.pctRefs?.comp_pr.includes(lift)) return null;
+    return "a % of their competition PR needs a meet result on file, and none is for this lift.";
+  }
+  if (b === "est_1rm") {
+    if (stored || (lift && snap.pctRefs?.est_1rm.includes(lift))) return null;
+    if (hasEffort) return null;
+    return "a % of their estimated max needs an estimate the app can plan from, and there isn't one yet; give it an RPE to go by.";
+  }
+  if (stored) return null;
+  return "a % needs a max to turn into a load, and none is on file for it.";
+}
+
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
 }
@@ -640,12 +669,14 @@ function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: 
         for (const r of d.rows) {
           const orig = original.get(r.id);
           if (r.exerciseId && (!orig || orig.exerciseId !== r.exerciseId)) added.add(r.exerciseId);
-          if (r.percentage != null && (!orig || orig.percentage == null) && snap.maxLifts) {
+          const basisChanged = !!orig && orig.percentage != null && orig.percentageBasis !== r.percentageBasis;
+          if (r.percentage != null && (!orig || orig.percentage == null || basisChanged) && snap.maxLifts) {
             const fam = r.exerciseId ? ctx.byId.get(r.exerciseId)?.family?.toLowerCase() ?? "" : "";
             const lift = COMP_FAMILY[fam] ?? (/squat/i.test(r.name) ? "squat" : /bench/i.test(r.name) ? "bench" : /deadlift/i.test(r.name) ? "deadlift" : null);
-            if ((!lift || !snap.maxLifts.includes(lift)) && !noMax.has(r.name)) {
+            const msg = pctReadWarning(r.percentageBasis, (lift as "squat" | "bench" | "deadlift" | null) ?? null, snap, !!(r.rpe || r.rir));
+            if (msg && !noMax.has(r.name)) {
               noMax.add(r.name);
-              issues.push({ level: "warning", text: `${r.name}: a % needs a max to turn into a load, and none is on file for it.` });
+              issues.push({ level: "warning", text: `${r.name}: ${msg}` });
             }
           }
         }

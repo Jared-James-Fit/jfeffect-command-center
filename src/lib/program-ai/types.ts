@@ -105,6 +105,8 @@ export type ProgramSnapshot = {
   maxSessionMinutes?: number | null;
   /** Lifts with a max on file (percentages need one). */
   maxLifts?: string[];
+  /** What the other % bases can read (strength-intel planningRefs): lifts with an estimate a program can plan from, and with a competition PR. */
+  pctRefs?: { est_1rm: string[]; comp_pr: string[] };
   /** Locked days left out of the text the model reads (older finished weeks), said so. */
   omittedNote?: string | null;
 };

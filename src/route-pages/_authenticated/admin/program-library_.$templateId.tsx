@@ -95,7 +95,7 @@ import { Layers } from "lucide-react";
 import { createContext, useCallback, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { hasRpeCap, isMaxBasis, plannedLoadLabel, referenceFamily } from "@/lib/workouts/load-reference";
-import { strengthKgs, type StrengthRefs } from "@/lib/strength-intel/planning";
+import { strengthKgs, strengthLoadInputs, type StrengthRefs } from "@/lib/strength-intel/planning";
 import { fetchStrengthReadInputs, strengthDayFor, strengthRefsAsOf } from "@/lib/workouts/card-suggestion-reads";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton, BlockMaxesDialog } from "@/components/block-maxes-panel";
@@ -1314,7 +1314,11 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             pain: athlete?.pain ?? [],
             needsDates,
             hasMax: (name, family, basis) => {
-              const out = computeRowLoad({ exerciseName: name, basis: basis as any, percentage: 100, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: maxesCtx.index, family: family as any, ownCompetition: !!family && /competition/i.test(name) });
+              // the logger's own read: a max on file, or the strength read's estimate / competition PR
+              // (not judged until the strength read is in, so nothing is flagged while it loads)
+              if (!maxesCtx.strengthRefs && (basis === "est_1rm" || basis === "comp_pr")) return true;
+              const { loggedE1rmKg, compPrKg } = strengthLoadInputs(maxesCtx.strengthRefs, basis, (family as any) ?? null, null);
+              const out = computeRowLoad({ exerciseName: name, basis: basis as any, percentage: 100, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: maxesCtx.index, family: family as any, ownCompetition: !!family && /competition/i.test(name), loggedE1rmKg, compPrKg });
               return out.status !== "no-max";
             },
           }
@@ -1324,7 +1328,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         return !!d?._dbId && lockedIds.has(d._dbId);
       },
     };
-  }, [checkV2, checkBlocks, clientId, programStyle, blockTypeOverride, exMap, blockTypeLib, athlete, needsDates, maxesCtx.index, dayScheduleStatus]);
+  }, [checkV2, checkBlocks, clientId, programStyle, blockTypeOverride, exMap, blockTypeLib, athlete, needsDates, maxesCtx.index, maxesCtx.strengthRefs, dayScheduleStatus]);
   const applyCheck = (patches: Patch[], words: string) => {
     if (!checkV2) return;
     const before = payload;
