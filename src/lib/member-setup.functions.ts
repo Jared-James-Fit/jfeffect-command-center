@@ -92,11 +92,12 @@ export const getMySetupStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { data: m } = await supabase
+    const { data: m, error } = await supabase
       .from("app_members")
       .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox, committed_training_days, committed_training_frequency, subscription_status, stripe_subscription_id")
       .eq("user_id", userId)
       .maybeSingle();
+    if (error) throw new Error("Could not load your membership setup.");
     if (!m) return { member: null, complete: true, missing: [] as string[] };
     if (m.is_admin_sandbox) return { member: m, complete: true, missing: [] };
     // a free account is asked only for its goal, experience and training days (member-setup-steps.ts)

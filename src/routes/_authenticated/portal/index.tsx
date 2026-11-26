@@ -248,12 +248,11 @@ function PortalHome() {
               is the one onboarding card (agreement, photo, info, schedule, Goals &
               Setup, calendar sync); once only the agreement is left, or a new
               version needs signing, the agreement card takes its place. */}
-          {client?.id && portalUserId && (coaching || scope.handlingMeets.length > 0 || (isSelfServe && client.source === "competition_handling" && !scope.ready)) && (
+          {client?.id && portalUserId && (coaching || isSelfServe) && (
             <SectionErrorBoundary label="Setup checklist">
               <SetupChecklistBanner
                 clientId={client.id}
                 userId={portalUserId ?? ""}
-                handlingOnly={!coaching}
                 whenHidden={
                   <SectionErrorBoundary label="Coaching agreement">
                     <AgreementDashboardCard />

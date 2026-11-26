@@ -175,6 +175,8 @@ export function MemberSetupWizard({
       if (Object.keys(patch).length) {
         const r = await update({ data: patch });
         await qc.invalidateQueries({ queryKey: ["m-setup-status"] });
+        void qc.invalidateQueries({ queryKey: ["account-setup-prefill", clientId] });
+        void qc.invalidateQueries({ queryKey: ["setup-banner-client"] });
         await qc.invalidateQueries({ queryKey: ["current-member-access"] });
         if (patch.committed_training_days) {
           // the days are the committed schedule now: the Workouts card, calendar and plan picker re-read them

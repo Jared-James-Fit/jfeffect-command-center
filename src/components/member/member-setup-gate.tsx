@@ -26,13 +26,15 @@ export function MemberSetupGate() {
   const isSandbox = !!member?.is_admin_sandbox;
   const free = isFreeAccount(member);
   const needsSetup = !!member && isJfMember && !isSandbox && data?.complete === false;
-  const isAllowed = ALLOW.some((p) => location.pathname.startsWith(p));
+  const isHome = location.pathname === "/portal" || location.pathname === "/portal/";
+  const isAllowed = isHome || ALLOW.some((p) => location.pathname.startsWith(p));
 
   useEffect(() => {
     if (needsSetup && !isAllowed) setOpen(true);
   }, [needsSetup, isAllowed]);
 
-  if (!needsSetup) return null;
+  // Home has the universal setup checklist, including its existing member wizard.
+  if (!needsSetup || isHome) return null;
 
   return (
     <>

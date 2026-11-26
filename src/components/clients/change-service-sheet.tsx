@@ -55,6 +55,7 @@ export function ChangeServiceSheet({ clientId, clientName, open, onOpenChange }:
     onCreated={() => {
       void qc.invalidateQueries({ queryKey: ["competition-handling-list"] });
       void qc.invalidateQueries({ queryKey: ["clients-directory"] });
+      void qc.invalidateQueries({ queryKey: ["goals-service-scope"] });
     }} />;
   const error = review.error || enrollments.error || packages.error;
   return <Sheet open={open} onOpenChange={value => { if (!busy) onOpenChange(value); }}>
