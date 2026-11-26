@@ -78,7 +78,7 @@ export const startMyHeadshotCapture = createServerFn({ method: "POST" })
     const db = await admin();
     const s = await import("./headshots.server");
     const c = await s.clientForUser(db, userId);
-    if (!c || !s.headshotApplies(c)) throw new Error("An account headshot is for coaching clients.");
+    if (!c || !s.headshotApplies(c)) throw new Error("An account headshot is for clients with an active coaching or handling service.");
     return s.startCapture(db, { client: c, actor: userId, method: data.method, consent: data.consent });
   });
 
@@ -195,7 +195,7 @@ export const requestClientHeadshot = createServerFn({ method: "POST" })
     const db = await admin();
     const s = await import("./headshots.server");
     const c = await s.clientById(db, data.clientId);
-    if (!c || !s.headshotApplies(c)) throw new Error("A headshot can be asked of a coaching client with a login.");
+    if (!c || !s.headshotApplies(c)) throw new Error("A headshot can be asked of a coaching or handling client with a login.");
     await s.openRequest(db, { client: c, kind: "manual", actor: userId, reason: data.reason ?? null });
     return { ok: true };
   });
@@ -222,7 +222,7 @@ export const startCoachHeadshotCapture = createServerFn({ method: "POST" })
     const db = await admin();
     const s = await import("./headshots.server");
     const c = await s.clientById(db, data.clientId);
-    if (!c || !s.headshotApplies(c)) throw new Error("A headshot can be taken for a coaching client with a login.");
+    if (!c || !s.headshotApplies(c)) throw new Error("A headshot can be taken for a coaching or handling client with a login.");
     return s.startCapture(db, { client: c, actor: userId, method: "coach_assisted", consent: true });
   });
 
