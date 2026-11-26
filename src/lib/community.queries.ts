@@ -1412,12 +1412,13 @@ export function useArchivePost() {
 
 /** Your archived posts, newest archived first. */
 export function useMyArchived(enabled: boolean) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: ["community-archived"],
-    enabled,
+    queryKey: pov.key(["community-archived"]),
+    enabled: enabled && pov.ready,
     staleTime: 15_000,
     queryFn: async (): Promise<CommunityPost[]> => {
-      const { data, error } = await db.rpc("community_my_archived");
+      const { data, error } = await pov.read("archived", "community_my_archived");
       if (error) throw error;
       return (data ?? []) as CommunityPost[];
     },
