@@ -19,6 +19,8 @@
  * tab (Adjust program's engine: proposals with a tick per change, nothing applied
  * until the coach applies it), so the coach never leaves the tab to change it.
  */
+import { PlanEventTimeline } from "@/components/clients/plan-event-timeline";
+import { plansOnDate } from "@/lib/plan-event-timeline";
 import { useCleoHandoff } from "@/lib/cleo-handoff";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
@@ -119,6 +121,7 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
   const qc = useQueryClient();
   // the block Adjust program centres on: the one the program card shows (running, else next)
   const [focusId, setFocusId] = useState<string | null>(null);
+  const schedule = useClientTrainingSchedule(clientId);
   const afterApply = () => {
     qc.invalidateQueries({ queryKey: programQualityKey(clientId) });
     qc.invalidateQueries({ queryKey: clientTrainingScheduleKey(clientId) });
@@ -130,6 +133,12 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     // under the program, a tap from it; on a computer it heads the side column.
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
       <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="order-1 lg:order-none lg:col-span-2" />
+      <div className="order-1 lg:order-none lg:col-span-2">
+        <PlanEventTimeline clientId={clientId} renderMilestone={(m) => {
+          const matches = plansOnDate((schedule.data?.blocks ?? []).filter((b) => b.status_derived !== "Draft"), m.date, (b) => ({ start: b.effective_start, end: b.effective_end }));
+          return schedule.isLoading ? <p>Reading program…</p> : schedule.isError ? <p>Program unavailable.</p> : matches.length ? <div className="space-y-2">{matches.map((b) => <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"><span>{b.name ?? "Training block"} · {b.status_derived}</span><Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="font-medium underline">Open block</Link></div>)}<Button variant="outline" size="sm" className="w-full" onClick={() => dock.ask("Review the training for " + m.event.name + " (" + m.label + ", " + m.date + ") using the recorded blocks: " + matches.map((b) => (b.name ?? "Block") + " [" + b.id + "]").join(", ") + ". Identify what is known and propose changes for review, without applying them.")}>Ask Cleo</Button></div> : <p className="text-muted-foreground">No dated block covers this milestone.</p>;
+        }} />
+      </div>
       {/* the approved targets the program works toward, and Cleo's read on them (hidden when there are none) */}
       <GoalSummary clientId={clientId} compact hideWhenEmpty className="order-1 lg:order-none lg:col-span-2" />
       <div className="contents lg:block lg:min-w-0 lg:space-y-5">
