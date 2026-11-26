@@ -21,7 +21,7 @@ Rules:
 
 Answer ONLY with JSON:
 {"written_by": "primary_coach"|"athlete"|null,
- "purposes": ["program"|"logs"|"competition_history"|"coach_recommendations"|"warmups"|"attempts"|"technical"|"other"],
+ "purposes": ["program"|"logs"|"competition_history"|"event_logistics"|"coach_recommendations"|"warmups"|"attempts"|"technical"|"other"],
  "transcript": "for a PDF or picture only: the text you read off it, line by line (empty otherwise)",
  "facts": [
   {"kind":"training","date":null,"week":null,"day":null,"exercise":"as written","lift":"squat"|"bench"|"deadlift"|null,"standard":"competition"|"variation"|"unclear","sets":1,"reps":3,"load":180,"unit":"kg"|"lb"|null,"pct":null,"rpe":null,"rir":null,"completion":"completed"|"prescribed"|"unknown","completion_evidence":null,"quote":"…","location":"…"},
