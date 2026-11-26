@@ -8,6 +8,7 @@
  */
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { communityKeys, patchPost, POST_LIST_KEYS } from "@/lib/community.queries";
 import { GRID_FIRST_PAGE, GRID_PAGE_SIZE, cleanRepostNote, nextFeedCursor, type CommunityFeedPage, type CommunityPost } from "@/lib/community";
@@ -41,13 +42,16 @@ function restore(qc: QC, snap: ReturnType<typeof snapshotLists>, postId: string,
 /** Save / unsave (optionally straight into an album). Unsaving says which albums it left, for Undo. */
 export function useSavePost() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { post: Pick<CommunityPost, "id">; on: boolean; albumId?: string | null }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_save", { _post_id: v.post.id, _on: v.on, ...(v.albumId ? { _album_id: v.albumId } : {}) });
       if (error) throw error;
       return (data ?? { saved: v.on, albums: [] }) as { saved: boolean; albums: string[]; removed_from?: string[] };
     },
     onMutate: async (v) => {
+      if (isPov) return undefined;
       await Promise.all(POST_LIST_KEYS.map((k) => qc.cancelQueries({ queryKey: [...k] })));
       const snap = snapshotLists(qc);
       const detail = qc.getQueryData(communityKeys.post(v.post.id));
@@ -64,12 +68,13 @@ export function useSavePost() {
 
 /** Saved at a glance: All posts and your albums (with whether each holds `postId`). */
 export function useSavedOverview(enabled = true, postId: string | null = null) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: savedKeys.overview(postId),
-    enabled,
+    queryKey: pov.key(savedKeys.overview(postId)),
+    enabled: enabled && pov.ready,
     staleTime: 30_000,
     queryFn: async (): Promise<SavedOverview> => {
-      const { data, error } = await db.rpc("community_saved_albums", postId ? { _post_id: postId } : {});
+      const { data, error } = await pov.read("saved_albums", "community_saved_albums", postId ? { _post_id: postId } : {});
       if (error) throw error;
       return (data ?? { all: { count: 0, covers: [] }, albums: [] }) as SavedOverview;
     },
@@ -78,13 +83,14 @@ export function useSavedOverview(enabled = true, postId: string | null = null) {
 
 /** The posts in All (albumId null) or one album, newest saved first. */
 export function useSavedPosts(albumId: string | null, enabled = true) {
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    queryKey: savedKeys.posts(albumId),
-    enabled,
+    queryKey: pov.key(savedKeys.posts(albumId)),
+    enabled: enabled && pov.ready,
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
-      const { data, error } = await db.rpc("community_saved_posts", {
+      const { data, error } = await pov.read("saved_posts", "community_saved_posts", {
         _limit: pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE,
         ...(albumId ? { _album_id: albumId } : {}),
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
@@ -105,8 +111,10 @@ function refreshSaved(qc: QC) {
 
 export function useCreateAlbum() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { name: string; postIds?: string[] }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_album_create", { _name: v.name, _post_ids: v.postIds ?? [] });
       if (error) throw error;
       return data as { id: string; name: string; count: number };
@@ -117,8 +125,10 @@ export function useCreateAlbum() {
 
 export function useRenameAlbum() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { id: string; name: string }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_album_rename", { _album_id: v.id, _name: v.name });
       if (error) throw error;
       return data as { id: string; name: string };
@@ -129,8 +139,10 @@ export function useRenameAlbum() {
 
 export function useDeleteAlbum() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { error } = await db.rpc("community_album_delete", { _album_id: id });
       if (error) throw error;
     },
@@ -141,8 +153,10 @@ export function useDeleteAlbum() {
 /** Put posts in an album (saving any that aren't yet) or take them out. */
 export function useAlbumPosts() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { albumId: string; postIds: string[]; add: boolean }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_album_posts", { _album_id: v.albumId, _post_ids: v.postIds, _in: v.add });
       if (error) throw error;
       return data as { id: string; count: number };
@@ -159,8 +173,10 @@ export function useAlbumPosts() {
  */
 export function useRepost() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { post: Pick<CommunityPost, "id" | "my_repost">; on: boolean; note?: string | null }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const setNote = v.note !== undefined;
       const { data, error } = await db.rpc("community_repost", {
         _post_id: v.post.id,
@@ -172,6 +188,7 @@ export function useRepost() {
       return data as { reposted: boolean; note: string | null; at?: string; count: number };
     },
     onMutate: async (v) => {
+      if (isPov) return undefined;
       await Promise.all(POST_LIST_KEYS.map((k) => qc.cancelQueries({ queryKey: [...k] })));
       const snap = snapshotLists(qc);
       const detail = qc.getQueryData(communityKeys.post(v.post.id));
@@ -199,13 +216,14 @@ export function useRepost() {
 
 /** What someone reposted, newest first (their profile's Reposts tab). */
 export function useUserReposts(userId: string | null, enabled = true) {
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    queryKey: savedKeys.reposts(userId),
-    enabled: enabled && !!userId,
+    queryKey: pov.key(savedKeys.reposts(userId)),
+    enabled: enabled && !!userId && pov.ready,
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
-      const { data, error } = await db.rpc("community_user_reposts", {
+      const { data, error } = await pov.read("reposts", "community_user_reposts", {
         _user_id: userId,
         _limit: pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),

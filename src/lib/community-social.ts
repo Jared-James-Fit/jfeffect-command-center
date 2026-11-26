@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import type { CommunityAuthor } from "@/lib/community";
 
 const db = supabase as any;
@@ -40,12 +41,13 @@ const toState = (d: any): FollowState => ({
 export const followKeys = { state: ["community-follows"] as const, list: (userId: string, kind: FollowListKind) => ["community-follow-list", userId, kind] as const };
 
 export function useFollowState(enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: followKeys.state,
-    enabled,
+    queryKey: pov.key(followKeys.state),
+    enabled: enabled && pov.ready,
     staleTime: 60_000,
     queryFn: async (): Promise<FollowState> => {
-      const { data, error } = await db.rpc("community_follow_state");
+      const { data, error } = await pov.read("follows", "community_follow_state");
       if (error) throw error;
       return toState(data);
     },
@@ -60,13 +62,16 @@ function useFollowAction<V>(
   feed = false,
 ) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: V): Promise<FollowState> => {
+      if (isPov) throw new Error("Preview only. Follow actions are not available on behalf of another account.");
       const { data, error } = await rpc(v);
       if (error) throw error;
       return toState(data);
     },
     onMutate: async (v: V) => {
+      if (isPov) return undefined;
       await qc.cancelQueries({ queryKey: followKeys.state });
       const before = qc.getQueryData<FollowState>(followKeys.state);
       qc.setQueryData<FollowState>(followKeys.state, (s) => guess(s ?? EMPTY_FOLLOW_STATE, v));
@@ -138,12 +143,13 @@ export type FollowListKind = "followers" | "following";
 
 /** Someone's followers / following (empty on a private account you don't follow). */
 export function useFollowList(userId: string | null, kind: FollowListKind, enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: followKeys.list(userId ?? "", kind),
-    enabled: enabled && !!userId,
+    queryKey: pov.key(followKeys.list(userId ?? "", kind)),
+    enabled: enabled && !!userId && pov.ready,
     staleTime: 30_000,
     queryFn: async (): Promise<CommunityAuthor[]> => {
-      const { data, error } = await db.rpc("community_follow_list", { _user_id: userId, _kind: kind });
+      const { data, error } = await pov.read("follow_list", "community_follow_list", { _user_id: userId, _kind: kind });
       if (error) throw error;
       return (data ?? []) as CommunityAuthor[];
     },

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { attentionExit } from "@/lib/post-attention";
 import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
@@ -173,7 +174,8 @@ export function CommunityScreen({
   hideTabs?: boolean;
   coach?: CoachCrew;
 }) {
-  const { user, role } = useAuth();
+  const { role } = useAuth();
+  const portalUserId = usePortalUserId();
   const qc = useQueryClient();
   // viewing as a client: the client's screen, without the coach's extras (remove anyone's post, …)
   const viewerIsStaff = (role === "admin" || role === "coach") && !previewOnly;
@@ -182,7 +184,7 @@ export function CommunityScreen({
   const canStory = canShare || !!coach;
   // leaving Crew ends the visit on whatever post is on screen (an exit); a layout
   // cleanup, so it runs before the cards' own cleanups take them off screen
-  useLayoutEffect(() => () => attentionExit(), []);
+  useLayoutEffect(() => () => { if (!previewOnly) attentionExit(); }, [previewOnly]);
   const [scope, setScope] = useState<Scope>(() => {
     const base = initialPageScope();
     // a push, the bell or a link (#post=…): straight onto the post's own screen, the feed under it for ‹ back
@@ -198,7 +200,7 @@ export function CommunityScreen({
     if (coach && manageTabFromHash(window.location.hash)) return { kind: "manage" };
     // Home's ranking tiles (and old #league links) land on Rankings; #you on your profile; everything else on the Feed
     if (rankingsFromHash()) return { kind: "rankings" };
-    if (youFromHash() && !previewOnly) return { kind: "you" };
+    if (youFromHash()) return { kind: "you" };
     return { kind: "feed" };
   }
   // what's under a post's screen (or on screen, with none): the page ‹ back from the post lands on
@@ -259,7 +261,7 @@ export function CommunityScreen({
   // Following is narrowed on the server (community_feed_ranked `_following`), so it pages through
   // their posts only, never the whole crew's; read again when who you follow changes
   const followKey = useMemo(() => [...followingIds].sort().join(","), [followingIds]);
-  const followingFeed = useRankedFeed(following && !followsNobody && !previewOnly, { follows: followKey });
+  const followingFeed = useRankedFeed(following && !followsNobody, { follows: followKey });
   const followingPosts = useMemo(
     () => uniquePosts(followingFeed.data?.pages.flatMap((p) => p.posts) ?? []).filter(inFeed),
     [followingFeed.data],
@@ -277,16 +279,17 @@ export function CommunityScreen({
   // note), once a visit, until the first double-tap, and only for the first
   // few visits either way. Remembered on the account, not the device.
   const hints = useHintsSeen();
-  const markHint = useMarkHintSeen();
+  const persistHint = useMarkHintSeen();
+  const markHint = useCallback((key: string) => { if (!previewOnly) persistHint(key); }, [persistHint, previewOnly]);
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
   const [tipDone, setTipDone] = useState(tipShownThisVisit);
   const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
   const hintId = scope.kind === "feed" && !tipDone && tipVisit && feedPosts.length ? ((feedPosts.find((p) => p.kind !== "note") ?? feedPosts[0])?.id ?? null) : null;
   useEffect(() => {
-    if (!hintId || !tipVisit || tipShownThisVisit) return;
+    if (previewOnly || !hintId || !tipVisit || tipShownThisVisit) return;
     tipShownThisVisit = true;
     markHint(tipVisit);
-  }, [hintId, tipVisit, markHint]);
+  }, [hintId, tipVisit, markHint, previewOnly]);
   const onTipDone = useCallback(() => setTipDone(true), []);
   // "Swipe for workout": on the first workout in the feed until they reach a recap (or open a workout), on the
   // account, so it never comes back on another phone. Waits for the like tip. A new key from Nov 20 2026, when the
@@ -310,12 +313,12 @@ export function CommunityScreen({
   // feed: opening on Rankings mustn't clear a count you haven't looked at.
   const markedRef = useRef(false);
   useEffect(() => {
-    if (markedRef.current || !ranked.isSuccess || scope.kind !== "feed") return;
+    if (previewOnly || markedRef.current || !ranked.isSuccess || scope.kind !== "feed") return;
     markedRef.current = true;
     void markCommunitySeen(qc);
-  }, [ranked.isSuccess, qc, scope.kind]);
+  }, [ranked.isSuccess, qc, scope.kind, previewOnly]);
 
-  const { data: unit = "lb" } = useViewerUnit(user?.id);
+  const { data: unit = "lb" } = useViewerUnit(portalUserId);
 
   // New posts from the crew while you're down the feed: a pill to jump up to them.
   const myId = useMyCommunityId();
@@ -371,7 +374,7 @@ export function CommunityScreen({
     else if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
     // the coach's Manage, any tab (a push, an old link, the Posts tab's own pages)
     else if (coachPage && manageTabFromHash(`#${routeHash}`)) setScope({ kind: "manage" });
-    else if (youFromHash(`#${routeHash}`) && !previewOnly) setScope({ kind: "you" });
+    else if (youFromHash(`#${routeHash}`)) setScope({ kind: "you" });
     // no hash (Crew's own button) or #feed (after posting): back on the feed
     else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" || sc.kind === "manage" ? { kind: "feed" } : sc));
   }, [routeHash, hideTabs, previewOnly, coachPage]);
@@ -615,7 +618,7 @@ export function CommunityScreen({
 
   // A follow notice (or anything else that names someone) opens their profile; your own id, yours.
   const meRef = useRef<(string | null | undefined)[]>([]);
-  meRef.current = [user?.id, myId];
+  meRef.current = [portalUserId, myId];
   useEffect(() => {
     const open = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
@@ -712,7 +715,7 @@ export function CommunityScreen({
   const openAuthorNow = (a: CommunityAuthor) => {
     rememberFeedPlace();
     setDetailId(null);
-    if (a.user_id === user?.id || a.user_id === myId) setScope({ kind: "you" });
+    if (a.user_id === portalUserId || a.user_id === myId) setScope({ kind: "you" });
     else setScope({ kind: "author", author: a, from: tab });
     window.scrollTo({ top: 0 });
   };
@@ -782,8 +785,6 @@ export function CommunityScreen({
             // the one you're on: back to its top (TikTok's)
             if (t === on) return window.scrollTo({ top: 0, behavior: "smooth" });
             if (t === "rankings") return openRankings();
-            // a preview is the coach's own follows, never the client's
-            if (t === "following" && previewOnly) return void toast("Preview only. Their Following feed is theirs to see.");
             setFeedTab(t);
             if (scope.kind === "rankings") return goBack("feed");
             window.scrollTo({ top: 0 });
@@ -791,7 +792,6 @@ export function CommunityScreen({
         />
       }
       right={
-        !previewOnly && (
           <>
             {/* Activity: who liked, commented, followed; what's new rises out of it in a bubble, then a dot until it's read */}
             <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !postOpen && !commentsFor && !reel && !sheet} />
@@ -800,7 +800,6 @@ export function CommunityScreen({
               <MyTabPhoto size={27} />
             </BarButton>
           </>
-        )
       }
     />
   ) : scope.kind === "manage" && coach ? (
@@ -815,12 +814,12 @@ export function CommunityScreen({
         </BarButton>
       }
     />
-  ) : scope.kind === "you" && user?.id ? (
+  ) : scope.kind === "you" && portalUserId ? (
     <CrewBar
       label="Your profile"
      
       left={<BarBack label="Back to the feed" onClick={leaveAuthor} />}
-      center={<ProfileBarTitle userId={user.id} />}
+      center={<ProfileBarTitle userId={portalUserId} />}
       // the app's menu (settings, account, everything else), where Instagram keeps it: your profile's ☰
       right={
         <BarButton label="More" onClick={openAppMore} data-crew-more>
@@ -857,7 +856,7 @@ export function CommunityScreen({
     {/* Find athletes has no bar: its search field starts right under the status bar */}
     {ownBar && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "var(--app-safe-top)" }} />}
     {/* a staff login that's also a client: its My Workouts / Staff switch, under Crew's bar instead of the shell's */}
-    {ownBar && <DualAccountSwitcher />}
+    {ownBar && !previewOnly && <DualAccountSwitcher />}
     <div ref={rootRef} className="mx-auto w-full max-w-[560px] [touch-action:pan-x_pan-y]">
       {/* a post on its own screen, exactly as the feed shows it; the page it came from stays mounted under it, hidden */}
       {postOpen && (
@@ -911,9 +910,9 @@ export function CommunityScreen({
           />
         </Suspense>
       ) : view.kind === "members" ? (
-        <DiscoverPage onBack={() => goBack(discoverBack)} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => go({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
-      ) : view.kind === "you" && user?.id ? (
-        <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
+        <DiscoverPage onBack={() => goBack(discoverBack)} onOpen={openAuthor} onOpenMe={() => go({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
+      ) : view.kind === "you" && portalUserId ? (
+        <ProfileView userId={portalUserId} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : view.kind === "author" ? (
         <ProfileView userId={view.author.user_id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : ranked.isLoading ? (
