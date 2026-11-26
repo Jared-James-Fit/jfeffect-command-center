@@ -83,7 +83,7 @@ const MORE = [
   ["attempts", "Cleo's attempts"],
   ["warmups", "Cleo's warm-ups"],
   ["gameday", "Meet day"],
-  ["resources", "Resources"],
+  ["resources", "Files & resources"],
   ["history", "History"],
 ] as const;
 type Section = (typeof SECTIONS)[number][0] | (typeof MORE)[number][0];
@@ -366,6 +366,9 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
         </p>
       ) : null}
 
+      {section === "overview" || section === "resources" ? (
+        <AthleteIntelCard key={comp.id} clientId={clientId} competitionId={comp.id} athleteFirst={sel.prep?.client?.first ?? "the athlete"} coachName={sel.prep?.handling?.existingCoach?.name ?? null} coachContactOk={sel.prep?.handling?.shareWithCoach === "yes"} onChanged={invalidate} />
+      ) : null}
       {section === "overview" ? (
         sel.prep ? (
           <div className="space-y-4">
@@ -386,15 +389,6 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
                 )
               }
               extra={<OverviewAssessments clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} />}
-            />
-            {/* uploaded athlete information (athlete-intel): logs, programs, their coach's notes */}
-            <AthleteIntelCard
-              clientId={clientId}
-              competitionId={comp.id}
-              athleteFirst={sel.prep.client?.first ?? "the athlete"}
-              coachName={sel.prep.handling?.existingCoach?.name ?? null}
-              coachContactOk={sel.prep.handling?.shareWithCoach === "yes"}
-              onChanged={invalidate}
             />
             {/* the targets at this meet (the goal ledger): theirs, the projection, the approved one */}
             <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
@@ -420,7 +414,6 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
         ) : (
           <>
             <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} onSection={setSection} />
-            <AthleteIntelCard clientId={clientId} competitionId={comp.id} athleteFirst="the athlete" coachName={null} coachContactOk={false} onChanged={invalidate} />
             <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
           </>
         )
