@@ -105,3 +105,68 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.update_nutrition_plan_revision(uuid,uuid,timestamptz,jsonb,jsonb,text,uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.update_nutrition_plan_revision(uuid,uuid,timestamptz,jsonb,jsonb,text,uuid) TO authenticated, service_role;
+
+-- Future plans must not be inserted in the live nutrition table before activation.
+-- Immediate publication creates plan + day records and archives superseded rows
+-- under the same client advisory lock used by existing-plan revisions.
+CREATE OR REPLACE FUNCTION public.publish_nutrition_plan_atomic(
+  _client_id uuid, _payload jsonb, _days jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  p public.nutrition_targets%ROWTYPE;
+  new_id uuid := gen_random_uuid();
+  archived_count int := 0;
+  local_today date;
+BEGIN
+  IF coalesce(auth.role(), '') <> 'service_role' AND (
+    auth.uid() IS NULL OR NOT (
+      coalesce(public.has_role(auth.uid(), 'admin'), false)
+      OR EXISTS (SELECT 1 FROM public.coached_client_ids() AS c(id) WHERE c.id = _client_id)
+    )
+  ) THEN RAISE EXCEPTION 'Coach access required' USING ERRCODE = '42501'; END IF;
+  IF jsonb_typeof(_payload) IS DISTINCT FROM 'object' OR jsonb_typeof(_days) IS DISTINCT FROM 'array'
+    OR jsonb_array_length(_days) > 100 THEN RAISE EXCEPTION 'Invalid nutrition plan payload'; END IF;
+  IF (_payload->>'client_id')::uuid IS DISTINCT FROM _client_id THEN RAISE EXCEPTION 'Client mismatch'; END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(_client_id::text, 0));
+  SELECT (now() AT TIME ZONE coalesce(nullif(timezone,''),'America/Winnipeg'))::date
+    INTO local_today FROM public.clients WHERE id = _client_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Client not found'; END IF;
+  p := jsonb_populate_record(NULL::public.nutrition_targets, _payload);
+  IF p.start_date IS NULL OR (p.end_date IS NOT NULL AND p.end_date < p.start_date)
+    THEN RAISE EXCEPTION 'Check plan dates'; END IF;
+  IF p.status NOT IN ('Active','Ending Soon','Due Today','Past Due','Archived') OR p.status IS NULL
+    THEN RAISE EXCEPTION 'Invalid plan status'; END IF;
+  IF p.status <> 'Archived' AND p.start_date > local_today THEN
+    RAISE EXCEPTION 'Future plans require scheduling; the current plan was not changed';
+  END IF;
+  IF p.status <> 'Archived' AND EXISTS (
+    SELECT 1 FROM public.nutrition_targets n WHERE n.client_id = _client_id
+    AND n.status <> 'Archived' AND n.start_date > p.start_date
+  ) THEN RAISE EXCEPTION 'A newer live plan exists. Review its dates before publishing'; END IF;
+  INSERT INTO public.nutrition_targets (
+    id, client_id, phase, custom_phase, goal, custom_goal, structure, start_date,
+    end_date, status, ending_soon_days, client_notes, food_weighing_rules, admin_notes,
+    visible_to_client, pdf_url, pdf_name, water, supplements, assigned_coach_id, last_updated_at
+  ) VALUES (
+    new_id, _client_id, coalesce(p.phase,'Maintenance'), p.custom_phase,
+    coalesce(p.goal,'Maintain bodyweight'), p.custom_goal, coalesce(p.structure,'Same Every Day'),
+    p.start_date, p.end_date, p.status, coalesce(p.ending_soon_days,7), p.client_notes,
+    p.food_weighing_rules,p.admin_notes,coalesce(p.visible_to_client,true),p.pdf_url,p.pdf_name,
+    p.water,p.supplements,p.assigned_coach_id,clock_timestamp()
+  );
+  INSERT INTO public.nutrition_target_days(target_id,day_label,calories,protein,carbs,fats,fibre,notes,sort_order,use_on,weekdays,steps)
+    SELECT new_id,d.day_label,d.calories,d.protein,d.carbs,d.fats,d.fibre,d.notes,coalesce(d.sort_order,0),d.use_on,d.weekdays,d.steps
+    FROM jsonb_populate_recordset(NULL::public.nutrition_target_days,_days) d;
+  IF p.status <> 'Archived' THEN
+    UPDATE public.nutrition_targets n SET status='Archived',
+      end_date=greatest(n.start_date,least(coalesce(n.end_date,p.start_date-1),p.start_date-1))
+      WHERE n.client_id=_client_id AND n.id<>new_id AND n.status<>'Archived';
+    GET DIAGNOSTICS archived_count = ROW_COUNT;
+  END IF;
+  RETURN jsonb_build_object('targetId',new_id,'archived',archived_count);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.publish_nutrition_plan_atomic(uuid,jsonb,jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.publish_nutrition_plan_atomic(uuid,jsonb,jsonb) TO authenticated,service_role;
