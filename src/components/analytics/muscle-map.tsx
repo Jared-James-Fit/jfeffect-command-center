@@ -202,7 +202,9 @@ export function MuscleMap({
 }) {
   const dark = useDark();
   const phone = useIsMobile();
-  const [mode, setMode] = useState<MuscleMode>("distribution");
+  const [requestedMode, setMode] = useState<MuscleMode>("distribution");
+  const hasProgress=baseRead.rows.some(r=>r.dev.status!=="unknown");
+  const mode: MuscleMode=requestedMode==="development"&&!hasProgress?"distribution":requestedMode;
   const [display, setDisplay] = useState<"body" | "list">("body");
   const [comparePeriod,setComparePeriod]=useState("previous");
   const [customStart,setCustomStart]=useState("");
@@ -214,7 +216,6 @@ export function MuscleMap({
   const [picked, setPicked] = useState<FineMuscle | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const ranked = useMemo(() => [...baseRead.rows].filter(r=>r.period.total>0).sort((a,b)=>b.period.total-a.period.total), [baseRead]);
-  const progressCount = baseRead.rows.filter(r=>r.dev.status!=="unknown").length;
   const hasComparison = read.rows.some(r=>r.period.before!=null);
   const colorOf = useCallback(
     (m: FineMuscle) => muscleColor(rows.get(m), mode, dark),
@@ -236,7 +237,7 @@ export function MuscleMap({
             onChange={e=>setMode(e.target.value as MuscleMode)}
             className="min-h-10 min-w-0 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground"
             data-muscle-metric-select>
-            {MUSCLE_MODES.map(m=><option key={m.key} value={m.key}>{m.label==="Goals"?"Plan vs actual":m.label==="Progress"?"Exercise progress":m.label}</option>)}
+            {MUSCLE_MODES.map(m=><option key={m.key} value={m.key} disabled={m.key==="development"&&!hasProgress}>{m.key==="fit"?"Plan vs actual":m.key==="development"?(hasProgress?"Exercise progress":"Exercise progress · more data needed"):m.label}</option>)}
             <option value="change">Compare periods</option>
           </select>
           <InfoTip label="About muscle colours">{modeMeans(mode, read.reference)}</InfoTip>
@@ -248,7 +249,7 @@ export function MuscleMap({
       </div>
       {mode==="change"&&<div className="my-2 space-y-2"><select aria-label="Compare muscle training period" className="min-h-10 w-full rounded-lg border bg-background px-2 text-xs" value={comparePeriod} onChange={e=>setComparePeriod(e.target.value)}><option value="previous">Previous equal period</option>{periods.filter(p=>start&&p.end<start).map(p=><option key={p.id} value={p.id}>{p.name} · {p.start} – {p.end}</option>)}<option value="custom">Custom dates</option></select>{comparePeriod==="custom"&&<div className="grid grid-cols-2 gap-2"><label className="text-xs">From<input className="block min-h-10 w-full rounded-lg border bg-background text-xs" type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)}/></label><label className="text-xs">To<input className="block min-h-10 w-full rounded-lg border bg-background text-xs" type="date" max={start} value={customEnd} onChange={e=>setCustomEnd(e.target.value)}/></label></div>}{comparison&&start&&(!comparison.start||!comparison.end||comparison.end<comparison.start||comparison.end>=start)?<p className="text-xs text-muted-foreground">Choose a valid earlier period; showing previous equal period until then.</p>:<p className="text-xs text-muted-foreground">Comparing equal elapsed days.</p>}</div>}
       <ModeLegend mode={mode} dark={dark} />
-      {mode==="development"&&progressCount===0&&<p className="mt-2 text-xs text-muted-foreground">No reliable exercise trend for this period. Select a muscle to see its recorded sets and exercises, or widen the date range.</p>}
+      {requestedMode==="development"&&!hasProgress&&<p className="mt-2 text-xs text-muted-foreground">No reliable exercise trend for this period. Showing volume; select a muscle for recorded exercise evidence.</p>}
       {mode==="change"&&!hasComparison&&<p className="mt-2 text-xs text-muted-foreground">No comparable training logs in the selected periods.</p>}
       {credit !== DEFAULT_SUPPORT_CREDIT && onCredit && (
         <p className="mt-1 text-[12px] text-muted-foreground" data-muscle-credit-note>
@@ -266,7 +267,7 @@ export function MuscleMap({
       {display === "body" ? (
         <div className="mt-3 grid gap-4 md:grid-cols-[minmax(180px,0.85fr)_minmax(0,1.15fr)] md:items-center" data-muscle-workspace>
           <BodyView colorOf={colorOf} picked={picked} onPick={pickFromBody} dark={dark}
-            heightClass="h-[320px] sm:h-[360px] md:h-[360px]" compactControls />
+            heightClass="h-[320px] sm:h-[360px] md:h-[380px]" compactControls />
           <div className="min-w-0 md:self-start">
             {!phone && pickedRow ? (
               <MuscleDetail row={pickedRow} mode={mode} coached={coached} credit={credit} enough={read.enoughData}
@@ -305,7 +306,7 @@ export function MuscleMap({
                   coached={coached}
                   credit={credit}
                   enough={read.enoughData}
-                  onExercise={onExercise}
+                  onExercise={onExercise ? (name)=>{setSheetOpen(false);onExercise(name)} : undefined}
                   onClear={() => setSheetOpen(false)}
                   bare
                 />
