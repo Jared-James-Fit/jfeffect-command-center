@@ -237,7 +237,7 @@ describe("people who signed an earlier version are left exactly as they are", ()
     resolveAgreementState({ latestSignature: sig(version), exempt: null, resignRequestedAt: null, resignNote: null }).state;
 
   it("does not ask anyone who signed 2.0 to sign again", () => {
-    expect(AGREEMENT_VERSION).toBe("3.1");
+    expect(AGREEMENT_VERSION).toBe("3.2");
     expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
     expect(state("2.0")).toBe("signed");
     expect(state("2.1")).toBe("signed");
