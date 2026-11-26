@@ -6,8 +6,8 @@
  *     picture at all, shown to the crew. Its only rule here is an occasional,
  *     dismissible reminder for people who haven't added one.
  *   - the account headshot (clients.profile_picture_url): a coaching client's
- *     private photo for their coach, taken live, checked, then accepted by their
- *     coach or an admin. Nothing in here ever copies one into the other.
+ *     private photo for their coach, taken live and automatically saved when checks
+ *     pass; uncertain captures can be reviewed by staff. Nothing in here ever copies one into the other.
  *
  * Reminders for an outstanding headshot follow one schedule from when it was
  * asked for (the initial request, then 3, 7 and 14 days, then every 14), the
@@ -26,7 +26,7 @@ export const HEADSHOT_STATUS_LABEL: Record<HeadshotStatus, string> = {
   missing: "Missing",
   previous: "Previously submitted",
   pending: "Pending review",
-  verified: "Verified",
+  verified: "Headshot on file",
   retake_requested: "Retake requested",
 };
 
