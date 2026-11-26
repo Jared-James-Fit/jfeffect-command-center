@@ -4,6 +4,9 @@ import {
   anchorLine,
   callsLine,
   callsPolicy,
+  comparisonPackages,
+  packageComparisonLink,
+  PACKAGES_PAGE_URL,
   centerpiece,
   decisionRows,
   changeWords,
@@ -429,5 +432,21 @@ describe("every way in, side by side on the landing page (Nov 23 2026)", () => {
     expect(hero).not.toMatch(/\$\d/);
     // the bottom repeats the choice compactly
     expect(landing).toContain("decisionRows(list)");
+  });
+});
+
+
+describe("shareable package comparisons", () => {
+  it("uses the existing listed catalogue and never exposes an unlisted package", () => {
+    expect(comparisonPackages([plusDraft, complete, free]).map((p) => p.slug)).toEqual(["free", "complete"]);
+    expect(comparisonPackages([plusDraft, complete, free], "plus,complete,unknown").map((p) => p.slug)).toEqual(["complete"]);
+    expect(comparisonPackages([plusDraft, complete, free], "plus")).toEqual([]);
+  });
+  it("builds a share link from valid unique slugs only", () => {
+    expect(packageComparisonLink()).toBe(PACKAGES_PAGE_URL);
+    const url = new URL(packageComparisonLink(["complete", "free", "complete", "../secret"]));
+    expect(url.searchParams.get("view")).toBe("packages");
+    expect(url.searchParams.get("plans")).toBe("complete,free");
+    expect(url.pathname).toBe("/coaching");
   });
 });
