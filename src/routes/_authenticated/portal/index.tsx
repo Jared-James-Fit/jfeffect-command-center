@@ -5,9 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
-import { firstPendingHandlingMeet } from "@/lib/account-setup-scope";
 import { HandlingSetupDialog } from "@/components/portal/setup-handling-dialog";
-import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
+import { type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupTracker } from "@/components/home-screen-setup-card";
@@ -43,17 +42,6 @@ import { Target } from "lucide-react";
 import { useServiceTier } from "@/lib/service-tier";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
-
-/** Clients the Goals & Setup prompt already opened for in this app launch (module state: a reload starts over). */
-const goalsPromptShownFor = new Set<string>();
-const handlingPromptShownFor = new Set<string>();
-
-/** No popup, sheet or drawer open, so a new one never stacks on another. */
-function uiIsClear() {
-  return !document.querySelector(
-    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-vaul-drawer][data-state="open"]',
-  );
-}
 
 function greeting() {
   const h = new Date().getHours();
@@ -145,58 +133,10 @@ function PortalHome() {
   }, [client?.id, coaching, bootstrapOcc, ensureMessengerCheckins, qc]);
 
 
-  const { data: goalsSetup } = useQuery({
-    queryKey: ["client-goals-setup", client?.id],
-    enabled: !!client?.id,
-    queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("client_goals_setup")
-        .select("*")
-        .eq("client_id", client!.id)
-        .maybeSingle();
-      return data as ClientGoalsSetupRow | null;
-    },
-  });
-
   const scope = useGoalsServiceScope(client?.id);
+  const needsGeneralSetup = scope.requirements?.generalGoals === true;
   const [goalsSetupPromptOpen, setGoalsSetupPromptOpen] = useState(false);
   const [handlingSetupMeet, setHandlingSetupMeet] = useState<{ clientId: string; meetId: string } | null>(null);
-  const pendingHandlingMeet = firstPendingHandlingMeet(scope.handlingMeets);
-
-  // Prompt incomplete clients once per app launch (not on every visit to Home),
-  // and only once nothing else is open: it waits for any other popup or sheet to
-  // close first. Closing never marks Goals & Setup complete, so it comes back on
-  // the next launch; the setup checklist keeps its row in between.
-  const needsGeneralSetup = scope.requirements?.generalGoals === true;
-  const goalsIncomplete = scope.ready && needsGeneralSetup && goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null, scope.nutritionOnly);
-  const promptClientId = client?.id ?? null;
-  useEffect(() => {
-    if (!promptClientId || !scope.ready || viewingAsClient || offlineNoCache || goalsSetupPromptOpen || handlingSetupMeet) return;
-    // The shared questionnaire comes first; closing it does not launch another dialog.
-    if (needsGeneralSetup && goalsSetup === undefined) return;
-    const showGeneral = goalsIncomplete && !goalsPromptShownFor.has(promptClientId);
-    const showMeet = !goalsIncomplete && !!pendingHandlingMeet && !handlingPromptShownFor.has(promptClientId);
-    if (!showGeneral && !showMeet) return;
-    let stopped = false;
-    let timer = 0;
-    const tick = () => {
-      if (stopped) return;
-      if (uiIsClear()) {
-        if (showGeneral) {
-          goalsPromptShownFor.add(promptClientId);
-          setGoalsSetupPromptOpen(true);
-        } else if (pendingHandlingMeet) {
-          handlingPromptShownFor.add(promptClientId);
-          setHandlingSetupMeet({ clientId: promptClientId, meetId: pendingHandlingMeet.id });
-        }
-        return;
-      }
-      timer = window.setTimeout(tick, 1200);
-    };
-    timer = window.setTimeout(tick, 1500);
-    return () => { stopped = true; window.clearTimeout(timer); };
-  }, [promptClientId, goalsIncomplete, goalsSetup, needsGeneralSetup, pendingHandlingMeet?.id, scope.ready, viewingAsClient, offlineNoCache, goalsSetupPromptOpen, handlingSetupMeet]);
-
 
   // Only derive the name from the loaded client record. Falling back to the
   // email username mid-load caused a visible "jaredm…" → "Jared" flash.
@@ -251,6 +191,26 @@ function PortalHome() {
           {/* only says something when it matters: offline, or a refresh that failed */}
           <DashboardRefreshIndicator />
 
+          {/* Needs-you items: each hides itself once it's done. The setup checklist
+              is the one onboarding card (agreement, photo, info, schedule, Goals &
+              Setup, calendar sync); once only the agreement is left, or a new
+              version needs signing, the agreement card takes its place. */}
+          {client?.id && portalUserId && (coaching || isSelfServe) && (
+            <SectionErrorBoundary label="Setup checklist">
+              <SetupChecklistBanner
+                clientId={client.id}
+                userId={portalUserId ?? ""}
+                onOpenGoals={viewingAsClient ? undefined : () => setGoalsSetupPromptOpen(true)}
+                onOpenMeet={viewingAsClient ? undefined : (meetId) => setHandlingSetupMeet({ clientId: client.id, meetId })}
+                whenHidden={
+                  <SectionErrorBoundary label="Coaching agreement">
+                    <AgreementDashboardCard />
+                  </SectionErrorBoundary>
+                }
+              />
+            </SectionErrorBoundary>
+          )}
+
           {/* the week strip and the selected day's workout / sessions (full calendar one tap away) */}
           {client?.id && (
             <SectionErrorBoundary label="Upcoming schedule">
@@ -265,25 +225,6 @@ function PortalHome() {
 
           {clientSettled && !client ? <NoProfileCard /> : null}
 
-          {/* Needs-you items: each hides itself once it's done. The setup checklist
-              is the one onboarding card (agreement, photo, info, schedule, Goals &
-              Setup, calendar sync); once only the agreement is left, or a new
-              version needs signing, the agreement card takes its place. */}
-          {client?.id && portalUserId && (coaching || isSelfServe) && (
-            <SectionErrorBoundary label="Setup checklist">
-              <SetupChecklistBanner
-                clientId={client.id}
-                userId={portalUserId ?? ""}
-                onOpenGoals={viewingAsClient ? undefined : () => { goalsPromptShownFor.add(client.id); setGoalsSetupPromptOpen(true); }}
-                onOpenMeet={viewingAsClient ? undefined : (meetId) => { handlingPromptShownFor.add(client.id); setHandlingSetupMeet({ clientId: client.id, meetId }); }}
-                whenHidden={
-                  <SectionErrorBoundary label="Coaching agreement">
-                    <AgreementDashboardCard />
-                  </SectionErrorBoundary>
-                }
-              />
-            </SectionErrorBoundary>
-          )}
           {/* an account headshot update that's outstanding (hidden once snoozed or done; a new client's
               first one is the setup checklist's step) */}
           {client?.id && coaching && (
