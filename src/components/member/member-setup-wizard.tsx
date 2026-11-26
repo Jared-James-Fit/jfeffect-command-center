@@ -175,6 +175,7 @@ export function MemberSetupWizard({
       if (Object.keys(patch).length) {
         const r = await update({ data: patch });
         await qc.invalidateQueries({ queryKey: ["m-setup-status"] });
+        void qc.invalidateQueries({ queryKey: ["goals-service-scope", clientId] });
         void qc.invalidateQueries({ queryKey: ["account-setup-prefill", clientId] });
         void qc.invalidateQueries({ queryKey: ["setup-banner-client"] });
         await qc.invalidateQueries({ queryKey: ["current-member-access"] });
