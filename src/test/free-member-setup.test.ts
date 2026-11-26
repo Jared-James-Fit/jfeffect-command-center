@@ -127,12 +127,13 @@ describe("a free member's Account never asks for the coaching intake", () => {
 
   it("only units and training days count as missing for a self-serve member", () => {
     expect(account).toContain('const coachingIntake = tier !== "self_serve";');
-    expect(account).toContain("profileMissing(client, goalsStatus, goalsOn, coachingIntake)");
+    expect(account).toContain("profileMissing(client, goalsStatus, goalsOn, coachingIntake, !!headshot?.outstanding)");
     const member = account.slice(account.indexOf("if (!coachingIntake) {"), account.indexOf("return missing;", account.indexOf("if (!coachingIntake) {")));
     expect(member).toContain('key: "units"');
     expect(member).toContain('key: "schedule"');
     expect(member).not.toMatch(/phone|date_of_birth|address|emergency|photo/);
-    // no "Add a photo" warning for a member either
-    expect(account).toContain('{ text: "Add a photo", warn: coachingIntake }');
+    // no photo warning for a member either: the account headshot is a coaching client's (a member's picture is their Crew one)
+    expect(account).toContain('const headshotOn = tier === "coaching";');
+    expect(account).toContain("{headshotOn && (");
   });
 });

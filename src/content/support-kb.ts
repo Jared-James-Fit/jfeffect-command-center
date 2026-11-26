@@ -11,7 +11,7 @@
  * access are always the team's (Cleo hands those off, rules.ts).
  */
 
-export const SUPPORT_KB_VERSION = "2026-11-25.1";
+export const SUPPORT_KB_VERSION = "2026-11-26.1";
 
 export type KbTier = "self_serve" | "coaching";
 export type KbLink = { label: string; to: string };
@@ -178,9 +178,26 @@ export const SUPPORT_KB: KbArticle[] = [
   {
     id: "profile",
     title: "Your profile and personal details",
-    keywords: ["profile", "name", "photo", "avatar", "details", "phone", "address", "social", "instagram"],
-    answer: "Your photo, name, contact details and social links are in Account.",
+    keywords: ["profile", "name", "details", "phone", "address", "social", "instagram"],
+    answer: "Your name, contact details and social links are in Account.",
     links: [{ label: "Account", to: "/portal/account" }],
+  },
+  {
+    id: "crew-picture",
+    title: "Your Crew profile picture",
+    keywords: ["crew picture", "crew photo", "profile picture", "profile photo", "avatar", "pfp", "picture", "photo", "change photo"],
+    answer:
+      "Your Crew picture can be any picture you like: you, your dog, a meme, a logo. It's optional. Open your Crew profile and tap the camera on your picture to take a photo, choose one from your library, or remove it. It's separate from the account headshot your coach sees.",
+    links: [{ label: "Crew", to: "/portal/community" }],
+  },
+  {
+    id: "account-headshot",
+    title: "Your account headshot",
+    tiers: ["coaching"],
+    keywords: ["headshot", "account headshot", "account photo", "verification", "verify", "photo update", "update headshot", "id photo", "face"],
+    answer:
+      "Coaching clients have a private account headshot so their coach can recognize them. It's taken live in Account → Account headshot (photos from your library aren't used): the app guides you into the oval, asks you to blink and turn your head slightly, and takes the photo itself. Only your coach and JF Effect admins see it, and your current photo stays until a new one is approved. If you're asked for an update, you can do it whenever you're ready or tap Remind me later. If your camera won't work, you can ask your coach to take it with you in person.",
+    links: [{ label: "Account headshot", to: "/portal/account#account-headshot" }],
   },
   {
     id: "your-plan",

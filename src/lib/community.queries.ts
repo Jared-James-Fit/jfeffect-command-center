@@ -213,6 +213,20 @@ export function useFullMediaUrl(path: string | null | undefined, enabled: boolea
 /** Every list of posts that pages like the feed: the feed, Saved, someone's Reposts. */
 export const POST_LIST_KEYS = [["community-feed"], ["community-saved"], ["community-user-reposts"]] as const;
 
+/** A post as a list already on the phone has it (a feed, a profile's grid, Saved, reposts), else null. */
+export function cachedListPost(qc: ReturnType<typeof useQueryClient>, postId: string): CommunityPost | null {
+  for (const queryKey of POST_LIST_KEYS) {
+    for (const [, data] of qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: [...queryKey] })) {
+      if (!data || !Array.isArray(data.pages)) continue;
+      for (const pg of data.pages) {
+        const hit = Array.isArray(pg?.posts) ? pg.posts.find((p) => p?.id === postId) : undefined;
+        if (hit) return hit;
+      }
+    }
+  }
+  return null;
+}
+
 export function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch: (p: CommunityPost) => CommunityPost) {
   for (const queryKey of POST_LIST_KEYS) {
     qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: [...queryKey] }, (old) =>
@@ -1105,14 +1119,21 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
 /* ---- post detail / profile ------------------------------------------ */
 
 /** One post + its full exercise breakdown (the Strava-style activity page). */
-export function usePostDetail(postId: string | null) {
+/**
+ * A post on its own (with its exercises). `placeholder`: the post as a list on
+ * the phone already has it (cachedListPost), shown while it's read, so a post
+ * opened from Activity or a link paints at once.
+ */
+export function usePostDetail(postId: string | null, opts: { placeholder?: CommunityPost | null } = {}) {
   const pov = usePovViewer();
   const asClient = useCallback((d: CommunityPostDetail | null) => (d ? seenAs(d, pov) : d), [pov]);
+  const placeholder = opts.placeholder && opts.placeholder.id === postId ? (opts.placeholder as CommunityPostDetail) : undefined;
   return useQuery({
     select: pov === null ? undefined : asClient,
     queryKey: communityKeys.post(postId),
     enabled: !!postId,
     staleTime: 30_000,
+    placeholderData: placeholder,
     queryFn: async (): Promise<CommunityPostDetail | null> => {
       const { data, error } = await db.rpc("community_post", { _post_id: postId });
       if (error) throw error;

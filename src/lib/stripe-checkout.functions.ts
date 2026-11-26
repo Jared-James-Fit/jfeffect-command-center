@@ -17,6 +17,7 @@ import {
   assertFirst50CanonicalStripeSnapshot,
 } from "@/lib/first50-policy";
 import { AGREEMENT_CHECKOUT_PARAMS } from "@/lib/coaching-agreement/checkout-notice";
+import { customerIdempotencyKey } from "@/lib/stripe-idempotency";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -35,12 +36,13 @@ function formEncode(params: Record<string, string | number | boolean | undefined
   return usp.toString();
 }
 
-async function stripeFetch(path: string, init: { method?: string; body?: string } = {}): Promise<any> {
+async function stripeFetch(path: string, init: { method?: string; body?: string; idempotencyKey?: string } = {}): Promise<any> {
   const res = await fetch(`${STRIPE_API}${path}`, {
     method: init.method ?? "GET",
     headers: {
       Authorization: `Bearer ${getStripeKey()}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...(init.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
     },
     body: init.body,
   });
@@ -151,14 +153,17 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         stripeCustomerId = existing.data[0].id;
       } else {
         // Create a new Stripe customer
+        const customerBody = formEncode({
+          email: client.email,
+          name: client.full_name ?? undefined,
+          "metadata[client_id]": client.id,
+          "metadata[user_id]": userId,
+        });
         const newCustomer = await stripeFetch("/customers", {
           method: "POST",
-          body: formEncode({
-            email: client.email,
-            name: client.full_name ?? undefined,
-            "metadata[client_id]": client.id,
-            "metadata[user_id]": userId,
-          }),
+          body: customerBody,
+          // a double tap (or two tabs) makes one customer, never two
+          idempotencyKey: customerIdempotencyKey("client", client.id, customerBody),
         });
         stripeCustomerId = newCustomer.id;
       }
@@ -447,13 +452,15 @@ export async function createAssignmentCheckout(
     if (existing?.data?.[0]?.id) {
       stripeCustomerId = existing.data[0].id;
     } else {
+      const customerBody = formEncode({
+        email: client.email,
+        name: client.full_name ?? undefined,
+        "metadata[client_id]": client.id,
+      });
       const newCustomer = await stripeFetch("/customers", {
         method: "POST",
-        body: formEncode({
-          email: client.email,
-          name: client.full_name ?? undefined,
-          "metadata[client_id]": client.id,
-        }),
+        body: customerBody,
+        idempotencyKey: customerIdempotencyKey("client", client.id, customerBody),
       });
       stripeCustomerId = newCustomer.id;
     }

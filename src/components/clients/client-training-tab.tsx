@@ -69,6 +69,7 @@ import { getClientSchedule, rescheduleFromCommittedDays } from "@/lib/schedule-b
 import { monthWorkoutsDone } from "@/lib/workout-peek";
 import { ClientNotesCard } from "@/components/messages/client-notes-log";
 import { FilmingAccountabilityCard } from "@/components/clients/filming-accountability-card";
+import { GoalSummary } from "@/components/goals/goal-summary";
 import { HealthCard, useHealthProfile } from "@/components/health/HealthCard";
 import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
 import { healthSummary } from "@/lib/health/health-profile";
@@ -129,6 +130,8 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     // under the program, a tap from it; on a computer it heads the side column.
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
       <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="order-1 lg:order-none lg:col-span-2" />
+      {/* the approved targets the program works toward, and Cleo's read on them (hidden when there are none) */}
+      <GoalSummary clientId={clientId} compact hideWhenEmpty className="order-1 lg:order-none lg:col-span-2" />
       <div className="contents lg:block lg:min-w-0 lg:space-y-5">
         <div className="order-2 min-w-0 lg:order-none">
           <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} onFocus={setFocusId} />

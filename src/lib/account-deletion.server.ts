@@ -71,7 +71,7 @@ export async function hasBusinessRecords(admin: Admin, clientId: string | null):
 }
 
 /** The person's own files: photo, progress photos and videos, lift videos, Crew media, plan PDFs. Chat attachments and signed agreements stay. */
-const PERSONAL_BUCKETS = ["avatars", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads", "documents", "equipment-photos"];
+const PERSONAL_BUCKETS = ["avatars", "account-headshots", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads", "documents", "equipment-photos"];
 
 async function removeFolder(admin: Admin, bucket: string, folder: string): Promise<number> {
   let removed = 0;

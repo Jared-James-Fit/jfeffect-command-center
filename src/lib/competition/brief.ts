@@ -113,7 +113,30 @@ export type BriefContext = {
   sessions?: Partial<Record<Lift, TrainingDay[]>>;
   /** an adjacent class's field when the athlete is well over their limit (research.server.ts) */
   classOptions?: ClassOption[];
+  /** the goal ledger's targets at this meet (goal-intel): approved, the athlete's own, how they want to go about it */
+  goals?: MeetGoal[];
 };
+
+export type MeetGoal = {
+  lift: Lift | "total" | null;
+  approvedKg: number | null;
+  /** the athlete's own target (the top of a range they said), kg */
+  clientKg: number | null;
+  /** a preference about the approach, in their words */
+  preference?: string | null;
+};
+
+export type MeetGoalRead = MeetGoal & { where: "under_conservative" | "in_range" | "above_high" | null };
+
+/** Where each approved target sits against the forecast (an approved target past the high scenario is a concern). */
+export function readMeetGoals(goals: MeetGoal[] | undefined, forecast: Forecast): MeetGoalRead[] {
+  return (goals ?? []).map((g) => {
+    const r = g.lift === "total" ? forecast.total : g.lift ? forecast.lifts[g.lift]?.range ?? null : null;
+    const t = g.approvedKg;
+    const where = r && t != null ? (t > r.high ? "above_high" : t < r.conservative ? "under_conservative" : "in_range") : null;
+    return { ...g, where };
+  });
+}
 
 export type ClassOption = {
   weightClass: string;
@@ -171,6 +194,8 @@ export type Brief = {
   projectionShift: number | null;
   /** an adjacent class's field, when the class is a question */
   classOptions: ClassOption[];
+  /** the goal ledger's targets at this meet, read against the forecast */
+  goals?: MeetGoalRead[];
   /** what the plan was built from, so a checked change from Cleo can rebuild it (proposals.ts) */
   inputs: {
     history: ReturnType<typeof attemptStats>;
@@ -267,6 +292,19 @@ export function buildBrief(ctx: BriefContext): Brief {
     missing: missing.essential,
   });
 
+  // approved targets past the high scenario: said, never planned around quietly
+  const goals = readMeetGoals(ctx.goals, forecast);
+  for (const g of goals) {
+    if (g.where !== "above_high" || g.approvedKg == null) continue;
+    const r = g.lift === "total" ? forecast.total : g.lift ? forecast.lifts[g.lift]?.range : null;
+    watch.push({
+      key: `goal:${g.lift}:above_high`,
+      area: "forecast",
+      lift: g.lift === "total" ? null : g.lift,
+      severity: "concern",
+      text: `The approved ${g.lift === "total" ? "total" : g.lift} target (${g.approvedKg} kg) is above the high scenario (${r?.high} kg).`,
+    } as WatchItem);
+  }
   const competitors = ctx.competitors.map((x) => ({
     id: x.id,
     name: x.name,
@@ -379,6 +417,7 @@ export function buildBrief(ctx: BriefContext): Brief {
     profile,
     missing,
     projectionShift,
+    goals,
     // another class's field, with where they'd stand there on their own numbers at that class
     classOptions: (ctx.classOptions ?? []).map((alt) => {
       const ours = ourAtClass({

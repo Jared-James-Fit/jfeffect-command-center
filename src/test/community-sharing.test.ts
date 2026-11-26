@@ -416,7 +416,8 @@ describe("community is the first tab and a shelf on Home; Nutrition keeps its ta
     expect(entry).not.toContain("PostDetailDialog");
     // the feed scrolls to the post you tapped (or opens it if it's older than what's loaded)
     expect(screen).toContain('const el = document.querySelector(`[data-post-id="${jumpTo}"]`);');
-    expect(screen).toContain("} else setDetailId(jumpTo);");
+    // (an older post: on its own screen, as the feed shows it; post-open.ts)
+    expect(screen).toContain("} else showPost(jumpTo);");
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");
@@ -515,11 +516,15 @@ describe("community photos are the athlete's own", () => {
   });
   it("lets you add, change or remove it from your own profile only", () => {
     // adding (a tap on the empty circle) and changing (the camera badge) render only on your own profile;
-    // on anyone's, a tap on the photo opens it big (photo-viewer.tsx)
+    // on anyone's, a tap on the photo opens it big (photo-viewer.tsx). Take a photo, pick one, or remove it:
+    // crew-photo-picker.tsx, any picture at all, never the account headshot
+    const picker = read("src/components/community/crew-photo-picker.tsx");
     expect(profile).toContain("{story.state === \"none\" && profile.is_me && !profile.author.avatar_url ? (");
-    expect(profile).toMatch(/\{profile\.is_me && \(\s*<button[^>]*?\s*type="button"\s*disabled=\{setAvatar\.isPending\}\s*onClick=\{\(\) => photoRef\.current\?\.click\(\)\}\s*data-profile-photo-change/);
-    expect(profile).toContain("{profile.is_me && profile.author.avatar_url && (");
-    expect(profile).toContain("setAvatar.mutate(null");
+    expect(profile).toMatch(/\{profile\.is_me && \(\s*<button[^>]*?\s*type="button"\s*disabled=\{photo\.pending\}\s*onClick=\{photo\.open\}\s*data-profile-photo-change/);
+    expect(profile).toContain("{profile.is_me && photo.element}");
+    expect(picker).toContain("setAvatar.mutate(null");
+    expect(picker).toContain('useFilmCamera({ purpose: "profile"');
+    expect(picker).not.toMatch(/profile_picture_url|account-headshots/);
   });
 });
 
