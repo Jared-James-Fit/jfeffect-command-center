@@ -353,25 +353,37 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       supplements: supplementsOf(form).items.length || supplementsOf(form).notes.length ? supplementsOf(form) : null,
     };
     let targetId = form.id;
+    const dayPayload = days.map((d, i) => {
+      const { id: _omit, cardio: _cardio, ...rest } = d as any;
+      delete rest.created_at;
+      delete rest.updated_at;
+      delete rest.target_id;
+      return { ...rest, notes: plainOrNull(rest.notes ?? null), sort_order: i };
+    });
     if (targetId) {
-      const { error } = await supabase.from("nutrition_targets").update(payload).eq("id", targetId);
+      // Save and history are one transaction. Do not fall back to the old
+      // delete/insert sequence if the migration isn't present.
+      const { error } = await (supabase as any).rpc("update_nutrition_plan_revision", {
+        _target_id: targetId,
+        _client_id: form.client_id,
+        _expected_updated_at: initial?.last_updated_at ?? initial?.updated_at ?? null,
+        _patch: payload,
+        _days: dayPayload,
+        _source: "coach",
+      });
       if (error) { setSaving(false); return toast.error(error.message); }
-      await supabase.from("nutrition_target_days").delete().eq("target_id", targetId);
     } else {
       const { data, error } = await supabase.from("nutrition_targets").insert(payload).select("id").single();
       if (error || !data) { setSaving(false); return toast.error(error?.message ?? "Failed"); }
       targetId = data.id;
-    }
-    if (days.length) {
-      const rows = days.map((d, i) => {
-        const { id: _omit, cardio: _cardio, ...rest } = d as any;
-        delete (rest as any).created_at;
-        delete (rest as any).updated_at;
-        delete (rest as any).target_id;
-        return { ...rest, notes: plainOrNull(rest.notes ?? null), target_id: targetId, sort_order: i };
-      });
-      const { error } = await supabase.from("nutrition_target_days").insert(rows);
-      if (error) { setSaving(false); return toast.error(error.message); }
+      if (dayPayload.length) {
+        const { error: dayError } = await supabase.from("nutrition_target_days").insert(dayPayload.map((d) => ({ ...d, target_id: targetId })));
+        if (dayError) {
+          await supabase.from("nutrition_targets").delete().eq("id", targetId);
+          setSaving(false);
+          return toast.error(dayError.message);
+        }
+      }
     }
     // A new current plan replaces the one before it: archived with its dates, never deleted.
     let replacedMsg = "";
@@ -400,6 +412,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     toast.success(`${form.id ? "Updated" : "Created"}${replacedMsg}${cardioMsg}`);
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["nutrition-plan-revisions", form.client_id] });
+    qc.invalidateQueries({ queryKey: ["food-history", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
     // Let the client know their plan changed (only when they can see it).
     if (form.visible_to_client && form.status === "Active") fireAppEvent("nutrition_targets_updated", form.client_id);
