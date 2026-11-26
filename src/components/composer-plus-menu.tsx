@@ -17,7 +17,7 @@ import { GifPicker } from "@/components/gif-picker";
 import { useServerFn } from "@tanstack/react-start";
 import { createMeetLink } from "@/lib/meet.functions";
 import { toast } from "sonner";
-import type { ChatGif } from "@/lib/chat-gifs";
+import type { MediaItem } from "@/lib/media/media";
 import type { ChatSound } from "@/lib/chat-sounds";
 import { MessengerCheckinRequestDialog } from "@/components/messages/messenger-checkin-request-dialog";
 
@@ -63,7 +63,7 @@ export function ComposerPlusMenu({
   onPickVideo?: () => void;
   onPickPhotos: () => void;
   onPickFiles: () => void;
-  onPickGif?: (g: ChatGif) => void | Promise<void>;
+  onPickGif?: (m: MediaItem) => void | Promise<void>;
   onPickSound?: (s: ChatSound) => void | Promise<void>;
   /** Admin/coach-only — undefined hides the request tiles. */
   onAttach?: (att: ChatSendAttachment, body: string) => void | Promise<void>;
@@ -123,7 +123,7 @@ export function ComposerPlusMenu({
     {
       key: "gif",
       section: "attach",
-      label: "GIFs & Sounds",
+      label: "GIFs & Stickers",
       icon: <span className="rounded-[5px] border-2 border-current px-[3px] text-[11px] font-bold leading-[16px] tracking-tight" aria-hidden>GIF</span>,
       onClick: () => { setOpen(false); setGifOpen(true); },
       hidden: !canSendGifs,

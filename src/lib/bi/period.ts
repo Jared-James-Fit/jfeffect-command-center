@@ -26,6 +26,16 @@ export function businessDay(at: Date = new Date(), tz = BI_TZ): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+/** The hour (0–23) on the business's clock. */
+export function businessHour(at: Date = new Date(), tz = BI_TZ): number {
+  return Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(at)) % 24;
+}
+
+/** Monday at `hour` on the business's clock: when the weekly business summary goes out. */
+export function isWeeklySummaryTime(at: Date, hour: number, tz = BI_TZ): boolean {
+  return new Date(`${businessDay(at, tz)}T12:00:00Z`).getUTCDay() === 1 && businessHour(at, tz) === hour;
+}
+
 export function addDays(iso: string, n: number): string {
   const t = Date.parse(`${iso}T12:00:00Z`) + n * DAY;
   return new Date(t).toISOString().slice(0, 10);

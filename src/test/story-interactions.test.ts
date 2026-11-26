@@ -62,7 +62,7 @@ describe("the interaction bar", () => {
   });
 
   it("a message goes through the existing direct path with its request rules; a comment is the post's own thread, in the story's panel", () => {
-    expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true });");
+    expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true, media: media ? mediaAttachment(media) : null });");
     expect(viewer).toContain("const full = !!thread?.outgoing && thread.left === 0;");
     expect(viewer).toContain("<StoryCommentsPanel key={post.id} post={post} open={commentsOpen}");
     expect(read("src/components/community/story-comments.tsx")).toContain("const list = useComments(post.id, open);");

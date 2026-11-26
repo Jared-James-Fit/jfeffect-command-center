@@ -47,7 +47,7 @@ export type MessageAttachment = {
   width?: number;
   height?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission" | "community_post" | "staff_invite" | "session_request" | "session_change" | "session_booked" | "workout_note" | "nutrition_plan" | "cardio_plan" | "recovery_auto" | "autopilot_update" | "session_confirm";
+  kind?: "sound" | "gif" | "sticker" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission" | "community_post" | "staff_invite" | "session_request" | "session_change" | "session_booked" | "workout_note" | "nutrition_plan" | "cardio_plan" | "recovery_auto" | "autopilot_update" | "session_confirm";
   /** kind "session_request": the client's request the card shows (session_requests.id). */
   session_request_id?: string;
   /** kind "session_change": the client's change request on a booked session (pt_session_change_requests.id). */
@@ -63,6 +63,9 @@ export type MessageAttachment = {
   post_id?: string;
   fallback_emoji?: string;
   category?: string;
+  /** kind "gif" / "sticker": a lighter animated link and a still frame (reduced motion). */
+  preview?: string | null;
+  still?: string | null;
   purchase_id?: string;
   payment_url?: string;
   amount_cents?: number;

@@ -29210,6 +29210,7 @@ export type Database = {
           quiet_hours_enabled: boolean
           quiet_start: number
           reminders: boolean
+          session_reminders: Json
           timezone: string | null
           updated_at: string
           user_id: string
@@ -29229,6 +29230,7 @@ export type Database = {
           quiet_hours_enabled?: boolean
           quiet_start?: number
           reminders?: boolean
+          session_reminders?: Json
           timezone?: string | null
           updated_at?: string
           user_id: string
@@ -29248,6 +29250,7 @@ export type Database = {
           quiet_hours_enabled?: boolean
           quiet_start?: number
           reminders?: boolean
+          session_reminders?: Json
           timezone?: string | null
           updated_at?: string
           user_id?: string
@@ -35223,7 +35226,7 @@ export type Database = {
       }
       community_members: { Args: never; Returns: Json }
       community_message_author: {
-        Args: { _body: string; _post_id: string; _story?: boolean }
+        Args: { _body: string; _media?: Json; _post_id: string; _story?: boolean }
         Returns: Json
       }
       community_mutuals: {

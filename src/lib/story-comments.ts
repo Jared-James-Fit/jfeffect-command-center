@@ -25,7 +25,7 @@ export type StoryPeekItem = {
   pending: boolean;
 };
 
-const MEDIA_WORD: Record<string, string> = { video: "a video", gif: "a GIF", audio: "a voice memo", image: "a photo" };
+const MEDIA_WORD: Record<string, string> = { video: "a video", gif: "a GIF", sticker: "a sticker", audio: "a voice memo", image: "a photo" };
 
 /**
  * What floats over a story: the newest top-level comments that are showing,

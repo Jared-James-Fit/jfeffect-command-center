@@ -18,7 +18,8 @@ import { cn } from "@/lib/utils";
 import { COMMENT_MAX, PREVIEW_ONLY_MESSAGE, compactNumber, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
 import { insertAtCursor } from "@/lib/comment-composer";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
-import type { ChatGif } from "@/lib/chat-gifs";
+import type { MediaItem } from "@/lib/media/media";
+import { SentMediaView } from "@/components/media/media-view";
 import { STORY_COMMENT_STICKERS, commentCountWords, isStickerText } from "@/lib/story-comments";
 import {
   useAddComment,
@@ -96,7 +97,8 @@ export function StoryCommentsPanel({
   const [picked, setPicked] = useState<PickedMedia | null>(null);
   const pickedRef = useRef<PickedMedia | null>(null);
   pickedRef.current = picked;
-  const [gif, setGif] = useState<ChatGif | null>(null);
+  // one attachment at a time: a photo / clip, a GIF / sticker, or a voice memo
+  const [gif, setGif] = useState<MediaItem | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
   const [voice, setVoice] = useState<RecordedVoice | null>(null);
   const [picking, setPicking] = useState(false);
@@ -167,7 +169,8 @@ export function StoryCommentsPanel({
     if (!sticker && !canSend) return;
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const media = sticker ? null : picked;
-    const g = sticker || !gif ? null : { url: gif.media_url, thumb: gif.thumb_url };
+    const pickedGif = sticker ? null : gif;
+    const g = pickedGif ? { url: pickedGif.url, thumb: pickedGif.preview !== pickedGif.url ? pickedGif.preview : null, kind: pickedGif.kind, width: pickedGif.width, height: pickedGif.height } : null;
     const v = sticker ? null : voice;
     const to = replyTo;
     if (!sticker) {
@@ -201,6 +204,7 @@ export function StoryCommentsPanel({
           setText((t) => t || words);
           if (media) setPicked((p) => p ?? media);
           if (v) setVoice((x) => x ?? v);
+          if (pickedGif) setGif((x) => x ?? pickedGif);
         }
         if (to) setReplyTo((r) => r ?? to);
       })
@@ -417,7 +421,7 @@ export function StoryCommentsPanel({
           {(gif || voice || picked) && (
             <div className="relative mb-2 inline-block" data-story-comment-attachment>
               {gif ? (
-                <img src={gif.thumb_url ?? gif.media_url} alt={gif.title} className="h-16 rounded-xl bg-white/10 object-cover" />
+                <SentMediaView m={{ kind: gif.kind, url: gif.url, preview: gif.preview, still: gif.still, width: gif.width, height: gif.height, title: gif.title }} max={72} />
               ) : voice ? (
                 <VoiceMemoPlayer src={voice.url} duration={voice.duration} />
               ) : picked?.kind === "video" ? (
@@ -476,7 +480,7 @@ export function StoryCommentsPanel({
                   data-story-comment-input
                 />
                 <div className="flex shrink-0 items-center py-[3px]">
-                  <button type="button" onClick={() => setGifOpen(true)} className="grid h-9 w-9 place-items-center rounded-full text-[10px] font-bold text-white/70" aria-label="Add a GIF">
+                  <button type="button" onClick={() => setGifOpen(true)} className="grid h-9 w-9 place-items-center rounded-full text-[10px] font-bold text-white/70" aria-label="Add a GIF or sticker">
                     <span className="rounded-[5px] border-[1.5px] border-current px-[3px] leading-[14px]">GIF</span>
                   </button>
                   <button type="button" onClick={() => fileRef.current?.click()} disabled={picking} className="grid h-9 w-9 place-items-center rounded-full text-white/70" aria-label="Add a photo or video">

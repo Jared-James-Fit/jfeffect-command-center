@@ -180,9 +180,11 @@ describe("Crew Stories", () => {
   describe("replying to a story", () => {
     const viewer = read("src/components/community/crew-stories.tsx");
     const sql = read("supabase/migrations/20261102090000_community_story_reply.sql");
-    it("a message field with two quick emoji and the heart, like Instagram / TikTok; eight more open with the keyboard", () => {
+    it("a message field with a GIF / sticker button, a quick emoji and the heart, like Instagram / TikTok; eight more open with the keyboard", () => {
       expect(viewer).toContain('const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉"];');
-      expect(viewer).toContain("quick.slice(0, 2).map((e) =>");
+      // Nov 25 2026: one emoji made room for GIFs & stickers (the field stays readable on a small phone)
+      expect(viewer).toContain("data-story-gif");
+      expect(viewer).toContain("quick.slice(0, 1).map((e) =>");
       expect(viewer).toContain('placeholder={full ? `You can message ${first} again once they reply` : "Message…"}');
       expect(viewer).toContain("<StoryBar\n              post={post}\n              viewerIsStaff={viewerIsStaff}\n              onOpenPerson={openPerson}\n              onOpen={() => onOpenPost(storyTarget(post))}\n              onComposing={setComposing}");
     });
@@ -195,7 +197,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("onEscapeKeyDown={(e) => {");
     });
     it("goes the same private way as Message on a post, tagged as a story; never as a client the coach is previewing", () => {
-      expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true });");
+      expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true, media: media ? mediaAttachment(media) : null });");
       expect(viewer).toContain("if (isImpersonating) return void toast.message(PREVIEW_ONLY_MESSAGE);");
       expect(viewer).toContain("const canMessage = !post.is_mine && !(post.author.is_coach && staff);");
       expect(read("src/lib/direct-chats.ts")).toContain("...(story ? { _story: true } : {})");

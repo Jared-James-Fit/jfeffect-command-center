@@ -747,10 +747,10 @@ export function caughtUpAt(posts: { fresh?: boolean }[]): number | null {
 }
 
 export type CommentMedia = {
-  /** A GIF's is its public link (from the GIF library). */
+  /** A GIF's / sticker's is its public link (the library or KLIPY). */
   path: string;
   thumb: string | null;
-  type: "image" | "video" | "gif" | "audio";
+  type: "image" | "video" | "gif" | "sticker" | "audio";
   width: number | null;
   height: number | null;
   /** A voice memo's length in seconds. */
