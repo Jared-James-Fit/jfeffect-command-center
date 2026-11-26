@@ -31,6 +31,7 @@ import { NutritionCleoEntry } from "@/components/nutrition/nutrition-cleo-dock";
 import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
+import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 
 export function NutritionTargetsPanel({
   clientId,
@@ -45,6 +46,7 @@ export function NutritionTargetsPanel({
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [copySource, setCopySource] = useState<PlanRow | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
   const [groceryOpen, setGroceryOpen] = useState(false);
   const { user, role } = useAuth();
@@ -245,6 +247,14 @@ export function NutritionTargetsPanel({
               </Button>
             </div>
           )}
+          <NutritionWeekSummary
+            key={clientId}
+            clientId={clientId}
+            days={plan.nutrition_target_days ?? []}
+            references={previous}
+            anchor={plan.start_date && plan.start_date > new Date().toISOString().slice(0, 10) ? plan.start_date : undefined}
+            onReuse={(source) => { setEditing(null); setCopySource(source); setOpen(true); }}
+          />
           {/* A day at a time: its targets (the client's ring), then its meals. */}
           <PlanDaysView
             days={planViewDays(plan)}
@@ -345,7 +355,7 @@ export function NutritionTargetsPanel({
       {groceryOpen && (
         <GroceryListSheet open={groceryOpen} onOpenChange={setGroceryOpen} clientId={clientId} viewAsUserId={clientUserId} coachPreview />
       )}
-      <NutritionTargetDialog open={open} onOpenChange={setOpen} clientId={clientId} initial={editing ?? undefined} />
+      <NutritionTargetDialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setCopySource(null); }} clientId={clientId} initial={editing ?? undefined} copyFrom={copySource ?? undefined} />
       {clientUserId && user?.id && (
         <WaterTargetDialog open={waterOpen} onOpenChange={setWaterOpen} userId={clientUserId} currentUserId={user.id} viewerRole={viewerRole} />
       )}
