@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { submitCapture } from "@/lib/headshots/headshots.server";
+import { canAutoSaveHeadshot, submitCapture } from "@/lib/headshots/headshots.server";
 
-function fakeDb(status: string, method = "coach_assisted", commitError: string | null = null) {
+const passedChecks = { blink: { confirmed: true }, turn: { confirmed: true }, deviceProblems: [] };
+function fakeDb(status: string, method = "coach_assisted", commitError: string | null = null, flags: string[] = [], checks: any = null) {
   const display = "login/headshot-capture.jpg";
-  const h = { id: "capture", client_id: "client", user_id: "actor", status, method, photo_path: "client/capture/photo.jpg", display_path: display, flags: [] };
+  const h = { id: "capture", client_id: "client", user_id: "actor", status, method, photo_path: "client/capture/photo.jpg", display_path: display, flags, server_checks: checks };
   const c = { id: "client", user_id: "login", profile_picture_url: status === "accepted" ? display : null };
   const upload = vi.fn(async () => ({ error: null }));
   const rpc = vi.fn(async () => {
@@ -36,11 +37,25 @@ describe("account headshot persistence", () => {
     await expect(submitCapture(db, args)).rejects.toThrow("temporary database error");
     expect(c.profile_picture_url).toBeNull();
   });
-  it("keeps client captures waiting for review, rather than bypassing approval", async () => {
+  it("keeps uncertain client captures waiting for review", async () => {
     const { db, rpc, upload } = fakeDb("pending", "guided");
     expect(await submitCapture(db, { ...args, staffAccepts: false })).toMatchObject({ ok: true, status: "pending" });
     expect(rpc).not.toHaveBeenCalled();
     expect(upload).not.toHaveBeenCalled();
+  });
+  it("automatically saves a guided capture with confirmed checks even with EXIF metadata", async () => {
+    const { db, rpc } = fakeDb("pending", "guided", null, ["exif"], passedChecks);
+    expect(await submitCapture(db, { ...args, staffAccepts: false })).toMatchObject({ ok: true, status: "accepted" });
+    expect(rpc).toHaveBeenCalledWith("commit_account_headshot", expect.objectContaining({ _automatic: true }));
+  });
+  it("requires both server-confirmed challenges, consistent device evidence and no suspicious flags", () => {
+    expect(canAutoSaveHeadshot("guided", ["exif", "same_as_before"], passedChecks)).toBe(true);
+    for (const f of ["similar_other_account", "blink_unconfirmed", "device_inconsistent", "soft_focus", "unknown"]) {
+      expect(canAutoSaveHeadshot("guided", [f], passedChecks)).toBe(false);
+    }
+    expect(canAutoSaveHeadshot("live", [], passedChecks)).toBe(false);
+    expect(canAutoSaveHeadshot("guided", [], { ...passedChecks, turn: { confirmed: false } })).toBe(false);
+    expect(canAutoSaveHeadshot("guided", [], { ...passedChecks, deviceProblems: ["faces"] })).toBe(false);
   });
   it("recognizes an already saved capture after a lost response", async () => {
     const { db, rpc } = fakeDb("accepted");
