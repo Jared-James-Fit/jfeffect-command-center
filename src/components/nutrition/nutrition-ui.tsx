@@ -11,13 +11,14 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { AlertTriangle, ChevronDown, MoreHorizontal, SlidersHorizontal, Target, Utensils, Zap } from "lucide-react";
+import { AlertTriangle, ChevronDown, Info, MoreHorizontal, SlidersHorizontal, Target, Utensils, Zap } from "lucide-react";
 import { structureMealPlanDay, type PlanMacros } from "@/lib/nutrition-targets/meal-plan-structure";
 import { coachCoverageLine, dayCoverage, targetMathLine, type Coverage } from "@/lib/nutrition-targets/plan-coverage";
 import { mealFoodShort, mealMath, mealsOffTheirFoods, type MealMath } from "@/lib/nutrition-targets/food-values";
 import { MEAL_TIMING_LABEL } from "@/lib/nutrition-targets/meal-timing";
 import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MacroTargetsChart, type TargetExtra } from "@/components/nutrition/MacroTargetsChart";
 import { cn } from "@/lib/utils";
 
@@ -50,17 +51,24 @@ export function StatusChip({
   );
 }
 
+/** Short, optional definitions accessible by touch, keyboard and pointer. */
+export function NutritionInfo({ label, children }: { label: string; children: ReactNode }) {
+  return <Popover><PopoverTrigger asChild><button type="button" aria-label={label} title={label} className="inline-grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Info className="h-3.5 w-3.5" /></button></PopoverTrigger><PopoverContent align="start" className="max-w-[calc(100vw-2rem)] text-xs font-normal">{children}</PopoverContent></Popover>;
+}
+
 /** A card's title row: icon, title, an optional chip, and its actions on the right. */
 export function CardHeader({
   icon: Icon,
   title,
   chip,
   actions,
+  info,
 }: {
   icon: ComponentType<{ className?: string }>;
   title: string;
   chip?: ReactNode;
   actions?: ReactNode;
+  info?: string;
 }) {
   return (
     <div className="flex min-h-10 items-center gap-2">
@@ -68,6 +76,7 @@ export function CardHeader({
       {/* The chip drops under the title when a phone hasn't room for both. */}
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
         <h3 className="text-base font-semibold">{title}</h3>
+        {info && <NutritionInfo label={"About " + title}>{info}</NutritionInfo>}
         {chip}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
@@ -335,7 +344,8 @@ export function PlanDaysView({
 
       <section className="space-y-3" data-plan-targets aria-label={`${d.label} targets`}>
         <h4 className="flex items-center gap-1.5 text-[15px] font-semibold">
-          <Target className="h-4 w-4 text-muted-foreground" aria-hidden /> Targets
+          <Target className="h-4 w-4 text-muted-foreground" aria-hidden /> Daily targets
+          <NutritionInfo label="About daily targets">Prescribed calories, macros and other daily goals for the selected day type; not logged intake.</NutritionInfo>
           {days.length === 1 ? <span className="font-normal text-muted-foreground">· {d.label}</span> : null}
         </h4>
         {/* the client's ring, at the width it reads best */}
@@ -409,7 +419,7 @@ export function PlanDaysView({
               aria-expanded={showMath}
               onClick={() => setShowMath((v) => !v)}
             >
-              {showMath ? "Hide the math" : "Show the math"}
+              {showMath ? "Hide meal nutrition breakdown" : "View meal nutrition breakdown"}
             </button>
             {showMath ? <MealMathRows meals={perMeal} cover={cover} /> : null}
           </div>

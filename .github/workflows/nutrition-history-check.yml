@@ -1,0 +1,38 @@
+name: Nutrition history checks
+on:
+  pull_request:
+    paths:
+      - 'src/components/nutrition*/**'
+      - 'src/components/nutrition-target*.tsx'
+      - 'src/components/cardio/**'
+      - 'src/components/clients/**'
+      - 'src/components/competition/**'
+      - 'src/lib/nutrition-targets/**'
+      - 'src/lib/nutrition-plan-edits.server.ts'
+      - 'src/lib/cardio/**'
+      - 'src/lib/competition/**'
+      - 'src/lib/plan-event-timeline*'
+      - 'src/lib/client-intel/**'
+      - '.github/workflows/nutrition-history-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install locked dependencies
+        run: |
+          sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
+          bun install --frozen-lockfile --ignore-scripts
+      - run: bun run test src/lib/nutrition-targets/weekly-summary.test.ts src/lib/plan-event-timeline.test.ts
+      - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
+      - run: npm run build

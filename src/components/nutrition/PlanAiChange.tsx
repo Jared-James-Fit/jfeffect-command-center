@@ -141,6 +141,7 @@ export function PlanAiChange({
 
   const refreshPlan = () => {
     qc.invalidateQueries({ queryKey: ["nutrition-quality", clientId] });
+    qc.invalidateQueries({ queryKey: ["nutrition-plan-revisions", clientId] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", clientId] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: key });
