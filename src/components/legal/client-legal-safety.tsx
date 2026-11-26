@@ -142,7 +142,7 @@ function DocRow({ doc }: { doc: any }) {
   const [typedName, setTypedName] = useState("");
   const acceptFn = useServerFn(recordAcceptance);
   const qc = useQueryClient();
-  const isAccepted = !!doc.accepted_at;
+  const isAccepted = !!doc.accepted_at || !!doc.satisfied_by_prior_version;
 
   const submit = async () => {
     try {
@@ -226,7 +226,7 @@ function DocRow({ doc }: { doc: any }) {
             )}
             {isAccepted && (
               <div className="text-xs text-muted-foreground">
-                Accepted {new Date(doc.accepted_at).toLocaleString()}.
+                {doc.accepted_at ? `Accepted ${new Date(doc.accepted_at).toLocaleString()}.` : "Previously accepted; no new signature required."}
               </div>
             )}
           </div>
