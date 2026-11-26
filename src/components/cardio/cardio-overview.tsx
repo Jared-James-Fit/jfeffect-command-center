@@ -20,7 +20,7 @@ import { CardHeader, Section, StatusChip } from "@/components/nutrition/nutritio
 import { CardioWeek } from "@/components/cardio/cardio-week";
 import { CleoMark } from "@/components/summer/cleo-mark";
 import { cardioKpis, loggedDetails, weekdayDistribution, weeklySeries } from "@/lib/cardio/overview";
-import { daysWords, progressionWords, sessionLine, TIMING_SHORT } from "@/lib/cardio/plan";
+import { cleanPlan, daysWords, progressionWords, sessionLine, TIMING_SHORT } from "@/lib/cardio/plan";
 import { REC_LABEL, type CardioRecommendation, type Signal } from "@/lib/cardio/insights";
 import { summarizeCardio } from "@/lib/analytics/cardio-adherence";
 import type { CardioWorkspaceView } from "@/lib/cardio/types";
@@ -116,7 +116,18 @@ export function CardioOverview({
               <span>Min/week</span><span className="text-right">{previous.weekly_minutes ?? "—"}</span><span className="text-right font-medium">{kpi.prescribedMinutes}</span>
               <span>Sessions/week</span><span className="text-right">{previous.weekly_sessions ?? "—"}</span><span className="text-right font-medium">{kpi.prescribedSessions}</span>
             </div>
-            <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={restoring === previous.id} onClick={() => onRestore(previous.id)}>Restore to draft</Button><Button type="button" size="sm" variant="outline" onClick={() => onAsk("Compare the current cardio with version " + previous.version_no + " effective " + previous.effective_date + " (ID " + previous.id + "). Use stored records and do not assume missing details.")}>Ask Cleo</Button></div>
+            <details className="rounded-md border border-border p-2">
+              <summary className="cursor-pointer font-medium">Compare sessions</summary>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {[{ label: "Reference", sessions: cleanPlan(previous.sessions).sessions }, { label: "Current", sessions: view.live.sessions }].map((side) => (
+                  <div key={side.label} className="min-w-0 space-y-1 rounded-md border border-border p-2">
+                    <p className="font-medium">{side.label}</p>
+                    {side.sessions.length ? side.sessions.map((s) => <p key={s.key} className="break-words text-muted-foreground">{sessionLine(s, view.speedUnit)} · {s.weekdays.length ? s.weekdays.map((d) => d.slice(0, 3)).join(", ") : s.days.replaceAll("_", " ")}{s.enabled ? "" : " · paused"}</p>) : <p className="text-muted-foreground">No recorded sessions.</p>}
+                  </div>
+                ))}
+              </div>
+            </details>
+            <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={restoring === previous.id} onClick={() => onRestore(previous.id)}>Restore to draft</Button><Button type="button" size="sm" variant="outline" onClick={() => onAsk("Compare the current cardio with version " + previous.version_no + " effective " + previous.effective_date + " (version ID " + previous.id + "). Use stored records and do not assume missing details.")}>Ask Cleo</Button></div>
           </>}
         </div>
       </details>}
