@@ -12,8 +12,7 @@
  *
  * Honest about its limits: this stops a printed photo, a screenshot or the
  * same frames sent again. It can't stop a determined attacker who feeds the
- * browser a fake camera, and it never proves who someone is, so every new
- * headshot is still reviewed by a person.
+ * browser a fake camera, and it never proves who someone is, so the coach can still review or request a retake.
  */
 import type { ChallengeStep } from "./rules";
 import { toGray, type DecodedImage } from "./png";
@@ -342,7 +341,7 @@ export const FLAG_WORDS: Record<string, string> = {
   similar_other_account: "Looks like another account's photo",
   same_as_before: "Looks the same as an earlier photo",
   coach_assisted: "Taken by the coach in person",
-  exif: "Carries camera data (not from the app's camera)",
+  exif: "Contains image metadata (not proof of a file upload)",
 };
 
 export function flagWords(flag: string): string {
