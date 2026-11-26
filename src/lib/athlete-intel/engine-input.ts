@@ -248,7 +248,7 @@ export function intelEvidence(facts: Fact[], today: string): Array<{ id: string;
       out.push({ id: `U-AP${i + 1}`, kind: "intel", lift: f.lift, date: f.date, text: `${who(f)}'s ${f.lift} attempts: ${[a.opener, a.second, a.third].map((x) => x ?? "–").join("/")} kg` });
     });
   facts
-    .filter((f) => f.kind === "instruction" || f.kind === "technique" || f.kind === "taper")
+    .filter((f) => f.kind === "instruction" || f.kind === "technique" || f.kind === "taper" || (f.kind === "note" && f.scope === "meet" && !(f.data as any).meetLogistics))
     .slice(0, 8)
     .forEach((f, i) => out.push({ id: `U-N${i + 1}`, kind: "intel", lift: f.lift, date: f.date, text: `${who(f)} (${f.kind}): ${(f.data as { text: string }).text}` }));
   return out;
