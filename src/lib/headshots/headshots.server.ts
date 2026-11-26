@@ -496,7 +496,7 @@ export async function decide(
   // One DB transaction: no success unless the profile, decision and request
   // have all persisted. Do not delete the staged file on an uncertain response.
   const { data: committed, error: commitErr } = await (db as any).rpc("commit_account_headshot", {
-    _headshot: h.id, _actor: args.actor, _display_path: displayPath, _note: note, _decided_at: now.toISOString(), _automatic: args.automatic === true,
+    _headshot: h.id, _actor: args.actor, _display_path: displayPath, _note: note, _decided_at: now.toISOString(), ...(args.automatic === true ? { _automatic: true } : {}),
   });
   if (commitErr) throw new Error(commitErr.message);
   const saved = await clientById(db, c.id);
