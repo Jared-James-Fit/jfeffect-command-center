@@ -97,6 +97,8 @@ function ChipActions({
             return <RemindButton key={a} r={r} primary={i === 0} close={close} />;
           case "billing":
             return <ClientNameLink key={a} clientId={r.id} tab="billing" className={cls} onClick={close}>Open billing</ClientNameLink>;
+          case "setup":
+            return <ClientNameLink key={a} clientId={r.id} tab="summary" className={cls} onClick={close}>Open setup checklist</ClientNameLink>;
           case "profile":
             return <ClientNameLink key={a} clientId={r.id} className={cls} onClick={close}>Open profile</ClientNameLink>;
           case "agreement":
