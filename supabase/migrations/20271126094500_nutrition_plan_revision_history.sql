@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.nutrition_plan_revisions (
 CREATE INDEX IF NOT EXISTS nutrition_plan_revisions_client_at_idx
   ON public.nutrition_plan_revisions(client_id, captured_at DESC);
 ALTER TABLE public.nutrition_plan_revisions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff read nutrition revisions" ON public.nutrition_plan_revisions;
 CREATE POLICY "Staff read nutrition revisions" ON public.nutrition_plan_revisions
   FOR SELECT TO authenticated
   USING ((SELECT public.has_role((SELECT auth.uid()), 'admin')) OR client_id IN (SELECT public.coached_client_ids()));
@@ -84,6 +85,9 @@ BEGIN
   IF new_plan.start_date IS NOT NULL AND new_plan.end_date IS NOT NULL AND new_plan.end_date < new_plan.start_date THEN
     RAISE EXCEPTION 'Plan end must not precede its start';
   END IF;
+  IF new_plan.status <> 'Archived' AND new_plan.start_date IS DISTINCT FROM old_plan.start_date AND new_plan.start_date >
+    (SELECT (now() AT TIME ZONE coalesce(nullif(timezone,''),'America/Winnipeg'))::date FROM public.clients WHERE id=_client_id)
+    THEN RAISE EXCEPTION 'Future plans require scheduling; the current plan was not changed'; END IF;
   UPDATE public.nutrition_targets SET
     phase = new_plan.phase, custom_phase = new_plan.custom_phase,
     goal = new_plan.goal, custom_goal = new_plan.custom_goal,
