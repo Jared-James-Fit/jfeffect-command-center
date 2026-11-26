@@ -56,6 +56,8 @@ describe("live competition target rating", () => {
     expect(targetDifficulty(g,122.5)).toMatchObject({band:"high",label:"High"});
     expect(targetDifficulty(g,122.5).brief).toContain("2.5 kg above");
     expect(targetDifficulty(g,122.5).brief).toContain("within the discussed range");
+    expect(targetDifficulty(g,122.5).summary).toContain("2.5 kg (5.5 lb) above forecast");
+    expect(targetDifficulty(g,120).summary).toContain("At forecast");
     expect(targetDifficulty(g,120).band).toBe("moderate");
     expect(targetDifficulty(g,137.5).band).toBe("extreme");
     expect(targetDifficulty(g,137.5).brief).toContain("above the discussed range");
@@ -64,5 +66,6 @@ describe("live competition target rating", () => {
     expect(targetDifficulty({...g,feasibility:null},120).label).toBe("Not rated");
     expect(targetDifficulty(g,null).label).toBe("No target");
     expect(targetDifficulty({...g,feasibility:{...f,confidence:"low"}},122.5).brief).toContain("provisional");
+    expect(targetDifficulty({...g,feasibility:{...f,confidence:"low"}},122.5).summary).toContain("Low confidence");
   });
 });
