@@ -31,6 +31,7 @@ import type { SessionEvent } from "@/lib/coaching-sessions/events";
 import { MemoryPanel } from "./memory-panel";
 import { STATE_WORDS, type AppointmentState } from "@/lib/coaching-sessions/lifecycle";
 import { meetingsKey } from "./keys";
+import { extractMeetingGoalsFn } from "@/lib/goal-intel/goal-intel.functions";
 
 function MeetingHelp({ label, text }: { label: string; text: string }) {
   return (
@@ -69,12 +70,25 @@ const day = (iso: string | null | undefined) =>
 
 export function MeetingsWorkspace({
   clientId,
+  onOpenTab,
 }: {
   clientId: string;
   onOpenTab?: (tab: string) => void;
 }) {
   const read = useServerFn(getSessionsHomeFn);
   const qc = useQueryClient();
+  const extractGoals = useServerFn(extractMeetingGoalsFn);
+  const scan = useMutation({
+    mutationFn: (sessionId: string) => extractGoals({ data: { sessionId } }),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: meetingsKey(clientId) });
+      void qc.invalidateQueries({ queryKey: ["client-goals", clientId] });
+      void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
+      const count = result.created + result.updated;
+      toast.success(count ? `${count} goal proposal${count === 1 ? "" : "s"} ready for review` : "Meeting checked — no new proposals");
+    },
+    onError: (error: Error) => toast.error(error.message || "Could not read meeting goals"),
+  });
   const navigate = useNavigate();
   const q = useQuery({
     queryKey: meetingsKey(clientId),
@@ -254,6 +268,12 @@ export function MeetingsWorkspace({
                         </div>
                       </details>
                     ) : null}
+                    {s.analysis_status === "ready" && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" disabled={scan.isPending} onClick={() => scan.mutate(s.id)}>{scan.isPending && scan.variables === s.id ? "Checking…" : "Check for goal proposals"}</Button>
+                        {onOpenTab && s.discussedGoals?.length > 0 && <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => onOpenTab("summary")}>Review goals <ChevronRight className="ml-1 h-3 w-3" /></Button>}
+                      </div>
+                    )}
                     {(d.intelligence as any[]).filter((i) => i.source_session_id === s.id && i.status !== "archived" && ["goal", "decision", "commitment"].includes(i.kind)).slice(0, 6).map((i) => (
                       <p key={i.id} className="leading-snug"><span className="font-medium">{i.status === "confirmed" ? "Saved note" : "For review"}:</span> {i.text}</p>
                     ))}
