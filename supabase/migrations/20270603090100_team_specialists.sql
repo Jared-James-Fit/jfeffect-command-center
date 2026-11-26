@@ -8,7 +8,8 @@
 --
 --   specialist_can_view(client, category) is true only when, all at once,
 --   - the login holds 'specialist' (and has its two-step sign-in when it has one),
---   - its specialist record is active and its organization membership active,
+--   - its specialist record is active, its profile finished and the
+--     confidentiality promise agreed, and its organization membership active,
 --   - an access row names that athlete, is active and has that category on
 --     (footage, training, performance),
 --   - the athlete agreed to share (or is the person who granted it: the
@@ -108,7 +109,9 @@ ALTER TABLE public.staff_invites
   ADD COLUMN IF NOT EXISTS code_hash text,
   ADD COLUMN IF NOT EXISTS code_expires_at timestamptz,
   ADD COLUMN IF NOT EXISTS code_attempts integer NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS code_sent_at timestamptz;
+  ADD COLUMN IF NOT EXISTS code_sent_at timestamptz,
+  -- codes emailed for the current link; a new link starts again at 0
+  ADD COLUMN IF NOT EXISTS codes_sent integer NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS staff_invites_token_hash ON public.staff_invites (setup_token_hash) WHERE setup_token_hash IS NOT NULL;
 
 ALTER TABLE public.staff_invites DROP CONSTRAINT IF EXISTS staff_invites_status_check;
@@ -123,6 +126,125 @@ ALTER TABLE public.staff_invites ADD CONSTRAINT staff_invites_specialist_shape
          OR (preset IN ('game_day_coach', 'performance_specialist')
              AND title IS NOT NULL AND length(btrim(title)) BETWEEN 1 AND 60
              AND jsonb_typeof(access) = 'array'));
+
+/**
+ * An invite keeps who made it, and each athlete on a specialist invite keeps
+ * who added it (access[].granted_by): the server (service role) says who;
+ * anyone writing with their own login is recorded as the one who added or
+ * widened what they changed. Only the owner adding their own athlete account
+ * counts as that athlete's yes (tg_specialist_access_shape), so nobody can
+ * put that yes on someone else's grant. A new link starts its codes over.
+ */
+CREATE OR REPLACE FUNCTION public.tg_staff_invites_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  editor uuid := auth.uid();
+  fixed jsonb := '[]'::jsonb;
+  e jsonb;
+  prev jsonb;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    NEW.created_by := OLD.created_by;
+    IF NEW.setup_token_hash IS NOT NULL AND NEW.setup_token_hash IS DISTINCT FROM OLD.setup_token_hash THEN
+      NEW.codes_sent := 0;
+      NEW.code_attempts := 0;
+      NEW.code_hash := NULL;
+      NEW.code_expires_at := NULL;
+      NEW.code_sent_at := NULL;
+    END IF;
+  END IF;
+  IF editor IS NULL OR NEW.access IS NULL OR jsonb_typeof(NEW.access) <> 'array' THEN
+    RETURN NEW;
+  END IF;
+  FOR e IN SELECT value FROM jsonb_array_elements(NEW.access) LOOP
+    prev := NULL;
+    IF TG_OP = 'UPDATE' AND jsonb_typeof(OLD.access) = 'array' THEN
+      -- the same athlete with nothing widened keeps who added it
+      SELECT o.value INTO prev
+        FROM jsonb_array_elements(OLD.access) o
+       WHERE o.value ->> 'client_id' = e ->> 'client_id'
+         AND NOT ((e -> 'footage') IS DISTINCT FROM 'false'::jsonb AND (o.value -> 'footage') = 'false'::jsonb)
+         AND NOT ((e -> 'training') IS DISTINCT FROM 'false'::jsonb AND (o.value -> 'training') = 'false'::jsonb)
+         AND NOT ((e -> 'performance') IS DISTINCT FROM 'false'::jsonb AND (o.value -> 'performance') = 'false'::jsonb)
+       LIMIT 1;
+    END IF;
+    fixed := fixed || jsonb_build_array(
+      e || jsonb_build_object('granted_by', CASE WHEN prev IS NOT NULL THEN prev -> 'granted_by' ELSE to_jsonb(editor) END));
+  END LOOP;
+  NEW.access := fixed;
+  RETURN NEW;
+END $$;
+
+REVOKE ALL ON FUNCTION public.tg_staff_invites_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS staff_invites_guard ON public.staff_invites;
+CREATE TRIGGER staff_invites_guard BEFORE INSERT OR UPDATE ON public.staff_invites
+  FOR EACH ROW EXECUTE FUNCTION public.tg_staff_invites_guard();
+
+/**
+ * (server) Store a new 6-digit code for an invite's email, unless one went in
+ * the last 45 seconds or this link has had its 5 codes. One statement, so two
+ * taps at once can't both send. 'sent' | 'wait' | 'limit' | 'gone'.
+ */
+CREATE OR REPLACE FUNCTION public.staff_invite_code_issue(_invite uuid, _code_hash text, _minutes integer)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  inv public.staff_invites;
+BEGIN
+  UPDATE public.staff_invites
+     SET code_hash = _code_hash,
+         code_expires_at = now() + make_interval(mins => greatest(1, least(_minutes, 60))),
+         code_attempts = 0,
+         code_sent_at = now(),
+         codes_sent = codes_sent + 1
+   WHERE id = _invite AND status = 'pending'
+     AND (code_sent_at IS NULL OR code_sent_at < now() - interval '45 seconds')
+     AND codes_sent < 5;
+  IF FOUND THEN
+    RETURN 'sent';
+  END IF;
+  SELECT * INTO inv FROM public.staff_invites WHERE id = _invite;
+  IF NOT FOUND OR inv.status <> 'pending' THEN
+    RETURN 'gone';
+  END IF;
+  IF inv.codes_sent >= 5 THEN
+    RETURN 'limit';
+  END IF;
+  RETURN 'wait';
+END $$;
+
+REVOKE ALL ON FUNCTION public.staff_invite_code_issue(uuid, text, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.staff_invite_code_issue(uuid, text, integer) TO service_role;
+
+/**
+ * (server) Count one try at an invite's code before it's checked, and hand
+ * back the code's hash to check it against. Nothing comes back once the code
+ * has run out or had its 5 tries, so tries sent at once can't add up to more.
+ */
+CREATE OR REPLACE FUNCTION public.staff_invite_code_try(_invite uuid)
+RETURNS text
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  UPDATE public.staff_invites
+     SET code_attempts = code_attempts + 1
+   WHERE id = _invite AND status = 'pending'
+     AND code_hash IS NOT NULL AND code_expires_at > now()
+     AND code_attempts < 5
+  RETURNING code_hash
+$$;
+
+REVOKE ALL ON FUNCTION public.staff_invite_code_try(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.staff_invite_code_try(uuid) TO service_role;
 
 -- ── team_specialists ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.team_specialists (
@@ -191,9 +313,11 @@ REVOKE ALL ON FUNCTION public._team_same_person(uuid, uuid) FROM PUBLIC, anon, a
 GRANT EXECUTE ON FUNCTION public._team_same_person(uuid, uuid) TO service_role;
 
 /**
- * Access rows keep themselves straight, whoever writes them: a grant by the
- * athlete themselves (the owner sharing their own training) is agreed at
- * once; any other grant waits for the athlete; a revoked row keeps its time.
+ * Access rows keep themselves straight, whoever writes them: the owner
+ * sharing their own athlete account is agreed at once; any other grant waits
+ * for the athlete; access given again or widened asks again; a revoked row
+ * keeps its time. Only the server writes these rows, and it sets granted_by
+ * to whoever made the change.
  */
 CREATE OR REPLACE FUNCTION public.tg_specialist_access_shape()
 RETURNS trigger
@@ -224,7 +348,11 @@ BEGIN
     END IF;
     IF NEW.athlete_ok_at IS NULL THEN
       SELECT user_id INTO athlete FROM public.clients WHERE id = NEW.client_id;
-      IF public._team_same_person(NEW.granted_by, athlete) THEN
+      -- only the owner sharing their own athlete account is that athlete's yes;
+      -- any other grant (another admin's, an admin linked to someone's login) waits
+      IF NEW.granted_by IS NOT NULL
+         AND EXISTS (SELECT 1 FROM public.business_owners b WHERE b.user_id = NEW.granted_by)
+         AND public._team_same_person(NEW.granted_by, athlete) THEN
         NEW.athlete_ok_at := now();
         NEW.athlete_ok_by := 'self';
       END IF;
@@ -405,6 +533,10 @@ AS $$
          JOIN public.clients c ON c.id = a.client_id
         WHERE s.user_id = auth.uid()
           AND s.status = 'active'
+          -- their profile is done and they agreed to keep it private (what the screens ask first)
+          AND s.confidentiality_at IS NOT NULL
+          AND s.display_name IS NOT NULL AND s.phone IS NOT NULL
+          AND s.time_zone IS NOT NULL AND s.headshot_path IS NOT NULL
           AND a.client_id = _client
           AND a.status = 'active'
           AND a.athlete_ok_at IS NOT NULL
@@ -441,7 +573,12 @@ GRANT EXECUTE ON FUNCTION public.specialist_my_athletes() TO authenticated, serv
 
 -- ── The athlete's side: who can see their training, and their yes or no ────
 
-/** (internal) The athlete accounts the signed-in person answers for: their own, and their linked one. */
+/**
+ * (internal) The athlete accounts the signed-in person answers for: their own,
+ * and for the owner their linked athlete account. Another staff login linked
+ * to an athlete answers from that athlete's own login, since an admin can make
+ * that link.
+ */
 CREATE OR REPLACE FUNCTION public._my_athlete_client_ids()
 RETURNS SETOF uuid
 LANGUAGE sql
@@ -451,7 +588,8 @@ SET search_path TO 'public'
 AS $$
   SELECT c.id FROM public.clients c WHERE c.user_id = auth.uid() AND auth.uid() IS NOT NULL
   UNION
-  SELECT public.linked_client_id() WHERE public.linked_client_id() IS NOT NULL
+  SELECT public.linked_client_id()
+   WHERE public.linked_client_id() IS NOT NULL AND public.is_business_owner(auth.uid())
 $$;
 
 REVOKE ALL ON FUNCTION public._my_athlete_client_ids() FROM PUBLIC, anon;
@@ -485,8 +623,14 @@ $$;
 REVOKE ALL ON FUNCTION public.my_team_access() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.my_team_access() TO authenticated, service_role;
 
-/** The athlete says yes (share) or no (stop sharing) to one specialist's access. */
-CREATE OR REPLACE FUNCTION public.specialist_access_respond(_access_id uuid, _allow boolean)
+/**
+ * The athlete says yes (share) or no (stop sharing) to one specialist's
+ * access. A yes names what they saw (footage, training, performance): if it
+ * changed since, nothing is agreed and they're asked again ('changed').
+ */
+CREATE OR REPLACE FUNCTION public.specialist_access_respond(
+  _access_id uuid, _allow boolean,
+  _footage boolean DEFAULT NULL, _training boolean DEFAULT NULL, _performance boolean DEFAULT NULL)
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -495,7 +639,7 @@ AS $$
 DECLARE
   acc public.specialist_access;
 BEGIN
-  SELECT * INTO acc FROM public.specialist_access WHERE id = _access_id;
+  SELECT * INTO acc FROM public.specialist_access WHERE id = _access_id FOR UPDATE;
   IF NOT FOUND OR acc.client_id NOT IN (SELECT public._my_athlete_client_ids()) THEN
     RETURN 'not_found';
   END IF;
@@ -503,6 +647,10 @@ BEGIN
     RETURN 'not_active';
   END IF;
   IF _allow THEN
+    IF _footage IS DISTINCT FROM acc.footage OR _training IS DISTINCT FROM acc.training
+       OR _performance IS DISTINCT FROM acc.performance THEN
+      RETURN 'changed';
+    END IF;
     UPDATE public.specialist_access
        SET athlete_ok_at = coalesce(athlete_ok_at, now()), athlete_ok_by = coalesce(athlete_ok_by, 'athlete'),
            athlete_withdrew_at = NULL
@@ -515,8 +663,8 @@ BEGIN
   RETURN 'stopped';
 END $$;
 
-REVOKE ALL ON FUNCTION public.specialist_access_respond(uuid, boolean) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.specialist_access_respond(uuid, boolean) TO authenticated;
+REVOKE ALL ON FUNCTION public.specialist_access_respond(uuid, boolean, boolean, boolean, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.specialist_access_respond(uuid, boolean, boolean, boolean, boolean) TO authenticated;
 
 /** Notes a specialist shared with the signed-in athlete (never a private one). */
 CREATE OR REPLACE FUNCTION public.my_shared_team_notes(_target_kind text DEFAULT NULL, _target_id uuid DEFAULT NULL)
@@ -612,7 +760,8 @@ BEGIN
   INSERT INTO public.staff_invites (first_name, role, status, preset, title, access, created_by)
   VALUES ('Jesse', 'specialist', 'draft', 'game_day_coach', 'Game Day Coach',
           CASE WHEN athlete IS NULL THEN '[]'::jsonb
-               ELSE jsonb_build_array(jsonb_build_object('client_id', athlete, 'footage', true, 'training', true, 'performance', true))
+               ELSE jsonb_build_array(jsonb_build_object('client_id', athlete, 'footage', true, 'training', true,
+                                                         'performance', true, 'granted_by', owner_uid))
           END,
           owner_uid);
 END $$;

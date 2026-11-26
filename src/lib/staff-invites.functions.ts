@@ -347,6 +347,7 @@ export const getStaffInvitePreview = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => TokenInput.parse(i))
   .handler(async ({ data }) => {
     const sb = await admin();
+    if (!(await inviteRatesOk(sb, "preview"))) return { valid: false as const, reason: SLOW_DOWN };
     const inv = await inviteForToken(sb, data.token);
     const problem = linkProblem(inv);
     if (problem) return { valid: false as const, reason: problem };
@@ -368,26 +369,41 @@ export const getStaffInvitePreview = createServerFn({ method: "POST" })
     };
   });
 
+/** Per-address limits on the public setup-link calls (a code is 6 digits). */
+async function inviteRatesOk(sb: any, kind: "preview" | "send" | "verify" | "redeem"): Promise<boolean> {
+  const { callerIp, allRatesOk } = await import("@/lib/public-rate-limit.server");
+  const ip = callerIp();
+  if (!ip) return true;
+  const per = { preview: 60, send: 10, verify: 20, redeem: 10 }[kind];
+  return allRatesOk(sb, [
+    { key: `staff_invite_${kind}:${ip}`, max: per, window: "1 hour" },
+    { key: `staff_invite_any:${ip}`, max: 120, window: "1 hour" },
+  ]);
+}
+
+const SLOW_DOWN = "Too many tries from here. Wait a while, then try again.";
+
 /** Email a 6-digit code to the invite's email (a texted or copied link). */
 export const sendStaffInviteCode = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => TokenInput.parse(i))
   .handler(async ({ data }) => {
     const sb = await admin();
+    if (!(await inviteRatesOk(sb, "send"))) throw new Error(SLOW_DOWN);
     const inv = await inviteForToken(sb, data.token);
     const problem = linkProblem(inv);
     if (problem) throw new Error(problem);
     const m = await import("@/lib/staff-invites.server");
-    if (inv.code_sent_at && Date.now() - Date.parse(inv.code_sent_at) < m.INVITE_CODE_RESEND_SECONDS * 1000) {
-      return { sentTo: m.maskInviteEmail(inv.email), waitSeconds: m.INVITE_CODE_RESEND_SECONDS };
-    }
     const code = m.newInviteCode();
-    const { error } = await sb.from("staff_invites").update({
-      code_hash: m.inviteCodeHash(inv.id, code),
-      code_expires_at: new Date(Date.now() + m.INVITE_CODE_MINUTES * 60_000).toISOString(),
-      code_attempts: 0,
-      code_sent_at: new Date().toISOString(),
-    }).eq("id", inv.id);
+    // one statement: two taps at once can't both send, and a link gets 5 codes
+    const { data: outcome, error } = await sb.rpc("staff_invite_code_issue", {
+      _invite: inv.id,
+      _code_hash: m.inviteCodeHash(inv.id, code),
+      _minutes: m.INVITE_CODE_MINUTES,
+    });
     if (error) throw new Error("Couldn't send the code. Try again.");
+    if (outcome === "wait") return { sentTo: m.maskInviteEmail(inv.email), waitSeconds: m.INVITE_CODE_RESEND_SECONDS };
+    if (outcome === "limit") throw new Error("This link has sent all its codes. Ask for a new invite.");
+    if (outcome !== "sent") throw new Error("This invite was already used or revoked.");
     const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
     const sent = await sendTemplateEmail(sb, {
       template: "team-code",
@@ -406,19 +422,22 @@ export const verifyStaffInviteCode = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const sb = await admin();
+    if (!(await inviteRatesOk(sb, "verify"))) throw new Error(SLOW_DOWN);
     const inv = await inviteForToken(sb, data.token);
     const problem = linkProblem(inv);
     if (problem) throw new Error(problem);
     const m = await import("@/lib/staff-invites.server");
-    if (!inv.code_hash || !inv.code_expires_at || Date.parse(inv.code_expires_at) < Date.now()) {
-      throw new Error("That code has expired. Tap Send a new code.");
+    // the try is counted before the code is checked, in one statement, so
+    // tries sent at once can't add up to more than the code's 5
+    const { data: storedHash, error } = await sb.rpc("staff_invite_code_try", { _invite: inv.id });
+    if (error) throw new Error("Couldn't check the code. Try again.");
+    if (typeof storedHash !== "string" || !storedHash) {
+      throw new Error("That code has expired or had too many tries. Tap Send a new code.");
     }
-    if ((inv.code_attempts ?? 0) >= m.INVITE_CODE_MAX_ATTEMPTS) throw new Error("Too many tries. Tap Send a new code.");
-    if (m.inviteCodeHash(inv.id, data.code) !== inv.code_hash) {
-      await sb.from("staff_invites").update({ code_attempts: (inv.code_attempts ?? 0) + 1 }).eq("id", inv.id);
+    if (!m.sameDigest(m.inviteCodeHash(inv.id, data.code), storedHash)) {
       throw new Error("That code didn't work. Check it, or tap Send a new code.");
     }
-    await sb.from("staff_invites").update({ code_hash: null, code_expires_at: null, code_attempts: 0 }).eq("id", inv.id);
+    await sb.from("staff_invites").update({ code_hash: null, code_expires_at: null }).eq("id", inv.id).eq("code_hash", storedHash);
     return { proof: m.inviteEmailProof(inv.id, inv.email), email: inv.email as string };
   });
 
@@ -433,6 +452,7 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => RedeemInput.parse(i))
   .handler(async ({ data }) => {
     const sb = await admin();
+    if (!(await inviteRatesOk(sb, "redeem"))) throw new Error(SLOW_DOWN);
     const { assertInviteRoleRedeemable, assertEmailFreeForStaffInvite, finalizeStaffOnlyUser } =
       await import("@/lib/setup-link-guard.server");
     const invite = await inviteForToken(sb, data.token);
@@ -444,10 +464,16 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
     if (!inviteProofOk(invite.id, invite.email, data.proof)) {
       throw new Error("Confirm your email first: enter the code we sent you.");
     }
-    // claim the invite first, so a second tap can't make a second login
-    const { data: claimed } = await sb.from("staff_invites")
-      .update({ status: "redeemed", redeemed_at: new Date().toISOString(), setup_token: null, setup_token_hash: null, code_hash: null })
-      .eq("id", invite.id).eq("status", "pending").select("id");
+    // claim the invite first, so a second tap can't make a second login; only
+    // with the link it was read by (one replaced meanwhile no longer works)
+    const { hashSetupToken } = await import("@/lib/staff-invites.server");
+    let claim = sb.from("staff_invites")
+      .update({ status: "redeemed", redeemed_at: new Date().toISOString() })
+      .eq("id", invite.id).eq("status", "pending");
+    claim = invite.setup_token_hash
+      ? claim.eq("setup_token_hash", hashSetupToken(data.token))
+      : claim.eq("setup_token", data.token);
+    const { data: claimed } = await claim.select("id");
     if (!claimed?.length) throw new Error("This invite was already used or revoked.");
 
     let uid: string | null = null;
@@ -464,7 +490,7 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
       uid = created.user.id as string;
       if (invite.role === "specialist") {
         // the specialist record and their athletes first, then the role that makes them count
-        const { cleanAccess } = await import("@/lib/team-access/presets");
+        const { cleanAccess, storedGrantor } = await import("@/lib/team-access/presets");
         const { error: sErr } = await sb.from("team_specialists").insert({
           user_id: uid,
           preset: invite.preset,
@@ -477,15 +503,19 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
         const access = cleanAccess(invite.access);
         if (access.length) {
           const { error: aErr } = await sb.from("specialist_access").insert(
-            access.map((a) => ({ ...a, specialist_user_id: uid, granted_by: invite.created_by ?? null })),
+            // who added each athlete, as the invite recorded it (never who made the invite)
+            access.map((a) => ({ ...a, specialist_user_id: uid, granted_by: storedGrantor(invite.access, a.client_id) })),
           );
           if (aErr) throw new Error(aErr.message);
         }
       }
       await finalizeStaffOnlyUser(sb, uid, invite.role);
-      await sb.from("staff_invites").update({ redeemed_user_id: uid }).eq("id", invite.id);
+      // done: the link and any code stop working for good
+      await sb.from("staff_invites")
+        .update({ redeemed_user_id: uid, setup_token: null, setup_token_hash: null, code_hash: null, code_expires_at: null })
+        .eq("id", invite.id);
     } catch (e) {
-      // undo the half-made login and put the invite back so the link works again
+      // undo the half-made login and put the invite back; the link still works
       if (uid) await sb.auth.admin.deleteUser(uid).catch(() => undefined);
       await sb.from("staff_invites").update({ status: "pending", redeemed_at: null }).eq("id", invite.id).eq("status", "redeemed");
       throw e;

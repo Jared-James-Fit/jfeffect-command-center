@@ -10,7 +10,38 @@ import type { ViewCategory } from "@/lib/team-access/presets";
 
 export const MESSAGE_BUCKET = "message-attachments";
 /** Signed media links live this long: long enough to watch, short enough to stop working soon after access ends. */
-export const MEDIA_LINK_SECONDS = 30 * 60;
+export const MEDIA_LINK_SECONDS = 15 * 60;
+
+/**
+ * Footage a specialist may see: a set video, or a lift sent in the coach chat
+ * only once it's linked to a logged set. A chat video on its own is a message,
+ * and messages are never theirs. (PostgREST `or` filter.)
+ */
+export const FOOTAGE_VIDEO_FILTER = "origin.eq.set,result_id.not.is.null";
+
+/** True when a pl_set_videos row is footage a specialist may see (the same rule as the filter). */
+export function isFootageVideo(v: {
+  origin?: string | null;
+  result_id?: string | null;
+  deleted_at?: string | null;
+}): boolean {
+  return !v.deleted_at && (v.origin === "set" || !!v.result_id);
+}
+
+/**
+ * A timestamp as a date-only instant on the athlete's own calendar day (noon
+ * UTC), so code that reads the day from a Date gets the athlete's day on the
+ * server and on any phone within ±11 hours of UTC.
+ */
+export function asAthleteDay(
+  iso: string | null | undefined,
+  timeZone: string | null | undefined,
+): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${todayIn(timeZone, d)}T12:00:00.000Z`;
+}
 
 export async function serviceDb(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -93,4 +124,14 @@ export function chunks<T>(items: T[], size = 150): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
+}
+
+/** Has the owner kept this clip back from specialists? */
+export async function footageHidden(db: any, setVideoId: string): Promise<boolean> {
+  const { data } = await db
+    .from("specialist_hidden_videos")
+    .select("set_video_id")
+    .eq("set_video_id", setVideoId)
+    .maybeSingle();
+  return !!data;
 }

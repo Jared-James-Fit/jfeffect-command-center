@@ -310,7 +310,7 @@ the plain coach voice.
 
 `20270603090000_specialist_login_kind.sql` + `20270603090100_team_specialists.sql`,
 `src/lib/team-access/`, `src/components/specialist/`, `src/components/team/specialists-section.tsx`.
-Database tests: `supabase/tests/team-specialists/` (60 checks on real Postgres,
+Database tests: `supabase/tests/team-specialists/` (79 checks on real Postgres,
 as each kind of login). Unit tests: `src/test/team-specialists.test.ts`.
 
 The first team role built on the target model instead of the global `coach`
@@ -322,16 +322,16 @@ permission, checked in the database on every read.
 | Identity | A staff-only login (its own email, never a client's) with the app role `specialist`. It never holds `coach` or `admin`, so none of the ~38 policies and 75 functions that trust those roles let it in. Two-step sign-in is required (`MFA_REQUIRED_ROLES`). |
 | Membership | `organization_members.role = 'specialist'`, kept in step by `_jf_member_sync` like every staff role. Removing the role revokes the membership at once. |
 | The person | `team_specialists`: preset (`game_day_coach`, `performance_specialist`), the role's title in the owner's words, status (active / suspended), display name, phone, time zone, headshot, and the confidentiality promise's exact words and time. |
-| Athletes | `specialist_access`: one row per athlete, `footage` / `training` / `performance` switches, active / revoked, and the athlete's consent (`athlete_ok_at`; automatic only when the person granting it is the athlete: the owner sharing their own athlete account). |
-| The one rule | `specialist_can_view(client, category)`: the role (with its two-step session), an active record, an active membership in an active organization, an active access row with that category on, the athlete's consent, and an open athlete account (not archived, deactivated or deleted). |
-| Reads | `specialist.functions.ts`: every handler asks `specialist_can_view` with the caller's own login, then reads with the service role only the columns that category allows (never `coach_notes`, a day's or a row's notes, goals, messages, nutrition, check-ins or recovery). Media links are signed for 30 minutes. |
+| Athletes | `specialist_access`: one row per athlete, `footage` / `training` / `performance` switches, active / revoked, and the athlete's consent (`athlete_ok_at`; automatic only when the business owner grants their own linked athlete account; any other admin's grant, or an admin linked to someone else's login, waits for the athlete; widening a category or giving access back asks again; an athlete's yes names exactly the categories they were shown, `specialist_access_respond(…, footage, training, performance)`). The server sets `granted_by` to whoever made each change, and on an invite each athlete carries who added it (`access[].granted_by`, kept by `tg_staff_invites_guard` for anyone writing with their own login; `created_by` never changes). |
+| The one rule | `specialist_can_view(client, category)`: the role (with its two-step session), an active record with a finished profile and the confidentiality promise agreed (the same fields the screens ask for first), an active membership in an active organization, an active access row with that category on, the athlete's consent, and an open athlete account (not archived, deactivated or deleted). |
+| Reads | `specialist.functions.ts`: every handler asks `specialist_can_view` with the caller's own login, then reads with the service role only the columns that category allows (never `coach_notes`, a day's or a row's notes, goals, messages, nutrition, check-ins or recovery). Footage is set videos, and coach-chat videos only once they're linked to a logged set (`isFootageVideo`; a chat video on its own is a message); clips the owner hid can't be listed, played, marked or noted. Media links are signed for 15 minutes, and no specialist answer is kept in the device's saved cache (`specialist-` in `DO_NOT_PERSIST_PREFIXES`). Days are the athlete's own calendar days (their zone; a moved workout's date). |
 | Notes | `specialist_notes`: the author reads their own; the athlete reads only shared ones through `my_shared_team_notes()`; no admin, coach, staff or Cleo path reads them (`CLEO_HIDDEN_TABLES`). Writes only through the server after the same check. Nothing notifies anyone. |
 | Footage the owner keeps back | `specialist_hidden_videos` (per clip, for every specialist). |
 | Audit | Every grant, change, consent, revocation, suspension and title change is a line in `organization_audit_log`. |
-| Invites | `staff_invites` (one invite system): `draft` until it has an email; the setup link's token is stored only as a SHA-256 hash; the invitee proves the email is theirs (the emailed link carries an HMAC proof; a texted or copied link asks for a 6-digit emailed code) before any login is created; redeeming claims the invite first, and a failure deletes the half-made login. The finance invite flow got the same hardening. |
+| Invites | `staff_invites` (one invite system): `draft` until it has an email; the setup link's token is stored only as a SHA-256 hash; the invitee proves the email is theirs (the emailed link carries an HMAC proof; a texted or copied link asks for a 6-digit emailed code) before any login is created. A code's tries are counted in the database before it's checked (`staff_invite_code_try`, 5 a code), a link gets 5 codes and one every 45 seconds (`staff_invite_code_issue`), and the public setup calls are limited per address. Redeeming claims the invite with the link it was read by, a failure deletes the half-made login and leaves the link working, and only success clears the link. The finance invite flow got the same hardening. |
 
 What a specialist sees: Footage (set videos, competition lifts first, weight
-in both units, reps, logged against planned effort, measured bar speed;
+in both units, reps, logged against planned effort, bar speed (an estimate shown as ≈ and called one);
 slow motion, frame step, full screen, compare with an earlier set, watched
 marks), Training (the program as the athlete sees it, read-only, main lifts
 up front, accessories folded, coming up and recently done), Performance
@@ -417,8 +417,8 @@ target model (specialists, done), then isolation, then everything external.
 | 24 | AI isolation | **Partly done** | Specialists have no AI; notes hidden from Cleo; per-org Cleo is Phase 4 |
 | 25 | Data governance | **Partly done** | Athlete consent for specialist sharing, confidentiality promise recorded; a team-member agreement document and organization agreements need counsel |
 | 26 | Existing JF Effect migration | **N/A yet** | Nothing moved: every change is additive (expand only) |
-| 29 | Testing | **Done for specialists** | 60 database checks, 18 unit tests, 6 screen render tests, existing suites |
-| 30 | Production deployment | See the PR / session report | Migrations are applied by hand (§3) |
+| 29 | Testing | **Done for specialists** | 79 database checks, 24 unit tests, 6 screen render tests, an independent security review (its findings fixed), the full suite (879 files) |
+| 30 | Production deployment | **Database done, app waiting to publish** | Both specialist migrations applied to production by hand on Nov 26 2026 (in one transaction that committed only if Jesse's draft, the existing memberships and invites, the 7 policies, 8 functions and 5 triggers checked out; every function body then matched the tested file). The app code reaches people when this branch is merged and published. |
 
 ### Known limits of the specialist role
 
@@ -426,7 +426,7 @@ target model (specialists, done), then isolation, then everything external.
   the API like any signed-in account (the app never routes them there). The
   Crew shows nothing private to them, but it isn't fenced off at the database.
   Fencing Crew functions behind a "may use Crew" check belongs with Phase 3.
-- A signed clip link stays valid up to 30 minutes after access is revoked.
+- A signed clip link stays valid up to 15 minutes after access is revoked.
 - Revoking access can't recall a clip someone downloaded or recorded.
 - There is no team-member agreement in Admin → Legal yet; the confidentiality
   promise is recorded on the specialist's record with its exact words.

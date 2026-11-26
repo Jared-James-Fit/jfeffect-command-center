@@ -88,7 +88,15 @@ export function TeamAccessList({ rows }: { rows: TeamAccessRow[] }) {
       const { data, error } = await (supabase as any).rpc("specialist_access_respond", {
         _access_id: r.access_id,
         _allow: allow,
+        // a yes covers exactly what they were shown
+        _footage: r.footage,
+        _training: r.training,
+        _performance: r.performance,
       });
+      if (!error && data === "changed") {
+        await qc.invalidateQueries({ queryKey: ["my-team-access"] });
+        throw new Error(`What ${r.name} would see just changed. Check it, then tap Allow again.`);
+      }
       if (error || !["allowed", "stopped"].includes(data))
         throw new Error("Couldn't save that. Try again.");
       toast.success(

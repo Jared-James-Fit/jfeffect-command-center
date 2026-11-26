@@ -8,12 +8,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  assignGrantors,
   cleanAccess,
   isPreset,
   permissionSummary,
   PRESETS,
   SPECIALIST_HOME,
+  storedGrantor,
 } from "@/lib/team-access/presets";
+import { asAthleteDay, isFootageVideo } from "@/lib/team-access/access.server";
 import {
   availableFilters,
   compareCandidates,
@@ -22,6 +25,7 @@ import {
   footageLine,
   matchesFilter,
   sortFootage,
+  speedWords,
   type FootageSource,
 } from "@/lib/team-access/footage";
 import {
@@ -125,7 +129,8 @@ describe("footage", () => {
     expect(i.weight).toEqual({ value: 230, unit: "kg", kg: 230, lb: 507.1 });
     expect(i.loggedEffort).toBe("RPE 8");
     expect(i.prescribedEffort).toBe("RPE 7-8");
-    expect(i.velocity).toEqual({ mps: 0.31, quality: "measured" });
+    expect(i.velocity).toEqual({ mps: 0.31, quality: "measured", estimated: false });
+    expect(speedWords(i.velocity)).toBe("0.31 m/s measured");
     expect(footageLine(i, "kg")).toBe("230 kg × 1 @ RPE 8");
     expect(footageLine(i, "lb")).toBe("507.1 lb × 1 @ RPE 8");
   });
@@ -549,5 +554,84 @@ describe("guarantees in the code", () => {
     expect(policies.length).toBe(1);
     expect(policies[0]).toMatch(/author_user_id = \(SELECT auth\.uid\(\)\)/);
     expect(policies.join(" ")).not.toMatch(/has_role|admin|coach/);
+  });
+});
+
+describe("review fixes", () => {
+  const OWNER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const ADMIN2 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+  it("who added each athlete is the server's: kept when unchanged or narrowed, the editor's when new or widened", () => {
+    const stored = [
+      { client_id: A, footage: true, training: false, performance: true, granted_by: OWNER },
+      { client_id: B, footage: true, training: true, performance: true, granted_by: OWNER },
+    ];
+    const next = cleanAccess([
+      // the request says the owner added it: ignored
+      { client_id: A, footage: true, training: true, performance: true, granted_by: OWNER },
+      { client_id: B, footage: true, training: false, performance: true, granted_by: ADMIN2 },
+    ]);
+    const out = assignGrantors(next, stored, ADMIN2);
+    expect(out.find((a) => a.client_id === A)?.granted_by).toBe(ADMIN2); // widened
+    expect(out.find((a) => a.client_id === B)?.granted_by).toBe(OWNER); // narrowed keeps
+    expect(assignGrantors(cleanAccess([{ client_id: A }]), [], ADMIN2)[0].granted_by).toBe(ADMIN2);
+    // a request can't sneak granted_by through cleanAccess
+    expect(
+      (cleanAccess([{ client_id: A, granted_by: OWNER }])[0] as any).granted_by,
+    ).toBeUndefined();
+  });
+
+  it("redeem reads who added an athlete from the invite, never who made it", () => {
+    const stored = [
+      { client_id: A, granted_by: ADMIN2 },
+      { client_id: B, granted_by: "not-a-uuid" },
+    ];
+    expect(storedGrantor(stored, A)).toBe(ADMIN2);
+    expect(storedGrantor(stored, B)).toBeNull();
+    expect(storedGrantor(null, A)).toBeNull();
+  });
+
+  it("footage is set videos, and chat videos only once they're linked to a set", () => {
+    expect(isFootageVideo({ origin: "set", result_id: null })).toBe(true);
+    expect(isFootageVideo({ origin: "chat", result_id: null })).toBe(false);
+    expect(isFootageVideo({ origin: "chat", result_id: A })).toBe(true);
+    expect(
+      isFootageVideo({ origin: "set", result_id: A, deleted_at: "2026-11-01T00:00:00Z" }),
+    ).toBe(false);
+  });
+
+  it("an estimated bar speed is never called measured", () => {
+    const i = footageItem({
+      ...src(),
+      result: {
+        ...src().result!,
+        mean_concentric_velocity_mps: 0.42,
+        velocity_quality: "estimated",
+      },
+    });
+    expect(i.velocity?.estimated).toBe(true);
+    expect(speedWords(i.velocity)).toBe("≈0.42 m/s estimated");
+  });
+
+  it("a set's day is the athlete's own calendar day, not the server's", () => {
+    // 9:30 PM in Winnipeg on Nov 20 is 03:30 UTC on Nov 21
+    expect(asAthleteDay("2026-11-21T03:30:00Z", "America/Winnipeg")).toBe(
+      "2026-11-20T12:00:00.000Z",
+    );
+    expect(asAthleteDay("2026-11-21T03:30:00Z", "Europe/London")).toBe("2026-11-21T12:00:00.000Z");
+    expect(asAthleteDay(null, "America/Winnipeg")).toBeNull();
+  });
+
+  it("the database checks the confidentiality promise and counts code tries itself", () => {
+    const sql = readFileSync("supabase/migrations/20270603090100_team_specialists.sql", "utf8");
+    const canView = sql.slice(
+      sql.indexOf("FUNCTION public.specialist_can_view"),
+      sql.indexOf("specialist_my_athletes()"),
+    );
+    expect(canView).toMatch(/confidentiality_at IS NOT NULL/);
+    expect(sql).toMatch(/FUNCTION public\.staff_invite_code_try/);
+    const code = readFileSync("src/lib/staff-invites.functions.ts", "utf8");
+    expect(code).toMatch(/rpc\("staff_invite_code_try"/);
+    expect(code).not.toMatch(/code_attempts: \(inv\.code_attempts/);
   });
 });

@@ -73,14 +73,15 @@ export type FootageItem = {
   loggedEffort: string | null;
   prescribedEffort: string | null;
   prescribedReps: string | null;
-  /** measured, never estimated */
-  velocity: { mps: number; quality: string | null } | null;
+  /** bar speed on the set: measured, or an estimate said as one (≈) */
+  velocity: { mps: number; quality: string | null; estimated: boolean } | null;
   durationS: number | null;
   createdAt: string;
 };
 
 const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
 
+/** The day a clip belongs to: the server works it out in the athlete's own zone; this is only a fallback. */
 function dayOf(src: FootageSource): string {
   if (src.day_date && /^\d{4}-\d{2}-\d{2}$/.test(src.day_date)) return src.day_date;
   const iso = src.result?.completed_at ?? src.created_at;
@@ -128,7 +129,11 @@ export function footageItem(src: FootageSource): FootageItem {
   const v = r?.mean_concentric_velocity_mps;
   const velocity =
     r && !r.velocity_excluded && v != null && Number(v) > 0
-      ? { mps: round(Number(v), 2), quality: r.velocity_quality ?? null }
+      ? {
+          mps: round(Number(v), 2),
+          quality: r.velocity_quality ?? null,
+          estimated: String(r.velocity_quality ?? "").toLowerCase() === "estimated",
+        }
       : null;
   const reps =
     r?.actual_reps != null && Number(r.actual_reps) > 0 ? Math.round(Number(r.actual_reps)) : null;
@@ -237,6 +242,12 @@ export function compareCandidates(
     .filter((x) => x.id !== item.id && (same(x) || (item.lift != null && x.lift === item.lift)))
     .sort((a, b) => Number(same(b)) - Number(same(a)) || b.day.localeCompare(a.day))
     .slice(0, max);
+}
+
+/** "0.31 m/s measured" / "≈0.31 m/s estimated": an estimate is never shown as a measurement. */
+export function speedWords(v: FootageItem["velocity"]): string | null {
+  if (!v) return null;
+  return v.estimated ? `≈${v.mps.toFixed(2)} m/s estimated` : `${v.mps.toFixed(2)} m/s measured`;
 }
 
 /** "140 kg × 3 @ RPE 8" with the other unit after it: what goes under a clip. */

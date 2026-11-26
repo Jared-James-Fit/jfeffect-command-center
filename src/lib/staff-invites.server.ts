@@ -55,6 +55,13 @@ export function inviteProofOk(inviteId: string, email: string | null | undefined
   return want.length === got.length && timingSafeEqual(want, got);
 }
 
+/** Two hex digests compared in constant time. */
+export function sameDigest(a: string, b: string): boolean {
+  const x = Buffer.from(a, "utf8");
+  const y = Buffer.from(b, "utf8");
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
 /** "j***@gmail.com" */
 export function maskInviteEmail(email: string): string {
   const [user, domain] = email.split("@");

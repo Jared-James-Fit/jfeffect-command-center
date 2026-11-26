@@ -183,11 +183,18 @@ export const getSpecialistFootage = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => z.object({ clientId: Uuid }).parse(i))
   .handler(async ({ data, context }): Promise<FootageResponse> => {
     const ctx = context as any;
-    const { assertSpecialistCan, serviceDb, signPaths, readAll, chunks } =
-      await import("@/lib/team-access/access.server");
+    const {
+      assertSpecialistCan,
+      serviceDb,
+      signPaths,
+      readAll,
+      chunks,
+      todayIn,
+      FOOTAGE_VIDEO_FILTER,
+    } = await import("@/lib/team-access/access.server");
     await assertSpecialistCan(ctx, data.clientId, "footage");
     const db = await serviceDb();
-    const [videos, hidden] = await Promise.all([
+    const [videos, hidden, client] = await Promise.all([
       readAll((from, to) =>
         db
           .from("pl_set_videos")
@@ -196,11 +203,14 @@ export const getSpecialistFootage = createServerFn({ method: "POST" })
           )
           .eq("client_id", data.clientId)
           .is("deleted_at", null)
+          .or(FOOTAGE_VIDEO_FILTER)
           .order("created_at", { ascending: false })
           .range(from, to),
       ),
       db.from("specialist_hidden_videos").select("set_video_id").eq("client_id", data.clientId),
+      db.from("clients").select("timezone").eq("id", data.clientId).maybeSingle(),
     ]);
+    const zone = (client?.data as any)?.timezone ?? null;
     const hiddenIds = new Set(((hidden.data ?? []) as any[]).map((h) => h.set_video_id));
     const list = (videos as any[]).filter((v) => !hiddenIds.has(v.id)).slice(0, 400);
 
@@ -227,11 +237,39 @@ export const getSpecialistFootage = createServerFn({ method: "POST" })
         .in("id", part);
       for (const r of (rs ?? []) as any[]) rows.set(r.id, r);
     }
-    const days = new Map<string, string | null>();
+    // a workout's day is where it sat on their calendar (moved ones too), else its own date
+    const calendarDays = new Map<string, string[]>();
     for (const part of chunks(dayIds)) {
-      const { data: ds } = await db.from("pl_days").select("id, scheduled_date").in("id", part);
-      for (const d of (ds ?? []) as any[]) days.set(d.id, d.scheduled_date ?? null);
+      const [{ data: ds }, { data: sched }] = await Promise.all([
+        db.from("pl_days").select("id, scheduled_date").in("id", part),
+        db
+          .from("pl_scheduled_workouts")
+          .select("source_day_id, scheduled_date")
+          .eq("client_id", data.clientId)
+          .in("source_day_id", part),
+      ]);
+      const instances = new Map<string, string[]>();
+      for (const w of (sched ?? []) as any[]) {
+        if (!w.source_day_id || !w.scheduled_date) continue;
+        instances.set(w.source_day_id, [
+          ...(instances.get(w.source_day_id) ?? []),
+          w.scheduled_date,
+        ]);
+      }
+      for (const d of (ds ?? []) as any[]) {
+        const own = d.scheduled_date ? [d.scheduled_date] : [];
+        calendarDays.set(d.id, instances.get(d.id) ?? own);
+      }
     }
+    /** the calendar day (the latest one not after the set was done), else the day it was done or filmed, in their zone */
+    const dayFor = (v: any, result: any): string | null => {
+      const lifted = todayIn(zone, new Date(result?.completed_at ?? v.created_at));
+      const planned = (v.day_id ? (calendarDays.get(v.day_id) ?? []) : [])
+        .filter((d) => d <= lifted)
+        .sort()
+        .pop();
+      return planned ?? lifted;
+    };
     // the set's name in its workout ("Top set", "Backoff 2"), as the coach chat says it
     const setNames = new Map<string, string>();
     await Promise.all(
@@ -256,7 +294,7 @@ export const getSpecialistFootage = createServerFn({ method: "POST" })
           exercise_name: v.exercise_name,
           workout_title: v.workout_title,
           duration_s: v.duration_s,
-          day_date: v.day_id ? (days.get(v.day_id) ?? null) : null,
+          day_date: dayFor(v, v.result_id ? (results.get(v.result_id) ?? null) : null),
           result: v.result_id ? (results.get(v.result_id) ?? null) : null,
           row: row
             ? {
@@ -297,11 +335,15 @@ export const getSpecialistVideo = createServerFn({ method: "POST" })
     const db = await serviceDb();
     const { data: v } = await db
       .from("pl_set_videos")
-      .select("id, client_id, storage_path, feed_path, thumbnail_path, mime, deleted_at")
+      .select(
+        "id, client_id, origin, result_id, storage_path, feed_path, thumbnail_path, mime, deleted_at",
+      )
       .eq("id", data.videoId)
       .maybeSingle();
-    // one answer whether the clip doesn't exist or isn't theirs
-    if (!v || v.deleted_at) throw new Error("You don't have access to this athlete's footage.");
+    const { isFootageVideo } = await import("@/lib/team-access/access.server");
+    // one answer whether the clip doesn't exist, isn't footage or isn't theirs
+    if (!v || !isFootageVideo(v))
+      throw new Error("You don't have access to this athlete's footage.");
     await assertSpecialistCan(ctx, v.client_id, "footage");
     const { data: hid } = await db
       .from("specialist_hidden_videos")
@@ -333,11 +375,15 @@ export const markFootageWatched = createServerFn({ method: "POST" })
     const db = await serviceDb();
     const { data: v } = await db
       .from("pl_set_videos")
-      .select("client_id")
+      .select("client_id, origin, result_id, deleted_at")
       .eq("id", data.videoId)
       .maybeSingle();
-    if (!v) throw new Error("You don't have access to this athlete's footage.");
+    const { isFootageVideo, footageHidden } = await import("@/lib/team-access/access.server");
+    if (!v || !isFootageVideo(v))
+      throw new Error("You don't have access to this athlete's footage.");
     await assertSpecialistCan(ctx, v.client_id, "footage");
+    if (await footageHidden(db, data.videoId))
+      throw new Error("You don't have access to this athlete's footage.");
     if (data.watched) {
       await db
         .from("specialist_video_views")
@@ -532,8 +578,15 @@ export const getSpecialistPerformance = createServerFn({ method: "POST" })
     );
     const { neutralizeObviousLoadOutliers } = await import("@/lib/analytics/load-sanity");
     // the athlete's own exercise notes never leave the server
+    const { asAthleteDay } = await import("@/lib/team-access/access.server");
+    const zone = client?.timezone ?? null;
+    // each set on the athlete's own calendar day (the engine reads the day from
+    // the date), so "now" here is what the athlete's own analytics say
     const results = neutralizeObviousLoadOutliers(
-      (raw as any[]).map((r) => ({ ...mapClientResultRow(r), exercise_note: null })),
+      (raw as any[]).map((r) => {
+        const row = mapClientResultRow(r) as any;
+        return { ...row, date: asAthleteDay(row.date, zone) ?? row.date, exercise_note: null };
+      }),
     );
 
     const { data: athlete } = await db
@@ -626,10 +679,16 @@ async function checkTarget(
   if (kind === "set_video") {
     const { data } = await db
       .from("pl_set_videos")
-      .select("client_id, deleted_at")
+      .select("client_id, origin, result_id, deleted_at")
       .eq("id", targetId)
       .maybeSingle();
-    if (!data || data.client_id !== clientId || data.deleted_at)
+    const { isFootageVideo, footageHidden } = await import("@/lib/team-access/access.server");
+    if (
+      !data ||
+      data.client_id !== clientId ||
+      !isFootageVideo(data) ||
+      (await footageHidden(db, targetId))
+    )
       throw new Error("That clip isn't this athlete's.");
     return "footage";
   }

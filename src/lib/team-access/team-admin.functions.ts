@@ -242,8 +242,19 @@ export const saveSpecialistInvite = createServerFn({ method: "POST" })
     const ctx = context as any;
     await assertOrgAdmin(ctx);
     const sb = await db();
-    const { cleanAccess } = await import("@/lib/team-access/presets");
-    const access = cleanAccess(data.access);
+    const { cleanAccess, assignGrantors } = await import("@/lib/team-access/presets");
+    const wanted = cleanAccess(data.access);
+    let stored: unknown = [];
+    if (data.id) {
+      const { data: prev } = await sb
+        .from("staff_invites")
+        .select("access")
+        .eq("id", data.id)
+        .maybeSingle();
+      stored = prev?.access ?? [];
+    }
+    // who added each athlete is ours to say, never the request's
+    const access = assignGrantors(wanted, stored, ctx.userId);
     if (data.email) {
       const { assertEmailFreeForStaffInvite } = await import("@/lib/setup-link-guard.server");
       await assertEmailFreeForStaffInvite(sb, data.email);
@@ -251,7 +262,11 @@ export const saveSpecialistInvite = createServerFn({ method: "POST" })
         .from("staff_invites")
         .select("id")
         .in("status", ["draft", "pending"])
-        .ilike("email", data.email)
+        // case-insensitive, with _ and % meaning themselves
+        .ilike(
+          "email",
+          data.email.replace(/[\\%_]/g, (c) => `\\${c}`),
+        )
         .neq("id", data.id ?? "00000000-0000-0000-0000-000000000000")
         .limit(1);
       if (same?.length) throw new Error("There's already an invite for that email.");
@@ -441,7 +456,9 @@ export const setSpecialistAccess = createServerFn({ method: "POST" })
             training: w.training,
             performance: w.performance,
             status: "active",
-            granted_by: existing.status === "active" ? undefined : ctx.userId,
+            // whoever changed it last granted it: a widening asks the athlete
+            // again unless it's the owner sharing their own account
+            granted_by: ctx.userId,
           })
           .eq("id", existing.id);
         if (error) throw new Error(error.message);

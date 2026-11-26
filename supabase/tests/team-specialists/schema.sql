@@ -1,7 +1,7 @@
 -- Minimal stand-ins for what 20270507090000_organizations_foundation.sql,
 -- 20270603090000_specialist_login_kind.sql and
 -- 20270603090100_team_specialists.sql use, plus a small team: the owner
--- (admin, business owner) with a linked athlete account, a coach, a client
+-- (admin, business owner) with a linked athlete account, a second admin, a coach, a client
 -- with a login, a client with none, a JF member, and Jesse's future login.
 \set ON_ERROR_STOP 1
 
@@ -37,6 +37,8 @@ create function is_admin_viewer() returns boolean language sql stable as $$ sele
 create function tg_set_updated_at() returns trigger language plpgsql as $$ begin new.updated_at = now(); return new; end $$;
 
 create table business_owners (user_id uuid primary key references auth.users(id) on delete cascade, created_at timestamptz not null default now());
+create function is_business_owner(_uid uuid default auth.uid()) returns boolean language sql stable security definer as $$
+  select case when exists (select 1 from public.business_owners where user_id = _uid) then public.caller_mfa_ok(_uid) else false end $$;
 create table profiles (id uuid primary key references auth.users(id) on delete cascade, full_name text, email text);
 create table coaches (
   id uuid primary key default gen_random_uuid(), user_id uuid unique, full_name text, email text,
@@ -70,7 +72,8 @@ insert into auth.users values
   ('00000000-0000-0000-0000-0000000000c1', 'ana@example.test'),
   ('00000000-0000-0000-0000-0000000000d1', 'marc@example.test'),
   ('00000000-0000-0000-0000-0000000000e1', 'member@example.test'),
-  ('00000000-0000-0000-0000-0000000000f1', 'finance@example.test');
+  ('00000000-0000-0000-0000-0000000000f1', 'finance@example.test'),
+  ('00000000-0000-0000-0000-0000000000a3', 'second.admin@example.test');
 insert into profiles (id, full_name) values
   ('00000000-0000-0000-0000-0000000000a1', 'Jared Owner'),
   ('00000000-0000-0000-0000-0000000000c1', 'Ana Coach');
@@ -81,7 +84,8 @@ insert into user_roles (user_id, role) values
   ('00000000-0000-0000-0000-0000000000c1', 'coach'),
   ('00000000-0000-0000-0000-0000000000d1', 'client'),
   ('00000000-0000-0000-0000-0000000000e1', 'client'),
-  ('00000000-0000-0000-0000-0000000000f1', 'finance');
+  ('00000000-0000-0000-0000-0000000000f1', 'finance'),
+  ('00000000-0000-0000-0000-0000000000a3', 'admin');
 insert into coaches (id, user_id, full_name, status) values
   ('00000000-0000-0000-0000-00000000c0a1', '00000000-0000-0000-0000-0000000000c1', 'Ana Coach', 'Active');
 -- the owner's staff login is linked to their own athlete account
@@ -92,5 +96,6 @@ insert into clients (id, user_id, full_name, assigned_coach_id) values
   ('00000000-0000-0000-0000-0000000c1e01', '00000000-0000-0000-0000-0000000000d1', 'Marc Client', '00000000-0000-0000-0000-00000000c0a1'),
   ('00000000-0000-0000-0000-0000000c1e02', null, 'Nico Client', null),
   ('00000000-0000-0000-0000-0000000c1e03', '00000000-0000-0000-0000-0000000000e1', 'Mia Member', null);
+-- footage: a set video, a chat video nobody linked to a set
 insert into pl_set_videos (id, client_id) values
   ('00000000-0000-0000-0000-0000000f0001', '00000000-0000-0000-0000-0000000c1e00');

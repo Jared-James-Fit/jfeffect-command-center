@@ -67,11 +67,11 @@ function render(
     createElement(
       QueryClientProvider,
       { client: qc },
-      createElement(
-        SpecialistProvider,
-        { data: { me, athletes: [athlete] }, refresh: async () => undefined },
-        node,
-      ),
+      createElement(SpecialistProvider, {
+        data: { me, athletes: [athlete] },
+        refresh: async () => undefined,
+        children: node,
+      }),
     ),
   );
 }

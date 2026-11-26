@@ -20,6 +20,7 @@ import {
   compareCandidates,
   defaultFilter,
   footageLine,
+  speedWords,
   matchesFilter,
   type FootageFilter,
   type FootageItem,
@@ -190,10 +191,7 @@ function FootageCard({
         <div className="text-xs text-muted-foreground">{item.setName}</div>
         <div className="mt-0.5 text-sm">{footageLine(item, unit) || "Not logged"}</div>
         <div className="text-xs text-muted-foreground">
-          {[
-            item.prescribedEffort && `Planned ${item.prescribedEffort}`,
-            item.velocity && `${item.velocity.mps.toFixed(2)} m/s measured`,
-          ]
+          {[item.prescribedEffort && `Planned ${item.prescribedEffort}`, speedWords(item.velocity)]
             .filter(Boolean)
             .join(" · ")}
         </div>
@@ -405,10 +403,7 @@ function VideoSheet({
                 .join(" @ ") || "—"
             }
           />
-          <Fact
-            label="Bar speed"
-            value={item.velocity ? `${item.velocity.mps.toFixed(2)} m/s, measured` : "Not measured"}
-          />
+          <Fact label="Bar speed" value={speedWords(item.velocity) ?? "Not measured"} />
         </dl>
         <div className="flex flex-wrap gap-2">
           {candidates.length > 0 && (

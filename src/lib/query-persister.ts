@@ -40,6 +40,9 @@ const DO_NOT_PERSIST_PREFIXES = [
   // before the owner reset someone, or a device forgotten elsewhere, must
   // never be painted).
   "two-step-",
+  // A specialist's view of an athlete: access can end at any moment (revoked,
+  // paused, the athlete stops sharing), so it's never kept on the device.
+  "specialist-",
   // Tasks are edited from several devices at once. A 24h-old disk snapshot
   // made the phone show an outdated (or empty) list after a desktop edit.
   "tasks",

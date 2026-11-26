@@ -5,6 +5,7 @@ set client_min_messages = notice;
 -- ids
 \set owner     '''00000000-0000-0000-0000-0000000000a1'''
 \set owner_ath '''00000000-0000-0000-0000-0000000000a2'''
+\set admin2    '''00000000-0000-0000-0000-0000000000a3'''
 \set coach     '''00000000-0000-0000-0000-0000000000c1'''
 \set marc      '''00000000-0000-0000-0000-0000000000d1'''
 \set member    '''00000000-0000-0000-0000-0000000000e1'''
@@ -18,9 +19,59 @@ set client_min_messages = notice;
 select t_assert((select count(*) = 1 from staff_invites where first_name = 'Jesse' and role::text = 'specialist'
                  and status = 'draft' and email is null and preset = 'game_day_coach' and title = 'Game Day Coach'),
                 'Jesse waits as a Game Day Coach draft with no email');
-select t_assert((select access = jsonb_build_array(jsonb_build_object('client_id', :c_owner::uuid, 'footage', true, 'training', true, 'performance', true))
+select t_assert((select access = jsonb_build_array(jsonb_build_object('client_id', :c_owner::uuid, 'footage', true, 'training', true,
+                                                                      'performance', true, 'granted_by', :owner::uuid))
                    from staff_invites where first_name = 'Jesse'),
-                'Jesse''s draft gives the owner''s own athlete account, every category');
+                'Jesse''s draft gives the owner''s own athlete account, every category, added by the owner');
+
+-- Who added an athlete is the database's to say when someone writes with their own login
+reset role; select t_as(:admin2);
+update staff_invites
+   set access = jsonb_build_array(
+         jsonb_build_object('client_id', :c_owner::uuid, 'footage', true, 'training', true, 'performance', true, 'granted_by', :owner::uuid),
+         jsonb_build_object('client_id', :c_marc::uuid, 'footage', true, 'training', false, 'performance', false, 'granted_by', :owner::uuid)),
+       created_by = :admin2
+ where first_name = 'Jesse';
+select t_assert((select (access -> 0 ->> 'granted_by')::uuid = :owner::uuid and (access -> 1 ->> 'granted_by')::uuid = :admin2::uuid
+                   from staff_invites where first_name = 'Jesse'),
+                'an athlete another admin adds is theirs, even when they say it was the owner''s');
+select t_assert((select created_by = :owner::uuid from staff_invites where first_name = 'Jesse'), 'who made an invite never changes');
+update staff_invites
+   set access = jsonb_build_array(
+         jsonb_build_object('client_id', :c_owner::uuid, 'footage', true, 'training', true, 'performance', true, 'granted_by', :owner::uuid),
+         jsonb_build_object('client_id', :c_marc::uuid, 'footage', true, 'training', true, 'performance', false, 'granted_by', :owner::uuid))
+ where first_name = 'Jesse';
+select t_assert((select (access -> 1 ->> 'granted_by')::uuid = :admin2::uuid from staff_invites where first_name = 'Jesse'),
+                'widening an athlete makes it the editor''s');
+reset role; select t_as_service();
+update staff_invites
+   set access = jsonb_build_array(jsonb_build_object('client_id', :c_owner::uuid, 'footage', true, 'training', true,
+                                                     'performance', true, 'granted_by', :owner::uuid))
+ where first_name = 'Jesse';
+
+-- ── Codes for a texted or copied link: counted in the database ─────────────
+insert into staff_invites (id, email, role, status, setup_token_hash)
+values ('00000000-0000-0000-0000-00000000c0de', 'code@example.test', 'finance', 'pending', 'hash-1');
+select t_assert(staff_invite_code_issue('00000000-0000-0000-0000-00000000c0de', 'code-hash', 15) = 'sent', 'a code goes out');
+select t_assert(staff_invite_code_issue('00000000-0000-0000-0000-00000000c0de', 'code-hash-2', 15) = 'wait', 'a second right away waits');
+select t_assert((select code_hash = 'code-hash' from staff_invites where id = '00000000-0000-0000-0000-00000000c0de'), 'and doesn''t replace the first');
+select t_assert(staff_invite_code_try('00000000-0000-0000-0000-00000000c0de') = 'code-hash', 'try 1 is counted and checked');
+select staff_invite_code_try('00000000-0000-0000-0000-00000000c0de') from generate_series(2, 5);
+select t_assert(staff_invite_code_try('00000000-0000-0000-0000-00000000c0de') is null, 'a sixth try gets nothing to check against');
+update staff_invites set code_sent_at = now() - interval '1 minute', codes_sent = 4 where id = '00000000-0000-0000-0000-00000000c0de';
+select t_assert(staff_invite_code_issue('00000000-0000-0000-0000-00000000c0de', 'code-hash-5', 15) = 'sent', 'a fifth code goes out');
+update staff_invites set code_sent_at = now() - interval '1 minute' where id = '00000000-0000-0000-0000-00000000c0de';
+select t_assert(staff_invite_code_issue('00000000-0000-0000-0000-00000000c0de', 'code-hash-6', 15) = 'limit', 'a link gets 5 codes');
+update staff_invites set setup_token_hash = 'hash-2' where id = '00000000-0000-0000-0000-00000000c0de';
+select t_assert((select codes_sent = 0 and code_hash is null from staff_invites where id = '00000000-0000-0000-0000-00000000c0de'),
+                'a new link starts its codes over');
+reset role; select t_as(:admin2); set role authenticated;
+do $$ begin
+  perform staff_invite_code_try('00000000-0000-0000-0000-00000000c0de');
+  raise exception 'ASSERT FAILED: a login checked a code directly';
+exception when insufficient_privilege then raise notice 'ok: only the server checks codes';
+end $$;
+reset role; select t_as_service();
 
 -- Invites keep their shape
 do $$ begin
@@ -49,12 +100,35 @@ values (:jesse, 'game_day_coach', 'Game Day Coach', 'Jesse', :owner),
        (:other_sp, 'performance_specialist', 'Performance Specialist', 'Sam', :owner);
 insert into specialist_access (specialist_user_id, client_id, granted_by)
 values (:jesse, :c_owner, :owner);
+reset role; select t_as(:jesse); set role authenticated;
+select t_assert(not specialist_can_view(:c_owner, 'footage'), 'nothing until his profile is done and he agrees to keep it private');
+reset role; select t_as_service();
+update team_specialists
+   set phone = '+12045550123', time_zone = 'America/Winnipeg', headshot_path = user_id::text || '/h.jpg',
+       confidentiality_text = 'I''ll keep it private', confidentiality_at = now()
+ where user_id in (:jesse, :other_sp);
 select t_assert((select athlete_ok_by = 'self' and athlete_ok_at is not null from specialist_access where specialist_user_id = :jesse and client_id = :c_owner),
                 'the owner sharing their own athlete account is agreed at once');
 insert into specialist_access (specialist_user_id, client_id, granted_by, training, performance)
 values (:jesse, :c_marc, :owner, false, false);
 select t_assert((select athlete_ok_at is null from specialist_access where specialist_user_id = :jesse and client_id = :c_marc),
                 'access to another athlete waits for that athlete');
+-- only the owner sharing their own athlete account is that athlete's yes
+insert into specialist_access (specialist_user_id, client_id, granted_by)
+values (:other_sp, :c_owner, :admin2);
+select t_assert((select athlete_ok_at is null from specialist_access where specialist_user_id = :other_sp and client_id = :c_owner),
+                'another admin giving the owner''s athlete account waits for the owner');
+-- an admin who links their own login to an athlete's doesn't get to answer for them
+insert into community_profiles (user_id, same_person_as) values (:admin2, :marc);
+select id as marc_access from specialist_access where specialist_user_id = :jesse and client_id = :c_marc \gset
+reset role; select t_as(:admin2); set role authenticated;
+select t_assert((select count(*) = 0 from my_team_access()), 'an admin linked to someone''s login doesn''t see their requests');
+select t_assert(specialist_access_respond(:'marc_access', true, true, false, false) = 'not_found',
+                'nor agree for them');
+reset role; select t_as_service();
+select t_assert((select athlete_ok_at is null from specialist_access where id = :'marc_access'), 'Marc''s access still waits for Marc');
+delete from community_profiles where user_id = :admin2;
+delete from specialist_access where specialist_user_id = :other_sp and client_id = :c_owner;
 select t_assert((select count(*) >= 3 from organization_audit_log where target_id = :jesse::uuid and action like 'specialist.%'),
                 'the access record keeps each grant and the new specialist');
 
@@ -103,7 +177,11 @@ select t_assert(not specialist_can_view(:c_owner, 'footage'), 'another specialis
 -- ── The athlete's side ─────────────────────────────────────────────────────
 reset role; select t_as(:marc); set role authenticated;
 select t_assert((select count(*) = 1 and bool_and(not agreed) from my_team_access()), 'Marc sees Jesse asking, not yet agreed');
-select t_assert((select specialist_access_respond(access_id, true) = 'allowed' from my_team_access()), 'Marc agrees');
+select t_assert((select specialist_access_respond(access_id, true, not footage, training, performance) = 'changed' from my_team_access()),
+                'a yes to something other than what he was shown agrees to nothing');
+select t_assert((select bool_and(not agreed) from my_team_access()), 'still waiting');
+select t_assert((select specialist_access_respond(access_id, true, footage, training, performance) = 'allowed' from my_team_access()),
+                'Marc agrees to exactly what he was shown');
 reset role; select t_as(:jesse); set role authenticated;
 select t_assert(specialist_can_view(:c_marc, 'footage'), 'then Jesse sees Marc''s footage');
 select t_assert(not specialist_can_view(:c_marc, 'training'), 'but only the categories the owner turned on');

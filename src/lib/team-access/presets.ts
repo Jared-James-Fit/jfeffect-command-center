@@ -117,6 +117,49 @@ export function cleanAccess(input: unknown): InviteAccess {
   return out;
 }
 
+/** An invite's athlete with who added it (the server's record, never the client's say). */
+export type GrantedAccess = InviteAccess[number] & { granted_by: string | null };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Who added each athlete on an invite: one already on it with nothing widened
+ * keeps who added it, anything new or widened is the editor's. The database
+ * applies the same rule to anyone writing with their own login
+ * (tg_staff_invites_guard), and only the owner adding their own athlete
+ * account counts as that athlete's yes.
+ */
+export function assignGrantors(
+  next: InviteAccess,
+  stored: unknown,
+  editor: string,
+): GrantedAccess[] {
+  const prev = new Map<string, any>();
+  if (Array.isArray(stored))
+    for (const raw of stored) if (typeof raw?.client_id === "string") prev.set(raw.client_id, raw);
+  const on = (raw: any, k: keyof CategoryFlags) => raw?.[k] !== false;
+  return next.map((a) => {
+    const p = prev.get(a.client_id);
+    const widened =
+      !p ||
+      (a.footage && !on(p, "footage")) ||
+      (a.training && !on(p, "training")) ||
+      (a.performance && !on(p, "performance"));
+    const kept =
+      typeof p?.granted_by === "string" && UUID_RE.test(p.granted_by) ? p.granted_by : null;
+    return { ...a, granted_by: widened ? editor : kept };
+  });
+}
+
+/** Who added an athlete to a stored invite (null when nobody we can name). */
+export function storedGrantor(stored: unknown, clientId: string): string | null {
+  if (!Array.isArray(stored)) return null;
+  const raw = stored.find((r: any) => r?.client_id === clientId);
+  return typeof raw?.granted_by === "string" && UUID_RE.test(raw.granted_by)
+    ? raw.granted_by
+    : null;
+}
+
 export function anyCategory(f: CategoryFlags): boolean {
   return f.footage || f.training || f.performance;
 }
