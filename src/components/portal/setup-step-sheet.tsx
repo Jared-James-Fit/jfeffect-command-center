@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BasicInfoForm } from "@/components/basic-info-form";
-import { ProfilePictureCapture } from "@/components/profile-picture-capture";
+import { useHeadshotCamera } from "@/components/headshots/headshot-ui";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { isBasicInfoComplete } from "@/lib/basic-info";
@@ -23,9 +23,9 @@ type Props = {
 
 export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }: Props) {
   const open = step !== null;
-  const title = step === "profile_picture" ? "Add a profile photo" : step === "basic_info" ? "Confirm your basic info" : step === "training_schedule" ? "Set your training schedule" : "";
+  const title = step === "profile_picture" ? "Add your account headshot" : step === "basic_info" ? "Confirm your basic info" : step === "training_schedule" ? "Set your training schedule" : "";
   const description = step === "profile_picture"
-    ? "A clear headshot helps your coach personalise your feedback."
+    ? "Taken live with your camera."
     : step === "basic_info"
       ? "Identity, contact and emergency details only. Coaching questions live in Goals & Setup."
       : step === "training_schedule"
@@ -51,34 +51,15 @@ export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }:
   );
 }
 
-function ProfilePictureStep({ userId, clientId, currentUrl, onDone }: { userId: string; clientId: string; currentUrl: string | null; onDone: () => void }) {
-  const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const handleUploaded = async (path: string) => {
-    setSaving(true);
-    const { error } = await supabase.from("clients").update({
-      profile_picture_url: path,
-      profile_picture_updated_at: new Date().toISOString(),
-      profile_picture_updated_by: "client",
-      profile_picture_source: "camera",
-      profile_picture_needs_update: false,
-      profile_picture_needs_update_at: null,
-      profile_picture_needs_update_reason: null,
-    }).eq("id", clientId);
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["setup-banner-client", userId] });
-    qc.invalidateQueries({ queryKey: ["my-client-account"] });
-    qc.invalidateQueries({ queryKey: ["my-client"] });
-    toast.success("Profile photo saved");
-    onDone();
-  };
+function ProfilePictureStep({ onDone }: { userId: string; clientId: string; currentUrl: string | null; onDone: () => void }) {
+  // the account headshot is taken with its own live camera (headshot-capture.tsx), never a file
+  const camera = useHeadshotCamera();
   return (
     <div className="space-y-4">
-      <ProfilePictureCapture mode="client" userId={userId} currentUrl={currentUrl} onUploaded={handleUploaded} />
-      <Button variant="outline" className="w-full" onClick={onDone} disabled={saving}>
-        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Done
-      </Button>
+      <p className="text-sm text-muted-foreground">A quick live photo so your coach can recognize you. Only your coach and JF Effect admins see it.</p>
+      <Button className="w-full" onClick={camera.open}>Take my headshot</Button>
+      <Button variant="outline" className="w-full" onClick={onDone}>Done</Button>
+      {camera.element}
     </div>
   );
 }

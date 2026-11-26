@@ -8,7 +8,7 @@
 // named in `missing`, never invented: the sign-up still asks for the tick,
 // and the person is asked again in the app once the document is published
 // (listMyLegalStatus, LegalAcceptanceGate).
-import { SIGNUP_ACK_TEXT, SIGNUP_LEGAL_SLUGS, type SignupLegalSlug } from "./legal-signup";
+import { CREW_GUIDELINES_VERSION, SIGNUP_ACK_TEXT, SIGNUP_LEGAL_SLUGS, type SignupLegalSlug } from "./legal-signup";
 
 export type SignupAcceptanceResult = {
   recorded: SignupLegalSlug[];
@@ -72,6 +72,17 @@ export async function recordSignupAcceptances(
     // 23505: already recorded for this version (a retry), which is the same evidence.
     if (insErr && (insErr as any).code !== "23505") throw new Error(insErr.message);
     recorded.push(slug);
+  }
+  // The box names the Crew community guidelines too: kept where Crew reads who agreed to them
+  // (whatever the Terms' state; the database also records it from the Terms acceptance above).
+  // Never over an earlier agreement, and never failing the sign-up.
+  try {
+    const { error: crewErr } = await sb
+      .from("community_rules_acceptances")
+      .upsert({ user_id: input.userId, version: CREW_GUIDELINES_VERSION }, { onConflict: "user_id", ignoreDuplicates: true });
+    if (crewErr) console.warn("[signup] community guidelines not recorded", crewErr.message);
+  } catch (e: any) {
+    console.warn("[signup] community guidelines not recorded", e?.message ?? e);
   }
   return { recorded, missing };
 }

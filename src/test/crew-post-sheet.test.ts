@@ -80,7 +80,7 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
     expect(sheet).toContain("useSwipeDownToClose(node, open, closeNow, {");
     const hook = read("src/hooks/use-swipe-down-to-close.ts");
     expect(hook).toContain('target?.addEventListener("touchmove", onMove as EventListener, { passive: false });');
-    expect(hook).toContain("if (t?.closest?.(NO_DRAG)) return;");
+    expect(hook).toContain('if (t?.closest?.(NO_DRAG) || targetOwns(t, "y", el)) return;');
     expect(hook).toContain("if (scrolled && !(ex?.enabled && !ex.full)) return;");
     expect(hook).toContain(`const NO_DRAG = "input, textarea, select, [contenteditable='true'], [role='slider'], [data-no-sheet-drag]";`);
     expect(hook).toContain("if (sheetDragCloses({ dy, ms, height })) closeRef.current();");
@@ -126,7 +126,8 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
   it("the paged feed opens it from … more and 💬; the coach's card feed keeps its comments sheet", () => {
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("onOpenComments={openCommentsSheet}\n                  onOpenCaption={openCaptionSheet}\n                  onOpenWorkout={openWorkoutSheet}\n                  sheetOpen={sheet?.post.id === p.id}");
-    expect(screen).toContain("{paging && <PostSheet post={sheetPost}");
+    // the feed's screens and a post on its own screen (post-open.ts) share it
+    expect(screen).toContain("{pagedLook && <PostSheet post={sheetPost}");
     expect(screen).toContain("<CommentsSheet post={commentsFor}");
   });
 });

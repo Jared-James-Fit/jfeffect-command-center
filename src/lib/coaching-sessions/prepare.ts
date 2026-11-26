@@ -108,6 +108,24 @@ export type MeetingExtras = {
   doneCommitments?: Array<{ owner: "coach" | "athlete"; text: string; closedOn: string | null }>;
   /** the client's weight unit, for anything said in a load */
   unit?: "kg" | "lb";
+  /** the goal ledger (goal-intel), each target already in words */
+  goals?: Array<{
+    id: string;
+    title: string;
+    status: "proposed" | "active";
+    /** what they said ("220–225 lb") */
+    clientTarget: string | null;
+    unitInferred: boolean;
+    tentative: boolean;
+    /** the coach-approved target, in words */
+    approved: string | null;
+    /** Cleo's projection (an interpretation) */
+    projection: string | null;
+    score: number | null;
+    /** the read's recommended action, when it asks for something */
+    action: string | null;
+    clientFacing: boolean;
+  }>;
 };
 
 export type SessionPrepInput = PrepInput &
@@ -444,6 +462,33 @@ export function buildSessionPrep(x: SessionPrepInput): SessionPrep {
       coachActions.push({ slot: "action-game-plan", text: "Release the game plan (attempts and warm-ups) before meet week", source: "read", kind: "action" });
   }
 
+  // ---------------- the goal ledger: approved targets, what they said, and what still needs the coach
+  for (const g of x.goals ?? []) {
+    const slot = `goal:${g.id}`;
+    // Cleo's projection is an interpretation: the coach's to read, never on the shared screen
+    if (g.projection) observations.push({ slot: `${slot}:projection`, text: `${g.title}: projected ${g.projection}${g.score != null ? `, ${g.score}/100 feasibility` : ""}`, source: "read", ref: "Goals" });
+    if (g.status === "proposed") {
+      if (g.clientTarget)
+        decisions.push({
+          slot,
+          text: `Confirm the target: ${g.title}, they said ${g.clientTarget}${g.tentative ? " (tentatively)" : ""}`,
+          source: "athlete",
+          ref: "Goals",
+        });
+      if (g.unitInferred) clarify.push({ slot: `${slot}:unit`, text: `${g.title}: no unit was said (${g.clientTarget}); confirm it`, source: "athlete", clarify: true });
+      continue;
+    }
+    if (g.approved)
+      milestones.push({
+        slot,
+        text: `${g.title}: target ${g.approved}`,
+        // a target the client isn't told about stays off the shared screen
+        source: g.clientFacing ? "record" : "coach",
+        ref: "Goals",
+      });
+    if (g.action) recommendations.push({ slot: `${slot}:action`, text: `${g.title}: ${g.action}`, source: "read", ref: "Goals" });
+  }
+
   // ---------------- the client's own words: answers, topics, recent messages (reported, never verified)
   const routed = routeAnswers(x.answers);
   const said = (text: string, slot: string): PrepItem => ({ text, source: "athlete", ref: "Pre-call questions", slot });
@@ -591,6 +636,8 @@ export type Agenda = {
   outcome: string;
   /** the objective is the coach's private priority: the shared screen leaves it out */
   objectivePrivate?: boolean;
+  /** the coach wrote the objective: a refresh keeps it */
+  objectiveEdited?: boolean;
   nextObjective: string | null;
   sections: AgendaSection[];
   /** clarifications to settle, kept apart from the talking points */
@@ -642,6 +689,34 @@ const WEIGHTS: Record<"call" | "touch_base", Record<SectionKey, number>> = {
   touch_base: { connect: 0.1, recognize: 0.1, evaluate: 0.2, coach: 0.3, execute: 0.2, align: 0.1 },
 };
 
+/**
+ * Each thing is said once in a plan: the same signal can reach a section from
+ * two lists (a check-in's recovery flags are both "what's not working" and
+ * "what they need"; a worsening pain the same), so a point whose topic (its
+ * slot, "-support" aside) or whose words (past a "Label:") were already said
+ * in an earlier point is left out, the first one kept.
+ */
+function onceEach(raw: Record<SectionKey, PrepItem[]>): Record<SectionKey, PrepItem[]> {
+  const seen = sayOnce();
+  const out = {} as Record<SectionKey, PrepItem[]>;
+  for (const k of SECTION_KEYS) out[k] = (raw[k] ?? []).filter((i) => seen(i));
+  return out;
+}
+
+/** A filter that passes a point the first time its topic or its words come up. */
+function sayOnce() {
+  const topics = new Set<string>();
+  const words = new Set<string>();
+  return (i: { slot?: string | null; text: string }): boolean => {
+    const topic = i.slot ? i.slot.replace(/-support$/, "") : null;
+    const said = i.text.replace(/^[^:]{1,30}:\s*/, "").toLowerCase().replace(/[^a-z0-9×]+/g, " ").trim();
+    if ((topic && topics.has(topic)) || (said.length > 8 && words.has(said))) return false;
+    if (topic) topics.add(topic);
+    if (said.length > 8) words.add(said);
+    return true;
+  };
+}
+
 export function planAgenda(prep: SessionPrep, opts: { minutes?: number; format?: string; now?: string; firstName?: string | null } = {}): Agenda {
   const fmt = opts.format === "touch_base" ? "touch_base" : "call";
   const decisions = prep.decisions.length + prep.recommendations.length;
@@ -685,7 +760,7 @@ export function planAgenda(prep: SessionPrep, opts: { minutes?: number; format?:
       say: "You know what to do and why. I'll send you a short recap so it's all in one place.",
     },
   ];
-  const raw: Record<SectionKey, PrepItem[]> = { connect, recognize, evaluate, coach, execute, align };
+  const raw: Record<SectionKey, PrepItem[]> = onceEach({ connect, recognize, evaluate, coach, execute, align });
   if (fmt === "touch_base") {
     raw.recognize = raw.recognize.slice(0, 1);
     raw.evaluate = raw.evaluate.slice(0, 2);
@@ -741,10 +816,22 @@ const LEGACY_TO: Record<LegacySectionKey, SectionKey> = {
 export function normalizeAgenda(agenda: any): Agenda | null {
   if (!agenda || !Array.isArray(agenda.sections)) return null;
   if (agenda.version === 2) {
+    // a plan stored before points were said once each: an untouched repeat is
+    // left out as it's read (the coach's own, edited or settled points always stay)
+    const seen = sayOnce();
     return {
       ...agenda,
       clarify: Array.isArray(agenda.clarify) ? agenda.clarify : [],
-      sections: agenda.sections.map((s: any) => ({ ...s, items: (s.items ?? []).map((i: any) => fillPoint(s.key, i)) })),
+      sections: agenda.sections.map((s: any) => ({
+        ...s,
+        items: (s.items ?? [])
+          .map((i: any) => fillPoint(s.key, i))
+          .filter((i: TalkingPoint) => {
+            const touched = !!(i.custom || i.edited || (i.status && i.status !== "open"));
+            const first = seen(i);
+            return first || touched;
+          }),
+      })),
     } as Agenda;
   }
   const by = new Map<SectionKey, AgendaSection>();
@@ -820,14 +907,25 @@ export function mergeAgenda(prev: Agenda | null, next: Agenda, now: string): Age
     if (!items.length) continue;
     sections.push({ key, title: SECTION_TITLES[key], minutes: p?.minutes ?? n?.minutes ?? 1, items });
   }
+  // clarifications: the coach's wording and status stay; one they settled or reworded stays even once it's no longer on file
+  const touchedClarify = (c: TalkingPoint) => c.custom || c.edited || (c.status && c.status !== "open");
+  const nextClarify = new Set(next.clarify.map((c) => c.id));
+  const clarify = [
+    ...next.clarify.map((c) => {
+      const was = prev.clarify.find((x) => x.id === c.id);
+      if (!was) return { ...c, addedAt: now };
+      return was.edited || was.custom ? was : { ...c, status: was.status, addedAt: was.addedAt };
+    }),
+    ...prev.clarify.filter((c) => !nextClarify.has(c.id) && touchedClarify(c)),
+  ];
   return {
     ...next,
+    ...(prev.objectiveEdited
+      ? { objective: prev.objective, objectivePrivate: prev.objectivePrivate, objectiveEdited: true }
+      : {}),
     minutes: prev.minutes,
     sections,
-    clarify: next.clarify.map((c) => {
-      const was = prev.clarify.find((x) => x.id === c.id);
-      return was ? { ...c, status: was.status, addedAt: was.addedAt } : { ...c, addedAt: now };
-    }),
+    clarify,
   };
 }
 
@@ -994,6 +1092,7 @@ export function applyAgendaOp(raw: Agenda | unknown, op: AgendaOp, now: string):
     case "objective":
       a.objective = op.text.trim().slice(0, 200) || a.objective;
       a.objectivePrivate = false;
+      a.objectiveEdited = true;
       return a;
     case "minutes": {
       const s = a.sections.find((x) => x.key === op.section);

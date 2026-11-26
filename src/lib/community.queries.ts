@@ -9,7 +9,6 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import type { MyCommunitySettings } from "@/lib/community-discover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { withCrewRules } from "@/lib/crew-safety";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import {
   FEED_PAGE_SIZE,
@@ -213,6 +212,20 @@ export function useFullMediaUrl(path: string | null | undefined, enabled: boolea
 
 /** Every list of posts that pages like the feed: the feed, Saved, someone's Reposts. */
 export const POST_LIST_KEYS = [["community-feed"], ["community-saved"], ["community-user-reposts"]] as const;
+
+/** A post as a list already on the phone has it (a feed, a profile's grid, Saved, reposts), else null. */
+export function cachedListPost(qc: ReturnType<typeof useQueryClient>, postId: string): CommunityPost | null {
+  for (const queryKey of POST_LIST_KEYS) {
+    for (const [, data] of qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: [...queryKey] })) {
+      if (!data || !Array.isArray(data.pages)) continue;
+      for (const pg of data.pages) {
+        const hit = Array.isArray(pg?.posts) ? pg.posts.find((p) => p?.id === postId) : undefined;
+        if (hit) return hit;
+      }
+    }
+  }
+  return null;
+}
 
 export function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch: (p: CommunityPost) => CommunityPost) {
   for (const queryKey of POST_LIST_KEYS) {
@@ -620,7 +633,7 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
         const path = await uploadVoiceMemo(c.voice.blob, c.userId, c.onProgress);
         media = { path, thumb: null, type: "audio", width: null, height: null, duration: Math.round(c.voice.duration * 10) / 10 };
       }
-      const { data, error } = await withCrewRules(() => db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media }));
+      const { data, error } = await db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media });
       if (error) {
         // only our own uploads are tidied up: a GIF / sticker is a provider's link
         if (media && media.type !== "gif" && media.type !== "sticker") await removeCommunityFiles([media.path, media.thumb]);
@@ -755,7 +768,7 @@ export function useShareComment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ commentId, caption }: { commentId: string; caption: string }): Promise<string> => {
-      const { data, error } = await withCrewRules(() => db.rpc("community_share_comment", { _comment_id: commentId, _caption: caption.trim() || null }));
+      const { data, error } = await db.rpc("community_share_comment", { _comment_id: commentId, _caption: caption.trim() || null });
       if (error) throw error;
       return data as string;
     },
@@ -900,22 +913,20 @@ export type SavePostInput = {
 
 export async function saveCommunityPost(input: SavePostInput): Promise<string> {
   const m = input.media;
-  const { data, error } = await withCrewRules(() =>
-    db.rpc("community_save_post", {
-      _completion_id: input.completionId,
-      _caption: input.caption,
-      _visibility: input.visibility,
-      _media_action: m.action,
-      _media_path: m.action === "set" ? m.media_path : null,
-      _media_thumb_path: m.action === "set" ? m.media_thumb_path : null,
-      _media_type: m.action === "set" ? m.media_type : null,
-      _media_width: m.action === "set" ? m.media_width : null,
-      _media_height: m.action === "set" ? m.media_height : null,
-      _hide_loads: input.hideLoads ?? null,
-      _extra_media: input.extras === undefined ? null : input.extras,
-      _lock_in: input.lockIn ?? null,
-    }),
-  );
+  const { data, error } = await db.rpc("community_save_post", {
+    _completion_id: input.completionId,
+    _caption: input.caption,
+    _visibility: input.visibility,
+    _media_action: m.action,
+    _media_path: m.action === "set" ? m.media_path : null,
+    _media_thumb_path: m.action === "set" ? m.media_thumb_path : null,
+    _media_type: m.action === "set" ? m.media_type : null,
+    _media_width: m.action === "set" ? m.media_width : null,
+    _media_height: m.action === "set" ? m.media_height : null,
+    _hide_loads: input.hideLoads ?? null,
+    _extra_media: input.extras === undefined ? null : input.extras,
+    _lock_in: input.lockIn ?? null,
+  });
   if (error) {
     // A "set" photo was uploaded just for this save; if the database refused it, it belongs to
     // nothing. Not on a network failure (no code): the save may have landed with it.
@@ -1030,15 +1041,13 @@ export async function createCommunityPost(
   }
   media.push(...(i.extras ?? []));
   // (_story is only sent for a story, so a post never depends on it)
-  const { data, error } = await withCrewRules(() =>
-    db.rpc("community_create_post", {
-      _caption: i.caption,
-      _media: media,
-      _visibility: i.visibility,
-      ...(i.story ? { _story: true } : {}),
-      ...(i.story && i.sharedPostId ? { _shared_post_id: i.sharedPostId } : {}),
-    }),
-  );
+  const { data, error } = await db.rpc("community_create_post", {
+    _caption: i.caption,
+    _media: media,
+    _visibility: i.visibility,
+    ...(i.story ? { _story: true } : {}),
+    ...(i.story && i.sharedPostId ? { _shared_post_id: i.sharedPostId } : {}),
+  });
   if (error) {
     if (up && error.code) await removeCommunityFiles([up.media_path, up.media_thumb_path]);
     throw error;
@@ -1062,7 +1071,7 @@ export function useCreateCommunityPost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (a: { caption: string; media?: PostSlide[]; visibility?: CommunityVisibility }) => {
-      const { data, error } = await withCrewRules(() => db.rpc("community_create_post", { _caption: a.caption, _media: a.media ?? [], _visibility: a.visibility ?? "community" }));
+      const { data, error } = await db.rpc("community_create_post", { _caption: a.caption, _media: a.media ?? [], _visibility: a.visibility ?? "community" });
       if (error) throw error;
       return (data as { id: string }).id;
     },
@@ -1110,14 +1119,21 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
 /* ---- post detail / profile ------------------------------------------ */
 
 /** One post + its full exercise breakdown (the Strava-style activity page). */
-export function usePostDetail(postId: string | null) {
+/**
+ * A post on its own (with its exercises). `placeholder`: the post as a list on
+ * the phone already has it (cachedListPost), shown while it's read, so a post
+ * opened from Activity or a link paints at once.
+ */
+export function usePostDetail(postId: string | null, opts: { placeholder?: CommunityPost | null } = {}) {
   const pov = usePovViewer();
   const asClient = useCallback((d: CommunityPostDetail | null) => (d ? seenAs(d, pov) : d), [pov]);
+  const placeholder = opts.placeholder && opts.placeholder.id === postId ? (opts.placeholder as CommunityPostDetail) : undefined;
   return useQuery({
     select: pov === null ? undefined : asClient,
     queryKey: communityKeys.post(postId),
     enabled: !!postId,
     staleTime: 30_000,
+    placeholderData: placeholder,
     queryFn: async (): Promise<CommunityPostDetail | null> => {
       const { data, error } = await db.rpc("community_post", { _post_id: postId });
       if (error) throw error;

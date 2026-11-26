@@ -62,6 +62,7 @@ export function SalesPageShell({
           <Link to="/support" className="hover:text-foreground">Support</Link>
           <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
           <Link to="/terms" className="hover:text-foreground">Terms</Link>
+          <Link to="/community-guidelines" className="hover:text-foreground">Community guidelines</Link>
         </nav>
         <SocialLinks variant="icons" className="mb-4" />
         © {new Date().getFullYear()} JF Effect. All rights reserved.

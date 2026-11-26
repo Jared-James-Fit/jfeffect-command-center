@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { COMMUNITY_BUCKET, removeCommunityFiles } from "@/lib/community-media";
 import { invalidateCommunity } from "@/lib/community.queries";
-import { withCrewRules } from "@/lib/crew-safety";
 import { postSlides, type CommunityPost } from "@/lib/community";
 import { feedCopyPath, feedMedia, storyFeedVerdict, storyFilesToCopy } from "@/lib/story-feed";
 
@@ -34,13 +33,11 @@ export function useShareStoryToFeed(userId: string | null | undefined) {
           made.push(to);
         }
         sent = true;
-        const { data, error } = await withCrewRules(() =>
-          db.rpc("community_create_post", {
-            _caption: post.caption ?? "",
-            _media: feedMedia(post, copies),
-            _visibility: verdict.audience,
-          }),
-        );
+        const { data, error } = await db.rpc("community_create_post", {
+          _caption: post.caption ?? "",
+          _media: feedMedia(post, copies),
+          _visibility: verdict.audience,
+        });
         if (error) throw error;
         return (data as { id: string }).id;
       } catch (e) {

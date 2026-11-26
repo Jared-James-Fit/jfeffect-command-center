@@ -42,6 +42,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/loading";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import { GoalSummary } from "@/components/goals/goal-summary";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -182,20 +183,37 @@ function CommandCentre({ data }: { data: any }) {
   // the plan, edited optimistically and saved as ops (the server applies them to the plan on file)
   const [agenda, setAgenda] = useState<Agenda | null>(() => normalizeAgenda(s.agenda));
   const serverAgenda = useRef(s.agenda);
+  // edits go to the server one at a time, in the order they were made; the
+  // plan on screen isn't replaced by a refetch until every edit has landed
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const [inFlight, setInFlight] = useState(0);
   useEffect(() => {
+    if (inFlight > 0) return;
     if (s.agenda !== serverAgenda.current) {
       serverAgenda.current = s.agenda;
       setAgenda(normalizeAgenda(s.agenda));
     }
-  }, [s.agenda]);
-  const saveOps = useMutation({
-    mutationFn: (ops: AgendaOp[]) => update({ data: { sessionId: s.id, agendaOps: ops } }),
-    onError: (e: any) => {
-      toast.error(e?.message ?? "Couldn't save that");
-      setAgenda(normalizeAgenda(serverAgenda.current));
+  }, [s.agenda, inFlight]);
+  const pending = useRef(0);
+  const saveOps = {
+    isPending: inFlight > 0,
+    mutate: (ops: AgendaOp[]) => {
+      pending.current += 1;
+      setInFlight(pending.current);
+      queue.current = queue.current
+        .then(() => update({ data: { sessionId: s.id, agendaOps: ops } }))
+        .catch((e: any) => {
+          toast.error(e?.message ?? "Couldn't save that");
+          // what's on file wins: the next read puts it back on screen
+          serverAgenda.current = null;
+        })
+        .finally(() => {
+          pending.current -= 1;
+          setInFlight(pending.current);
+          if (pending.current === 0) qc.invalidateQueries({ queryKey: sessionKey(s.id) });
+        });
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: sessionKey(s.id) }),
-  });
+  };
   const onOps = (ops: AgendaOp[]) => {
     const now = new Date().toISOString();
     setAgenda((a) =>
@@ -468,6 +486,9 @@ function PrepareStage({
       </div>
 
       <ChangesSinceReview changes={data.changesSinceReview ?? []} />
+
+      {/* what they're working toward (the goal ledger): the targets this meeting can confirm or move */}
+      <GoalSummary clientId={s.client_id} competitionId={s.competition_id ?? null} compact hideWhenEmpty />
 
       {agenda ? <Objective agenda={agenda} onOps={onOps} /> : null}
       {agenda ? <Clarify agenda={agenda} onOps={onOps} /> : null}

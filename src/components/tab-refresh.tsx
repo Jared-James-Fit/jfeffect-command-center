@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ActivitySpinner } from "@/components/activity-spinner";
 import { MIN_SPIN_MS, PULL_RECENT_MS, RECENT_MS, TAB_REFRESH_EVENT, canStartPull, needsRefresh, pullProgress } from "@/lib/tab-refresh";
 import { feedback } from "@/lib/feedback";
+import { gestureHolder } from "@/lib/gesture-arena";
 
 type Phase = "idle" | "pulling" | "refreshing" | "done";
 /** The room the page makes for the spinner while it loads. */
@@ -94,8 +95,11 @@ export function TabRefresh({ pull: pullEnabled, top }: {
     };
     const onMove = (e: TouchEvent) => {
       if (!start) return;
-      // something else took this gesture (dragging a workout on the calendar, a slider): not a pull
-      if (e.defaultPrevented) {
+      // something else took this gesture (dragging a workout on the calendar, a slider, the 3D body
+      // turning: the gesture arena): not a pull; before the pull starts it just waits, since a
+      // finger the browser turns into a scroll lets go of whatever held it
+      if (!pulling && gestureHolder()) return;
+      if (e.defaultPrevented || (pulling && gestureHolder())) {
         if (pulling) {
           pullRef.current = 0;
           setPull(0);

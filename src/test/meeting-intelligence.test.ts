@@ -82,6 +82,96 @@ const allText = (p: ReturnType<typeof buildSessionPrep>) =>
     .join(" | ");
 
 describe("preparation never depends on what the client sends", () => {
+  it("each signal is said once in the plan, however many lists it reaches", () => {
+    const p = buildSessionPrep({
+      ...complete,
+      checkins: { ...complete.checkins!, stress: 2, lowEnergy: 2 },
+      pain: [
+        { label: "Left knee", status: "recurring", trend: "worse", reasons: ["getting worse"] },
+      ],
+    });
+    const a = planAgenda(p);
+    const texts = a.sections.flatMap((s) => s.items.map((i) => i.text));
+    expect(texts.filter((t) => /high stress/.test(t))).toHaveLength(1);
+    expect(texts.filter((t) => /^Left knee/.test(t))).toHaveLength(1);
+    // the recommendation that answers it stays (a different thing to say)
+    expect(texts.some((t) => /recovery is low|Protect sleep/.test(t))).toBe(true);
+    const ids = a.sections.flatMap((s) => s.items.map((i) => i.id));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("a refresh keeps the objective the coach wrote and the clarifications they settled", () => {
+    const now = "2026-11-25T19:00:00Z";
+    const plan = planAgenda(buildSessionPrep(complete));
+    let mine = applyAgendaOp(
+      plan,
+      { op: "objective", text: "Decide the squat opener and the taper" },
+      now,
+    );
+    const settled = {
+      id: "evaluate:clarify-x",
+      slot: "clarify-x",
+      text: "Is 140 kg or lb?",
+      source: "read",
+      basis: "unknown",
+      kind: "question",
+      share: false,
+      status: "addressed",
+      clarify: true,
+    } as any;
+    mine = { ...mine, clarify: [...mine.clarify, settled] };
+    const next = planAgenda(buildSessionPrep({ ...complete, topics: "My bench" }));
+    const merged = mergeAgenda(mine, next, now);
+    expect(merged.objective).toBe("Decide the squat opener and the taper");
+    expect(merged.objectiveEdited).toBe(true);
+    expect(merged.clarify.find((c) => c.id === settled.id)?.status).toBe("addressed");
+    expect(agendaChanges(mine, merged).some((c) => c.startsWith("Objective"))).toBe(false);
+    // an untouched objective still follows the records
+    const plain = mergeAgenda(plan, { ...next, objective: "Something new" }, now);
+    expect(plain.objective).toBe("Something new");
+  });
+
+  it("a plan stored with a repeat reads without it, unless the coach touched it", () => {
+    const plan = planAgenda(buildSessionPrep(complete));
+    const ev = plan.sections.find((s) => s.key === "evaluate")!;
+    const first = {
+      id: "evaluate:recovery",
+      slot: "recovery",
+      text: "Recovery: high stress 2× in recent check-ins",
+      source: "record",
+      basis: "verified",
+      kind: "statement",
+      share: true,
+      status: "open",
+    };
+    const repeat = {
+      ...first,
+      id: "evaluate:recovery-support",
+      slot: "recovery-support",
+      text: "Recovery support: high stress 2× in recent check-ins",
+    };
+    const stored = {
+      ...plan,
+      sections: plan.sections.map((s) =>
+        s.key === "evaluate" ? { ...s, items: [...ev.items, first, repeat] } : s,
+      ),
+    };
+    const read = normalizeAgenda(stored)!;
+    const texts = read.sections.flatMap((s) => s.items.map((i) => i.text));
+    expect(texts.filter((t) => /high stress/.test(t))).toHaveLength(1);
+    const kept = normalizeAgenda({
+      ...stored,
+      sections: stored.sections.map((s) =>
+        s.key === "evaluate"
+          ? { ...s, items: [...ev.items, first, { ...repeat, edited: true }] }
+          : s,
+      ),
+    })!;
+    expect(
+      kept.sections.flatMap((s) => s.items.map((i) => i.text)).filter((t) => /high stress/.test(t)),
+    ).toHaveLength(2);
+  });
+
   it("complete records: wins, a direction and an objective with no answers at all", () => {
     const p = buildSessionPrep(complete);
     expect(p.goingWell.length).toBeGreaterThan(0);
@@ -266,6 +356,45 @@ describe("after the meeting: outcome and honest statuses", () => {
     expect(recStatus({ status: "kept" })).toBe("kept");
     expect(recStatus({ status: "deferred" })).toBe("later");
     expect(recStatus({ status: "rejected" })).toBe("dismissed");
+  });
+
+  it("a decision the coach noted and the same one Cleo read is one line, with Cleo's quote", () => {
+    const o = organizeOutcome({
+      analysis: {
+        summary: "",
+        items: [
+          {
+            kind: "agreement",
+            basis: "confirmed",
+            speaker: "coach",
+            text: "Squat opener is locked at 105 kg.",
+            quote: "Yes, 105 for the squat opener is perfect.",
+            due: "2026-12-05",
+          },
+          {
+            kind: "agreement",
+            basis: "confirmed",
+            speaker: "coach",
+            text: "Deadlift opener is locked at 125 kg.",
+            quote: "Yep, 125 on deadlift works for me.",
+            due: null,
+          },
+        ],
+        recommendations: [],
+        intelligence: [],
+        contradictions: [],
+        unitChecks: [],
+        dropped: [],
+      } as any,
+      decisions: ["Squat opener 105 kg"],
+      commitments: [],
+    });
+    expect(o.decisions.map((d) => d.text)).toEqual([
+      "Squat opener 105 kg",
+      "Deadlift opener is locked at 125 kg.",
+    ]);
+    expect(o.decisions[0].quote).toBe("Yes, 105 for the squat opener is perfect.");
+    expect(o.decisions[0].due).toBe("2026-12-05");
   });
   it("the outcome keeps floated ideas apart from decisions, and loads to confirm as open", () => {
     const o = organizeOutcome({

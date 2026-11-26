@@ -154,9 +154,7 @@ export function SessionAfter({
             ) : (
               <p className="text-[13px] text-success">Nothing waiting on you.</p>
             )}
-            {analysis?.summary ? (
-              <p className="text-[14px] leading-relaxed">{analysis.summary}</p>
-            ) : null}
+            {analysis?.summary ? <Summary text={analysis.summary} /> : null}
           </div>
         </section>
       ) : null}
@@ -174,8 +172,18 @@ export function SessionAfter({
           <span className="h-2 w-2 animate-pulse rounded-full bg-foreground/50" /> Cleo is reading
           the {s.transcript_path ? "transcript" : "notes"}. It carries on if you close this.
         </p>
-      ) : !analysis && !s.recording?.consent ? (
-        <Import data={data} refresh={refresh} />
+      ) : !analysis && (!s.recording?.consent || recordingGaveUp(s.recording, data.audio)) ? (
+        <>
+          {s.recording?.consent ? (
+            <p className="text-[13px] text-muted-foreground" data-recording-gave-up>
+              The recording didn't become a transcript. Upload one instead (Otter, notes or the
+              call's own transcript).
+            </p>
+          ) : null}
+          <Import data={data} refresh={refresh} />
+        </>
+      ) : !analysis && s.recording?.consent && !s.recording?.transcript_ready ? (
+        <RecordingProgress parts={(data.audio ?? []) as any[]} />
       ) : null}
       {s.analysis_status === "failed" ? (
         <p
@@ -264,6 +272,63 @@ export function SessionAfter({
 }
 
 /* ------------------------------------------------------------------ */
+
+/** Cleo's summary: three lines, the rest a tap away (the groups under it carry the detail). */
+function Summary({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 220;
+  return (
+    <div>
+      <p className={cn("text-[14px] leading-relaxed", long && !open && "line-clamp-3")}>{text}</p>
+      {long ? (
+        <button
+          type="button"
+          className="mt-0.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {open ? "Less" : "More"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** A recording that will never become a transcript: its audio is gone, or every part failed. */
+function recordingGaveUp(rec: any, audio: any[] | undefined): boolean {
+  if (!rec?.consent || rec.transcript_ready) return false;
+  if (rec.status === "expired" || rec.audio_deleted_at) return true;
+  const parts = (audio ?? []) as any[];
+  return (
+    rec.status === "processing" && parts.length > 0 && parts.every((p) => p.status === "failed")
+  );
+}
+
+/** Where a stopped recording is: parts transcribed so far, or waiting on the client's AI permission. */
+function RecordingProgress({ parts }: { parts: any[] }) {
+  if (!parts.length) return null;
+  const waiting = parts.find((p) => p.status === "waiting_consent");
+  const done = parts.filter((p) => p.status === "done" || p.status === "failed").length;
+  return (
+    <p
+      className="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-[13.5px]"
+      data-recording-progress
+    >
+      {waiting ? (
+        <span className="text-muted-foreground">
+          {waiting.error ?? "Waiting on their permission for AI."} It carries on by itself once they
+          allow it.
+        </span>
+      ) : (
+        <>
+          <span className="h-2 w-2 animate-pulse rounded-full bg-foreground/50" />
+          Turning the recording into a transcript: {done} of {parts.length} parts. It carries on if
+          you close this.
+        </>
+      )}
+    </p>
+  );
+}
 
 function Fold({
   title,
@@ -1225,7 +1290,7 @@ function TranscriptControls({
   if (!s.transcript_path && !hasAudio)
     return s.transcript_deleted_at ? (
       <p className="text-[12px] text-muted-foreground">
-        The transcript was deleted {String(s.transcript_deleted_at).slice(0, 10)}.
+        The transcript was deleted {billingDay(String(s.transcript_deleted_at).slice(0, 10))}.
       </p>
     ) : null;
   return (
@@ -1234,10 +1299,10 @@ function TranscriptControls({
         {hasAudio ? "The recording and transcript are" : "The transcript is"} private to you and
         their coaches
         {s.transcript_retain_until
-          ? `, kept until ${s.transcript_retain_until}`
+          ? `, kept until ${billingDay(s.transcript_retain_until)}`
           : ", kept until you delete it"}
         {s.transcript_consent_at
-          ? `, with their consent (${String(s.transcript_consent_at).slice(0, 10)})`
+          ? `, with their consent (given ${billingDay(String(s.transcript_consent_at).slice(0, 10))})`
           : ""}
         . What you keep from it stays.
       </p>

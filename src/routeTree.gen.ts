@@ -18,6 +18,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CoachingAgreementRouteImport } from './routes/coaching-agreement'
+import { Route as CommunityGuidelinesRouteImport } from './routes/community-guidelines'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as JoinRouteImport } from './routes/join'
@@ -287,6 +288,7 @@ import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/p
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
+import { Route as ApiPublicHooksGoalIntelTickRouteImport } from './routes/api/public/hooks/goal-intel-tick'
 import { Route as ApiPublicHooksJfLibraryInstallRouteImport } from './routes/api/public/hooks/jf-library-install'
 import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/public/hooks/lead-replies-tick'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
@@ -388,6 +390,11 @@ const AuthRoute = AuthRouteImport.update({
 const CoachingAgreementRoute = CoachingAgreementRouteImport.update({
   id: '/coaching-agreement',
   path: '/coaching-agreement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityGuidelinesRoute = CommunityGuidelinesRouteImport.update({
+  id: '/community-guidelines',
+  path: '/community-guidelines',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
@@ -1938,6 +1945,12 @@ const ApiPublicHooksGcalSessionImportRoute =
     path: '/api/public/hooks/gcal-session-import',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksGoalIntelTickRoute =
+  ApiPublicHooksGoalIntelTickRouteImport.update({
+    id: '/api/public/hooks/goal-intel-tick',
+    path: '/api/public/hooks/goal-intel-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksJfLibraryInstallRoute =
   ApiPublicHooksJfLibraryInstallRouteImport.update({
     id: '/api/public/hooks/jf-library-install',
@@ -2295,6 +2308,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2545,6 +2559,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2632,6 +2647,7 @@ export interface FileRoutesByTo {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2878,6 +2894,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2967,6 +2984,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -3217,6 +3235,7 @@ export interface FileRoutesById {
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -3306,6 +3325,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3556,6 +3576,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -3643,6 +3664,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3889,6 +3911,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -3977,6 +4000,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -4227,6 +4251,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -4316,6 +4341,7 @@ export interface RootRouteChildren {
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   CoachingAgreementRoute: typeof CoachingAgreementRoute
+  CommunityGuidelinesRoute: typeof CommunityGuidelinesRoute
   DeleteAccountRoute: typeof DeleteAccountRoute
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
@@ -4384,6 +4410,7 @@ export interface RootRouteChildren {
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
+  ApiPublicHooksGoalIntelTickRoute: typeof ApiPublicHooksGoalIntelTickRoute
   ApiPublicHooksJfLibraryInstallRoute: typeof ApiPublicHooksJfLibraryInstallRoute
   ApiPublicHooksLeadRepliesTickRoute: typeof ApiPublicHooksLeadRepliesTickRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
@@ -4490,6 +4517,13 @@ declare module '@tanstack/react-router' {
       path: '/coaching-agreement'
       fullPath: '/coaching-agreement'
       preLoaderRoute: typeof CoachingAgreementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community-guidelines': {
+      id: '/community-guidelines'
+      path: '/community-guidelines'
+      fullPath: '/community-guidelines'
+      preLoaderRoute: typeof CommunityGuidelinesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/delete-account': {
@@ -6375,6 +6409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGcalSessionImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/goal-intel-tick': {
+      id: '/api/public/hooks/goal-intel-tick'
+      path: '/api/public/hooks/goal-intel-tick'
+      fullPath: '/api/public/hooks/goal-intel-tick'
+      preLoaderRoute: typeof ApiPublicHooksGoalIntelTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/jf-library-install': {
       id: '/api/public/hooks/jf-library-install'
       path: '/api/public/hooks/jf-library-install'
@@ -7482,6 +7523,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   CoachingAgreementRoute: CoachingAgreementRoute,
+  CommunityGuidelinesRoute: CommunityGuidelinesRoute,
   DeleteAccountRoute: DeleteAccountRoute,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,
@@ -7562,6 +7604,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
+  ApiPublicHooksGoalIntelTickRoute: ApiPublicHooksGoalIntelTickRoute,
   ApiPublicHooksJfLibraryInstallRoute: ApiPublicHooksJfLibraryInstallRoute,
   ApiPublicHooksLeadRepliesTickRoute: ApiPublicHooksLeadRepliesTickRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,

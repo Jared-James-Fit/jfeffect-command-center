@@ -15,11 +15,11 @@ import { BlockConfirmSheet } from "@/components/community/block-person-sheet";
 import { ReportSheet } from "@/components/community/report-sheet";
 import { ProfileEditSheet } from "@/components/community/profile-edit";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
-import { AvatarCropper } from "@/components/avatar-cropper";
+import { useCrewPhotoPicker } from "@/components/community/crew-photo-picker";
 import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { RepostsGrid, SavedView } from "@/components/community/saved-view";
 import { isWorkoutCard, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
-import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetCommunityAvatar } from "@/lib/community.queries";
+import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls } from "@/lib/community.queries";
 import { StoryAvatar, StoryHostContext, useStoryRing } from "@/components/community/story-ring";
 import { storyGroupFor, storyRings } from "@/lib/story-ring";
 import { useSeenStories } from "@/lib/story-seen";
@@ -72,7 +72,6 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   const { data: urls } = usePostMediaUrls(posts);
   const [editing, setEditing] = useState(false);
   const { isImpersonating } = useClientImpersonation();
-  const setAvatar = useSetCommunityAvatar(userId);
   // Instagram: follow someone and people close to them slide in under their profile
   const { data: follows } = useFollowState(!!profile && !profile.is_me);
   const fl = followLabel(follows, profile?.author.user_id ?? userId);
@@ -85,10 +84,8 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
     if (!followed) setSimilar(false);
     wasFollowed.current = followed;
   }, [follows, followed, profile]);
-  const photoRef = useRef<HTMLInputElement | null>(null);
-  // A picked photo goes through "Move and scale" before it's saved.
-  const [cropSrc, setCropSrc] = useState<string | null>(null);
-  useEffect(() => () => { if (cropSrc) URL.revokeObjectURL(cropSrc); }, [cropSrc]);
+  // Your Crew picture: any picture, taken or picked, framed in "Move and scale" (crew-photo-picker.tsx)
+  const photo = useCrewPhotoPicker(userId, { hasPhoto: !!profile?.author.avatar_url });
 
   if (!profile && (profileQ.isError || profileQ.fetchStatus === "paused")) {
     // a profile that couldn't load says so, with Try again (never a skeleton forever)
@@ -125,14 +122,14 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             says, so nothing moves when a story goes up or runs out. */}
         <div className="flex shrink-0 flex-col items-center gap-1">
           <div className="relative p-1.5" data-profile-photo>
-            <span className={cn("block rounded-full", setAvatar.isPending && "animate-pulse")}>
+            <span className={cn("block rounded-full", photo.pending && "animate-pulse")}>
               {story.state === "none" && profile.is_me && !profile.author.avatar_url ? (
                 <button
                   type="button"
-                  disabled={setAvatar.isPending}
-                  onClick={() => photoRef.current?.click()}
+                  disabled={photo.pending}
+                  onClick={photo.open}
                   className="block rounded-full"
-                  aria-label="Add a community photo"
+                  aria-label="Add a Crew picture"
                 >
                   <UserAvatar src={null} name={profile.author.name} size={78} expandable={false} />
                 </button>
@@ -143,10 +140,10 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             {profile.is_me && (
               <button
                 type="button"
-                disabled={setAvatar.isPending}
-                onClick={() => photoRef.current?.click()}
+                disabled={photo.pending}
+                onClick={photo.open}
                 data-profile-photo-change
-                aria-label={profile.author.avatar_url ? "Change your community photo" : "Add a community photo"}
+                aria-label={profile.author.avatar_url ? "Change your Crew picture" : "Add a Crew picture"}
                 className="absolute bottom-0.5 right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2 after:content-[''] active:scale-95"
               >
                 <Camera className="h-3.5 w-3.5" />
@@ -154,38 +151,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             )}
           </div>
           {profile.is_me && !profile.author.avatar_url && <span className="text-[11px] font-bold text-primary">Add photo</span>}
-          {profile.is_me && profile.author.avatar_url && (
-            <button type="button" disabled={setAvatar.isPending} className="text-[11px] font-semibold text-muted-foreground" onClick={() => setAvatar.mutate(null, { onError: (e: any) => toast.error(e?.message ?? "Couldn't remove it") })}>
-              Remove
-            </button>
-          )}
-          {profile.is_me && (
-            <input
-              ref={photoRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                if (f.type && !f.type.startsWith("image/")) return void toast.error("Pick a photo");
-                setCropSrc(URL.createObjectURL(f));
-              }}
-            />
-          )}
-          {profile.is_me && (
-            <AvatarCropper
-              src={cropSrc}
-              open={!!cropSrc}
-              onCancel={() => setCropSrc(null)}
-              onDone={(blob) => {
-                setCropSrc(null);
-                const file = new File([blob], "community-photo.jpg", { type: "image/jpeg" });
-                setAvatar.mutate(file, { onSuccess: () => toast.success("Photo updated"), onError: (err: any) => toast.error(err?.message ?? "Couldn't upload that photo") });
-              }}
-            />
-          )}
+          {profile.is_me && photo.element}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -193,6 +159,11 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             <NameMarks person={profile.author} userId={profile.author.user_id} size={16} />
           </div>
           {profile.username && <div className="mt-1 truncate text-[13px] font-semibold text-muted-foreground" data-profile-username>@{profile.username}</div>}
+          {profile.author.virtual && (
+            <div className="mt-1 text-[12px] text-muted-foreground" data-virtual-disclosure>
+              Virtual account run by JF Effect · not a real person
+            </div>
+          )}
           {profile.author.is_coach && <div className="mt-1 text-[12px] font-bold text-foreground/80">{profile.author.title || "Coach · JF Effect"}</div>}
           <div className="mt-1 flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
             {profile.is_private && <Lock className="h-3 w-3" aria-label="Private account" />}

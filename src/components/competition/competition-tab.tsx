@@ -59,6 +59,7 @@ import { HandlingOpportunities } from "./prep/handling-opportunities";
 import { HandlingInviteSheet } from "./prep/handling-sheets";
 import { RecapCard } from "./prep/recap-card";
 import { reviewChangesFn, saveScheduleFn, tickChecklistFn } from "@/lib/competition/handling.functions";
+import { GoalSummary } from "@/components/goals/goal-summary";
 
 export const competitionWorkspaceKey = (clientId: string, competitionId: string | null) =>
   ["competition-workspace", clientId, competitionId] as const;
@@ -385,6 +386,8 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
               }
               extra={<OverviewAssessments clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} />}
             />
+            {/* the targets at this meet (the goal ledger): theirs, the projection, the approved one */}
+            <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
             <RecapCard prep={sel.prep} onChanged={invalidate} />
             <HandlingOpportunities clientId={clientId} />
             {!sel.prep.handling ? (
@@ -405,7 +408,10 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
             </details>
           </div>
         ) : (
-          <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} onSection={setSection} />
+          <>
+            <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} onSection={setSection} />
+            <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
+          </>
         )
       ) : null}
       {section === "gameplan" && sel.prep ? <GameplanSection prep={sel.prep} onChanged={invalidate} /> : null}

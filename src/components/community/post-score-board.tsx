@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { BarChart3, ChevronRight, RotateCcw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PostDetailDialog } from "@/components/community/post-detail";
+import { openCommunityPost } from "@/lib/community-notifications";
 import { ScoreBadge, TONE, shortDate } from "@/components/community/post-score";
 import { usePostScoreBoard } from "@/lib/post-scores.queries";
 import { kindAverages, kindLabel, scoreBand, scoreTitle, type PostScore } from "@/lib/post-scores";
-import { useWeightUnit } from "@/lib/use-weight-unit";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,8 +14,6 @@ import { cn } from "@/lib/utils";
  */
 export function PostScoreBoard() {
   const { data, isLoading, isError, refetch } = usePostScoreBoard();
-  const { unit } = useWeightUnit();
-  const [openPost, setOpenPost] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const settled = (data?.posts ?? []).filter((p) => !p.early);
   const kinds = kindAverages(data?.posts ?? []);
@@ -26,7 +23,7 @@ export function PostScoreBoard() {
   const maxAvg = Math.max(1, ...kinds.map((k) => k.avg));
 
   const row = (p: PostScore, i: number) => (
-    <button key={p.post_id} type="button" onClick={() => setOpenPost(p.post_id)} className="flex w-full min-w-0 items-center gap-3 py-2.5 text-left active:opacity-70" data-score-board-post={i}>
+    <button key={p.post_id} type="button" onClick={() => openCommunityPost(p.post_id)} className="flex w-full min-w-0 items-center gap-3 py-2.5 text-left active:opacity-70" data-score-board-post={i}>
       <ScoreBadge score={p} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[14px] font-bold">{scoreTitle(p)}</div>
@@ -98,7 +95,6 @@ export function PostScoreBoard() {
           </p>
         </>
       )}
-      <PostDetailDialog postId={openPost} unit={unit} viewerIsStaff onClose={() => setOpenPost(null)} />
     </section>
   );
 }

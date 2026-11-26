@@ -16,6 +16,7 @@ import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goa
 import { SetupStepSheet, type SetupStepKey } from "@/components/portal/setup-step-sheet";
 import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 import { agreementPrompt } from "@/components/coaching-agreement/agreement-copy";
+import { useHeadshotCamera, useMyHeadshot } from "@/components/headshots/headshot-ui";
 
 type Props = {
   clientId: string;
@@ -58,12 +59,26 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
     staleTime: 60_000,
     queryFn: () => calFn({ data: {} }),
   });
+  // the account headshot step: a new client's first one (an update someone asked for is Home's own card)
+  const { data: headshot } = useMyHeadshot();
+  const camera = useHeadshotCamera();
+  const headshotNeeded = !!headshot?.outstanding && headshot.status === "missing";
+  const headshotDone = !!headshot && (!headshot.applies || headshot.status === "pending" || headshot.status === "verified" || headshot.status === "previous" || headshot.status === "retake_requested");
   const calendarDone = !!cal?.google?.connected || calendarSyncState({ lastFetchAt: cal?.lastFetchAt }) === "synced";
 
   const items = useMemo<Item[]>(() => {
     const c = client as any;
     const base: Item[] = [
-      { key: "profile_picture", label: "Add a profile photo", description: "A clear headshot helps your coach personalise feedback.", sheet: "profile_picture", icon: Camera, done: !!c?.profile_picture_url && !c?.profile_picture_needs_update },
+      {
+        key: "profile_picture",
+        label: "Add your account headshot",
+        description: headshot?.status === "pending" ? "Sent. Your coach will review it." : "A quick live photo so your coach can recognize you. Private to your coach.",
+        onClick: camera.open,
+        icon: Camera,
+        done: headshotDone || (!headshotNeeded && !!c?.profile_picture_url),
+        // not asked of someone who joined before account headshots: there if they'd like it, never in the way
+        optional: !headshotNeeded && !headshotDone,
+      },
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
       { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
@@ -85,7 +100,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       });
     }
     return base;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow]);
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
@@ -112,8 +127,9 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
             return <li key={it.key}>{it.onClick || it.key === "agreement" ? <button type="button" className={rowClass} onClick={it.onClick} disabled={it.done || !it.onClick}>{inner}</button> : it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} search={it.search as any} className={rowClass}>{inner}</Link>}</li>;
           })}
         </ul>
-        <div className="mt-3 flex flex-wrap gap-2">{nextItem.key === "agreement" ? <Button className="h-10" onClick={nextItem.onClick} disabled={!nextItem.onClick}>Continue setup</Button> : nextItem.sheet ? <Button className="h-10" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild className="h-10"><Link to={nextItem.to!} search={nextItem.search as any}>Continue setup</Link></Button>}</div>
+        <div className="mt-3 flex flex-wrap gap-2">{nextItem.key === "agreement" || nextItem.onClick ? <Button className="h-10" onClick={nextItem.onClick} disabled={!nextItem.onClick}>Continue setup</Button> : nextItem.sheet ? <Button className="h-10" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild className="h-10"><Link to={nextItem.to!} search={nextItem.search as any}>Continue setup</Link></Button>}</div>
       </Card>
+      {camera.element}
       <SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} onOpenChange={(o) => { if (!o) setOpenStep(null); }} />
     </>
   );

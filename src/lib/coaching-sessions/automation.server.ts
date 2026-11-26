@@ -16,7 +16,7 @@
  * twice; a move clears the stamp and the next day-before message goes for the
  * new time. A call booked within a day of its start isn't asked to confirm.
  */
-import { isTrainingSessionType } from "@/lib/booking-types";
+import { isTrainingSessionType, NOT_TRAINING_FILTER } from "@/lib/booking-types";
 import { fmtClock, fmtDayLabel } from "@/lib/schedule-time";
 import { relativeDayWord } from "@/lib/pt-session-reminders";
 import {
@@ -61,6 +61,9 @@ export async function runMeetingAutomation(admin: Admin, now: Date = new Date())
     .is("confirmation_requested_at", null)
     .gte("starts_at", from)
     .lte("starts_at", to)
+    // training sessions are never stamped, so they're dropped before the limit, not after
+    .or(NOT_TRAINING_FILTER)
+    .order("starts_at")
     .limit(60);
   if (error) throw new Error(error.message);
   const calls = ((rows ?? []) as any[]).filter((r) => !isTrainingSessionType(r.session_type));
@@ -78,6 +81,12 @@ export async function runMeetingAutomation(admin: Admin, now: Date = new Date())
     ? await db.from("coaches").select("id, user_id, full_name").in("id", coachIds)
     : { data: [] };
   const coachBy = new Map(((coaches ?? []) as any[]).map((c) => [c.id, c]));
+  // the client's own clock (their phone's zone, as the push reminders use), else the booking's
+  const clientUsers = ((clients ?? []) as any[]).map((c) => c.user_id).filter(Boolean);
+  const { data: prefs } = clientUsers.length
+    ? await db.from("push_notification_preferences").select("user_id, timezone").in("user_id", clientUsers)
+    : { data: [] };
+  const tzBy = new Map(((prefs ?? []) as any[]).filter((p) => p.timezone).map((p) => [p.user_id, p.timezone as string]));
   let sent = 0;
   const out: Array<{ id: string; confirm: boolean; questions: number }> = [];
   for (const call of calls) {
@@ -148,13 +157,16 @@ export async function runMeetingAutomation(admin: Admin, now: Date = new Date())
       .is("confirmation_requested_at", null)
       .select("id");
     if (!claimed?.length) continue;
-    const tz = call.timezone || DEFAULT_TZ;
+    const callTz = call.timezone || DEFAULT_TZ;
+    const tz = tzBy.get(c.user_id) || callTz;
     const at = new Date(call.starts_at);
     const day = relativeDayWord(at, now, tz) ?? `on ${fmtDayLabel(at, tz)}`;
+    // their clock; said as theirs when the booking's zone would read differently
+    const theirs = fmtClock(at, tz);
     const body = dayBeforeWords({
       coachFirst: coach.full_name ? String(coach.full_name).split(" ")[0] : null,
       day,
-      time: fmtClock(at, tz),
+      time: theirs !== fmtClock(at, callTz) ? `${theirs} your time` : theirs,
       confirm,
       questions: asks,
       minutes: q?.minutes ?? 1,
