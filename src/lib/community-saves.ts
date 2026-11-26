@@ -42,13 +42,16 @@ function restore(qc: QC, snap: ReturnType<typeof snapshotLists>, postId: string,
 /** Save / unsave (optionally straight into an album). Unsaving says which albums it left, for Undo. */
 export function useSavePost() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { post: Pick<CommunityPost, "id">; on: boolean; albumId?: string | null }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_save", { _post_id: v.post.id, _on: v.on, ...(v.albumId ? { _album_id: v.albumId } : {}) });
       if (error) throw error;
       return (data ?? { saved: v.on, albums: [] }) as { saved: boolean; albums: string[]; removed_from?: string[] };
     },
     onMutate: async (v) => {
+      if (isPov) return undefined;
       await Promise.all(POST_LIST_KEYS.map((k) => qc.cancelQueries({ queryKey: [...k] })));
       const snap = snapshotLists(qc);
       const detail = qc.getQueryData(communityKeys.post(v.post.id));
@@ -108,8 +111,10 @@ function refreshSaved(qc: QC) {
 
 export function useCreateAlbum() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { name: string; postIds?: string[] }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_album_create", { _name: v.name, _post_ids: v.postIds ?? [] });
       if (error) throw error;
       return data as { id: string; name: string; count: number };
@@ -120,8 +125,10 @@ export function useCreateAlbum() {
 
 export function useRenameAlbum() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { id: string; name: string }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_album_rename", { _album_id: v.id, _name: v.name });
       if (error) throw error;
       return data as { id: string; name: string };
@@ -132,8 +139,10 @@ export function useRenameAlbum() {
 
 export function useDeleteAlbum() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { error } = await db.rpc("community_album_delete", { _album_id: id });
       if (error) throw error;
     },
@@ -144,8 +153,10 @@ export function useDeleteAlbum() {
 /** Put posts in an album (saving any that aren't yet) or take them out. */
 export function useAlbumPosts() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { albumId: string; postIds: string[]; add: boolean }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { data, error } = await db.rpc("community_album_posts", { _album_id: v.albumId, _post_ids: v.postIds, _in: v.add });
       if (error) throw error;
       return data as { id: string; count: number };
@@ -162,8 +173,10 @@ export function useAlbumPosts() {
  */
 export function useRepost() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (v: { post: Pick<CommunityPost, "id" | "my_repost">; on: boolean; note?: string | null }) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const setNote = v.note !== undefined;
       const { data, error } = await db.rpc("community_repost", {
         _post_id: v.post.id,
@@ -175,6 +188,7 @@ export function useRepost() {
       return data as { reposted: boolean; note: string | null; at?: string; count: number };
     },
     onMutate: async (v) => {
+      if (isPov) return undefined;
       await Promise.all(POST_LIST_KEYS.map((k) => qc.cancelQueries({ queryKey: [...k] })));
       const snap = snapshotLists(qc);
       const detail = qc.getQueryData(communityKeys.post(v.post.id));
