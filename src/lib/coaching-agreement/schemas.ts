@@ -123,6 +123,7 @@ export type SignPayload = z.infer<typeof signPayloadSchema>;
 export const requestResignSchema = z.object({
   clientId: z.string().uuid(),
   note: z.string().trim().max(500).optional(),
+  onlyIfOutstanding: z.boolean().optional(),
 });
 
 export const setExemptionSchema = z.object({

@@ -915,13 +915,20 @@ export const adminRequestAgreement = createServerFn({ method: "POST" })
 
     const { data: client } = await supabaseAdmin
       .from("clients")
-      .select("id, user_id, email, full_name, first_name, preferred_name, service_tier")
+      .select("id, user_id, email, full_name, first_name, preferred_name, service_tier, archived, status, portal_access_disabled")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
     if (!client.user_id) throw new Error("This client doesn't have an app account yet.");
     if ((client as any).service_tier === "self_serve")
       throw new Error("This is a JF Membership account: they accept the Membership Agreement in the app, not the Coaching Agreement.");
+    if (data.onlyIfOutstanding) {
+      if (!isActiveClient(client)) throw new Error("This account is not active.");
+      const { state, adminState } = await loadAgreementForClient(supabaseAdmin, client.id);
+      if (state.state !== "needs_signature" || adminState?.resign_requested_at) {
+        return { ok: true as const, skipped: true, emailed: false, pushed: 0 };
+      }
+    }
     if (!isAdmin) {
       // A coach can send to their own clients, but only an admin can override an exemption.
       const { data: current } = await supabaseAdmin
@@ -971,7 +978,7 @@ export const adminRequestAgreement = createServerFn({ method: "POST" })
       kind: "request",
       isFirst: (count ?? 0) === 0,
     });
-    return { ok: true as const, ...sent };
+    return { ok: true as const, skipped: false, ...sent };
   });
 
 export const adminCancelAgreementRequest = createServerFn({ method: "POST" })

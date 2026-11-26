@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, Phone, Calendar, ChevronDown } from "lucide-react";
-import { adminClientAgreementDetail } from "@/lib/coaching-agreement.functions";
+import { adminClientAgreementDetail, adminRequestAgreement } from "@/lib/coaching-agreement.functions";
 import { ADMIN_AGREEMENT_QUERY_ROOT, SendAgreementDialog } from "@/components/coaching-agreement/admin-agreement-parts";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ClientScheduleSheet } from "@/components/messages/booking-invite";
@@ -61,6 +61,7 @@ import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete } from "@/lib/client-goals/schema";
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { requestGoalsUpdateFn } from "@/lib/client-goals/goals.functions";
+import { pendingSetupRequests, type SetupRequestKind } from "@/lib/client-setup-requests";
 import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { WorkspaceIdentityHeader } from "@/components/workspace";
 import {
@@ -1870,6 +1871,11 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   const agreementFn = useServerFn(adminClientAgreementDetail);
   const scope = useGoalsServiceScope(coaching ? clientId : null);
   const [agreementOpen, setAgreementOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchNote, setBatchNote] = useState("");
+  const [batchItems, setBatchItems] = useState<SetupRequestKind[]>([]);
+  const sendAgreement = useServerFn(adminRequestAgreement);
   const requestGoals = useServerFn(requestGoalsUpdateFn);
   const qc = useQueryClient();
   const sendGoals = async () => {
@@ -1896,6 +1902,32 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
     },
     enabled: coaching, staleTime: 60_000,
   });
+  const outstanding = pendingSetupRequests({
+    eligible: coaching && !!form.user_id && !form.archived && !form.portal_access_disabled && !["Archived", "Deactivated", "Deleted"].includes(form.status),
+    agreement: agreement.isSuccess && agreement.data?.canSend ? { needsSignature: agreement.data.state.state === "needs_signature", requested: !!agreement.data.resignRequestedAt } : null,
+    goals: scope.ready && goals.isSuccess ? { complete: isGoalsSetupComplete(goals.data, scope.nutritionOnly), requested: !!goals.data?.update_requested_at } : null,
+  });
+  const sendOutstanding = async () => {
+    if (batchBusy) return;
+    setBatchBusy(true);
+    const sent: string[] = [], failed: string[] = [];
+    const note = batchNote.trim() || undefined;
+    try {
+      for (const item of batchItems) {
+        try {
+          const result = item === "agreement"
+            ? await sendAgreement({ data: { clientId, note, onlyIfOutstanding: true } })
+            : await requestGoals({ data: { clientId, message: note ?? "Please complete your setup details in the app.", onlyIfOutstanding: true } });
+          if (!result.skipped) sent.push(item === "agreement" ? "Agreement" : "Setup details");
+        } catch (e: any) { failed.push((item === "agreement" ? "Agreement" : "Setup details") + ": " + (e?.message ?? "could not send")); }
+      }
+      await Promise.all([qc.invalidateQueries({ queryKey: [ADMIN_AGREEMENT_QUERY_ROOT] }), qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] })]);
+      if (sent.length) toast.success(sent.join(" and ") + " requested");
+      if (failed.length) toast.error(failed.join(" · "));
+      if (!sent.length && !failed.length) toast.info("Already completed or requested — nothing sent.");
+      setBatchOpen(false); setBatchNote("");
+    } finally { setBatchBusy(false); }
+  };
   const access = describeAccountAccess(form);
   const invite = form.invite_last_resent_at || form.invite_sent_at;
   const signedIn = !!form.last_signed_in_at;
@@ -1940,6 +1972,7 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
       )}
       {coaching && form.user_id && (
         <div className="flex flex-wrap items-center gap-2">
+          {outstanding.length > 1 && <Button size="sm" onClick={() => { setBatchItems(outstanding); setBatchOpen(true); }}>Send outstanding ({outstanding.length})</Button>}
           {agreement.data?.canSend && agreement.data.state.state === "needs_signature" && (
             <Button variant="outline" size="sm" onClick={() => setAgreementOpen(true)}>
               {agreement.data.resignRequestedAt ? "Resend agreement" : "Send agreement"}
@@ -1952,6 +1985,19 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
           )}
         </div>
       )}
+      <AlertDialog open={batchOpen} onOpenChange={open => { if (!batchBusy) setBatchOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send outstanding setup</AlertDialogTitle>
+            <AlertDialogDescription>Request {batchItems.map(item => item === "agreement" ? "the coaching agreement" : "setup details").join(" and ")} from {form.full_name || "this client"}. Completed or already requested items will be skipped. No billing changes.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea value={batchNote} onChange={e => setBatchNote(e.target.value)} placeholder="Optional note to the client" maxLength={500} disabled={batchBusy} aria-label="Optional setup note" />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={batchBusy}>Cancel</AlertDialogCancel>
+            <Button disabled={batchBusy} onClick={() => void sendOutstanding()}>{batchBusy ? "Sending…" : "Send requests"}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {agreementOpen && <SendAgreementDialog clientId={clientId} clientName={form.full_name || "the client"} alreadySigned={!!agreement.data?.signatures?.length} open={agreementOpen} onOpenChange={setAgreementOpen} />}
       <ul className="divide-y divide-border">
         {incomplete.map((step) => (

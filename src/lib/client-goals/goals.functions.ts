@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { clientGoalsSetupSchema, EDITABLE_GOALS_FIELDS } from "@/lib/client-goals/schema";
+import { clientGoalsSetupSchema, EDITABLE_GOALS_FIELDS, isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { goalsForSchedule, scheduleForGoalsSave, weekOrder } from "@/lib/client-goals/schedule-sync";
 import { WEEK_DAYS } from "@/lib/training-schedule";
 
@@ -182,10 +182,23 @@ export const requestGoalsUpdateFn = createServerFn({ method: "POST" })
     z.object({
       clientId: z.string().uuid(),
       message: z.string().trim().max(500).optional().nullable(),
+      onlyIfOutstanding: z.boolean().optional(),
     }).parse(data),
   )
   .handler(async ({ data, context }) => {
     await assertCoachOrAdmin(context, data.clientId);
+    if (data.onlyIfOutstanding) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const db = supabaseAdmin as any;
+      const [client, enrollment, goals] = await Promise.all([
+        db.from("clients").select("user_id, service_tier, archived, status, portal_access_disabled").eq("id", data.clientId).maybeSingle(),
+        db.from("coaching_package_enrollments").select("coaching_packages!inner(slug)").eq("client_id", data.clientId).eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)).maybeSingle(),
+        db.from("client_goals_setup").select("*").eq("client_id", data.clientId).maybeSingle(),
+      ]);
+      if (client.error || enrollment.error || goals.error) throw new Error("Could not verify outstanding setup.");
+      if (!client.data?.user_id || client.data.service_tier === "self_serve" || client.data.archived || client.data.portal_access_disabled || ["Archived", "Deactivated", "Deleted"].includes(client.data.status)) throw new Error("This account is not active for coaching setup.");
+      if (goals.data?.update_requested_at || isGoalsSetupComplete(goals.data as ClientGoalsSetupRow | null, enrollment.data?.coaching_packages?.slug === "nutrition")) return { ok: true, skipped: true };
+    }
     // Make sure a row exists so the banner condition works in the portal.
     const { error } = await context.supabase
       .from("client_goals_setup")
@@ -199,7 +212,7 @@ export const requestGoalsUpdateFn = createServerFn({ method: "POST" })
         { onConflict: "client_id" },
       );
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return { ok: true, skipped: false };
   });
 
 /** Clear the "update requested" flag once the client acknowledges it. */
