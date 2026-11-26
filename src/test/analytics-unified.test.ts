@@ -35,6 +35,19 @@ describe("one analytics experience for the coach and the athlete", () => {
     }
   });
 
+  it("keeps primary analytics prominent and opens records through controlled state", () => {
+    expect(dash).toContain('label="Records & competitions" open={recordsOpen} onOpenChange={setRecordsOpen}');
+    expect(dash).toContain('if(v==="records")setRecordsOpen(true)');
+    expect(dash).not.toContain('querySelector("details")');
+    expect(dash).toContain('onSectionChange={setRecordSection}');
+    expect(dash.indexOf('id="analytics-muscles"')).toBeLessThan(dash.indexOf('label="Strength & programming"'));
+    expect(dash).toContain('label="Training & recovery details"');
+    const map = read("src/components/analytics/muscle-map.tsx");
+    expect(map).toContain('rows={read.rows} mode={mode}');
+    expect(map).toContain('aria-label="Find a muscle" value={picked??""}');
+    expect(map).toContain('Largest training changes');
+  });
+
   it("volume is the training-load read: one observation for both, coach-only flags only for the coach", () => {
     expect(dash).toContain("useTrainingLoad({");
     // the training-load insights reach the athlete through Cleo's one observation, never a list
