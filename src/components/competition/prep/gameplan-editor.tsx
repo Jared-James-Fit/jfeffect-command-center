@@ -8,6 +8,7 @@
  */
 import { useMemo, useState } from "react";
 import { Minus, Plus } from "lucide-react";
+import { dualLoad, inputKg, roundUpWeight, weightNumber, kgIn, type WeightUnit } from "@/lib/dual-weight";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,7 @@ export function GameplanEditor({
 }) {
   const [p, setP] = useState<GameplanDoc>(() => JSON.parse(JSON.stringify(initial)));
   const [note, setNote] = useState("");
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>("kg");
   const problems = useMemo(() => checkGameplan(p, rules), [p, rules]);
   const errors = problems.filter((x) => x.severity === "error");
   const coach = who === "coach";
@@ -66,14 +68,19 @@ export function GameplanEditor({
     <div className="space-y-4" data-gameplan-editor={who}>
       {coach ? (
         <section className="rounded-2xl border border-border bg-card p-4">
-          <h3 className="text-[15px] font-semibold">Attempts (kg)</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[15px] font-semibold">Attempts</h3>
+            <div className="flex items-center gap-1 text-xs" aria-label="Gameplan input unit">
+              {(["kg", "lb"] as const).map(u => <Button key={u} type="button" size="sm" variant={u === weightUnit ? "default" : "outline"} aria-pressed={u === weightUnit} className="h-8 px-2" onClick={() => setWeightUnit(u)}>{u}</Button>)}
+            </div>
+          </div>
           <div className="mt-2 grid grid-cols-[4.5rem_1fr_1fr_1fr] items-center gap-2 text-[13px]">
             <span />
             <span className="text-muted-foreground">Opener</span>
             <span className="text-muted-foreground">Second</span>
             <span className="text-muted-foreground">Third</span>
             {LIFTS.map((l) => (
-              <AttemptRow key={l} lift={l} p={p} onChange={setAttempt} />
+              <AttemptRow key={l} lift={l} p={p} onChange={setAttempt} rules={rules} unit={weightUnit} />
             ))}
           </div>
           <p className="mt-1 text-[12px] text-muted-foreground">On {rules.incrementKg} kg steps, each at least one step over the last.</p>
@@ -81,7 +88,7 @@ export function GameplanEditor({
       ) : null}
 
       {LIFTS.map((l) => (
-        <WarmupRows key={l} lift={l} rows={p.warmups[l]?.rows ?? []} opener={p.attempts[l]?.opener ?? null} onChange={(rows) => setRows(l, rows)} />
+        <WarmupRows key={l} lift={l} rows={p.warmups[l]?.rows ?? []} opener={p.attempts[l]?.opener ?? null} onChange={(rows) => setRows(l, rows)} unit={weightUnit} />
       ))}
 
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -210,47 +217,58 @@ function clean(p: GameplanDoc): GameplanDoc {
   return { ...p, contacts: p.contacts.filter((c) => c.name.trim()) };
 }
 
-function AttemptRow({ lift, p, onChange }: { lift: Lift; p: GameplanDoc; onChange: (l: Lift, k: "opener" | "second" | "third", v: number | null) => void }) {
+/** The plan stores kg. A unit toggle is presentation only. Draft text is local
+ * until blur; an explicit rounding click commits the exact standard step. */
+function MeetWeightCell({ kg, unit, onChange, label, marker, incrementKg, confirmed, required = false }: {
+  kg: number | null; unit: WeightUnit; onChange: (v: number | null) => void;
+  label: string; marker?: string; incrementKg?: number; confirmed?: boolean; required?: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const raw = draft ?? (kg == null ? "" : weightNumber(kgIn(kg, unit), 2));
+  const parsed = raw.trim() && /^\d+(?:[.,]\d*)?$/.test(raw.trim()) ? Number(raw.replace(",", ".")) : null;
+  const exact = draft == null ? kg : parsed != null && parsed > 0 ? inputKg(parsed, unit) : null;
+  const next = exact != null && incrementKg != null ? roundUpWeight(exact, incrementKg) : null;
+  const finish = () => {
+    if (draft == null) return;
+    if (exact != null) onChange(exact);
+    else if (!required && !raw.trim()) onChange(null);
+    setDraft(null);
+  };
+  return <div className="min-w-0 space-y-0.5">
+    <Input inputMode="decimal" value={raw} onFocus={e => e.currentTarget.select()} onChange={e => setDraft(e.target.value)}
+      onBlur={finish} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+      aria-label={label} data-attempt-input={marker} className="h-9 w-full max-w-20 px-2 tabular-nums" />
+    <p className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap">{exact == null ? unit : dualLoad(exact, unit).secondary}</p>
+    {next != null && <Button type="button" size="sm" variant="outline" className="h-auto min-h-8 px-1.5 py-1 text-[10px] leading-tight whitespace-normal"
+      title={confirmed ? "Round to the meet's standard increment" : "Standard increment; confirm the meet rules"} onClick={() => { setDraft(null); onChange(next); }}>Round up {next} kg</Button>}
+  </div>;
+}
+
+function AttemptRow({ lift, p, onChange, rules, unit }: { lift: Lift; p: GameplanDoc; onChange: (l: Lift, k: "opener" | "second" | "third", v: number | null) => void; rules: FederationRules; unit: WeightUnit }) {
   const a = p.attempts[lift];
   return (
     <>
       <span className="text-[14px] font-medium">{WORD[lift]}</span>
       {(["opener", "second", "third"] as const).map((k) => (
-        <Input
-          key={k}
-          inputMode="decimal"
-          className="h-10 text-[15px] tabular-nums"
-          defaultValue={a?.[k] ?? ""}
-          onBlur={(e) => onChange(lift, k, n(e.target.value))}
-          aria-label={`${WORD[lift]} ${k}`}
-          data-attempt-input={`${lift}:${k}`}
-        />
+        <MeetWeightCell key={k + unit} kg={a?.[k] ?? null} unit={unit} onChange={v => onChange(lift, k, v)}
+          label={`${WORD[lift]} ${k} (${unit})`} marker={`${lift}:${k}`} incrementKg={rules.incrementKg} confirmed={rules.confirmed} />
       ))}
     </>
   );
 }
 
-function WarmupRows({ lift, rows, opener, onChange }: { lift: Lift; rows: WarmupRow[]; opener: number | null; onChange: (rows: WarmupRow[]) => void }) {
+function WarmupRows({ lift, rows, opener, onChange, unit }: { lift: Lift; rows: WarmupRow[]; opener: number | null; onChange: (rows: WarmupRow[]) => void; unit: WeightUnit }) {
   return (
     <section className="rounded-2xl border border-border bg-card p-4" data-warmup-editor={lift}>
       <div className="flex items-baseline justify-between">
         <h3 className="text-[15px] font-semibold">{WORD[lift]} warm-ups</h3>
-        {opener != null ? <span className="text-[12px] text-muted-foreground">Opener {opener} kg</span> : null}
+        {opener != null ? <span className="text-[12px] text-muted-foreground">Opener {dualLoad(opener, "kg").primary} ({dualLoad(opener, "kg").secondary})</span> : null}
       </div>
       <ul className="mt-2 space-y-1.5">
         {rows.map((r, i) => (
           <li key={`${i}:${r.kg}:${r.reps}:${rows.length}`} className="flex items-center gap-2">
-            <Input
-              inputMode="decimal"
-              className="h-10 w-24 tabular-nums"
-              defaultValue={r.kg}
-              onBlur={(e) => {
-                const v = n(e.target.value);
-                if (v != null) onChange(rows.map((x, j) => (j === i ? { ...x, kg: v } : x)));
-              }}
-              aria-label={`${WORD[lift]} warm-up ${i + 1} kg`}
-            />
-            <span className="text-[13px] text-muted-foreground">kg ×</span>
+            <MeetWeightCell key={unit} kg={r.kg} unit={unit} required onChange={v => { if (v != null) onChange(rows.map((x,j) => j === i ? {...x, kg: v} : x)); }} label={`${WORD[lift]} warm-up ${i + 1} ${unit}`} />
+            <span className="text-[13px] text-muted-foreground">{unit} ×</span>
             <Input
               inputMode="numeric"
               className="h-10 w-16 tabular-nums"

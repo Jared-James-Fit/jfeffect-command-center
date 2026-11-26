@@ -134,7 +134,7 @@ export function buildGameplanPdf(x: GameplanPdfInput): File {
       null,
       timed.map((e) => [
         e.at != null ? (e.from != null && e.to != null && e.to - e.from >= 5 ? `${clock(e.from)}-${clock(e.to).replace(/ (AM|PM)$/, "")}` : clock(e.at)) : (e.relative ?? "TBC"),
-        e.label + (e.kind === "attempt" && e.kg != null ? ` · ${e.kg} kg` : ""),
+        e.label + (e.kind === "attempt" && e.kg != null ? ` · ${e.kg} kg (${toLb(e.kg)} lb)` : ""),
         e.status === "confirmed" ? "" : e.status === "recommended" ? "plan" : "est.",
       ]),
       { widths: [104, W - M * 2 - 104 - 40, 40], bold: [0] },
@@ -143,17 +143,16 @@ export function buildGameplanPdf(x: GameplanPdfInput): File {
 
   // ── attempts ──
   heading("Attempts", 120);
-  const kgs = (v: number | null | undefined) => (v == null ? "-" : `${v}`);
+  const attempt = (v: number | null | undefined) => v == null ? "-" : `${v} kg\n${toLb(v)} lb`;
   table(
     ["Lift", "Opener", "2nd", "3rd"],
     LIFTS.map((l) => {
       const a = x.plan.attempts[l];
-      return [WORD[l], kgs(a?.opener), kgs(a?.second), kgs(a?.third)];
+      return [WORD[l], attempt(a?.opener), attempt(a?.second), attempt(a?.third)];
     }),
-    { widths: [86, 86, 86, W - M * 2 - 258], size: 15, bold: [1] },
+    { widths: [68, 94, 94, W - M * 2 - 256], size: 12, bold: [1] },
   );
-  const lbs = LIFTS.map((l) => x.plan.attempts[l]?.opener).filter((v): v is number => v != null);
-  if (lbs.length) line(`kg. Openers in lb: ${LIFTS.filter((l) => x.plan.attempts[l]?.opener != null).map((l) => `${WORD[l]} ${toLb(x.plan.attempts[l]!.opener!)}`).join(" · ")}`, 10.5, PDF_COLOR.muted);
+
   y += 2;
 
   // ── warm-ups, one table per lift, each kept together ──
