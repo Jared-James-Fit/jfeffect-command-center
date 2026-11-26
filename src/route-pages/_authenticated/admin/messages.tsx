@@ -38,6 +38,9 @@ import { useChatPresence } from "@/hooks/use-chat-presence";
 import { LiveAvatar, LiveMark } from "@/components/live-indicator";
 import { useGroupLastMessages, useGroupListRealtime, groupUnread } from "@/components/group-chats-pane";
 import { GroupChatRow, GroupThreadPane } from "@/components/messages/group-thread-pane";
+import { DirectChatView, DirectRow } from "@/components/direct-chat";
+import { NewRequestView } from "@/components/messages/inbox-parts";
+import { directThreadsKey, isUnread as directUnread, useDirectThreads, type DirectThread } from "@/lib/direct-chats";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { InboxControls } from "@/components/messages/inbox-chips";
 import { inPrimary, type PrimaryFilter } from "@/lib/inbox-filters";
@@ -235,6 +238,7 @@ export function MessagesInbox({
   initialClient,
   initialMessage,
   initialSupport,
+  initialDirect,
   embedded = false,
   view,
 }: {
@@ -242,6 +246,7 @@ export function MessagesInbox({
   /** A message in initialClient's chat to open on, scrolled to and highlighted (a check-in from the dashboard). */
   initialMessage?: string;
   initialSupport?: string;
+  initialDirect?: string;
   embedded?: boolean;
   view?: "chats" | "groups";
 } = {}) {
@@ -258,6 +263,7 @@ export function MessagesInbox({
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   // A JF member's Support chat, open in the pane (its thread id).
   const [supportId, setSupportId] = useState<string | null>(initialSupport ?? null);
+  const [directId, setDirectId] = useState<string | null>(initialDirect ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
   // the selected client's workout notes log (pain, review and exercise notes)
   const [notesOpen, setNotesOpen] = useState(false);
@@ -274,8 +280,9 @@ export function MessagesInbox({
   const appAlerts = badgeCounts?.supportAlerts ?? 0;
   const cleoOn = useCleoAccess();
 
-  useEffect(() => { if (selectedFromUrl) { setSelectedId(selectedFromUrl); setSupportId(null); } }, [selectedFromUrl]);
-  useEffect(() => { if (initialSupport) { setSupportId(initialSupport); setSelectedId(null); } }, [initialSupport]);
+  useEffect(() => { if (selectedFromUrl) { setSelectedId(selectedFromUrl); setSupportId(null); setDirectId(null); setGroupId(null); } }, [selectedFromUrl]);
+  useEffect(() => { if (initialSupport) { setSupportId(initialSupport); setSelectedId(null); setDirectId(null); setGroupId(null); } }, [initialSupport]);
+  useEffect(() => { if (initialDirect) { setDirectId(initialDirect); setSelectedId(null); setSupportId(null); setGroupId(null); } }, [initialDirect]);
 
   const clientsQ = useQuery({
     queryKey: ["clients-min"],
@@ -290,6 +297,13 @@ export function MessagesInbox({
     refetchInterval: 60_000,
   });
   const clients = useMemo(() => clientsQ.data ?? [], [clientsQ.data]);
+  // Staff see only direct chats they personally participate in, not other members’ private conversations.
+  const personalQ = useDirectThreads((role === "admin" || role === "coach") && !clientPov.isImpersonating);
+  const personalThreads = useMemo(() => (personalQ.data ?? []).map((t) => {
+    const c = clients.find((row) => row.user_id === t.other?.user_id);
+    return c?.full_name ? { ...t, other: { ...t.other, name: c.full_name } } : t;
+  }), [personalQ.data, clients]);
+  const personalUnread = personalThreads.filter((t) => directUnread(t, user?.id)).length;
   // The list's own read: a cold open waits in the shape of rows, a failed or offline one says so
   // (never "No conversations." over chats that didn't load).
   const clientsState = queryView(clientsQ as any).kind;
@@ -681,8 +695,7 @@ export function MessagesInbox({
     return m;
   }, [sessionRequestRows]);
 
-  // Coach chats only: a JF member can't open the coach chat, so their row in
-  // this list is their Support chat (supportChats), never a coach chat.
+  // Coaching workflows stay in their established chat; uncoached accounts use personal DMs.
   const allRows = useMemo(() => clients.filter((c) => (c as any).service_tier !== "self_serve").map((c) => {
     const state = stateMap.get(c.id);
     const last = lastByClient.get(c.id);
@@ -779,8 +792,8 @@ export function MessagesInbox({
   // same number as the Messages tab's badge (messagesBadge).
   const newChats = useMemo(
     () => allRows.filter((it) => it.unread > 0 && (it.state?.status ?? "open") !== "archived").length
-      + supportNewChats(supportChats),
-    [allRows, supportChats],
+      + supportNewChats(supportChats) + personalUnread,
+    [allRows, supportChats, personalUnread],
   );
 
   // Members' Support chats this filter shows, then one list with the coach chats, newest first.
@@ -807,9 +820,11 @@ export function MessagesInbox({
       conversations, (it) => latestOf(it.last?.created_at, it.liftReview?.latestAt),
       supportVisible, (c) => c.at,
     );
-    type ListRow = (typeof direct)[number] | { kind: "group"; item: (typeof groupsVisible)[number] };
+    type ListRow = (typeof direct)[number] | { kind: "group"; item: (typeof groupsVisible)[number] } | { kind: "personal"; item: DirectThread } | { kind: "member"; item: (typeof clients)[number] };
     const at = (r: ListRow) => r.kind === "group" ? r.item.at
       : r.kind === "support" ? r.item.at
+      : r.kind === "personal" ? r.item.last_at
+      : r.kind === "member" ? ""
         : latestOf(r.item.last?.created_at, r.item.liftReview?.latestAt);
     const merged: ListRow[] = [];
     let i = 0;
@@ -820,11 +835,24 @@ export function MessagesInbox({
       else if (newestFirst(groupsVisible[j].at, at(direct[i])) < 0) merged.push({ kind: "group", item: groupsVisible[j++] });
       else merged.push(direct[i++]);
     }
-    return merged.filter((r) => inPrimary({
+    if (filter === "Inbox") {
+      const term = search.trim().toLowerCase();
+      for (const t of personalThreads) {
+        if (!term || `${t.other?.name ?? ""} ${t.last?.body ?? ""}`.toLowerCase().includes(term)) merged.push({ kind: "personal", item: t });
+      }
+      // Searching for a member starts a personal chat on the first send, without creating empty Support tickets.
+      if (term && personalQ.isSuccess) {
+        for (const c of clients) {
+          if (c.service_tier === "self_serve" && c.user_id && c.user_id !== user?.id && !c.archived && !["Archived", "Inactive", "Deactivated"].includes(c.status ?? "") &&
+            !personalThreads.some((t) => t.other?.user_id === c.user_id) && `${c.full_name ?? ""} ${c.email ?? ""}`.toLowerCase().includes(term)) merged.push({ kind: "member", item: c });
+        }
+      }
+    }
+    return merged.sort((a, b) => newestFirst(at(a), at(b))).filter((r) => inPrimary({
       kind: r.kind === "group" ? "group" : "direct",
-      unread: r.kind === "group" ? r.item.unread : r.kind === "support" ? r.item.unread > 0 : r.item.unread > 0,
+      unread: r.kind === "group" ? r.item.unread : r.kind === "personal" ? directUnread(r.item, user?.id) : r.kind === "member" ? false : r.item.unread > 0,
     }, primary));
-  }, [conversations, supportVisible, groupsVisible, primary]);
+  }, [conversations, supportVisible, groupsVisible, primary, filter, search, personalThreads, personalQ.isSuccess, clients, user?.id]);
   // Cleo and the coaching queues: the top of All with nothing narrowing it.
   const pinnedSystem = primary === "all" && filter === "Inbox" && !search;
 
@@ -853,14 +881,13 @@ export function MessagesInbox({
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
   // "Live in chat" for the client only while I actually have their chat open.
-  // A JF member opens their Support chat (they can't see the coach chat).
-  const selectedIsMember = (selected as any)?.service_tier === "self_serve";
-  const openSupport: SupportChat | null = supportId
-    ? supportChats.find((c) => c.threadId === supportId) ?? null
-    : selectedIsMember ? supportChats.find((c) => c.clientId === selected!.id) ?? null : null;
-  const supportOpen = !!supportId || selectedIsMember;
+  // Opening an account is personal. Support is only opened explicitly from its own row.
+  const selectedIsMember = selected?.service_tier === "self_serve";
+  const openSupport: SupportChat | null = supportId ? supportChats.find((c) => c.threadId === supportId) ?? null : null;
+  const supportOpen = !!supportId;
+  const openDirect = directId ? personalThreads.find((t) => t.group_id === directId) : selectedIsMember ? personalThreads.find((t) => t.other?.user_id === selected?.user_id) : undefined;
   const openGroup = groupId ? staffGroups.find((g) => g.id === groupId) ?? null : null;
-  const paneOpen = !!selected || !!supportId || !!openGroup;
+  const paneOpen = !!selected || !!supportId || !!openGroup || !!directId;
   const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin", !openGroup && !!selected && !selectedIsMember);
 
   // A client is "active in the app" if they've pinged within the last 3 min.
@@ -876,24 +903,35 @@ export function MessagesInbox({
   };
 
   const selectClient = (id: string) => {
+    setDirectId(null);
     setSupportId(null);
     setGroupId(null);
     setSelectedId(id);
     navigate({ to: "/admin/communication", search: { tab: "messages", client: id } as any, replace: true });
   };
   const selectSupport = (threadId: string) => {
+    setDirectId(null);
     setSelectedId(null);
     setGroupId(null);
     setSupportId(threadId);
     navigate({ to: "/admin/communication", search: { tab: "messages", support: threadId } as any, replace: true });
   };
   const selectGroup = (id: string) => {
+    setDirectId(null);
     setSelectedId(null);
     setSupportId(null);
     setGroupId(id);
     navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
   };
+  const selectDirect = (id: string) => {
+    setSelectedId(null);
+    setSupportId(null);
+    setGroupId(null);
+    setDirectId(id);
+    navigate({ to: "/admin/communication", search: { tab: "messages", direct: id } as any, replace: true });
+  };
   const clearSelection = () => {
+    setDirectId(null);
     setSelectedId(null);
     setSupportId(null);
     setGroupId(null);
@@ -1167,11 +1205,15 @@ export function MessagesInbox({
               selected={groupId === row.item.group.id}
               onClick={() => selectGroup(row.item.group.id)}
             />
+          ) : row.kind === "personal" ? (
+            <DirectRow key={`personal:${row.item.group_id}`} thread={row.item} me={user?.id} selected={openDirect?.group_id === row.item.group_id} onClick={() => selectDirect(row.item.group_id)} />
+          ) : row.kind === "member" ? (
+            <ChatListRow key={`member:${row.item.id}`} onClick={() => selectClient(row.item.id)} selected={selectedId === row.item.id} avatar={<UserAvatar src={row.item.profile_picture_url} name={row.item.full_name ?? "Member"} size={CHAT_ROW_AVATAR} expandable={false} />} name={row.item.full_name ?? "Member"} preview="New message" />
           ) : row.kind === "support" ? (
             <SupportChatRow
               key={`support:${row.item.threadId}`}
               chat={row.item}
-              selected={supportId === row.item.threadId || (!!selectedId && selectedId === row.item.clientId)}
+              selected={supportId === row.item.threadId}
               onOpen={() => selectSupport(row.item.threadId)}
               onAction={supportAction}
             />
@@ -1303,13 +1345,20 @@ export function MessagesInbox({
           <MemberSupportPane
             key={openSupport?.threadId ?? supportId ?? `client:${selected?.id}`}
             threadId={openSupport?.threadId ?? supportId ?? undefined}
-            clientId={openSupport || supportId ? undefined : selected?.id}
+            clientId={undefined}
             fallback={openSupport
               ? { name: openSupport.name, avatar: openSupport.avatar }
               : selected ? { name: selected.full_name ?? "Member", avatar: selected.profile_picture_url ?? null } : undefined}
             onBack={clearSelection}
             embedded={embedded}
           />
+        ) : openDirect ? (
+          <DirectChatView key={openDirect.group_id} thread={openDirect} onBack={clearSelection} />
+        ) : directId || selectedIsMember ? (
+          personalQ.isError ? <div className="flex flex-1 flex-col items-center justify-center gap-3 p-5"><p>Could not load your direct chats.</p><Button onClick={() => personalQ.refetch()}>Retry</Button><Button variant="ghost" onClick={clearSelection}>Back</Button></div>
+          : !personalQ.isSuccess ? <ListSkeleton rows={5} className="p-4" label="Loading conversation" />
+          : !directId && selected?.user_id ? <NewRequestView key={selected.id} staffClientId={selected.id} to={{ user_id: selected.user_id, name: selected.full_name ?? "Member", avatar_url: selected.profile_picture_url ?? null, is_coach: false }} onBack={clearSelection} onSent={async (id) => { await qc.refetchQueries({ queryKey: directThreadsKey }); selectDirect(id); }} />
+          : <div className="flex flex-1 flex-col items-center justify-center gap-3 p-5"><p>This conversation is unavailable.</p><Button variant="ghost" onClick={clearSelection}>Back</Button></div>
         ) : selected ? (
           <>
             <header
