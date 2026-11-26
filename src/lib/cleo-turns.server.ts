@@ -551,7 +551,7 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
   // Explicit setup review commands use an internal, role-scoped read, never a model.
   // Keep this allowlist narrow: arbitrary free text and previous chat history can contain personal data.
   if (chat.client_id && !cleo.viewOnly && !(questionRow.attachments?.length) &&
-      /^(review (account|coaching) setup|what (access issues are|is still) outstanding|(?:show|review|check) (?:client )?(?:onboarding|intake|setup)(?: status)?|what(?:'s| is) (?:missing|left) (?:from|in) (?:onboarding|setup|intake))[?.!]*$/i.test(questionRow.content.trim())) {
+      /^(review (account|coaching) setup|what (access issues are|is still) outstanding|(?:show|review|check) (?:(?:client|competition|meet|handling) )?(?:onboarding|intake|setup)(?: status)?|what(?:'s| is) (?:missing|left) (?:from|in) (?:onboarding|setup|intake))[?.!]*$/i.test(questionRow.content.trim())) {
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { assertRequesterReaches } = await import("@/lib/cleo-actions.server");
@@ -559,7 +559,7 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
       const { isBasicInfoComplete } = await import("@/lib/basic-info");
       const { isGoalsSetupComplete } = await import("@/lib/client-goals/schema");
       const [client, goals, enrollments] = await Promise.all([
-        cleo.db.from("clients").select("id, user_id, last_signed_in_at, portal_access_disabled, profile_picture_url, first_name, last_name, phone, date_of_birth, height_cm, address, city, country, timezone, emergency_contact_name, emergency_contact_phone, training_schedule_completed").eq("id", chat.client_id).maybeSingle(),
+        cleo.db.from("clients").select("id, user_id, last_signed_in_at, portal_access_disabled, profile_picture_url, service_tier, first_name, last_name, phone, date_of_birth, height_cm, address, city, country, timezone, emergency_contact_name, emergency_contact_phone, training_schedule_completed").eq("id", chat.client_id).maybeSingle(),
         cleo.db.from("client_goals_setup").select("*").eq("client_id", chat.client_id).maybeSingle(),
         (supabaseAdmin as any).from("coaching_package_enrollments").select("coaching_packages!inner(slug)").eq("client_id", chat.client_id).eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)),
       ]);
@@ -572,7 +572,14 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
         status(isBasicInfoComplete(c), "Basic information"),
         status(!!c.profile_picture_url, "Account photo"),
       ];
-      if (enrollments.error) lines.push("Service scope — couldn't verify; check the client profile.");
+      const { loadHandlingSetup } = await import("@/lib/competition/handling-setup.server");
+      const handlingMeets = await loadHandlingSetup(supabaseAdmin, chat.client_id);
+      for (const meet of handlingMeets) {
+        lines.push(status(meet.intakeDone, `Competition intake: ${meet.name}`), status(meet.termsDone, "Handling terms"));
+        if (meet.remaining.length) lines.push("Remaining: " + meet.remaining.join(", "));
+      }
+      if (c.service_tier === "self_serve") { /* no regular coaching intake required */ }
+      else if (enrollments.error) lines.push("Service scope — couldn't verify; check the client profile.");
       else {
         const nutritionOnly = !!enrollments.data?.length && enrollments.data.every((e: any) => e.coaching_packages?.slug === "nutrition");
         if (!nutritionOnly) lines.push(status(!!c.training_schedule_completed, "Training schedule"));
