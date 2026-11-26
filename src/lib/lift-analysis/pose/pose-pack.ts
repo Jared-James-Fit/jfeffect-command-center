@@ -141,8 +141,9 @@ export function poseWindowFor(
   analysis: { window?: { start?: number; end?: number } | null } | null | undefined,
   durationS?: number | null,
 ): PoseWindow {
-  const s = Number(analysis?.window?.start);
-  const e = Number(analysis?.window?.end);
+  // only numbers count (Number(null) is 0): the database reads a missing start or end the same way
+  const s = typeof analysis?.window?.start === "number" ? analysis.window.start : NaN;
+  const e = typeof analysis?.window?.end === "number" ? analysis.window.end : NaN;
   if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
     const end = e + POSE_PAD_S;
     return {

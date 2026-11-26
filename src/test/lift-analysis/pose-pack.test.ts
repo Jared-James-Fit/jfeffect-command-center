@@ -81,6 +81,8 @@ describe("pose window", () => {
     expect(poseWindowFor(null, 42)).toEqual({ start: 0, end: 42, whole: true, duration: 42 });
     expect(poseWindowFor({ window: null }, 200)).toEqual({ start: 0, end: 90, whole: true, duration: 200 });
     expect(poseWindowFor(undefined)).toEqual({ start: 0, end: 90, whole: true, duration: null });
+    // a missing start or end is no window (as the database reads it), never 0
+    expect(poseWindowFor({ window: { start: null as never, end: 8 } }, 20)).toEqual({ start: 0, end: 20, whole: true, duration: 20 });
   });
 
   it("uses a stored read only while it covers what Technique would read", () => {

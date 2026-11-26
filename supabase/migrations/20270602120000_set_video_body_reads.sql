@@ -154,7 +154,7 @@ BEGIN
   END IF;
 END $$;
 
-/** A removed set video's body read is cancelled with it. */
+/** A removed set video's body read goes with it, like its bar read (a track stays readable otherwise). */
 CREATE OR REPLACE FUNCTION public.tg_set_video_removed_cancel_pose()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -163,9 +163,7 @@ SET search_path TO 'public'
 AS $$
 BEGIN
   IF NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL THEN
-    UPDATE public.pl_set_video_poses
-       SET status = 'cancelled', lease_id = NULL, lease_until = NULL, updated_at = now()
-     WHERE set_video_id = NEW.id AND status IN ('queued', 'running');
+    DELETE FROM public.pl_set_video_poses WHERE set_video_id = NEW.id;
   END IF;
   RETURN NEW;
 END
@@ -260,7 +258,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $function$
-DECLARE p public.pl_set_video_poses; s public.pl_set_videos; res jsonb; st text; num numeric;
+DECLARE p public.pl_set_video_poses; s public.pl_set_videos; res jsonb; changed timestamptz; st text; num numeric;
 BEGIN
   PERFORM public._velocity_server_only();
   SELECT * INTO p FROM public.pl_set_video_poses WHERE set_video_id = _video FOR UPDATE;
@@ -304,8 +302,9 @@ BEGIN
    WHERE set_video_id = _video
   RETURNING * INTO p;
   -- the bar was read again meanwhile and the set's window moved past this read: read the body again
-  SELECT result INTO res FROM public.pl_set_video_analyses WHERE set_video_id = _video;
-  IF res IS NOT NULL AND NOT public._pose_covers(p, res) THEN
+  -- (only when the bar's read changed since the claim, so a window this read can't fit never loops)
+  SELECT result, updated_at INTO res, changed FROM public.pl_set_video_analyses WHERE set_video_id = _video;
+  IF res IS NOT NULL AND changed IS DISTINCT FROM p.analysis_base AND NOT public._pose_covers(p, res) THEN
     UPDATE public.pl_set_video_poses SET status = 'queued', attempts = 0, available_at = now(), updated_at = now()
      WHERE set_video_id = _video;
     RETURN jsonb_build_object('ok', true, 'requeued', true);
