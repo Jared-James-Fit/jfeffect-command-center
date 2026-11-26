@@ -13,7 +13,9 @@
 --      to the guidelines and when. Existing rows are never changed or removed.
 --   3. The Terms of Service gain "8.1 Crew community guidelines" (zero tolerance, report and
 --      block, the 24-hour review, the contact), saved as a DRAFT for the owner to read and
---      publish in Admin → Legal, like every Terms change. It adds no obligation the Terms
+--      publish in Admin → Legal, like every Terms change. When another Terms draft is already
+--      waiting (Nov 26's 2.3 Access to your account), this one is built on it, so there is one
+--      draft to publish with both. It adds no obligation the Terms
 --      don't already make (6. Acceptable Use, 8. User Content and Community), so nobody is
 --      asked to accept again (requires_reacceptance = false).
 --
@@ -74,6 +76,8 @@ DECLARE
   v_base  public.legal_document_versions%ROWTYPE;
   v_next  integer;
   v_body  text;
+  v_current integer;
+  v_on_draft boolean;
   v_date  constant text := 'November 26, 2026';
   v_section constant text := $section$8.1 Crew community guidelines
 Crew is where members train and cheer each other on. These guidelines are part of these Terms, and you agree to them when you agree to these Terms:
@@ -92,14 +96,22 @@ BEGIN
     RETURN;
   END IF;
 
-  -- from what people read today: the current version, else the newest published, else the newest
+  -- from a draft already waiting on top of what people read today (so ONE draft carries every
+  -- pending change, e.g. 20270601092000's 2.3 Access to your account), else what people read
+  -- today: the current version, else the newest published, else the newest
+  SELECT coalesce(cv.version_number, 0) INTO v_current
+    FROM public.legal_documents d
+    LEFT JOIN public.legal_document_versions cv ON cv.id = d.current_version_id
+   WHERE d.id = v_doc;
   SELECT v.* INTO v_base
     FROM public.legal_document_versions v
     LEFT JOIN public.legal_documents d ON d.current_version_id = v.id
    WHERE v.document_id = v_doc
-   ORDER BY (d.id IS NOT NULL) DESC, (v.status = 'published') DESC, v.version_number DESC
+   ORDER BY (v.status = 'draft' AND v.version_number > coalesce(v_current, 0)) DESC,
+            (d.id IS NOT NULL) DESC, (v.status = 'published') DESC, v.version_number DESC
    LIMIT 1;
   IF v_base.id IS NULL THEN RETURN; END IF;
+  v_on_draft := v_base.status = 'draft';
 
   v_body := v_base.body;
   -- at the end of section 8, just before 9. Intellectual Property; else at the end
@@ -125,6 +137,10 @@ BEGIN
      'Adds 8.1 Crew community guidelines: zero tolerance for hate, harassment, threats and sexual content, Report and Block, the 24-hour review and the contact. Agreed to with these Terms, never on a separate screen in Crew.',
      v_body, v_base.signature_method,
      false, v_base.reacceptance_audience, DATE '2026-11-26', true,
-     'Adds section 8.1 at the end of 8. User Content and Community, in the words the app shows (src/lib/crew-safety.ts, CREW_RULES). Sign-up''s box now reads "I agree to the JF Effect Terms of Service, including the Crew community guidelines, and the Privacy Policy." Nothing new is asked of anyone the Terms don''t already ask (6. Acceptable Use), so no one is asked to accept again. Read it, then publish.');
+     'Adds section 8.1 at the end of 8. User Content and Community, in the words the app shows (src/lib/crew-safety.ts, CREW_RULES). Sign-up''s box now reads "I agree to the JF Effect Terms of Service, including the Crew community guidelines, and the Privacy Policy." Nothing new is asked of anyone the Terms don''t already ask (6. Acceptable Use), so no one is asked to accept again.'
+       || CASE WHEN v_on_draft
+               THEN ' Built on draft version ' || v_base.version_number || ', so it carries that draft''s changes too: publish this one instead of version ' || v_base.version_number || '.'
+               ELSE '' END
+       || ' Read it, then publish.');
 END
 $do$;

@@ -505,3 +505,66 @@ function FasterWayScreen({
     </div>
   );
 }
+
+// ── Confirming again for one sensitive action (step-up) ─────────────────────
+/**
+ * "Confirm it's you" for one sensitive action, inside a dialog: the sign-in's own ways (Face ID,
+ * a text, the authenticator, the emailed backup), never a trusted device (that would skip the
+ * question being asked). Confirming marks this session confirmed again, which is what the server
+ * checks (two_step_sessions.verified_at).
+ */
+export function StepUpConfirm({ onConfirmed }: { onConfirmed: () => void | Promise<void> }) {
+  const status = useTwoStepStatus(true);
+  const passkeyHere = passkeysPossibleHere();
+  const data = status.data;
+  const ordered = useMemo(
+    () => (data ? orderMethods(data.methods, data.preferred, passkeyHere) : []),
+    [data, passkeyHere],
+  );
+  const emailBackup = data?.emailBackup?.ready ? data.emailBackup : null;
+  const kinds = useMemo<ConfirmKind[]>(
+    () => [...kindsInOrder(ordered), ...(emailBackup ? (["email"] as const) : [])],
+    [ordered, emailBackup],
+  );
+  const [picked, setPicked] = useState<ConfirmKind | null>(null);
+  const kind = picked ?? kinds[0] ?? null;
+  const done = async () => {
+    rememberConfirmed(status.sid);
+    await onConfirmed();
+  };
+  if (status.isLoading || !data) {
+    return (
+      <div className="grid h-20 place-items-center" aria-busy="true">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  const sms = ordered.find((m) => m.kind === "sms");
+  return (
+    <div className="space-y-4" data-step-up>
+      {kind === "passkey" && <PasskeyConfirm trust={false} onConfirmed={done} />}
+      {kind === "sms" && sms && (
+        <SmsCodeStep key={sms.id} purpose="sign_in" methodId={sms.id} to={sms.label.replace(/^Text to /, "")} trust={false} onConfirmed={done} />
+      )}
+      {kind === "email" && emailBackup && (
+        <SmsCodeStep key="email" channel="email" purpose="sign_in" to={emailBackup.to} trust={false} onConfirmed={done} />
+      )}
+      {kind === "totp" && <TotpConfirm trust={false} onConfirmed={done} />}
+      {!kind && <p className="text-sm text-muted-foreground">No way to confirm is set up on this sign-in.</p>}
+      {kinds.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 border-t pt-3">
+          {kinds
+            .filter((k) => k !== kind)
+            .map((k) => {
+              const Icon = CONFIRM_ICON(k);
+              return (
+                <Button key={k} variant="ghost" size="sm" className="h-10" onClick={() => setPicked(k)}>
+                  <Icon className="mr-2 h-4 w-4" /> {KIND_NAME(k)}
+                </Button>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}

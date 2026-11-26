@@ -21,6 +21,16 @@ import {
 import { planPaymentTarget } from "@/lib/stripe-plan-payments.server";
 import { isAiCreditsObject, isCreditPackPayment, recordCreditsFromSession } from "@/lib/ai-credits/stripe.server";
 
+
+/** Statuses a sale never comes back from by itself (stripe-account-sync never reopens them). */
+const ENDED_PAYMENT = new Set(["Cancelled", "Refunded", "Voided"]);
+const ENDED_SERVICE = new Set(["Cancelled", "Completed", "Ended", "Expired"]);
+const LIVE_SUBSCRIPTION = new Set(["active", "trialing", "past_due"]);
+
+export function saleHasEnded(p: { payment_status?: string | null; service_status?: string | null }): boolean {
+  return ENDED_PAYMENT.has(String(p.payment_status ?? "")) || ENDED_SERVICE.has(String(p.service_status ?? ""));
+}
+
 export type SyncEntry = {
   session_id: string;
   purchase_id: string | null;
@@ -282,6 +292,9 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
     }
 
     const isSub = s.mode === "subscription" && !!s.subscription;
+    // A sale that has ended (cancelled, refunded, voided) keeps its state: a checkout that was
+    // paid weeks ago never brings it back. Only the Stripe references are filled in.
+    const ended = saleHasEnded(purchase);
     const patch: Record<string, any> = {
       payment_status: isSub ? "Active Subscription" : "Paid",
       paid_at: purchase.paid_at ?? occurredAt,
@@ -304,14 +317,27 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
         patch.stripe_subscription_status = sub?.status ?? null;
         patch.cancel_at_period_end = !!sub?.cancel_at_period_end;
         patch.next_billing_date = subscriptionNextCharge(sub, purchase.next_billing_date);
+        // The subscription as it is now decides: one that ended isn't an active subscription.
+        if (!LIVE_SUBSCRIPTION.has(String(sub?.status ?? ""))) {
+          delete patch.payment_status;
+          delete patch.service_status;
+          if (!sub?.status || sub.status === "canceled" || sub.status === "incomplete_expired") patch.next_billing_date = null;
+        }
       } catch (e: any) {
         entries.push({ ...base, purchase_id: purchase.id, client_id: purchase.client_id, action: "skipped", reason: `Subscription lookup failed: ${e?.message ?? "unknown"}` });
         continue;
       }
     }
 
+    if (ended) {
+      delete patch.payment_status;
+      delete patch.service_status;
+      delete patch.paid_at;
+      delete patch.amount_paid;
+    }
+
     const unchanged =
-      purchase.payment_status === patch.payment_status &&
+      (patch.payment_status === undefined || purchase.payment_status === patch.payment_status) &&
       purchase.stripe_checkout_session_id === patch.stripe_checkout_session_id &&
       String(purchase.next_billing_date ?? "").slice(0, 10) === String(patch.next_billing_date ?? "").slice(0, 10);
 

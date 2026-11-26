@@ -13,7 +13,7 @@ import {
   DISCIPLINES, MAX_DISCIPLINES, isValidUsername, useGymNames, useSetDiscoverable, useSetTraining, useSetUsername, useUsernameCheck,
 } from "@/lib/community-discover";
 
-import { CoachPublicRow, PostMyFilmRow, PrivateAccountRow } from "@/components/community/privacy-settings";
+import { CoachPublicRow, MembershipBadgeRow, PostMyFilmRow, PrivateAccountRow } from "@/components/community/privacy-settings";
 import { CrewGuidelinesRow } from "@/components/community/crew-rules-sheet";
 
 // Messages' blocked list, loaded only when it's opened (it lives with the chat screens).
@@ -188,6 +188,7 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
               <Field label="Privacy">
               <div className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-privacy-settings>
                 {isCoach ? <CoachPublicRow /> : <PrivateAccountRow />}
+                {!isCoach && <MembershipBadgeRow />}
                 <PostMyFilmRow />
                 {!isCoach && (
                   <label className="flex items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3" data-discoverable-switch>

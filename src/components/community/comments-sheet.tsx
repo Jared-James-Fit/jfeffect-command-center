@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { StoryAvatar } from "@/components/community/story-ring";
-import { CoachBadge } from "@/components/community/post-card";
 import { SharedCommentCard } from "@/components/community/shared-comment";
 import { ReportSheet } from "@/components/community/report-sheet";
 import { useAuth } from "@/lib/auth";
@@ -41,6 +40,7 @@ import {
 } from "@/lib/community.queries";
 import { feedback } from "@/lib/feedback";
 import { HapticTap } from "@/components/haptic-tap";
+import { NameMarks } from "@/components/name-marks";
 
 const NOTE_MAX = 1200;
 /** Replies shown under a comment before "View all". */
@@ -721,7 +721,7 @@ function CommentRow({
           ) : (
             <span className="min-w-0 truncate font-semibold">{c.author.name}</span>
           )}
-          {c.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          <NameMarks person={c.author} userId={c.author.user_id} size={13} />
           <span className="shrink-0 text-[12px] text-muted-foreground">
             {c.pending ? (progress != null && progress < 100 ? `Uploading ${progress}%` : "Sending…") : postTimeLabel(c.created_at)}
           </span>

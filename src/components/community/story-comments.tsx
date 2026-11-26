@@ -3,7 +3,7 @@ import { ArrowUp, Globe2, Heart, ImagePlus, Loader2, Pin, X } from "lucide-react
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge } from "@/components/community/post-card";
+import { NameMarks } from "@/components/name-marks";
 import { ReportSheet } from "@/components/community/report-sheet";
 import { CommentMedia, CommentMenu, MediaViewer, ShareCommentSheet, mediaWord, urlFor, useHold } from "@/components/community/comments-sheet";
 import { MicButton, RecordingBar, VoiceMemoPlayer, useVoiceMemoRecorder, type RecordedVoice } from "@/components/community/voice-memo";
@@ -630,7 +630,7 @@ function StoryCommentRow({
           ) : (
             <span className="min-w-0 truncate font-semibold">{c.author.name}</span>
           )}
-          {c.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          <NameMarks person={c.author} userId={c.author.user_id} size={13} onDark />
           <span className="shrink-0 text-[11.5px] text-white/50">
             {c.pending ? (progress != null && progress < 100 ? `Uploading ${progress}%` : "Posting…") : postTimeLabel(c.created_at)}
           </span>

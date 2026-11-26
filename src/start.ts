@@ -5,6 +5,8 @@ import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 import { getTeamPreview, isPreviewSafeFn, PREVIEW_HEADER, PREVIEW_MESSAGE } from "@/lib/team-preview";
 import { mfaExemptFn } from "@/lib/mfa-rules";
 import { NATIVE_APP_HEADER } from "@/lib/native-purchases";
+import { POV_MODE_HEADER, POV_OWN_FNS, POV_SESSION_HEADER, POV_VIEW_ONLY_MESSAGE } from "@/lib/pov/pov-rules";
+import { povHeaders } from "@/lib/pov/pov-store";
 import { isNative } from "@/platform";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
@@ -38,6 +40,29 @@ const teamPreviewGuard = createMiddleware({ type: "function" })
   });
 
 /**
+ * An account view ("view as", src/lib/pov/pov-rules.ts): every server call made inside one says
+ * which view and whether edits are on. While it's view-only the server refuses anything that
+ * isn't a read (a GET, or a read by name, the team preview's rule); with edits on, each change is
+ * noted on the view's record. The marks only take rights away.
+ */
+const povGuard = createMiddleware({ type: "function" })
+  .client(async ({ next }) => next({ headers: povHeaders() }))
+  .server(async ({ next, serverFnMeta }) => {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const req = getRequest();
+    const session = req?.headers.get(POV_SESSION_HEADER);
+    const name = serverFnMeta?.name ?? null;
+    if (!session || !req || req.method === "GET" || (name && POV_OWN_FNS.has(name)) || isPreviewSafeFn(name)) return next();
+    const { notePovCall } = await import("@/lib/pov/pov-guard.server");
+    if (req.headers.get(POV_MODE_HEADER) !== "edit") {
+      await notePovCall(req.headers.get("authorization"), session, "blocked", name);
+      throw new Error(POV_VIEW_ONLY_MESSAGE);
+    }
+    await notePovCall(req.headers.get("authorization"), session, "write", name);
+    return next();
+  });
+
+/**
  * Two-step sign-in (src/lib/mfa-rules.ts): a session from a login that has a
  * way to confirm, not confirmed yet, is refused before any server function
  * runs (many check admin rights themselves and then act as the server).
@@ -63,6 +88,6 @@ const nativeAppMark = createMiddleware({ type: "function" }).client(async ({ nex
 );
 
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, nativeAppMark],
+  functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, povGuard, nativeAppMark],
   requestMiddleware: [errorMiddleware],
 }));

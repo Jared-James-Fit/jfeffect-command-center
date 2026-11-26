@@ -60,7 +60,9 @@ describe("clients see the badge", () => {
   it("on the Monthly board's rows, last month's final standings, and the athlete profile", () => {
     expect(card).toContain('import { CoachTag } from "@/components/portal/coach-tag"');
     expect(card.match(/<CoachTag/g)?.length).toBe(3);
-    expect(card.match(/r\.is_coach && <CoachTag \/>/g)?.length).toBe(2);
+    // the Monthly board's rows show the coach tag, else the athlete's membership emblem
+    expect(card).toContain("{r.is_coach ? <CoachTag /> : <NameMarks userId={r.client_id} size={13} />}");
+    expect(card.match(/r\.is_coach && <CoachTag \/>/g)?.length).toBe(1);
     expect(card).toContain("p.is_coach && <CoachTag />");
   });
 

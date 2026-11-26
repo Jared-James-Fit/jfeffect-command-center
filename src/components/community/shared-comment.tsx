@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, MessageCircle, Play } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge } from "@/components/community/post-card";
 import { signCommunityPaths } from "@/lib/community-media";
 import { VoiceMemoPlayer } from "@/components/community/voice-memo";
 import { cn } from "@/lib/utils";
 import type { CommentMedia, CommunityAuthor, SharedComment } from "@/lib/community";
+import { NameMarks } from "@/components/name-marks";
 import { SentMediaView } from "@/components/media/media-view";
 
 /** Ask the community screen to open a post (a shared comment's original). */
@@ -41,7 +41,7 @@ export function SharedCommentCard({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-1">
             <span className="truncate text-[13px] font-bold leading-tight">{shared.author.name}</span>
-            {shared.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+            <NameMarks person={shared.author as any} userId={(shared.author as any).user_id} size={13} />
           </div>
           {shared.post_author && <div className="truncate text-[11px] leading-tight text-muted-foreground">Commented on {shared.post_author}'s post</div>}
         </div>
