@@ -146,6 +146,7 @@ export async function loadGoalContext(sb: Db, clientId: string, opts: { goals?: 
         name: c.name,
         lifts: Object.fromEntries(LIFTS.map((l) => [l, b.forecast.lifts[l]?.range ?? null])),
         total: b.forecast.total,
+        liftBasis: Object.fromEntries(LIFTS.map(l => [l, b.forecast.lifts[l]?.basis ?? []])),
         confidence: b.forecast.confidence,
         incrementKg: loaded.ctx.competition.rules.incrementKg || 2.5,
         concerns: b.watch
@@ -212,8 +213,12 @@ export async function loadGoalContext(sb: Db, clientId: string, opts: { goals?: 
     calibration,
     preferences,
   };
+  // The evidence revision invalidates older summaries without duplicating source text in the hash.
+  const evidence = JSON.stringify([meets, preferences]);
+  let evidenceHash = 2166136261;
+  for (let i = 0; i < evidence.length; i++) evidenceHash = Math.imul(evidenceHash ^ evidence.charCodeAt(i), 16777619);
   const signature = [
-    today,
+    "forecast-evidence-v2", today, String(evidenceHash >>> 0),
     LIFTS.map((l) => `${l}:${strength[l]?.nowKg ?? ""}:${strength[l]?.basisDay ?? ""}:${strength[l]?.state ?? ""}`).join(","),
     weighIns.length ? weighIns[weighIns.length - 1].date + ":" + weighIns.length : "",
     liveAt.join(","),

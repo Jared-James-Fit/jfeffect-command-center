@@ -61,6 +61,8 @@ export type MeetForecast = {
   name: string;
   lifts: Partial<Record<Lift, { conservative: number; expected: number; high: number } | null>>;
   total: { conservative: number; expected: number; high: number } | null;
+  /** Exact per-lift evidence from the shared competition forecast. */
+  liftBasis?: Partial<Record<Lift, string[]>>;
   confidence: Confidence;
   incrementKg: number;
   /** pain or recovery concerns on a lift, in words */
@@ -271,13 +273,13 @@ export function recommendApproach(x: {
   adherencePct: number | null;
   preferences: string[];
   meetSoon: boolean;
-}): { key: ApproachKey; why: string } {
+}): { key: ApproachKey; why: string; evidence?: string } {
   const mine = x.concerns.filter((c) => (c.lift === x.lift || c.lift == null) && c.severity !== "watch");
   if (mine.length) return { key: "conservative", why: mine[0].text.replace(/\.$/, "") + ": that comes first" };
   if (x.confidence === "low") return { key: "conservative", why: "Low confidence: more recent training data is needed" };
   if (x.adherencePct != null && x.adherencePct < 70) return { key: "conservative", why: `About ${Math.round(x.adherencePct)}% of planned training done lately` };
-  const wantsTop = x.preferences.some((p) => /\b(top end|top-end|go for|max(imi[sz]e)?|aggressive|pr|personal best|send it|9 ?\/ ?9.*(don|not)|don.?t care.*9)/i.test(p));
-  if (wantsTop && x.meetSoon) return { key: "high", why: "They said they want the top end, and nothing on file argues against it" };
+  const topPreference = x.preferences.find((p) => /\b(top end|top-end|go for|max(imi[sz]e)?|aggressive|pr|personal best|send it|9 ?\/ ?9.*(don|not)|don.?t care.*9)/i.test(p));
+  if (topPreference && x.meetSoon) return { key: "high", why: "A recorded meet preference favors the top end. This selects the upper forecast, not a guaranteed lift.", evidence: topPreference };
   return { key: "moderate", why: "Their projection's middle: what training supports now" };
 }
 
@@ -423,6 +425,7 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
       range = { lowKg: r.conservative, expectedKg: r.expected, highKg: r.high };
       conf = meet.confidence;
       basis.push(`Competition forecast for ${meet.name}`);
+      for (const lift of lifts) for (const line of meet.liftBasis?.[lift] ?? []) basis.push(goal.kind === "total" ? `${lift}: ${line}` : line);
     }
   }
   if (!range) {
@@ -472,6 +475,7 @@ export function assessGoal(goal: GoalSpec, ctx: GoalContext): Feasibility {
   });
   base.recommended = recd.key;
   base.recommendedWhy = recd.why;
+  if (recd.evidence) base.recommendationEvidence = recd.evidence;
   if (base.baselineKg != null && target != null && nowKg != null && Math.abs(target - base.baselineKg) >= step) {
     const pct = clamp(((nowKg - base.baselineKg) / (target - base.baselineKg)) * 100, -100, 100);
     base.progress = { pct: Math.round(pct), line: `${fmtWeight(base.baselineKg, unit)} → ${fmtWeight(nowKg, unit)} of ${fmtWeight(target, unit)}` };
