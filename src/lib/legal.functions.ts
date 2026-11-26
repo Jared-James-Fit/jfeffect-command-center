@@ -4,7 +4,7 @@ import { z } from "zod";
 import { assertAdminView, readClientFor } from "@/lib/permissions.server";
 import { legalDocApplies, type LegalViewer } from "@/lib/legal-applies";
 import { IN_APP_SIGNING_FROM_VERSION } from "@/lib/membership-agreement.functions";
-import { MEMBERSHIP_AGREEMENT_SLUG } from "@/lib/membership-agreement/acks";
+import { MEMBERSHIP_AGREEMENT_SLUG, CLICK_ACCEPTANCE_VERSION_ID, isMemberAppAcceptance } from "@/lib/membership-agreement/acks";
 import { SIGNUP_LEGAL_SLUGS } from "@/lib/legal-signup";
 
 // ============================================================================
@@ -118,7 +118,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
     if (versionIds.length) {
       const { data: acc, error: e2 } = await context.supabase
         .from("legal_acceptances")
-        .select("id, version_id, document_id, accepted_at, signature_method, revoked_at")
+        .select("id, version_id, document_id, accepted_at, signature_method, revoked_at, context_ref, checkbox_checked, acknowledgement_text")
         .eq("user_id", context.userId)
         .in("version_id", versionIds);
       if (e2) throw new Error(e2.message);
@@ -141,6 +141,25 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
       priorAcceptances = prior ?? [];
     }
 
+    // The method-only membership revision keeps the actual prior v6 evidence,
+    // not a new acceptance row, and does not count checkout-only acknowledgements.
+    const clickVersion = published.find((d: any) => d.slug === MEMBERSHIP_AGREEMENT_SLUG &&
+      d.current_version.id === CLICK_ACCEPTANCE_VERSION_ID && !d.current_version.requires_reacceptance);
+    let priorMembershipAccepted = false;
+    if (clickVersion) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: priorVersion, error: versionError } = await supabaseAdmin.from("legal_document_versions")
+        .select("id").eq("document_id", clickVersion.id).eq("version_number", 6).maybeSingle();
+      if (versionError) throw new Error(versionError.message);
+      if (priorVersion) {
+        const { data: prior, error: priorError } = await context.supabase.from("legal_acceptances")
+          .select("signature_method, context_ref, checkbox_checked, acknowledgement_text")
+          .eq("user_id", context.userId).eq("version_id", priorVersion.id).is("revoked_at", null);
+        if (priorError) throw new Error(priorError.message);
+        priorMembershipAccepted = (prior ?? []).some(isMemberAppAcceptance);
+      }
+    }
+
     // Resolve effective enforcement per doc for THIS user (kill switch,
     // emergency disable, audience, effective date, grace period).
     const effective = await Promise.all(published.map(async (d: any) => {
@@ -151,7 +170,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
     }));
 
     return published.map((d: any) => {
-      const accepted = acceptances.find((a) => a.version_id === d.current_version.id && !a.revoked_at);
+      const accepted = acceptances.find((a) => a.version_id === d.current_version.id && !a.revoked_at && (d.slug !== MEMBERSHIP_AGREEMENT_SLUG || isMemberAppAcceptance(a)));
       const eff = effective.find((e) => e.id === d.id)?.effective ?? "inactive";
       return {
         document_id: d.id,
@@ -168,7 +187,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
         version: d.current_version,
         accepted_at: accepted?.accepted_at ?? null,
         acceptance_id: accepted?.id ?? null,
-        satisfied_by_prior_version: !accepted && noResignIds.includes(d.id) && priorAcceptances.some(a => a.document_id === d.id),
+        satisfied_by_prior_version: !accepted && ((noResignIds.includes(d.id) && priorAcceptances.some(a => a.document_id === d.id)) || (d.id === clickVersion?.id && priorMembershipAccepted)),
       };
     });
   });
