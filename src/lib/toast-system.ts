@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { feedback } from "@/lib/feedback";
-import { isRepeat, messageKey, shapeToast, toastFeedback, type ToastKind, type ToastOpts } from "@/lib/toast-policy";
+import { isRepeat, messageKey, shapeToast, toastFeedback, toastSound, type ToastKind, type ToastOpts } from "@/lib/toast-policy";
 
 /**
  * Installs the app's confirmation policy on Sonner's `toast` once (the
@@ -41,8 +41,10 @@ export function installToastSystem(): void {
       currentId = shaped.id ?? id;
       lastKey = { key, at: now };
       if (kind !== "loading") {
+        // a confirmation is felt, not heard (a pill already says it); a failed
+        // action also gets the soft low warning, so it registers without looking
         const ev = toastFeedback(kind);
-        if (ev) feedback(ev, { sound: false });
+        if (ev) feedback(ev, { sound: toastSound(kind) });
       }
       return id;
     };

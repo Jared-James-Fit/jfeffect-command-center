@@ -80,21 +80,13 @@ export function SettingsMenu({
 
   const handleUploaded = async (path: string) => {
     if (!user?.id) return;
-    const stamp = new Date().toISOString();
     try {
-      // Update whichever profile rows exist for this user.
-      const [{ data: cli }, { data: co }] = await Promise.all([
-        supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle(),
-        supabase.from("coaches").select("id").eq("user_id", user.id).maybeSingle(),
-      ]);
+      // Only a team login gets here (an athlete's photo is their account headshot, taken in
+      // Account with the live camera): the login's profile and its coach record. A client row's
+      // headshot columns are the server's alone (guard_clients_headshot).
+      const { data: co } = await supabase.from("coaches").select("id").eq("user_id", user.id).maybeSingle();
       await Promise.all([
         Promise.resolve(supabase.from("profiles").update({ avatar_url: path } as any).eq("id", user.id)),
-        cli?.id
-          ? Promise.resolve(supabase.from("clients").update({
-              profile_picture_url: path,
-              profile_picture_updated_at: stamp,
-            } as any).eq("id", cli.id))
-          : Promise.resolve(),
         co?.id
           ? Promise.resolve(supabase.from("coaches").update({
               profile_picture_url: path,

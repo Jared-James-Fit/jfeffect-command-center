@@ -29,6 +29,15 @@ export const PROFILE_READ_ONLY_FIELDS: ReadonlySet<string> = new Set<string>([
   "sex_updated_at",
   // The Training Schedule card owns these and realigns workouts when they change.
   ...SCHEDULE_OWNED_CLIENT_FIELDS,
+  // The account headshot changes only through its live camera and a review, written by the
+  // server (guard_clients_headshot refuses them from any signed-in caller).
+  "profile_picture_url",
+  "profile_picture_updated_at",
+  "profile_picture_source",
+  "profile_picture_updated_by",
+  "profile_picture_needs_update",
+  "profile_picture_needs_update_at",
+  "profile_picture_needs_update_reason",
 ]);
 
 type Row = Record<string, unknown>;

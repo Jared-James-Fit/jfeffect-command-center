@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CommunityAuthor } from "@/lib/community";
+import type { PostOpen } from "@/lib/post-open";
 
 /** One line in the bell: a post's reactions, one comment / reply, a comment's likes, a new follower, a follow request, or a post's reposts. */
 export type CommunityNotice = {
@@ -28,10 +29,14 @@ export type CommunityNotice = {
   fresh?: number;
 };
 
-/** Open a post from anywhere: the community screen, when it's up, listens for this. */
+/**
+ * Open a post from anywhere: the community screen, when it's up, listens for
+ * this and shows the post on its own screen, as the feed does (post-open.ts):
+ * an id, or where to open it (the slide a notice is about, its comments up).
+ */
 export const OPEN_POST_EVENT = "community:open-post";
-export function openCommunityPost(postId: string) {
-  window.dispatchEvent(new CustomEvent(OPEN_POST_EVENT, { detail: postId }));
+export function openCommunityPost(target: string | PostOpen) {
+  window.dispatchEvent(new CustomEvent(OPEN_POST_EVENT, { detail: target }));
 }
 
 /** Open someone's profile from anywhere (a follow notice): the community screen listens for this. */

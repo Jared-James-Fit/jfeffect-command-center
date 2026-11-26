@@ -92,6 +92,8 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   if (kinds.has("staff_invite")) return `sent${you} a team account invite`;
   // a recovery reply automation wrote: its marker is no attachment to the person reading it
   if (kinds.has("recovery_auto")) return `sent${you} a message`;
+  // an approved goal update (goal-intel outbox): the words are the message
+  if (kinds.has("goal_update")) return `sent${you} a goals update`;
   // a video of one set, from the workout logger (DB-made)
   if (atts.some((a) => (a as { set_video?: unknown }).set_video)) return `sent${you} a set video`;
   // a marked frame of a set video (a film note): opens the clip on that frame

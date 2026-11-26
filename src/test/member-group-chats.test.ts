@@ -103,7 +103,8 @@ describe("birthday posts: the card says who's next", () => {
     expect(bday).toContain("IF NOT (public.is_community_staff() OR coalesce(auth.role(), '') = 'service_role') THEN");
     expect(bday).toContain("ready_pushed_at");
     const fn = read("src/lib/birthday-posts.functions.ts");
-    expect(fn).toContain('r.role === "admin" || r.role === "coach"');
+    // the admin, or that client's own coach: never any coach (account-access hardening)
+    expect(fn).toContain("assertStaffReachesClient(supabase, userId, data.clientId)");
     expect(fn).toContain('rpc("community_birthday_draft_now"');
     const card = read("src/components/community/birthday-posts.tsx");
     expect(card).toContain("if (items.length === 0 && (actionableOnly || next.length === 0)) return null;");

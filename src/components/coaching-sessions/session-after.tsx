@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { HandlingOpportunities } from "@/components/competition/prep/handling-opportunities";
 import {
   analyseNotesFn,
   commitmentFn,
@@ -207,6 +208,8 @@ export function SessionAfter({
       ) : null}
 
       <OutcomeGroups outcome={outcome} />
+
+      <HandlingOpportunities sessionId={s.id} />
 
       {(data.recommendations as any[]).length ? (
         <section className="rounded-2xl border border-border" data-recommendations>

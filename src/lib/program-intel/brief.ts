@@ -6,6 +6,7 @@
  * budget, in which case they're summarized per exercise AND the brief, the
  * job's context and the inspector all say so (never silently cut).
  */
+import { GOAL_RULES } from "@/lib/goal-intel/rules";
 import { horizonText } from "./horizon";
 import { trainingLoadBrief } from "./training-load-intel";
 import { developmentText } from "./athlete-development";
@@ -195,6 +196,8 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
   const add = (key: string, title: string, text: string, detail: "full" | "summary" = "full", note?: string) => sections.push({ key, title, text, chars: text.length, detail, note });
 
   add("athlete", "Athlete", athleteSection(ctx));
+  // the goal ledger: plan toward the APPROVED targets; the client's own and the projections are labelled
+  if (ctx.goals.ledger) add("goals", "Goals (approved targets are the coach's; plan toward those)", `${ctx.goals.ledger}\n${GOAL_RULES}`);
   // how they're developing: the deterministic read every decision below should follow (see DEVELOPMENT_RULES)
   if (intel.development) add("development", "Athlete development (computed from their records)", developmentText(intel.development, ctx.unit));
   if (x.strength) add("strength", "Strength per lift (the app's one strength read: competition PR, best in training, peak estimate, current estimate and the coach's reference, kept apart)", x.strength);

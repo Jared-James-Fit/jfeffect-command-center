@@ -188,6 +188,7 @@ const TOOL_PROGRESS: Array<[RegExp, string]> = [
   [/exercise_library/, "Searching the exercise library"],
   [/nutrition/, "Reading the nutrition plan"],
   [/body_weight/, "Checking bodyweight"],
+  [/^goals$/, "Reading their goals"],
   [/check_ins/, "Reading check-ins"],
   [/pain_flags/, "Checking pain reports"],
   [/message_thread/, "Reading their messages"],

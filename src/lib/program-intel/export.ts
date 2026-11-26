@@ -61,6 +61,8 @@ export function privacySafeRecords(rec: IntelRecords): IntelRecords {
     checkins: [],
     // health is the athlete's own private record (conditions, medications): never in the privacy-safe copy
     health: null,
+    // the goal ledger keeps the athlete's own words (quotes): only the numbers and titles go, words removed
+    goalLedger: (rec.goalLedger ?? []).map((g) => ({ ...g, title: s(g.title) as string, client_text: blank(g.client_text), approved_text: s(g.approved_text), source_quote: null, source_context: null, event_title: s(g.event_title) })),
     profile: rec.profile ? { ...rec.profile, equipment_profile: rec.profile.equipment_profile ? { ...rec.profile.equipment_profile, notes: s(rec.profile.equipment_profile.notes) } : null } : rec.profile,
     unreadable: rec.unreadable,
   };

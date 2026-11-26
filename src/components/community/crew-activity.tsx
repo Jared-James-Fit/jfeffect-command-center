@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { CommunityAuthor } from "@/lib/community";
 import { ACTIVITY_FILTERS, activityAge, activityLine, activitySections, matchesActivityFilter, type ActivityFilter, type ActivityItem } from "@/lib/crew-activity";
 import { useActivityThumbs, useCrewActivity, useMarkCrewActivityRead } from "@/lib/crew-activity.queries";
+import { postOpenFromNotice, type PostOpen } from "@/lib/post-open";
 
 /**
  * Crew Activity, like Instagram's: who liked, commented on, replied to or
@@ -20,7 +21,8 @@ export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople, h
   onBack: () => void;
   /** Its own ‹ Activity 🔍 row; off where Crew's bar shows those. */
   header?: boolean;
-  onOpenPost: (postId: string) => void;
+  /** The post a line is about, on its own screen as the feed shows it, on the slide the line names (post-open.ts). */
+  onOpenPost: (open: PostOpen) => void;
   onOpenPerson: (a: CommunityAuthor) => void;
   onFindPeople: () => void;
 }) {
@@ -115,7 +117,7 @@ function ActivityRow({ it, isNew, thumb, onOpenPost, onOpenPerson }: {
   it: ActivityItem;
   isNew: boolean;
   thumb: string | null;
-  onOpenPost: (postId: string) => void;
+  onOpenPost: (open: PostOpen) => void;
   onOpenPerson: (a: CommunityAuthor) => void;
 }) {
   const line = activityLine(it);
@@ -123,7 +125,9 @@ function ActivityRow({ it, isNew, thumb, onOpenPost, onOpenPerson }: {
   const first = actors[0];
   const open = () => {
     if (it.kind === "follow" || it.kind === "follow_request") return first && onOpenPerson(first);
-    if (it.post_id) onOpenPost(it.post_id);
+    // the post itself, as the feed shows it: a "Belt Squat PR" on that set's clip, a comment with the comments up
+    const target = postOpenFromNotice(it);
+    if (target) onOpenPost(target);
   };
   return (
     <li className={cn("-mx-3 flex items-center gap-3 px-3 py-2", isNew && "bg-primary/[0.06]")} data-activity-row={it.kind}>

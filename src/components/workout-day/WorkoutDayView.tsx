@@ -126,14 +126,14 @@ import {
   cardSetupView,
   comparesAcrossEquipment,
   equipmentName,
-  offersSetup,
+  setupPhotos,
   settingsFromNote,
 } from "@/lib/equipment/equipment";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
-import { setPrItems } from "@/lib/set-pr-items";
+import { isGenuineSetPr, setPrItems } from "@/lib/set-pr-items";
 import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos, useSetVideosForDay } from "@/components/workout-day/set-video-cell";
 import { FilmingReminder } from "@/components/workout-day/filming-reminder";
 import { analysableExercise } from "@/lib/lift-analysis/exercise";
@@ -251,7 +251,7 @@ import {
   touchWorkoutSession,
 } from "@/components/workout-day/WorkoutTimer";
 import { listenChannel } from "@/lib/realtime-channel";
-import { feedback } from "@/lib/feedback";
+import { feedback, primeFeedback } from "@/lib/feedback";
 import { afterAdd, afterRemove, getSetSession, putBackWrites, rowsWithSkips, setKindAt, setRemoval, setSetSession, shownSetCount, takeOutWrites, withLoggedShown } from "@/lib/workouts/set-session";
 import { useSetSessionsVersion } from "@/lib/workouts/use-set-session";
 import { HapticTap } from "@/components/haptic-tap";
@@ -1113,6 +1113,13 @@ function WorkoutDay({
     }, 4000);
     return () => window.clearTimeout(t);
   }, [secondaryHydrationReady]);
+  // The logging cues (confirm, set, exercise, PR, rest, upload, the finish) are
+  // rendered into buffers in idle time as the workout opens, so the first set's
+  // pop is as quick as the tenth. Never makes a sound; nothing is downloaded.
+  useEffect(() => {
+    const t = window.setTimeout(() => primeFeedback(), 1200);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const { data: bodyweightSeries = [] } = useQuery<BodyweightKgPoint[]>({
     queryKey: ["load-bodyweight", historyOwnerId],
@@ -3345,6 +3352,8 @@ function WorkoutDay({
           // workouts, and never from a coach's "View as client" session.
           completionId={isClientWorkout && !isImpersonating && completion?.completed_at ? completion.id ?? null : null}
           dayId={dayId}
+          // the celebration right after the review plays the sting; "View score" later is the silent reveal
+          celebrate={recapFromSubmitRef.current}
           sessionRating={
             lastSessionRating ??
             (completion as any)?.session_rating ??
@@ -3628,12 +3637,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const cardSetup = useMemo(() => {
     if (!equipmentOn) return null;
     // cardSetupView (equipment.ts): the same line the coach's workout quick view shows
-    const { equipmentId: shownId, equipment: eq, summary } = cardSetupView(equipmentData, exerciseId, existingResults as any[]);
+    const { equipmentId: shownId, equipment: eq, setup, summary } = cardSetupView(equipmentData, exerciseId, existingResults as any[]);
     const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
+    const photos = setupPhotos(setup);
     return {
       equipmentId: shownId,
       equipment: eq,
       summary,
+      photo: photos[0] ?? null,
+      photoCount: photos.length,
       mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
       // a PR on a machine says which (its weight means nothing on another one)
       prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
@@ -4357,21 +4369,32 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     loadModel.status !== "calibrating" && !loadPicks ? loadHint.target : null;
   const quickLoad: number | null = quickLoadFromStrip ?? warmupTodayLoad;
 
-  // Logging feedback: one soft "tock" and a medium tap each time this card gains
+  // Logging feedback: one round pop and a medium tap each time this card gains
   // a completed set — however it was completed (typed, tapped, filled down,
-  // timed), in the same render its number turns green — and a warmer cue when
-  // it was the last one. A fill-down that logs three sets at once is one. Not
-  // on load, not for a coach view.
-  const completedSetCount = existingResults.filter((x: any) => x.completed_at && Number(x.set_index) <= setCount).length;
+  // timed), in the same render its number turns green — and its pop with a
+  // short ascending chime when it was the last one. A fill-down that logs three
+  // sets at once is one. Not on load, not for a coach view, and each set once
+  // (keyed by when it was logged): a refetch that drops and brings back a set,
+  // an offline write syncing or a remount never sounds it again, and a set
+  // logged long ago (another device, an old workout) is history.
+  const completedSets = existingResults.filter((x: any) => x.completed_at && Number(x.set_index) <= setCount);
+  const completedSetCount = completedSets.length;
+  const newestCompleted = completedSets.reduce<any>(
+    (a: any, x: any) => (!a || String(x.completed_at) > String(a.completed_at) ? x : a),
+    null,
+  );
   const soundedCountRef = useRef<number | null>(null);
   useEffect(() => {
     if (readonly || !resultsReady) return;
     const before = soundedCountRef.current;
     soundedCountRef.current = completedSetCount;
-    if (before == null || completedSetCount <= before) return;
-    feedback(completedSetCount >= setCount ? "exercise" : "set");
+    if (before == null || completedSetCount <= before || !newestCompleted) return;
+    const moment = feedback(completedSetCount >= setCount ? "exercise" : "set", {
+      key: `${row.id}:${newestCompleted.set_index}:${newestCompleted.completed_at}`,
+      at: newestCompleted.completed_at,
+    });
     // a working set in: its rest starts (warm-ups never count; the cardio has none)
-    if (restAuto && restOrder && effectiveRest && effectiveRest > 0) startWorkoutRest(dayId, restRowId, effectiveRest);
+    if (moment && restAuto && restOrder && effectiveRest && effectiveRest > 0) startWorkoutRest(dayId, restRowId, effectiveRest);
   }, [completedSetCount, resultsReady, readonly, setCount]);
 
   // For the finished card's "why": the last working weight and how the sets felt.
@@ -4918,7 +4941,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
       )}
       {equipmentOn && (
         <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
-          <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
+          <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary || cardSetup?.photo ? "Setup & equipment" : "Add your setup"}
         </CardMenuItem>
       )}
       {canSuggest && !readonly && (
@@ -5085,12 +5108,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
-      {cardSetup && (cardSetup.summary || (cardSetup.mode === "live" && completedSetCount === 0 && offersSetup({ name, equipment: (exercise as any)?.equipment ?? null }))) && (
-        <SetupLine text={cardSetup.summary} retired={!!cardSetup.equipment?.archived_at} onOpen={() => setSetupOpen(true)} />
+      {/* The athlete's own setup, on every card (any exercise, list or Focus, live or finished):
+          what's saved on one slim line with its photo, else a quiet "Add your setup". Never required. */}
+      {cardSetup && (cardSetup.summary || cardSetup.photo || cardSetup.mode !== "view") && (
+        <SetupLine
+          text={cardSetup.summary}
+          retired={!!cardSetup.equipment?.archived_at}
+          photo={cardSetup.photo}
+          photoCount={cardSetup.photoCount}
+          onOpen={() => setSetupOpen(true)}
+        />
       )}
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
           "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
-      <div className="mt-2.5 flex items-center justify-between gap-3">
+      <div className={cn("flex items-center justify-between gap-3", cardSetup ? "mt-1.5" : "mt-2.5")}>
       <div className={cn("min-w-0 flex-1 font-bold leading-tight tracking-tight text-foreground break-words", runRow || cardioRow ? "text-lg" : "text-2xl")} data-run-rx={runRow || undefined} data-rx>
         {runRow || cardioRow ? runPrescription({
           run: runRow,
@@ -7289,18 +7320,22 @@ function SetRow({
   }, [existing?.completed_at]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
-  const prSoundedRef = useRef<string | null>(null);
+  // A genuine PR (isGenuineSetPr: an all-time record at 10 reps or fewer, or the
+  // heaviest weight yet) gets its celebration, the PR chip's pop and the success
+  // tap together: once per set (keyed by when it was logged, so a re-render,
+  // the server's record arriving after the phone's check, or a remount never
+  // repeats it), only while it's just been earned (opening an old workout never
+  // replays its PRs), never in a coach's read-only view. A block or program
+  // best, or a 15-rep accessory record, keeps its chip and the set's own pop.
+  const genuinePr = isGenuineSetPr({
+    record: recordForBadge,
+    loadRecord: loadRecordForBadge,
+    localPr: prBadge && (!hasRecords || assistedSet) ? prBadge : null,
+  });
   useEffect(() => {
-    if (!existing?.completed_at) return;
-    if (hasRecords ? !recordForBadge && !loadRecordForBadge : !prBadge) return;
-    const key = recordForBadge || loadRecordForBadge
-      ? `${rowId}:${setIndex}:${existing.completed_at}:rec:${recordForBadge?.reps}:${recordForBadge?.atpr}:${recordForBadge?.program_pr}:${recordForBadge?.block_pr}:w:${loadRecordForBadge?.atpr}:${loadRecordForBadge?.program_pr}:${loadRecordForBadge?.block_pr}`
-      : `${rowId}:${setIndex}:${existing.completed_at}:${prBadge!.reps}:${prBadge!.amount}`;
-    if (prSoundedRef.current === key) return;
-    prSoundedRef.current = key;
-    // the PR chip's pop, its sparkle and the success tap together
-    feedback("pr");
-  }, [prBadge, recordForBadge, loadRecordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
+    if (readonly || !existing?.completed_at || !genuinePr) return;
+    feedback("pr", { key: `${rowId}:${setIndex}:${existing.completed_at}`, at: existing.completed_at });
+  }, [genuinePr, readonly, existing?.completed_at, rowId, setIndex]);
 
   const prescribedSec = prescribedDurationSeconds ?? null;
 

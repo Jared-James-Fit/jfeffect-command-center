@@ -51,22 +51,47 @@ import { CompetitionForm, emptyCompetition, type CompetitionFormValues } from ".
 import { CompetitionField } from "./competition-field";
 import { AttemptsView, ForecastTable, GameDayView, Kg, WarmupsView } from "./plan-views";
 import { cn } from "@/lib/utils";
+import { PrepOverview } from "./prep/prep-overview";
+import { GameplanSection } from "./prep/gameplan-section";
+import { TimelineSection } from "./prep/timeline-section";
+import { ChecklistSection } from "./prep/checklist-section";
+import { HandlingOpportunities } from "./prep/handling-opportunities";
+import { HandlingInviteSheet } from "./prep/handling-sheets";
+import { RecapCard } from "./prep/recap-card";
+import { reviewChangesFn, saveScheduleFn, tickChecklistFn } from "@/lib/competition/handling.functions";
+import { GoalSummary } from "@/components/goals/goal-summary";
 
 export const competitionWorkspaceKey = (clientId: string, competitionId: string | null) =>
   ["competition-workspace", clientId, competitionId] as const;
 
+/**
+ * Four sections people use every day; everything else (the field, projections,
+ * Cleo's preparation schedule, resources, history) is under More.
+ */
 const SECTIONS = [
   ["overview", "Overview"],
+  ["gameplan", "Gameplan"],
   ["timeline", "Timeline"],
+  ["checklist", "Checklist"],
+  ["more", "More"],
+] as const;
+const MORE = [
   ["field", "Field"],
   ["projections", "Projections"],
-  ["attempts", "Attempts"],
-  ["warmups", "Warm-ups"],
-  ["gameday", "Game day"],
+  ["preparation", "Preparation"],
+  ["attempts", "Cleo's attempts"],
+  ["warmups", "Cleo's warm-ups"],
+  ["gameday", "Meet day"],
   ["resources", "Resources"],
   ["history", "History"],
 ] as const;
-type Section = (typeof SECTIONS)[number][0];
+type Section = (typeof SECTIONS)[number][0] | (typeof MORE)[number][0];
+const SECTION_KEYS = new Set<string>([...SECTIONS.map((x) => x[0]), ...MORE.map((x) => x[0])]);
+function sectionParam(): Section | null {
+  if (typeof window === "undefined") return null;
+  const v = new URLSearchParams(window.location.search).get("section");
+  return v && SECTION_KEYS.has(v) ? (v as Section) : null;
+}
 
 /** a date inside the coming months, short: "Feb 1" (the year only when it isn't this one) */
 const shortDate = (iso: string | null | undefined) => {
@@ -114,7 +139,8 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const [competitionId, setCompetitionId] = useState<string | null>(() => urlParam("competition"));
   const [assessmentId, setAssessmentId] = useState<string | null>(() => urlParam("assessment"));
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useState<Section>(() => sectionParam() ?? "overview");
+  const [handlingNew, setHandlingNew] = useState(false);
   const [form, setForm] = useState<null | {
     mode: "create" | "edit";
     initial: CompetitionFormValues;
@@ -128,6 +154,14 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
   });
   const invalidate = () =>
     void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
+  const saveSchedule = useServerFn(saveScheduleFn);
+  const tickChecklist = useServerFn(tickChecklistFn);
+  const reviewChanges = useServerFn(reviewChangesFn);
+  const prepRun = useMutation({
+    mutationFn: (f: () => Promise<unknown>) => f(),
+    onSuccess: () => invalidate(),
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save it"),
+  });
   // what Cleo is writing right now, polled lightly while it's going (rewrite-progress.tsx)
   const rewrite = useRewriteProgress(q.data?.selected?.competition?.id, clientId, setAssessmentId);
 
@@ -219,6 +253,7 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
             })
           }
         />
+        <HandlingOpportunities clientId={clientId} />
         {formSheet}
       </div>
     );
@@ -282,40 +317,154 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
         className="-mx-1 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         aria-label="Competition sections"
       >
-        {SECTIONS.map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setSection(k)}
-            className={cn(
-              "h-9 shrink-0 rounded-full px-3 text-[13px]",
-              section === k
-                ? "bg-secondary font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            aria-current={section === k ? "page" : undefined}
-          >
-            {label}
-          </button>
-        ))}
+        {SECTIONS.map(([k, label]) => {
+          const on = k === "more" ? MORE.some(([m]) => m === section) || section === "more" : section === k;
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setSection(k === "more" ? "field" : k)}
+              className={cn(
+                "h-9 shrink-0 rounded-full px-3 text-[13px]",
+                on ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+              aria-current={on ? "page" : undefined}
+              data-section-tab={k}
+            >
+              {label}
+            </button>
+          );
+        })}
       </nav>
+      {MORE.some(([m]) => m === section) ? (
+        <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="More">
+          {MORE.map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setSection(k)}
+              className={cn(
+                "h-8 shrink-0 rounded-full border px-3 text-[12.5px]",
+                section === k ? "border-foreground/30 font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       {sel.briefError ? (
         <p className="rounded-xl border border-border p-3 text-[13px] text-muted-foreground">
           The live read couldn't be worked out: {sel.briefError}
         </p>
       ) : null}
+      {sel.prepError ? (
+        <p className="rounded-xl border border-border p-3 text-[13px] text-muted-foreground">
+          The preparation read couldn't be worked out: {sel.prepError}
+        </p>
+      ) : null}
 
       {section === "overview" ? (
-        <Overview
-          clientId={clientId}
-          sel={sel}
-          rewrite={rewrite}
-          onOpen={setAssessmentId}
-          onSection={setSection}
+        sel.prep ? (
+          <div className="space-y-4">
+            <PrepOverview
+              prep={sel.prep}
+              onSection={(s2) => setSection(s2)}
+              onChanged={invalidate}
+              onReviewChanges={() =>
+                prepRun.mutate(() =>
+                  reviewChanges({
+                    data: {
+                      competitionId: comp.id,
+                      applyProposed: (sel.prep.changes as any[]).some((c) => String(c.key).startsWith("event_"))
+                        ? window.confirm("Use the times they gave instead of the ones you confirmed?")
+                        : false,
+                    },
+                  }),
+                )
+              }
+              extra={<OverviewAssessments clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} />}
+            />
+            {/* the targets at this meet (the goal ledger): theirs, the projection, the approved one */}
+            <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
+            <RecapCard prep={sel.prep} onChanged={invalidate} />
+            <HandlingOpportunities clientId={clientId} />
+            {!sel.prep.handling ? (
+              <button
+                type="button"
+                className="text-[13px] text-muted-foreground underline-offset-2 hover:underline"
+                onClick={() => setHandlingNew(true)}
+                data-add-handling
+              >
+                Add competition handling for this meet
+              </button>
+            ) : null}
+            <details className="rounded-2xl border border-border px-4 py-3" data-full-read>
+              <summary className="cursor-pointer text-[14px] font-medium">Cleo's full read: projections, field, what's being watched</summary>
+              <div className="mt-3">
+                <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} onSection={setSection} part="rest" />
+              </div>
+            </details>
+          </div>
+        ) : (
+          <>
+            <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} onSection={setSection} />
+            <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
+          </>
+        )
+      ) : null}
+      {section === "gameplan" && sel.prep ? <GameplanSection prep={sel.prep} onChanged={invalidate} /> : null}
+      {section === "timeline" && sel.prep ? (
+        <TimelineSection
+          timeline={sel.prep.timeline}
+          tz={sel.prep.tz}
+          today={sel.prep.today}
+          saving={prepRun.isPending}
+          facts={{
+            lifting_start: sel.prep.competition.lifting_start ?? null,
+            weigh_in_at: sel.prep.competition.weigh_in_at ?? null,
+            flight: sel.prep.competition.flight ?? null,
+            flights_in_session: sel.prep.competition.flights_in_session ?? null,
+            lifters_per_flight: sel.prep.competition.lifters_per_flight ?? null,
+            platforms: sel.prep.competition.platforms ?? null,
+            timezone: sel.prep.competition.timezone ?? null,
+            travelMinutes: sel.prep.competition.schedule?.travelMinutes ?? sel.prep.info?.travel?.minutesToVenue ?? null,
+            verified: sel.prep.competition.schedule?.verified ?? {},
+          }}
+          onSaveFacts={(f) =>
+            prepRun.mutate(() =>
+              saveSchedule({
+                data: {
+                  competitionId: comp.id,
+                  fields: {
+                    lifting_start: f.lifting_start,
+                    weigh_in_at: f.weigh_in_at,
+                    flight: f.flight,
+                    flights_in_session: f.flights_in_session,
+                    lifters_per_flight: f.lifters_per_flight,
+                    platforms: f.platforms,
+                    timezone: f.timezone,
+                  },
+                  verified: f.verified as any,
+                  travelMinutes: f.travelMinutes,
+                },
+              }),
+            )
+          }
+          onConfirmEntry={(key, at) => prepRun.mutate(() => saveSchedule({ data: { competitionId: comp.id, confirmEntry: { key, at } } }))}
         />
       ) : null}
-      {section === "timeline" ? (
+      {section === "checklist" && sel.prep ? (
+        <ChecklistSection
+          items={sel.prep.checklist}
+          readiness={sel.prep.readiness}
+          today={sel.prep.today}
+          who="coach"
+          onTick={(key, state) => prepRun.mutate(() => tickChecklist({ data: { competitionId: comp.id, key, state } }))}
+        />
+      ) : null}
+      {section === "preparation" ? (
         <Timeline
           comp={comp}
           milestones={sel.milestones}
@@ -365,24 +514,33 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
       ) : null}
       {section === "attempts" ? (
         <Card
-          title="Attempt strategy"
-          sub="From the expected scenario and their own attempt history"
+          title="Cleo's attempt strategy"
+          sub="From the expected scenario and their own attempt history; the Gameplan is what the athlete gets"
         >
           <AttemptsView attempts={brief?.attempts?.lifts} />
         </Card>
       ) : null}
       {section === "warmups" ? (
         <Card
-          title="Warm-ups"
-          sub="Built from their own warm-up habits where there's enough of them"
+          title="Cleo's warm-ups"
+          sub="Built from their own warm-up habits where there's enough of them; the Gameplan is what the athlete gets"
         >
           <WarmupsView warmups={brief?.warmups} />
         </Card>
       ) : null}
       {section === "gameday" ? (
         <div className="space-y-4">
+          <Link
+            to="/admin/competition/$competitionId"
+            params={{ competitionId: comp.id }}
+            className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 text-[15px] font-semibold hover:bg-muted/40"
+            data-open-meet-day
+          >
+            Open Meet-Day Mode
+            <ChevronRight className="h-4 w-4" />
+          </Link>
           <Card
-            title="Meet day"
+            title="Meet day in order"
             sub={
               comp.lifting_start
                 ? `Lifting from ${comp.lifting_start}`
@@ -391,15 +549,6 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
           >
             <GameDayView steps={brief?.gameDay} />
           </Card>
-          <Link
-            to="/admin/competition/$competitionId"
-            params={{ competitionId: comp.id }}
-            className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 text-[15px] font-semibold hover:bg-muted/40"
-            data-open-meet-day
-          >
-            Open the meet-day command centre
-            <ChevronRight className="h-4 w-4" />
-          </Link>
         </div>
       ) : null}
       {section === "resources" ? (
@@ -429,6 +578,14 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
           !!assessmentId && !!assessments.find((a) => a.id === assessmentId)?.superseded_at
         }
       />
+      {handlingNew ? (
+        <HandlingInviteSheet
+          open
+          defaults={{ clientId, competitionId: comp.id }}
+          onClose={() => setHandlingNew(false)}
+          onCreated={() => invalidate()}
+        />
+      ) : null}
       {formSheet}
     </div>
   );
@@ -600,18 +757,29 @@ function Tile({
   );
 }
 
+/**
+ * Cleo's assessments that need the coach, for the top of the preparation
+ * overview: what's being written and the latest version waiting on him.
+ */
+function OverviewAssessments({ clientId, sel, rewrite, onOpen }: { clientId: string; sel: any; rewrite: RewriteProgress; onOpen: (id: string) => void }) {
+  return <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={onOpen} onSection={() => {}} part="lead" />;
+}
+
 function Overview({
   clientId,
   sel,
   rewrite,
   onOpen,
   onSection,
+  part = "all",
 }: {
   clientId: string;
   sel: any;
   rewrite: RewriteProgress;
   onOpen: (id: string) => void;
   onSection: (s: Section) => void;
+  /** "lead": only what's being written and the version waiting on the coach; "rest": everything else */
+  part?: "all" | "lead" | "rest";
 }) {
   const brief = sel.brief;
   const comp = sel.competition;
@@ -702,10 +870,18 @@ function Overview({
   ));
   const showLatest = !!latest && !replacing.has(latest.id);
 
+  if (part === "lead")
+    return progressCards.length || (showLatest && needsCoach) ? (
+      <div className="space-y-3" data-competition-lead>
+        {progressCards}
+        {showLatest && needsCoach ? latestCard : null}
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-4" data-competition-overview>
-      {progressCards}
-      {showLatest && needsCoach ? latestCard : null}
+      {part === "all" ? progressCards : null}
+      {part === "all" && showLatest && needsCoach ? latestCard : null}
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
         <Tile
           label="Countdown"

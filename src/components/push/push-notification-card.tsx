@@ -2,11 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX, Moon, Vibrate } from "lucide-react";
-import { appSoundsEnabled, setAppSoundsEnabled, subscribeAppSounds } from "@/lib/app-sounds";
+import {
+  appSoundVolume,
+  appSoundsEnabled,
+  setAppSoundVolume,
+  setAppSoundsEnabled,
+  subscribeAppSoundVolume,
+  subscribeAppSounds,
+} from "@/lib/app-sounds";
 import { hapticRoute, hapticsEnabled, setHapticsEnabled, subscribeHaptics, type HapticRoute } from "@/platform/haptics";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
@@ -93,23 +101,29 @@ function Panel({ bare, className, children }: { bare?: boolean; className?: stri
 }
 
 /**
- * Sounds & haptics: two switches, each this device's own (feedback.ts decides
- * what each moment gets). The haptics row shows only where the phone can give
- * a tap at all, and says what an iPhone's web view allows.
+ * Sounds & haptics: two switches and the sounds' volume, each this device's
+ * own and kept across sessions (feedback.ts decides what each moment gets).
+ * The volume moves while it's dragged and plays a set's pop at the new level
+ * when it's let go. The haptics row shows only where the phone can give a
+ * tap at all, and says what an iPhone's web view allows.
  */
 function AppSoundsCard({ bare = false }: { bare?: boolean }) {
   const [on, setOn] = useState(true);
+  const [volume, setVolume] = useState(80);
   const [haptics, setHaptics] = useState(true);
   const [route, setRoute] = useState<HapticRoute>("none");
   useEffect(() => {
     setOn(appSoundsEnabled());
+    setVolume(Math.round(appSoundVolume() * 100));
     setHaptics(hapticsEnabled());
     setRoute(hapticRoute());
     const a = subscribeAppSounds(setOn);
     const b = subscribeHaptics(setHaptics);
+    const c = subscribeAppSoundVolume((v) => setVolume(Math.round(v * 100)));
     return () => {
       a();
       b();
+      c();
     };
   }, []);
   return (
@@ -119,11 +133,31 @@ function AppSoundsCard({ bare = false }: { bare?: boolean }) {
           <div className="min-w-0">
             <Header icon={on ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />} title="Sounds" />
             <p className="mt-1 text-xs text-muted-foreground">
-              Soft sounds for sets, PRs, timers and messages while the app is open. Follows your phone's silent switch.
+              Soft sounds for sets, PRs, rest, uploads and messages while the app is open. Plays over your music and follows your phone's silent switch.
             </p>
           </div>
           <Switch checked={on} onCheckedChange={(v) => setAppSoundsEnabled(v)} aria-label="Sounds" data-sounds-switch />
         </div>
+        {on && (
+          <div className="flex items-center gap-3" data-sounds-volume>
+            <VolumeX className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <Slider
+              tone="neutral"
+              min={0}
+              max={100}
+              step={5}
+              value={[volume]}
+              onValueChange={([v]) => {
+                setVolume(v);
+                setAppSoundVolume(v / 100);
+              }}
+              onValueCommit={([v]) => setAppSoundVolume(v / 100, { preview: true })}
+              aria-label="Sound volume"
+              data-gesture="x"
+            />
+            <Volume2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          </div>
+        )}
         {route !== "none" && (
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">

@@ -10,6 +10,7 @@ import {
   type WUnit,
 } from "@/lib/workout-weight-input";
 import { formatLoadDisplay, type LoadType } from "@/lib/workout-load-type";
+import { feedback } from "@/lib/feedback";
 
 /**
  * Weight entry for the set logger — the WT cell IS the input.
@@ -204,6 +205,8 @@ export function WeightValueInput({
     setSheet(null);
     setConfirmValue(null);
     setError(null);
+    // a weight (or bodyweight) confirmed: one quiet tick; clearing says nothing
+    if (next.load !== "" || next.bodyweight) feedback("confirm");
     onPick(next);
   };
 
@@ -223,7 +226,7 @@ export function WeightValueInput({
       return;
     }
     const res = validateTypedWeight(typed, unit);
-    if (!res.ok) { setError(res.error); return; }
+    if (!res.ok) { setError(res.error); feedback("warning"); return; }
     if (res.aboveCap) { askAboveCap(res.value); return; }
     commitWeight({ load: String(res.value), bodyweight: false, loadType: numericType });
   };

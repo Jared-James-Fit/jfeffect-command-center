@@ -232,6 +232,15 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
     }
     debrief = readDebrief(plan, comp.results);
   }
+  // preparation and handling: the gameplan, the timeline, the checklist (prep.server.ts)
+  let prep = null;
+  let prepError: string | null = null;
+  try {
+    const { loadPrep } = await import("./prep.server");
+    prep = await loadPrep(sb, pick.id, { brief, coach: true });
+  } catch (e: any) {
+    prepError = String(e?.message ?? e);
+  }
   return {
     today,
     competitions: list,
@@ -255,6 +264,8 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
       events: events ?? [],
       meetLog: meetLog ?? [],
       debrief,
+      prep,
+      prepError,
     },
   };
 }

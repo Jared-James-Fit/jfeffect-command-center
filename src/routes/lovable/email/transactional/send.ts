@@ -54,19 +54,23 @@ export const Route = createFileRoute("/lovable/email/transactional/send")({
           return Response.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Only staff (admin or coach) may enqueue branded transactional email.
-        // A valid session alone is not enough — otherwise any signed-up client
-        // could send arbitrary email from the platform's verified domain.
+        // Only the admin may enqueue branded transactional email by hand, with a confirmed
+        // two-step sign-in. A valid session alone is not enough (any signed-up client could
+        // send from the verified domain), nor is a coach role: the templates include sign-in
+        // codes and approvals for any address. The app's own email goes through the server's
+        // queue (transactional-email.server.ts), never this route.
         const { data: isAdmin } = await supabase.rpc('has_role', {
           _user_id: user.id,
           _role: 'admin',
         })
-        const { data: isCoach } = await supabase.rpc('has_role', {
-          _user_id: user.id,
-          _role: 'coach',
-        })
-        if (!isAdmin && !isCoach) {
+        if (!isAdmin) {
           return Response.json({ error: 'Forbidden' }, { status: 403 })
+        }
+        try {
+          const { checkStaffMfa } = await import('@/lib/mfa-guard.server')
+          await checkStaffMfa(authHeader)
+        } catch {
+          return Response.json({ error: 'Confirm your sign-in first' }, { status: 403 })
         }
 
         // Parse request body

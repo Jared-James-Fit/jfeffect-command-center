@@ -215,7 +215,13 @@ describe("one feedback() per moment", () => {
     expect(FEEDBACK.set).toEqual({ haptic: "medium", sound: "set" });
     expect(FEEDBACK.exercise).toEqual({ haptic: "medium", sound: "exercise" });
     expect(FEEDBACK.pr).toEqual({ haptic: "success", sound: "pr" });
-    expect(FEEDBACK.workout).toEqual({ haptic: "success", sound: "success" });
+    // the JF Effect signature (the recap plays its longer sting instead)
+    expect(FEEDBACK.workout).toEqual({ haptic: "success", sound: "workout" });
+    // a confirmed value is a quiet tick; footage done and rest over are their own cues
+    expect(FEEDBACK.confirm).toEqual({ haptic: "selection", sound: "confirm" });
+    expect(FEEDBACK.upload).toEqual({ haptic: "success", sound: "upload" });
+    expect(FEEDBACK.rest).toEqual({ haptic: "success", sound: "rest" });
+    expect(FEEDBACK.warning).toEqual({ haptic: "warning", sound: "warning" });
     expect(FEEDBACK.milestone).toEqual({ haptic: "heavy", sound: "milestone" });
     expect(FEEDBACK.timer).toEqual({ haptic: "alarm", sound: "timer" });
     expect(FEEDBACK.error).toEqual({ haptic: "error", sound: "error" });
@@ -263,9 +269,9 @@ describe("one feedback() per moment", () => {
     expect(like).toContain('if (next) setPop((n) => n + 1);\n    // the heart\'s pop and its tap land together');
     expect(like).toContain('setBurst((b) => ({ n: b.n + 1, x, y }));\n    // every double-tap is a like: its tap lands with the heart\n    feedback("like");');
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain('feedback(completedSetCount >= setCount ? "exercise" : "set");');
-    expect(wdv).toContain('feedback("pr");');
-    expect(read("src/components/workout-submission-summary.tsx")).toContain('feedback(stingRef.current === "pr" ? "pr" : "workout", { sound: false });');
+    expect(wdv).toContain('const moment = feedback(completedSetCount >= setCount ? "exercise" : "set", {');
+    expect(wdv).toContain('feedback("pr", { key: `${rowId}:${setIndex}:${existing.completed_at}`, at: existing.completed_at });');
+    expect(read("src/components/workout-submission-summary.tsx")).toContain('const moment = feedback(stingRef.current === "pr" ? "pr" : "workout", { sound: false, key: `recap:');
     expect(read("src/lib/community.queries.ts")).toContain('feedback("post");');
     expect(read("src/components/tab-refresh.tsx")).toContain('if (p >= 1 && pullRef.current < 1) feedback("detent");');
   });

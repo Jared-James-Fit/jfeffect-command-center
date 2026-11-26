@@ -58,6 +58,15 @@ export async function runMeetChecklistReminders(admin: Db, now = new Date()) {
   const live = ((forms ?? []) as any[]).filter((f) => (f.settings as any)?.reminders !== false);
   if (!live.length) return out;
   const { sendWebPushToUser } = await import("@/lib/push/push.server");
+  // an athlete whose competition has preparation reminders hears from those instead (competition/prep-checklist.ts:
+  // the same checklist keys, one reminder a day), so nobody gets two pushes about one meet
+  const { data: prepComps } = await admin
+    .from("competitions")
+    .select("client_id")
+    .eq("status", "upcoming")
+    .eq("prep_reminders", true)
+    .gte("meet_date", now.toISOString().slice(0, 10));
+  const coveredByPrep = new Set(((prepComps ?? []) as any[]).map((c) => c.client_id));
   for (const form of live) {
     const [{ data: asg }, { data: qs }] = await Promise.all([
       admin.from("nf_assignments").select("client_id, settings, client:client_id(user_id, archived, timezone)").eq("form_id", form.id),
@@ -66,6 +75,7 @@ export async function runMeetChecklistReminders(admin: Db, now = new Date()) {
     const questions = ((qs ?? []) as any[]).sort((a, b) => a.order_index - b.order_index);
     for (const a of (asg ?? []) as any[]) {
       if ((a.settings as any)?.reminders === false || a.client?.archived || !a.client?.user_id) continue;
+      if (coveredByPrep.has(a.client_id)) continue;
       out.considered++;
       const today = dayIn(a.client?.timezone);
       try {

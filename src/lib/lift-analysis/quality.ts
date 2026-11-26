@@ -63,7 +63,9 @@ export function calibratedSetMean(a: LiftAnalysis, movement: Movement = a.moveme
   if (!a.reps.length) return null;
   if (a.reps.some(r => { const m = repValue(r, metric); return !r.complete || m.v == null || m.tier === "unavailable"; })) return null;
   const ratio = Number.isFinite(a.plate.ratio) ? a.plate.ratio : 1;
-  if (ratio < (a.plate.view === "turned" ? T.minTurnedRatio : T.minViewRatio)) return null;
+  // front-on (plates edge-on): the width is the stack's thickness, never an angle; the height is the ruler
+  const front = a.plate.view === "front";
+  if (!front && ratio < (a.plate.view === "turned" ? T.minTurnedRatio : T.minViewRatio)) return null;
   if (a.calibration.relErr > T.maxScaleRel) return null;
   const roms = a.reps.map(r => r.top - r.bottom);
   const sorted = [...roms].sort((x, y) => x - y);
@@ -81,6 +83,7 @@ export function calibratedSetMean(a: LiftAnalysis, movement: Movement = a.moveme
   const plateCheck = roms.every(r => r >= lo && r <= hi);
   const strict =
     a.calibration.relErr <= S.maxScaleRel &&
+    !front &&
     ratio >= (a.plate.view === "turned" ? S.minTurnedRatio : S.minViewRatio) &&
     a.quality.tracked >= S.minTracked &&
     !lost.some(g => g.end - g.start > S.maxLostInsideS) &&

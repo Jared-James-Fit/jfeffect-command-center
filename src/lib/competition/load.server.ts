@@ -222,6 +222,59 @@ export function readMeets(raw: unknown): MeetRecord[] {
     : [];
 }
 
+/** One lift's strength line as the engines read it (the analytics' own read; goal-intel reads it too). */
+export function liftEvidenceOf(
+  lift: Lift,
+  ls: ReturnType<typeof liftStrengths>[Lift],
+  today: string,
+): LiftEvidence {
+  const sixWeeks = addDays(today, -42);
+  const now = envelopeAt(ls.envelope, today);
+  const trend = envelopeTrend(ls.envelope, addDays(today, -56), today);
+  const weeks =
+    trend.kind !== "unclear" ? Math.max(1, daysBetween(trend.from.day, trend.to.day) / 7) : 1;
+  return {
+    lift,
+    nowKg: now ? kg(now.value) : null,
+    state: now?.state ?? null,
+    basis: basisWords(now, ls.sessions),
+    basisDay: now?.basis ?? null,
+    hardSessions6w: ls.sessions.filter((s) => s.confidence === "high" && s.day >= sixWeeks).length,
+    trendPerWeek:
+      trend.kind === "unclear" ? null : Math.round((trend.pct / 100 / weeks) * 10000) / 10000,
+    direction: trend.kind === "unclear" ? "unclear" : trend.kind === "steady" ? "flat" : trend.kind,
+  };
+}
+
+/**
+ * The strength line for each competition lift today, for a client with or
+ * without a competition (goal-intel): the same sets, meets and read as
+ * loadCompetitionContext. Best effort: a lift with nothing hard enough reads
+ * null, never a guess.
+ */
+export async function loadLiftEvidence(sb: Db, clientId: string, today: string): Promise<Record<Lift, LiftEvidence>> {
+  const [sets, meetRows] = await Promise.all([
+    safe(() => compSets(sb, clientId, addDays(today, -7 * 120)), [] as any[]),
+    safe(
+      async () =>
+        (
+          await sb
+            .from("athlete_powerlifting_results")
+            .select("meet_date, meet_name, federation, equipment, event, division, weight_class_kg, bodyweight_kg, squat_kg, bench_kg, deadlift_kg, total_kg, place, attempts, tested")
+            .eq("client_id", clientId)
+            .gte("meet_date", addDays(today, -7 * 160))
+            .order("meet_date", { ascending: false })
+            .limit(60)
+        ).data ?? [],
+      [] as any[],
+    ),
+  ]);
+  const strengths = liftStrengths(sets, meetsFromRows(meetRows), today);
+  const out = {} as Record<Lift, LiftEvidence>;
+  for (const lift of LIFTS) out[lift] = liftEvidenceOf(lift, strengths[lift], today);
+  return out;
+}
+
 export type LoadedCompetition = { ctx: BriefContext; competition: any; client: any };
 
 export async function loadCompetitionContext(
@@ -440,23 +493,7 @@ export async function loadCompetitionContext(
   const twelveWeeks = addDays(today, -84);
   for (const lift of LIFTS) {
     const ls = strengths[lift];
-    const now = envelopeAt(ls.envelope, today);
-    const trend = envelopeTrend(ls.envelope, addDays(today, -56), today);
-    const weeks =
-      trend.kind !== "unclear" ? Math.max(1, daysBetween(trend.from.day, trend.to.day) / 7) : 1;
-    lifts[lift] = {
-      lift,
-      nowKg: now ? kg(now.value) : null,
-      state: now?.state ?? null,
-      basis: basisWords(now, ls.sessions),
-      basisDay: now?.basis ?? null,
-      hardSessions6w: ls.sessions.filter((s) => s.confidence === "high" && s.day >= sixWeeks)
-        .length,
-      trendPerWeek:
-        trend.kind === "unclear" ? null : Math.round((trend.pct / 100 / weeks) * 10000) / 10000,
-      direction:
-        trend.kind === "unclear" ? "unclear" : trend.kind === "steady" ? "flat" : trend.kind,
-    };
+    lifts[lift] = liftEvidenceOf(lift, ls, today);
     const singles = ls.sessions
       .filter((s) => s.day >= sixWeeks && s.set.reps <= 2)
       .map((s) => kg(s.heaviest));
@@ -729,6 +766,23 @@ export async function loadCompetitionContext(
     cues: {},
     sessions,
     classOptions: Array.isArray(comp.research?.alternatives) ? comp.research.alternatives : [],
+    // the goal ledger's targets at this meet (approved, the athlete's own, how they want to approach it)
+    goals: await safe<NonNullable<BriefContext["goals"]>>(async () => {
+      const { data } = await sb
+        .from("client_goals")
+        .select("kind, lift, status, approved_kg, client_kg, client_kg_max, client_text, approved_text")
+        .eq("competition_id", competitionId)
+        .in("status", ["proposed", "active"])
+        .limit(20);
+      return ((data ?? []) as any[])
+        .filter((g) => g.kind === "lift" || g.kind === "total" || g.kind === "preference")
+        .map((g) => ({
+          lift: g.kind === "total" ? ("total" as const) : g.kind === "lift" ? (g.lift as Lift) : null,
+          approvedKg: g.status === "active" && g.approved_kg != null ? Number(g.approved_kg) : null,
+          clientKg: g.client_kg_max != null ? Number(g.client_kg_max) : g.client_kg != null ? Number(g.client_kg) : null,
+          preference: g.kind === "preference" ? (g.approved_text ?? g.client_text ?? null) : null,
+        }));
+    }, []),
   };
   return { ctx, competition: comp, client };
 }

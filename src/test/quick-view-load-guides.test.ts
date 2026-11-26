@@ -192,9 +192,9 @@ describe("quick view: the setup and rest their card shows", () => {
       ],
     };
     // nothing logged yet: today's pick (the newest used)
-    expect(cardSetupView(data as any, squatEx.id, [], now).summary).toBe("Rogue rack · J-hooks 9 · Safeties 4");
+    expect(cardSetupView(data as any, squatEx.id, [], now).summary).toBe("J-hooks 9 · Safeties 4 · Rogue rack");
     // logged on the garage rack: that's what it says
-    expect(cardSetupView(data as any, squatEx.id, [{ completed_at: "2026-11-23T17:00:00Z", equipment_id: "rack-2" }], now).summary).toBe("Garage rack · J-hooks 11");
+    expect(cardSetupView(data as any, squatEx.id, [{ completed_at: "2026-11-23T17:00:00Z", equipment_id: "rack-2" }], now).summary).toBe("J-hooks 11 · Garage rack");
     // an old workout with nothing stamped: never today's pick
     expect(cardSetupView(data as any, squatEx.id, [{ completed_at: "2026-09-01T17:00:00Z", equipment_id: null }], now).summary).toBe("");
   });

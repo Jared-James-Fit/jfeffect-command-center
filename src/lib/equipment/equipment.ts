@@ -10,12 +10,14 @@
  *   currentSetup     the setup a workout card shows (newest pick, never retired equipment)
  *   cardEquipment    what a card shows: what its sets were logged on, else the
  *                    current pick (never today's pick on a past workout)
- *   setupSummary     the card's one quiet line ("Rogue rack · J-hooks 9 · Safeties 4")
+ *   setupSummary     the card's one quiet line ("J-hooks 9 · Safeties 4 · Rogue rack")
  *   preferSameEquipment  "Last time" and the weight suggestions read the same
  *                    machine when there's history on it: weights on two machines
  *                    are never treated as the same thing (a rack or a bench never
  *                    changes the weight, so those read everything)
  */
+
+import { FIELDS, fieldFor, fieldsFor, rankSettings, settingWords } from "./setup-fields";
 
 export type EquipmentKind = "rack" | "bench" | "machine" | "cable" | "smith" | "cardio" | "other";
 
@@ -65,7 +67,10 @@ export type ExerciseSetup = {
   equipment_id: string | null;
   settings: Setting[];
   notes: string | null;
+  /** The first photo (kept for older readers); `photo_paths` holds them all. */
   photo_path: string | null;
+  /** Up to 4 photos, in order (20270602091000_setup_autosave_history_photos.sql). */
+  photo_paths?: string[] | null;
   source: "athlete" | "coach";
   last_used_at: string | null;
   updated_at: string | null;
@@ -81,6 +86,15 @@ export const SETTING_VALUE_MAX = 40;
 export const SETTINGS_MAX = 12;
 export const NAME_MAX = 60;
 export const NOTE_MAX = 280;
+/** Photos a setup holds (the database's athlete_exercise_setups_photo_paths_max). */
+export const PHOTOS_MAX = 4;
+
+/** A setup's photos, in order (a row from before photo_paths: its one photo). */
+export function setupPhotos(s: Pick<ExerciseSetup, "photo_path" | "photo_paths"> | null | undefined): string[] {
+  if (!s) return [];
+  const list = Array.isArray(s.photo_paths) && s.photo_paths.length ? s.photo_paths : s.photo_path ? [s.photo_path] : [];
+  return list.filter((p): p is string => typeof p === "string" && !!p.trim()).slice(0, PHOTOS_MAX);
+}
 
 /**
  * Settings as stored: labelled values only, trimmed, at most 12, in the order
@@ -101,23 +115,19 @@ export function cleanSettings(list: unknown): Setting[] {
   return out;
 }
 
-/** The settings worth asking for on each kind of equipment (all optional, all renameable). */
-export const SETTING_SUGGESTIONS: Record<EquipmentKind, readonly string[]> = {
-  rack: ["J-hooks", "Safeties"],
-  bench: ["Back pad", "Seat"],
-  machine: ["Seat", "Back pad"],
-  cable: ["Pulley height", "Attachment"],
-  smith: ["Safeties", "Bench"],
-  cardio: ["Incline", "Speed"],
-  other: ["Setting"],
-};
-
-/** The fields a setup sheet offers: what's saved first, then the kind's suggestions not already there. */
-export function setupFields(kind: EquipmentKind | null, saved: readonly Setting[]): Setting[] {
+/**
+ * The fields a setup sheet offers: what's saved first, then the settings that
+ * matter for this equipment and lift (setup-fields.ts fieldsFor: a rack's
+ * heights, a cable's pulley and attachment, a squat's stance…) not already
+ * there, empty.
+ */
+export function setupFields(kind: EquipmentKind | null, saved: readonly Setting[], exercise?: { name?: string | null; equipment?: string | null } | null): Setting[] {
   const out: Setting[] = saved.map((s) => ({ ...s }));
-  const have = new Set(out.map((s) => s.label.toLowerCase()));
-  for (const label of SETTING_SUGGESTIONS[kind ?? "other"]) {
-    if (!have.has(label.toLowerCase())) out.push({ label, value: "" });
+  const have = new Set(out.map((s) => fieldFor(s.label, kind)?.key ?? s.label.trim().toLowerCase()));
+  for (const key of fieldsFor(kind, exercise ?? null)) {
+    if (have.has(key)) continue;
+    have.add(key);
+    out.push({ label: FIELDS[key].label, value: "" });
   }
   return out;
 }
@@ -142,16 +152,6 @@ export function suggestKind(ex: { name?: string | null; equipment?: string | nul
   if (/\brack\b/.test(eq)) return "rack";
   if (/incline|decline|bench|seated|preacher/.test(name) || /\bbench\b/.test(eq)) return "bench";
   return null;
-}
-
-/**
- * Where an empty card offers "Add your setup": equipment whose settings change
- * the lift (J-hooks and safeties, a seat, a pulley). Never a bench, dumbbells
- * or a bodyweight move, so a day's accessories don't each ask.
- */
-export function offersSetup(ex: { name?: string | null; equipment?: string | null } | null | undefined): boolean {
-  const kind = suggestKind(ex);
-  return kind === "rack" || kind === "smith" || kind === "machine" || kind === "cable";
 }
 
 const time = (iso: string | null | undefined): number => {
@@ -280,18 +280,26 @@ export function equipmentDetail(eq: Pick<Equipment, "name" | "brand" | "model">,
   return [gymName ?? null, ...bm].filter(Boolean).join(" · ");
 }
 
-/** "J-hooks 9 · Safeties 4". */
-export function settingsText(settings: readonly Setting[] | null | undefined, max = 3): string {
-  const list = cleanSettings(settings ?? []);
-  return list.slice(0, max).map((s) => `${s.label} ${s.value}`).join(" · ");
+/**
+ * "J-hooks 9 · Safeties 4 · Bench 30°": the settings that set the lift up
+ * first (setup-fields.ts rankSettings), each the way the card reads it.
+ */
+export function settingsText(settings: readonly Setting[] | null | undefined, max = 3, kind: EquipmentKind | null = null): string {
+  const list = rankSettings(cleanSettings(settings ?? []), kind);
+  return list.slice(0, max).map((s) => settingWords(s, kind)).join(" · ");
 }
 
 /**
- * The card's one quiet line: the equipment, then its first settings.
- * Empty when there's nothing worth a line (no equipment and no settings).
+ * The card's one quiet line: the most important settings first, then the
+ * equipment they're on ("J-hooks 9 · Safeties 4 · Rogue rack"). The card
+ * shows the parts that fit one line, whole. Empty when there's nothing worth
+ * a line (no equipment and no settings).
  */
-export function setupSummary(setup: Pick<ExerciseSetup, "settings"> | null, eq: Pick<Equipment, "name" | "brand" | "model"> | null): string {
-  const parts = [eq ? equipmentName(eq) : "", settingsText(setup?.settings ?? [], eq ? 2 : 3)].filter(Boolean);
+export function setupSummary(
+  setup: Pick<ExerciseSetup, "settings"> | null,
+  eq: Pick<Equipment, "name" | "brand" | "model"> & { kind?: EquipmentKind } | null,
+): string {
+  const parts = [settingsText(setup?.settings ?? [], 3, eq?.kind ?? null), eq ? equipmentName(eq) : ""].filter(Boolean);
   return parts.join(" · ");
 }
 

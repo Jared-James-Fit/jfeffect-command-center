@@ -55,6 +55,6 @@ describe("set row look", () => {
     expect(view).toContain("<SetPrIndicator items={prItems} celebrate={prFresh} />");
     expect(view).not.toContain("<SetRecordBadge");
     // the PR sound and haptic stay (one feedback() call gives both)
-    expect(view).toContain('feedback("pr")');
+    expect(view).toContain('feedback("pr", { key: ');
   });
 });

@@ -36,5 +36,14 @@ export async function staffUnreachableClients(supabase: any, userId: string, cli
 
 /** Throws unless this staff member can act on this client. */
 export async function assertStaffReachesClient(supabase: any, userId: string, clientId: string | null | undefined): Promise<void> {
-  if (!(await staffCanReachClient(supabase, userId, clientId))) throw new Error("Coach access required");
+  if (await staffCanReachClient(supabase, userId, clientId)) return;
+  // On the access record (admin_access_denials): the database checks again and notes the refusal.
+  if (clientId) {
+    try {
+      await supabase.rpc("account_access_check", { _client_id: clientId, _source: "server" });
+    } catch {
+      /* never in the way of the refusal itself */
+    }
+  }
+  throw new Error("Coach access required");
 }

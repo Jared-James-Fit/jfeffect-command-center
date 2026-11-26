@@ -10,17 +10,25 @@ import { PageHeader } from "@/components/app-shell";
 import { AthleteCompetition } from "@/components/competition/athlete-competition";
 
 export const Route = createFileRoute("/_authenticated/portal/competition")({
-  validateSearch: (s) => z.object({ update: z.string().uuid().optional() }).catch({}).parse(s),
+  validateSearch: (s) =>
+    z
+      .object({
+        update: z.string().uuid().optional(),
+        meet: z.string().uuid().optional(),
+        onboard: z.coerce.boolean().optional(),
+      })
+      .catch({})
+      .parse(s),
   component: CompetitionPage,
 });
 
 function CompetitionPage() {
-  const { update } = Route.useSearch();
+  const { update, meet, onboard } = Route.useSearch();
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 pb-8">
       <PageHeader title="Competition" backTo="/portal" />
       <div className="px-4 md:px-5">
-        <AthleteCompetition focusUpdate={update ?? null} />
+        <AthleteCompetition focusUpdate={update ?? null} focusMeet={meet ?? null} onboard={!!onboard} />
       </div>
     </div>
   );

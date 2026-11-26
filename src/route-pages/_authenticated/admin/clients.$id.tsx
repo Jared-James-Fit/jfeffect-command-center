@@ -1,6 +1,8 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { PovAccessLogDialog } from "@/components/pov/pov-access-log";
+import { noteAccessAttempt } from "@/lib/pov/access-check";
+import { useAuth } from "@/lib/auth";
 import { loadErrorKind, queryView } from "@/lib/loading/load-state";
 import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -47,7 +49,7 @@ import { ClientCalendarSyncStatus } from "@/components/admin/client-calendar-syn
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { History, Send } from "lucide-react";
-import { FolderOpen, Eye, PauseCircle, Power } from "lucide-react";
+import { FolderOpen, Eye, PauseCircle, Power, UserRound } from "lucide-react";
 import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
@@ -95,9 +97,11 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
+const GoalSummary = lazyDefault(() => import("@/components/goals/goal-summary"), "GoalSummary");
 const ClientDocumentsPanel = lazyDefault(() => import("@/components/documents/documents-pages"), "ClientDocumentsPanel");
 const HealthCard = lazyDefault(() => import("@/components/health/HealthCard"), "HealthCard");
 const AccountHeadshotPanel = lazyDefault(() => import("@/components/headshots/headshot-admin"), "AccountHeadshotPanel");
+const HeadshotSheet = lazyDefault(() => import("@/components/headshots/headshot-admin"), "HeadshotSheet");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
 const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
@@ -264,6 +268,12 @@ export function ClientProfileWorkspace({
   };
 
   const [accessLogOpen, setAccessLogOpen] = useState(false);
+  // The account headshot, one tap from the header's ⋯ (mounted on first open).
+  const [headshotOpen, setHeadshotOpen] = useState(false);
+  const [headshotMounted, setHeadshotMounted] = useState(false);
+  // the access record is the admin's alone (the database refuses anyone else too)
+  const { role: loginRole } = useAuth();
+  const isAdminLogin = loginRole === "admin";
 
   if (!form) {
     // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
@@ -271,12 +281,14 @@ export function ClientProfileWorkspace({
     const clientState = queryView(clientQ as any).kind;
     if (clientState === "error" || clientState === "offline") {
       const gone = clientState === "error" && loadErrorKind(clientQ.error) === "not_found";
+      // a link to an account this login can't reach is on the access record
+      if (gone) noteAccessAttempt(id, "profile");
       return (
         <div className="mx-auto max-w-md space-y-3 p-6">
           {clientState === "offline" ? (
             <OfflineState what="this client" />
           ) : gone ? (
-            <EmptyState title="This client isn't here anymore" detail="They may have been deleted, or the link is out of date." />
+            <EmptyState title="This client isn't available" detail="They may have been deleted or moved to another coach, or the link is out of date." />
           ) : (
             <ErrorState error={clientQ.error} what="this client" onRetry={() => clientQ.refetch()} retrying={clientQ.isFetching} />
           )}
@@ -539,13 +551,18 @@ export function ClientProfileWorkspace({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+        <DropdownMenuLabel>Account</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => { setHeadshotMounted(true); setHeadshotOpen(true); }} data-header-headshot>
+          <UserRound className="mr-2 h-4 w-4" />Account headshot
+        </DropdownMenuItem>
         {form.status === "Deactivated" || form.deactivate_at ? (
           <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Power className="mr-2 h-4 w-4" />{form.status === "Deactivated" ? "Reactivate" : "Cancel the deactivation"}</DropdownMenuItem>
         ) : (
           <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><PauseCircle className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => setAccessLogOpen(true)}><History className="mr-2 h-4 w-4" />Account access log</DropdownMenuItem>
+        {isAdminLogin && (
+          <DropdownMenuItem onSelect={() => setAccessLogOpen(true)}><History className="mr-2 h-4 w-4" />Account access log</DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
           <Trash2 className="mr-2 h-4 w-4" />Delete client
@@ -553,7 +570,16 @@ export function ClientProfileWorkspace({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-  const accessLog = <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />;
+  const accessLog = (
+    <>
+      {isAdminLogin && <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />}
+      {headshotMounted && (
+        <Suspense fallback={null}>
+          <HeadshotSheet open={headshotOpen} onOpenChange={setHeadshotOpen} clientId={id} clientName={form.full_name} />
+        </Suspense>
+      )}
+    </>
+  );
 
   const links = [
     ["Program Sheet", form.program_sheet_link],
@@ -998,6 +1024,12 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="info" className={WORKSPACE_GRID_CLASS}>
+          {/* the account headshot first: status, a photo waiting to review, request / retake (private reason), take it with them */}
+          <div className="md:col-span-3">
+            <Suspense fallback={<TabFallback />}>
+              <AccountHeadshotPanel clientId={id} clientName={form.preferred_name || form.first_name || form.full_name || undefined} />
+            </Suspense>
+          </div>
           <div className="md:col-span-2 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card/60 px-4 py-3">
               <div>
@@ -1050,11 +1082,6 @@ export function ClientProfileWorkspace({
               <div><span className="text-muted-foreground">Basic info completed:</span> {fmtDate(form.basic_info_completed_at)}</div>
             </div>
           </div>
-
-          {/* the account headshot: status, a photo waiting to review, request / retake (private reason), take it with them */}
-          <Suspense fallback={<TabFallback />}>
-            <AccountHeadshotPanel clientId={id} clientName={form.preferred_name || form.first_name || form.full_name || undefined} />
-          </Suspense>
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground">Communication Preferences</h3>
@@ -1899,6 +1926,12 @@ function ClientOverviewSnapshot({
       {form.service_tier !== "self_serve" && (
         <Suspense fallback={null}>
           <ClientPackageCard clientId={clientId} />
+        </Suspense>
+      )}
+      {/* What they're working toward (the goal ledger): their target, Cleo's projection, the approved target, feasibility, time left, Cleo's action. */}
+      {form.service_tier !== "self_serve" && (
+        <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
+          <GoalSummary clientId={clientId} onOpenTraining={() => onGoToTab("training")} />
         </Suspense>
       )}
       {/* The coach's notes on this client (Quick Notes saved to them land here). */}

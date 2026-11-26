@@ -5,6 +5,7 @@
  * before it. Every field says where it came from; a field nothing on file can
  * answer is null and listed as missing, never guessed. Deterministic.
  */
+import { goalsText } from "@/lib/goal-intel/rules";
 import { consolidatePain, painPlaceName, type PainPlace } from "./pain-read";
 import { planBriefText } from "@/lib/competition-plan";
 import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
@@ -48,7 +49,7 @@ export type AthleteContext = {
     /** Their experience read as a level (Goals & Setup), or null when not on file. */
     level?: ExperienceLevel | null;
   };
-  goals: { main: string | null; other: string | null; target: string | null; styles: string[]; clientGoals: string | null; bodyweightGoal: string | null; updatedAt: string | null; onFile: boolean; /** Goals & Setup's last answer (anything else they told you), when it says something. */ notes?: string | null; location?: string | null; /** A dated long-term goal the coach set once (e.g. "600 kg total" by a date), on the intel profile. */ longTerm?: { text: string; date: string | null; savedAt?: string | null } | null };
+  goals: { main: string | null; other: string | null; target: string | null; styles: string[]; clientGoals: string | null; bodyweightGoal: string | null; updatedAt: string | null; onFile: boolean; /** Goals & Setup's last answer (anything else they told you), when it says something. */ notes?: string | null; location?: string | null; /** A dated long-term goal the coach set once (e.g. "600 kg total" by a date), on the intel profile. */ longTerm?: { text: string; date: string | null; savedAt?: string | null } | null; /** The goal ledger as text (goal-intel goalsText): approved targets, the client's own, projections labelled. */ ledger?: string | null };
   competition: {
     next: { name: string; date: string; weeksOut: number; federation: string | null; weightClass: string | null; division: string | null } | null;
     history: Array<{ date: string | null; name: string | null; squat: number | null; bench: number | null; deadlift: number | null; total: number | null; bodyweight: number | null }>;
@@ -246,6 +247,7 @@ export function buildAthleteContext(x: {
       notes: setupNotes(g?.final_notes),
       location: g?.training_location ?? null,
       longTerm: rec.profile?.long_term_goal ?? null,
+      ledger: rec.goalLedger?.length ? goalsText(rec.goalLedger, unit) : null,
     },
     competition: {
       next: nextMeet?.event_date

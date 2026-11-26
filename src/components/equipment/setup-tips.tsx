@@ -32,7 +32,7 @@ const STEPS: Array<{ key: StepKey; title: string; body: string }> = [
   {
     key: "save",
     title: "Save your rack height once",
-    body: "J-hooks, safeties, seat, pulley height: whatever you set up, from any exercise's ⋯ → Save your setup.",
+    body: "J-hooks, safeties, seat, pulley height, grip: tap \"Add your setup\" under any exercise. It saves as you go and shows on that card every time.",
   },
   {
     key: "line",

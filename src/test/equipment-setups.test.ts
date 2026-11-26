@@ -55,11 +55,11 @@ describe("settings", () => {
     expect(cleanSettings([{ label: "x".repeat(50), value: "y".repeat(60) }])[0]).toEqual({ label: "x".repeat(32), value: "y".repeat(40) });
   });
 
-  it("offers the kind's fields after what's saved, never twice", () => {
-    expect(setupFields("rack", [])).toEqual([{ label: "J-hooks", value: "" }, { label: "Safeties", value: "" }]);
-    expect(setupFields("rack", [{ label: "j-hooks", value: "9" }])).toEqual([{ label: "j-hooks", value: "9" }, { label: "Safeties", value: "" }]);
-    expect(setupFields(null, [])).toEqual([{ label: "Setting", value: "" }]);
-    expect(setupFields("machine", []).map((f) => f.label)).toEqual(["Seat", "Back pad"]);
+  it("offers the kind's fields after what's saved, never twice (under any name)", () => {
+    expect(setupFields("rack", [])).toEqual([{ label: "Rack height", value: "" }, { label: "Safety height", value: "" }]);
+    expect(setupFields("rack", [{ label: "j-hooks", value: "9" }])).toEqual([{ label: "j-hooks", value: "9" }, { label: "Safety height", value: "" }]);
+    expect(setupFields(null, [])).toEqual([]);
+    expect(setupFields("machine", []).map((f) => f.label)).toEqual(["Seat position", "Back pad"]);
   });
 });
 
@@ -121,9 +121,9 @@ describe("cardEquipment", () => {
 });
 
 describe("summary line", () => {
-  it("reads equipment then its first settings", () => {
+  it("reads the most important settings first, then the equipment (the card shows what fits one line)", () => {
     const s = setup("s", "squat", "rogue", { settings: [{ label: "J-hooks", value: "9" }, { label: "Safeties", value: "4" }, { label: "Pin", value: "2" }] });
-    expect(setupSummary(s, eq("rogue", { name: "Rogue rack" }))).toBe("Rogue rack · J-hooks 9 · Safeties 4");
+    expect(setupSummary(s, eq("rogue", { name: "Rogue rack" }))).toBe("J-hooks 9 · Safeties 4 · Pin 2 · Rogue rack");
     expect(setupSummary(s, null)).toBe("J-hooks 9 · Safeties 4 · Pin 2");
     expect(setupSummary(null, eq("rogue", { name: "Rogue rack" }))).toBe("Rogue rack");
     expect(setupSummary(null, null)).toBe("");
@@ -276,9 +276,11 @@ describe("PRs and progress say which machine", () => {
 describe("the card stays quiet", () => {
   const card = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
   const sheet = readFileSync("src/components/equipment/setup-sheet.tsx", "utf8");
-  it("the setup line shows what's saved; empty, only on a rack, machine or cable lift before its first set (Nov 21 2026), else the ⋯ is the way in", () => {
-    expect(card).toContain('{cardSetup && (cardSetup.summary || (cardSetup.mode === "live" && completedSetCount === 0 && offersSetup(');
+  it("the setup line is on every card that can change it (Nov 26 2026): what's saved, else a quiet Add your setup; read-only shows only what's saved", () => {
+    expect(card).toContain('{cardSetup && (cardSetup.summary || cardSetup.photo || cardSetup.mode !== "view") && (');
     expect(card).toContain('data-testid="card-setup"');
+    // one slim line: the prescription under it moves up to make room
+    expect(card).toContain('cardSetup ? "mt-1.5" : "mt-2.5"');
   });
   it("the setup sheet is a grip sheet that swipes down and stays above the keyboard", () => {
     // pinned to the visible part of the screen while typing (setup-sheet-reliability.test.ts)

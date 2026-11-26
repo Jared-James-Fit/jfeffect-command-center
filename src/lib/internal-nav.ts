@@ -118,6 +118,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "coach"], keywords: ["rankings", "leaderboard", "powerlifting", "dots", "gl points", "squat", "bench", "deadlift", "records", "competition level", "meet results", "athlete profiles"] },
   { to: "/admin/challenges", label: "Challenges", icon: Swords, group: "Crew",
     visibleTo: ["admin"], keywords: ["challenge", "competition", "event", "bench 225", "winnipeg 225", "leaderboard", "judge", "registration", "prizes", "sponsors", "live event"] },
+  { to: "/admin/virtual-accounts", label: "Virtual Accounts", icon: Heart, group: "Crew",
+    visibleTo: ["admin"], keywords: ["virtual", "virtual accounts", "virtual crew accounts", "bots", "simulated", "crew accounts", "automated likes", "rollout"] },
 
   // ── CALENDAR ─────────────────────────────────────────────────────────
   // One Calendar page with tabs; the old paths redirect into it.
@@ -279,6 +281,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"] },
   { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
+  { to: "/admin/access-log", label: "Account access", icon: ShieldCheck, group: "Team", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["view as", "pov", "audit", "access log", "security", "who opened"] },
 
   // ── SETTINGS ─────────────────────────────────────────────────────────
   // Everything you set once lives here (the old Add-ons and the chat media
@@ -325,8 +329,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/settings/ai", label: "AI & Cleo", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "cleo", "assistant", "who has cleo", "cleo access", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "errors"] },
-  { to: "/admin/virtual-accounts", label: "Virtual Crew accounts", icon: ShieldCheck, group: "Settings", searchOnly: true,
-    visibleTo: ["admin"], section: "Advanced", keywords: ["virtual", "virtual accounts", "bots", "simulated", "crew accounts", "developer", "test account"] },
+  { to: "/admin/settings/velocity", label: "Bar speed from videos", icon: ShieldCheck, group: "Settings", searchOnly: true,
+    visibleTo: ["admin"], section: "Advanced", keywords: ["velocity", "bar speed", "bar path", "set videos", "video analysis", "avg vel", "mcv", "worker", "failed analysis", "diagnostics"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings", searchOnly: true,
