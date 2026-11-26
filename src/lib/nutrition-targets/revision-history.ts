@@ -3,7 +3,7 @@ import { planPeriod, type PlanRow } from "./plan-history";
 
 export type NutritionRevision = {
   id: string; plan_id: string; captured_at: string; prior_updated_at: string | null;
-  source: "coach" | "cleo" | "undo"; snapshot: Omit<PlanRow, "id">;
+  source: "coach" | "cleo" | "undo"; snapshot: PlanRow;
 };
 
 export const nutritionRevisionKey = (clientId: string) => ["nutrition-plan-revisions", clientId] as const;
