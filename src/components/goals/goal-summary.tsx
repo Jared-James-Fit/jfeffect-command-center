@@ -24,6 +24,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { CompactWeightInput, draftKg, type WeightDraft } from "@/components/compact-weight-input";
+import { dualRange, dualLoadText, inputKg, type DualWeight } from "@/lib/dual-weight";
+import { WeightOther } from "@/components/dual-weight";
 import { handOffToCleo } from "@/lib/cleo-handoff";
 import {
   addGoalFn,
@@ -37,8 +40,6 @@ import {
   APPROACH_LABEL,
   KIND_WORD,
   fmtClientTarget,
-  fmtWeight,
-  fromKg,
   type ApproachKey,
   type GoalKind,
   type GoalRow,
@@ -63,8 +64,20 @@ function barTone(score: number) {
   return score >= 70 ? "bg-emerald-500" : score >= 30 ? "bg-amber-500" : "bg-destructive";
 }
 
-const approvedWords = (g: GoalRow, unit: Unit) =>
-  g.approved_value != null && g.approved_unit ? `${Number(g.approved_value)} ${g.approved_unit}` : g.approved_kg != null ? fmtWeight(Number(g.approved_kg), unit) : g.approved_text ?? null;
+function goalWeight(kg: number | null | undefined, unit: Unit, hi: number | null = null, recorded?: Unit): DualWeight | null {
+  return kg == null || !Number.isFinite(Number(kg)) ? null : dualRange(Number(kg), hi, unit, recorded);
+}
+function sourceKg(value: number | null, unit: Unit | null, fallback: number | null): number | null {
+  return value != null && unit ? inputKg(Number(value), unit) : fallback;
+}
+function goalDisplayUnit(g: GoalRow, unit: Unit): Unit {
+  return g.competition_id && (g.kind === "lift" || g.kind === "total" || g.kind === "bodyweight") ? "kg" : unit;
+}
+function WeightWords({ weight }: { weight: DualWeight | null }) {
+  return weight ? <>{weight.primary} <WeightOther className="text-[10px]">({weight.secondary})</WeightOther></> : <>—</>;
+}
+const approvedWords = (g: GoalRow, unit: Unit) => goalWeight(sourceKg(g.approved_value, g.approved_unit, g.approved_kg), unit, null, g.approved_unit ?? undefined);
+
 
 /** The top of the client's own range, in their unit, for "Approve 225 lb". */
 const clientTop = (g: GoalRow) => (g.client_value != null && g.client_unit ? `${Number(g.client_value_max ?? g.client_value)} ${g.client_unit}` : null);
@@ -159,7 +172,7 @@ export function GoalSummary({
                   <span className="truncate">{g.title}</span>
                   <span className={g.status === "achieved" ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground"}>
                     {g.status === "achieved" ? "Achieved" : "Missed"}
-                    {g.outcome?.actualKg != null ? ` · ${fmtWeight(g.outcome.actualKg, unit)}` : ""}
+                    {g.outcome?.actualKg != null ? ` · ${dualLoadText(g.outcome.actualKg, goalDisplayUnit(g, unit))}` : ""}
                   </span>
                 </li>
               ))}
@@ -204,11 +217,17 @@ function useGoalMutations(clientId: string) {
 function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view: View; unit: Unit; compact: boolean; onOpenTraining?: () => void }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [restoreDraft, setRestoreDraft] = useState<WeightDraft | null>(null);
+  unit = goalDisplayUnit(g, unit);
   const { goal, rec } = useGoalMutations(g.client_id);
   const f = g.feasibility;
   const busy = goal.isPending || rec.isPending;
   const said = fmtClientTarget(g);
   const approved = approvedWords(g, unit);
+  const clientWeight = g.client_unit ? goalWeight(sourceKg(g.client_value, g.client_unit, g.client_kg), unit, sourceKg(g.client_value_max, g.client_unit, g.client_kg_max), g.client_unit) : null;
+  const projected = goalWeight(f?.projection?.expectedKg, unit);
+  const comp = view.competitions.find(c => c.id === g.competition_id);
   const measurable = g.kind === "lift" || g.kind === "total" || g.kind === "bodyweight";
   const recOpen = g.recommendation_status === "open" && g.recommendation;
   const first = view.firstName ?? "them";
@@ -229,13 +248,13 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
 
       {g.kind !== "preference" && (
         <dl className="mt-1.5 grid grid-cols-3 gap-2 text-xs" data-goal-numbers>
-          <Num label="Client" value={said ?? "—"} note={g.client_unit_source === "inferred" ? "unit inferred" : g.tentative ? "tentative" : null} />
+          <Num label="Client" value={clientWeight?.primary ?? said ?? "—"} secondary={clientWeight?.secondary} note={g.client_unit_source === "inferred" ? "unit inferred" : g.tentative ? "tentative" : null} />
           <Num
             label="Projected"
-            value={f?.projection ? fmtWeight(f.projection.expectedKg, unit) : measurable ? "—" : "Not scored"}
-            note={f?.projection ? `${fmtWeight(f.projection.lowKg, unit)}–${fmtWeight(f.projection.highKg, unit)}` : null}
+            value={projected?.primary ?? (measurable ? "—" : "Not scored")}
+            secondary={projected?.secondary}
           />
-          <Num label="Approved" value={approved ?? "—"} strong={!!approved} note={g.approved_approach ? APPROACH_LABEL[g.approved_approach] : null} />
+          <Num label="Approved" value={approved?.primary ?? g.approved_text ?? "—"} secondary={approved?.secondary} strong={!!approved} note={g.approved_approach ? APPROACH_LABEL[g.approved_approach] : null} />
         </dl>
       )}
 
@@ -260,7 +279,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
           {f?.action?.line && <p className="w-full text-xs text-muted-foreground" data-goal-action>{f.action.line}</p>}
           {measurable && said ? (
             <Button size="sm" className="h-9" disabled={busy} onClick={() => approveAs({ action: "approve" }, `Approved ${clientTop(g) ?? ""}`.trim())} data-goal-approve>
-              Approve {clientTop(g)}
+              Approve {clientWeight ? <WeightWords weight={goalWeight(sourceKg(g.client_value_max ?? g.client_value, g.client_unit, g.client_kg_max ?? g.client_kg), unit, null, g.client_unit ?? undefined)} /> : clientTop(g)}
             </Button>
           ) : !measurable ? (
             <Button size="sm" className="h-9" disabled={busy} onClick={() => approveAs({ action: "approve" }, "Kept as a goal")} data-goal-approve>
@@ -276,7 +295,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
               onClick={() => approveAs({ action: "approve", approach: f.recommended }, `Approved ${APPROACH_LABEL[f.recommended as ApproachKey]}`)}
               data-goal-approve-recommended
             >
-              {APPROACH_LABEL[f.recommended]} {fmtWeight(f.approaches.find((a) => a.key === f.recommended)?.targetKg ?? null, g.client_unit ?? unit)}
+              {APPROACH_LABEL[f.recommended]} <WeightWords weight={goalWeight(f.approaches.find((a) => a.key === f.recommended)?.targetKg, unit)} />
             </Button>
           ) : null}
           {measurable && (
@@ -323,7 +342,7 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
                 )
               }
             >
-              {g.recommendation.kind === "adjust_program" ? "Adjust programming" : g.recommendation.suggestedKg != null ? `Approve ${fmtWeight(g.recommendation.suggestedKg, g.approved_unit ?? unit)}` : "Approve"}
+              {g.recommendation.kind === "adjust_program" ? "Adjust programming" : g.recommendation.suggestedKg != null ? `Approve ${dualLoadText(g.recommendation.suggestedKg, unit)}` : "Approve"}
             </Button>
             {g.recommendation.suggestedKg != null && (
               <Button size="sm" variant="outline" className="h-9" disabled={busy} onClick={() => setEditing(true)}>
@@ -339,24 +358,34 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
           </div>
         </div>
       )}
+      {g.status === "active" && !recOpen && measurable && !editing && (
+        <Button size="sm" variant="outline" className="mt-2 h-9" disabled={busy} onClick={() => setEditing(true)}>Edit target</Button>
+      )}
       {g.status === "active" && !recOpen && f?.action && f.action.kind === "maintain" && !compact && (
         <p className="mt-1 text-[11px] text-muted-foreground">{f.action.line}</p>
       )}
 
-      <button className="mt-1 flex min-h-8 items-center gap-1 text-[11px] text-muted-foreground" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} Details
-      </button>
+      {editing && <EditGoalInline g={g} view={view} unit={unit} initial={restoreDraft} incrementKg={g.kind === "lift" && g.competition_id ? comp?.incrementKg ?? 2.5 : undefined} confirmed={comp?.rulesConfirmed} onClose={() => { setEditing(false); setRestoreDraft(null); }} />}
+      <div className="mt-1 flex items-center gap-3">
+        <button type="button" className="flex min-h-9 items-center gap-1 text-xs text-muted-foreground" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} Details
+        </button>
+        <button type="button" className="flex min-h-9 items-center gap-1 text-xs text-muted-foreground" onClick={() => setHistoryOpen(v => !v)} aria-expanded={historyOpen}>
+          {historyOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} History
+        </button>
+      </div>
       {open && <GoalDetails g={g} view={view} unit={unit} busy={busy} onApprove={approveAs} first={first} />}
-      {editing && <EditGoalDialog g={g} view={view} unit={unit} onClose={() => setEditing(false)} />}
+      {historyOpen && <GoalHistory g={g} view={view} unit={unit} onRestore={g.status === "active" && !editing ? d => { setRestoreDraft(d); setEditing(true); } : undefined} />}
     </li>
   );
 }
 
-function Num({ label, value, note, strong }: { label: string; value: string; note?: string | null; strong?: boolean }) {
+function Num({ label, value, secondary, note, strong }: { label: string; value: string; secondary?: string; note?: string | null; strong?: boolean }) {
   return (
     <div className="min-w-0">
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={cn("truncate tabular-nums", strong ? "font-semibold" : "")}>{value}</dd>
+      <dd className={cn("break-words tabular-nums", strong ? "font-semibold" : "")}>{value}</dd>
+      {secondary && <dd><WeightOther className="text-[10px]">({secondary})</WeightOther></dd>}
       {note && <dd className="truncate text-[10px] text-muted-foreground">{note}</dd>}
     </div>
   );
@@ -364,7 +393,6 @@ function Num({ label, value, note, strong }: { label: string; value: string; not
 
 function GoalDetails({ g, view, unit, busy, onApprove, first }: { g: GoalRow; view: View; unit: Unit; busy: boolean; onApprove: (d: any, msg: string) => void; first: string }) {
   const f = g.feasibility;
-  const history = (view.history ?? []).filter((h: any) => h.goal_id === g.id).slice(0, 6);
   const { goal } = useGoalMutations(g.client_id);
   return (
     <div className="mt-1 space-y-2 rounded-lg border border-border p-2.5 text-xs" data-goal-details>
@@ -380,7 +408,7 @@ function GoalDetails({ g, view, unit, busy, onApprove, first }: { g: GoalRow; vi
                   <span className="block truncate text-[10px] text-muted-foreground">{a.line}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2 tabular-nums">
-                  {fmtWeight(a.targetKg, g.client_unit ?? unit)} · {a.score}
+                  <WeightWords weight={goalWeight(a.targetKg, unit)} /> · {a.score}
                   <Button size="sm" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onApprove({ action: "approve", approach: a.key }, `Approved ${a.label}`)}>
                     Use
                   </Button>
@@ -398,6 +426,7 @@ function GoalDetails({ g, view, unit, busy, onApprove, first }: { g: GoalRow; vi
           {f.pace.usualPctPerWeek ? ` (usual ${f.pace.usualPctPerWeek[0]}–${f.pace.usualPctPerWeek[1]}%)` : ""}.
         </p>
       )}
+      {f?.projection && <p className="text-muted-foreground">Projected range: <WeightWords weight={goalWeight(f.projection.lowKg, unit, f.projection.highKg)} /></p>}
       {f?.projection?.basis?.length ? <p className="text-muted-foreground">Projection from: {f.projection.basis.join("; ")}.</p> : null}
       {f?.reasons?.length ? <p className="text-muted-foreground">{f.reasons.join(" · ")}</p> : null}
       {f?.missing?.length ? <p className="text-amber-700 dark:text-amber-300">Missing: {f.missing.join("; ")}</p> : null}
@@ -426,16 +455,7 @@ function GoalDetails({ g, view, unit, busy, onApprove, first }: { g: GoalRow; vi
           </Button>
         </div>
       )}
-      {history.length > 0 && (
-        <ul className="space-y-0.5 text-[11px] text-muted-foreground" data-goal-history>
-          {history.map((h: any, i: number) => (
-            <li key={i}>
-              {ago(h.at)} · {HISTORY_WORD[h.action] ?? h.action.replace(/_/g, " ")}
-              {h.actor === "cleo" ? " (Cleo)" : h.actor === "coach" ? "" : h.actor === "athlete" ? " (client)" : ""}
-            </li>
-          ))}
-        </ul>
-      )}
+
     </div>
   );
 }
@@ -468,69 +488,63 @@ const HISTORY_WORD: Record<string, string> = {
   client_told: "They were told",
 };
 
-function EditGoalDialog({ g, view, unit, onClose }: { g: GoalRow; view: View; unit: Unit; onClose: () => void }) {
-  const u0 = (g.approved_unit ?? g.client_unit ?? unit) as Unit;
-  const start =
-    g.recommendation?.suggestedKg != null && g.recommendation_status === "open"
-      ? Math.round(fromKg(g.recommendation.suggestedKg, u0) * (u0 === "kg" ? 2 : 1)) / (u0 === "kg" ? 2 : 1)
-      : g.approved_value ?? g.client_value_max ?? g.client_value ?? null;
-  const [value, setValue] = useState(start != null ? String(start) : "");
-  const [u, setU] = useState<Unit>(u0);
+function GoalHistory({ g, view, unit, onRestore }: { g: GoalRow; view: View; unit: Unit; onRestore?: (d: WeightDraft) => void }) {
+  const [limit, setLimit] = useState(5);
+  const history = (view.history ?? []).filter(h => h.goal_id === g.id);
+  return (
+    <div className="mt-1 space-y-2 rounded-lg border border-border p-2.5 text-xs" data-goal-history>
+      {!history.length && <p className="text-muted-foreground">No recorded changes yet.</p>}
+      {history.slice(0, limit).map((h, i) => {
+        const before = h.detail?.before;
+        const after = h.detail?.after;
+        const b = goalWeight(sourceKg(before?.approved_value ?? null, before?.approved_unit ?? null, before?.approved_kg ?? null), unit);
+        const a = goalWeight(sourceKg(after?.approved_value ?? null, after?.approved_unit ?? null, after?.approved_kg ?? null), unit);
+        const changed = before?.approved_kg !== after?.approved_kg;
+        const actor = h.actor === "cleo" ? "Cleo" : h.actor === "coach" ? "Coach" : h.actor === "athlete" ? "Athlete" : "System";
+        const prev = before?.approved_kg != null ? { value: String(before.approved_value ?? before.approved_kg), unit: (before.approved_unit === "lb" && before.approved_value != null ? "lb" : "kg") as Unit } : null;
+        return <div key={h.at + i} className="border-b border-border/60 pb-2 last:border-0 last:pb-0">
+          <p className="font-medium">{HISTORY_WORD[h.action] ?? h.action.replace(/_/g, " ")}</p>
+          {changed && (a || b) && <p className="mt-0.5 tabular-nums"><WeightWords weight={b} /> → <WeightWords weight={a} /></p>}
+          <p className="text-[11px] text-muted-foreground">{actor} · {new Date(h.at).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+          {changed && prev && onRestore && (h.action === "edited" || h.action === "approved") && <Button type="button" variant="ghost" size="sm" className="mt-1 h-8 px-2" onClick={() => onRestore(prev)}>Restore previous target</Button>}
+        </div>;
+      })}
+      {history.length > limit && <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setLimit(v => v + 5)}>Show older changes</Button>}
+    </div>
+  );
+}
+
+function EditGoalInline({ g, view, unit, initial, incrementKg, confirmed, onClose }: { g: GoalRow; view: View; unit: Unit; initial: WeightDraft | null; incrementKg?: number; confirmed?: boolean; onClose: () => void }) {
+  const u0 = g.approved_unit ?? g.client_unit ?? unit;
+  const suggested = g.recommendation_status === "open" ? g.recommendation?.suggestedKg : null;
+  const start = suggested != null ? { value: String(suggested), unit: "kg" as Unit } : { value: String(g.approved_value ?? g.client_value_max ?? g.client_value ?? ""), unit: u0 };
+  const [draft, setDraft] = useState<WeightDraft>(initial ?? start);
   const [deadline, setDeadline] = useState(g.deadline ?? "");
   const [tell, setTell] = useState(g.client_facing);
+  const [settings, setSettings] = useState(false);
   const { goal } = useGoalMutations(g.client_id);
-  const n = Number(value);
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{g.title}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 text-sm">
-          <div className="flex gap-2">
-            <Input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Target" aria-label="Target" className="h-10" />
-            <Select value={u} onValueChange={(v) => setU(v as Unit)}>
-              <SelectTrigger className="h-10 w-24" aria-label="Unit">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="kg">kg</SelectItem>
-                <SelectItem value="lb">lb</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {!g.competition_id && (
-            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-label="By" className="h-10" />
-          )}
-          <label className="flex min-h-9 items-center justify-between gap-2">
-            <span>Tell {view.firstName ?? "them"} (after your review window)</span>
-            <Switch checked={tell} onCheckedChange={setTell} />
-          </label>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={!(n > 0) || goal.isPending}
-            onClick={() =>
-              goal.mutate(
-                { goalId: g.id, decision: { action: "approve", value: n, unit: u, deadline: g.competition_id ? undefined : deadline || null, clientFacing: tell } },
-                {
-                  onSuccess: () => {
-                    toast.success(`Approved ${n} ${u}`);
-                    onClose();
-                  },
-                },
-              )
-            }
-          >
-            Approve {n > 0 ? `${n} ${u}` : ""}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  const kg = draftKg(draft);
+  const valid = kg != null && kg <= 1500 && Number(draft.value) <= 3000;
+  const save = () => {
+    if (!valid || goal.isPending) return;
+    goal.mutate({ goalId: g.id, decision: { action: "approve", value: Number(draft.value), unit: draft.unit, deadline: g.competition_id ? undefined : deadline || null, clientFacing: tell } },
+      { onSuccess: () => { toast.success("Target saved"); onClose(); } });
+  };
+  return <form className="mt-2 rounded-lg border border-border p-2" onSubmit={e => { e.preventDefault(); save(); }} data-goal-edit>
+    {initial && <p className="mb-1 text-xs text-muted-foreground">Restore previous target — save to confirm.</p>}
+    <div className="flex flex-wrap items-start justify-between gap-1.5">
+      <CompactWeightInput draft={draft} onChange={setDraft} autoFocus incrementKg={incrementKg} confirmed={confirmed} disabled={goal.isPending} />
+      <div className="flex items-center gap-1">
+        <Button type="submit" size="sm" className="h-9" disabled={!valid || goal.isPending}>{goal.isPending ? "Saving…" : "Save"}</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-9 px-2" disabled={goal.isPending} onClick={onClose}>Cancel</Button>
+      </div>
+    </div>
+    <button type="button" className="mt-1 text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setSettings(v => !v)} aria-expanded={settings}>More options</button>
+    {settings && <div className="mt-2 space-y-2 text-xs">
+      {!g.competition_id && <label className="block">Target date<Input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className="mt-1 h-9" /></label>}
+      <label className="flex min-h-9 items-center justify-between gap-2"><span>Tell {view.firstName ?? "them"} after review</span><Switch checked={tell} onCheckedChange={setTell} /></label>
+    </div>}
+  </form>;
 }
 
 const ADD_KINDS: Array<{ kind: GoalKind; label: string }> = [
@@ -547,8 +561,9 @@ function AddGoalDialog({ view, competitionId, onClose }: { view: View; competiti
   const add = useServerFn(addGoalFn);
   const [kind, setKind] = useState<GoalKind>("lift");
   const [lift, setLift] = useState<Lift>("squat");
-  const [value, setValue] = useState("");
-  const [u, setU] = useState<Unit>(view.unit as Unit);
+  const [draft, setDraft] = useState<WeightDraft>({ value: "", unit: competitionId ? "kg" : view.unit as Unit });
+  const value = draft.value;
+  const u = draft.unit;
   const [deadline, setDeadline] = useState("");
   const [comp, setComp] = useState<string>(competitionId ?? "none");
   const [text, setText] = useState("");
@@ -609,18 +624,7 @@ function AddGoalDialog({ view, competitionId, onClose }: { view: View; competiti
             </Select>
           )}
           {measurable ? (
-            <div className="flex gap-2">
-              <Input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Target" aria-label="Target" className="h-10" />
-              <Select value={u} onValueChange={(v) => setU(v as Unit)}>
-                <SelectTrigger className="h-10 w-24" aria-label="Unit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kg">kg</SelectItem>
-                  <SelectItem value="lb">lb</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <CompactWeightInput draft={draft} onChange={setDraft} incrementKg={kind === "lift" && comp !== "none" ? view.competitions.find(c => c.id === comp)?.incrementKg ?? 2.5 : undefined} confirmed={view.competitions.find(c => c.id === comp)?.rulesConfirmed} />
           ) : (
             <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={kind === "event" ? "Qualify for nationals" : "In their words"} rows={2} />
           )}

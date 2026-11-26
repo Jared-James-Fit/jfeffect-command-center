@@ -8,6 +8,7 @@
  * review window in the outbox.
  */
 import { assessGoal, meaningfulChange, resolveOutcome } from "./feasibility";
+import { readRules } from "@/lib/competition/rules";
 import { dedupeKey, goalTitle, inferUnit, measurableGoals, statedGoals, wordedGoal, type GoalCandidate } from "./extract";
 import { loadGoalContext, localToday, readGoals, type GoalClient, type LoadedGoalContext } from "./load.server";
 import {
@@ -117,7 +118,7 @@ export async function assessClient(sb: Db, clientId: string, opts: { force?: boo
     }
     if (data) {
       goals[i] = data as GoalRow;
-      if (recStatus === "open" && recAt !== g.recommendation_at) await goalEvent(sb, g, { userId: null, kind: "cleo" }, "recommendation", { kind: rec.kind, line: rec.line, score: f.score });
+      if (recStatus === "open" && recAt !== g.recommendation_at) await goalEvent(sb, g, { userId: null, kind: "cleo" }, "recommendation", { kind: rec.kind, line: rec.line, score: f.score, suggested_kg: rec.suggestedKg });
     }
   }
   return { goals, loaded: { ...loaded, goals } };
@@ -527,8 +528,8 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
   if (!data) throw new Error("The goal changed since you opened it. Refresh and try again.");
   const next = data as GoalRow;
   await goalEvent(sb, g, actor, action, {
-    before: { status: g.status, approved_kg: g.approved_kg, approved_text: g.approved_text, deadline: g.deadline },
-    after: { status: next.status, approved_kg: next.approved_kg, approved_text: next.approved_text, deadline: next.deadline, approach: next.approved_approach },
+    before: { status: g.status, approved_kg: g.approved_kg, approved_value: g.approved_value, approved_unit: g.approved_unit, approved_text: g.approved_text, deadline: g.deadline },
+    after: { status: next.status, approved_kg: next.approved_kg, approved_value: next.approved_value, approved_unit: next.approved_unit, approved_text: next.approved_text, deadline: next.deadline, approach: next.approved_approach },
   });
   // fresh read with the new target
   await assessClient(sb, g.client_id, { force: true }).catch((e) => console.warn("[goal-intel] reread failed", e?.message));
@@ -593,7 +594,7 @@ export async function addGoal(
     throw new Error(error.message);
   }
   const g = data as GoalRow;
-  await goalEvent(sb, g, actor, "created", { from: "coach" });
+  await goalEvent(sb, g, actor, "created", { from: "coach", after: { approved_kg: g.approved_kg, approved_value: g.approved_value, approved_unit: g.approved_unit } });
   const { goals } = await assessClient(sb, clientId, { force: true });
   const fresh = goals.find((x) => x.id === g.id) ?? g;
   if (fresh.client_facing && client.user_id) {
@@ -929,7 +930,7 @@ export type GoalsView = {
   outbox: any | null;
   settings: GoalUpdateSettings;
   history: Array<{ goal_id: string | null; actor: string; action: string; detail: any; at: string }>;
-  competitions: Array<{ id: string; name: string; meet_date: string }>;
+  competitions: Array<{ id: string; name: string; meet_date: string; incrementKg: number; rulesConfirmed: boolean }>;
 };
 
 /** One client's goals, read fresh when stale, with the waiting update and the recent history. */
@@ -952,7 +953,7 @@ export async function goalsView(sb: Db, clientId: string, opts: { refresh?: bool
     loaded ? Promise.resolve(loaded.client) : sb.from("clients").select("id, first_name, preferred_name, full_name, preferred_weight_unit, timezone").eq("id", clientId).maybeSingle().then((r: any) => r.data),
     sb.from("client_update_outbox").select("*").eq("client_id", clientId).in("status", ["pending", "held", "sending"]).maybeSingle().then((r: any) => r.data ?? null),
     sb.from("client_goal_events").select("goal_id, actor, action, detail, at").eq("client_id", clientId).order("at", { ascending: false }).limit(60).then((r: any) => r.data ?? []),
-    sb.from("competitions").select("id, name, meet_date").eq("client_id", clientId).eq("status", "upcoming").order("meet_date").limit(10).then((r: any) => r.data ?? []),
+    sb.from("competitions").select("id, name, meet_date, rules, federation").eq("client_id", clientId).eq("status", "upcoming").order("meet_date").limit(10).then((r: any) => r.data ?? []),
     readUpdateSettings(sb),
   ]);
   return {
@@ -964,7 +965,7 @@ export async function goalsView(sb: Db, clientId: string, opts: { refresh?: bool
     outbox,
     settings,
     history,
-    competitions: comps,
+    competitions: comps.map((c: any) => { const r = readRules(c.rules, c.federation); return { id: c.id, name: c.name, meet_date: c.meet_date, incrementKg: r.incrementKg, rulesConfirmed: r.confirmed }; }),
   };
 }
 
