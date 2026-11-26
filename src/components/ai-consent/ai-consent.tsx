@@ -4,8 +4,8 @@
  * Never a popup, and never part of agreeing to anything else:
  *
  * - `AiConsentCheckbox`: an optional box, unticked, beside the Terms and
- *   Privacy Policy when an account is made (/activate) and in the Coaching
- *   Agreement's permissions when it's signed. `recordAiConsentChoice` saves
+ *   Privacy Policy when an account is made (/activate), never in the Coaching
+ *   Agreement. `recordAiConsentChoice` saves
  *   what it says once the agreement went through (`checkboxDecision`).
  * - `AiConsentInline`: someone with no answer yet meets one small request,
  *   in place, where a feature is about to send data (Allow / Don't allow, so
@@ -146,7 +146,7 @@ function MoreToggle({ open, onToggle }: { open: boolean; onToggle: () => void })
 /* ---------- the optional box in an agreement flow ---------- */
 
 /**
- * The optional, unticked box beside the Terms / Coaching Agreement. Controlled;
+ * The optional, unticked box beside the signup Terms. Controlled;
  * agreeing to the rest never depends on it.
  */
 export function AiConsentCheckbox({
