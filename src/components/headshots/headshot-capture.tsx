@@ -11,7 +11,7 @@
  *            live: a shutter, nothing measured (their coach reviews it). A coach
  *            taking it in person gets the live camera, rear-facing first.
  *   review   the photo, Use this photo or Retake
- *   done     sent for review (the photo on file stays until it's accepted)
+ *   done     saved automatically when checks pass, otherwise sent for review
  *
  * The photo and a strip of small frames go straight into the private bucket
  * under the server's capture session, then the server checks them itself
@@ -224,7 +224,7 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
             <p className="max-w-sm text-center text-[14px] text-amber-300" role="alert" data-headshot-error>{error}</p>
           ) : (
             <p className="max-w-sm text-center text-[14px] text-white/70">
-              {mode === "coach" ? "Saved as their account headshot when you tap Use this photo." : "Your coach reviews it. Your current photo stays until it's approved."}
+              {mode === "coach" ? "Saved as their account headshot when you tap Use this photo." : method === "guided" ? "Your headshot saves automatically when the checks pass." : "Your coach will review this photo before it replaces your current one."}
             </p>
           )}
           <div className="flex w-full max-w-sm flex-col gap-2 pb-[max(env(safe-area-inset-bottom),16px)]">
@@ -250,7 +250,7 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
           <h2 className="text-[22px] font-semibold">{result === "accepted" ? "Headshot saved" : "Sent for review"}</h2>
           <p className="max-w-sm text-[15px] text-white/70">
             {result === "accepted"
-              ? "It's on their account now."
+              ? mode === "coach" ? "It’s on their account now." : "Your account headshot is updated."
               : "Thanks! Your coach will look at it soon. Your current photo stays on your account until it's approved."}
           </p>
           <Button size="lg" className="mt-2 h-12 w-full max-w-sm rounded-full" onClick={onClose} data-headshot-finish>Done</Button>
@@ -279,7 +279,7 @@ function Intro({ onGuided, onLive, onAskCoach, helpSent, onLater }: { onGuided: 
       </p>
       <div className="mx-auto mt-auto flex w-full max-w-sm flex-col gap-2 pt-6">
         <Button size="lg" className="h-12 rounded-full" onClick={onGuided} data-headshot-agree>Agree and start</Button>
-        <Button size="lg" variant="secondary" className="h-12 rounded-full" onClick={onLive} data-headshot-simple>Take it without the checks</Button>
+        <Button size="lg" variant="secondary" className="h-12 rounded-full" onClick={onLive} data-headshot-simple>Take it without checks (requires review)</Button>
         <button type="button" onClick={onAskCoach} disabled={helpSent} className="h-11 text-[14px] font-semibold text-white/80 disabled:text-emerald-400" data-headshot-ask-coach>
           {helpSent ? "Your coach knows. They can take it with you in person." : "Ask my coach to take it with me"}
         </button>
