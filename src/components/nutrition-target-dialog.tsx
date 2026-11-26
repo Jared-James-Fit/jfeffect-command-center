@@ -40,7 +40,7 @@ import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
 import { publishNutritionPlanAtomic, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
 import { copyPlanDays, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
 import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
-import { manageScheduledNutrition, scheduledNutritionKey, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
+import { manageScheduledNutrition, scheduledNutritionKey, scheduledNutritionQuery, scheduledPlanReference, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 
@@ -282,8 +282,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const historyClient = open ? (form?.client_id || clientId || "") : "";
   const historyQ = useQuery({ ...clientPlansQuery(historyClient), enabled: !!historyClient });
   const revisionsQ = useQuery({ ...nutritionRevisionQuery(historyClient), enabled: !!historyClient });
+  const scheduledQ = useQuery(scheduledNutritionQuery(historyClient));
   const history = splitPlans(historyQ.data ?? []);
-  const references = [...history.current.filter((p) => p.id !== form?.id), ...orderPlanReferences(history.previous, revisionsQ.data ?? [])].filter((p) => p.id !== form?.id);
+  const references = [...history.current.filter((p) => p.id !== form?.id), ...orderPlanReferences(history.previous, revisionsQ.data ?? []), ...(scheduledQ.data ?? []).filter((d) => d.id !== scheduled?.id).map(scheduledPlanReference)].filter((p) => p.id !== form?.id);
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
