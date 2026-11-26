@@ -472,10 +472,11 @@ export async function loadCompetitionContext(
         (
           await sb
             .from("competition_assessments")
-            .select("internal, competition_id, competitions!inner(meet_date, results)")
+            .select("internal, competition_id, competitions!inner(meet_date, results, internal_test)")
             .eq("client_id", clientId)
             .eq("kind", "confirm")
             .neq("competition_id", competitionId)
+            .eq("competitions.internal_test", false)
             .not("competitions.results", "is", null)
             .limit(10)
         ).data ?? [],
