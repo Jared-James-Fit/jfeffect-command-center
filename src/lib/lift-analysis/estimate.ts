@@ -740,6 +740,11 @@ export type EstimateTry = {
   tracked: number;
   accepted: boolean;
   value: number | null;
+  /**
+   * The value on the motion-measured scale, for the agreement check: a blended size is a per-candidate
+   * choice, so comparing blended with motion-only values would split one bar's candidates by √ratio
+   */
+  agree?: number | null;
   why: string[];
 };
 
@@ -904,7 +909,9 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     const why = plainlyTheSet(a, opts.movement, opts.expectedReps);
     const complete = a.reps.filter((r) => r.complete).length;
     const ok = !why.length;
-    tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: ok ? a.velocity.value : null, why });
+    // speed ∝ 1 / plate height: undo the blend for the comparison between candidates
+    const agree = ok && a.velocity.value != null ? a.velocity.value * (blend ? bB / motion!.b : 1) : null;
+    tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: ok ? a.velocity.value : null, agree, why });
     const exact = opts.expectedReps != null && complete === opts.expectedReps ? 1 : 0;
     const score = (ok ? 10 : 0) + exact * 2 + a.quality.tracked + (a.units === "mm" ? Math.max(0, 1 - a.calibration.relErr * 5) : 0);
     if (ok && (!best || score > best.score)) best = { a, score };
@@ -913,7 +920,8 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
   const chosen = best as { a: LiftAnalysis; score: number } | null;
   if (!chosen) return { ok: false, why: "no_read", tried, best: (bestAny as { a: LiftAnalysis } | null)?.a ?? null };
   // two candidates that each read the set must agree, or neither is trusted (a scale off on one of them)
-  const values = tried.filter((t) => t.accepted && t.value != null).map((t) => t.value as number);
+  // compared on one scale (motion's), as before blending: a scale off on one candidate still shows
+  const values = tried.filter((t) => t.accepted && t.agree != null).map((t) => t.agree as number);
   if (values.length >= 2 && (Math.max(...values) - Math.min(...values)) / median(values) > ESTIMATE_AGREE)
     return { ok: false, why: "disagree", tried, best: chosen.a };
   const a = chosen.a;
