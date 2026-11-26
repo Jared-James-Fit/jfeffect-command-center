@@ -268,7 +268,14 @@ export const getMyAgreementState = createServerFn({ method: "GET" })
       legacy: { ...EMPTY_LEGACY },
     };
     try {
-      const clientId = await resolvePovClientId(supabase, userId, pov);
+      let clientId: string | null;
+      if (isPovRequest(userId, pov)) {
+        clientId = await resolvePovClientId(supabase, userId, pov);
+      } else {
+        const { data: own, error: ownError } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
+        if (ownError) throw new Error(ownError.message);
+        clientId = own?.id ?? null;
+      }
       if (!clientId) return { ...base, applicable: false, reason: "no_client" };
 
       const { data: client, error } = await supabase
