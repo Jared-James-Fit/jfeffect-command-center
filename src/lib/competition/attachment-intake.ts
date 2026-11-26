@@ -15,7 +15,7 @@ export const meetIntakeParams = z.object({
   attachment_number: z.number().int().min(1).max(5).describe("Number of the source attachment in the latest attached message"),
   confidence: z.enum(["high", "medium", "low"]),
   evidence: z.string().trim().min(1).max(2000).describe("Exact relevant text read from the source; omit uncertain fields"),
-}).strict();
+});
 
 export const MEET_LOGISTICS_LABELS: Record<string, string> = {
   session_label: "Session", flight: "Flight", weigh_in_at: "Weigh-ins", lifting_start: "Lifting starts",
