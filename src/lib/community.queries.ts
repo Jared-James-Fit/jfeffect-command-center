@@ -339,12 +339,13 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
 
 /** A post's Activity (views, likes, shares, reposts and who), for the person who posted it. */
 export function usePostActivity(postId: string | null) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: ["community-post-activity", postId],
-    enabled: !!postId,
+    queryKey: pov.key(["community-post-activity", postId]),
+    enabled: !!postId && pov.ready,
     staleTime: 15_000,
     queryFn: async (): Promise<PostActivity> => {
-      const { data, error } = await db.rpc("community_post_activity", { _post_id: postId });
+      const { data, error } = await pov.read("post_activity", "community_post_activity", { _post_id: postId });
       if (error) throw error;
       return data as PostActivity;
     },
@@ -355,12 +356,12 @@ export function usePostActivity(postId: string | null) {
 export type PostLiker = { author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string };
 
 /** Who liked a post (community_post_reactors: you, people you follow, then newest; the same people the post's "Liked by" names). */
-function postReactorsQuery(postId: string | null) {
+function postReactorsQuery(postId: string | null, pov: ReturnType<typeof usePovCrewRead>) {
   return {
-    queryKey: communityKeys.reactors(postId),
+    queryKey: pov.key(communityKeys.reactors(postId)),
     staleTime: 15_000,
     queryFn: async (): Promise<PostLiker[]> => {
-      const { data, error } = await db.rpc("community_post_reactors", { _post_id: postId });
+      const { data, error } = await pov.read("reactors", "community_post_reactors", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as any;
     },
@@ -368,13 +369,15 @@ function postReactorsQuery(postId: string | null) {
 }
 
 export function usePostReactors(postId: string | null) {
-  return useQuery({ ...postReactorsQuery(postId), enabled: !!postId });
+  const pov = usePovCrewRead();
+  return useQuery({ ...postReactorsQuery(postId, pov), enabled: !!postId && pov.ready });
 }
 
 /** Start loading the Likes as the finger lands, so the sheet opens with its names (a tap's click comes ~100 ms later). */
 export function usePrefetchPostReactors() {
   const qc = useQueryClient();
-  return useCallback((postId: string) => void qc.prefetchQuery(postReactorsQuery(postId)), [qc]);
+  const pov = usePovCrewRead();
+  return useCallback((postId: string) => { if (pov.ready) void qc.prefetchQuery(postReactorsQuery(postId, pov)); }, [qc, pov]);
 }
 
 /* ---- birthday posts (coach reviews, then they go out) ------------------ */
@@ -484,10 +487,17 @@ const HINTS_KEY = ["community-hints"] as const;
 
 /** The tips this account has already got. Kept on the account, so a tip doesn't come back on another device. */
 export function useHintsSeen() {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: HINTS_KEY,
+    queryKey: pov.key(HINTS_KEY),
+    enabled: pov.ready,
     staleTime: Infinity,
     queryFn: async (): Promise<string[]> => {
+      if (pov.isPov) {
+        const { data, error } = await pov.read("hints", "");
+        if (error) throw error;
+        return (data ?? []) as string[];
+      }
       const { data, error } = await db.from("community_hints_seen").select("hint");
       if (error) throw error;
       return ((data ?? []) as { hint: string }[]).map((r) => r.hint);
@@ -498,8 +508,10 @@ export function useHintsSeen() {
 /** Mark a tip as got (once; it disappears straight away). */
 export function useMarkHintSeen() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useCallback(
     (hint: string) => {
+      if (isPov) return;
       const cur = qc.getQueryData<string[]>(HINTS_KEY);
       if (cur?.includes(hint)) return;
       qc.setQueryData<string[]>(HINTS_KEY, [...(cur ?? []), hint]);
@@ -510,7 +522,7 @@ export function useMarkHintSeen() {
           if (error) console.warn("[community] couldn't save tip", error);
         });
     },
-    [qc],
+    [qc, isPov],
   );
 }
 
@@ -521,12 +533,13 @@ function setComments(qc: ReturnType<typeof useQueryClient>, postId: string, fn: 
 }
 
 export function useComments(postId: string, enabled: boolean) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: communityKeys.comments(postId),
-    enabled,
+    queryKey: pov.key(communityKeys.comments(postId)),
+    enabled: enabled && pov.ready,
     staleTime: 15_000,
     queryFn: async (): Promise<CommunityComment[]> => {
-      const { data, error } = await db.rpc("community_comments", { _post_id: postId });
+      const { data, error } = await pov.read("comments", "community_comments", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as CommunityComment[];
     },
