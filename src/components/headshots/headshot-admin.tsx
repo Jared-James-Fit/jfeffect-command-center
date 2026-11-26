@@ -76,6 +76,8 @@ function useInvalidate() {
     void qc.invalidateQueries({ queryKey: ["client-headshot"] });
     void qc.invalidateQueries({ queryKey: ["headshot-queue"] });
     void qc.invalidateQueries({ queryKey: ["client"] });
+    void qc.invalidateQueries({ queryKey: ["clients"] });
+    void qc.invalidateQueries({ queryKey: ["clients-min"] });
   };
 }
 
