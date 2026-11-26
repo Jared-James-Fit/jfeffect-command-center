@@ -182,6 +182,8 @@ export type MuscleReadRow = {
   frequency: number;
   changePct: number | null;
   exercises: Array<{ name: string; sets: number; direct: boolean }>;
+  averageRpe?: number | null;
+  targetSets?: number | null;
   /** 0–1 against the most-trained muscle's sets this period (the map's colour) */
   share: number;
   level: MuscleLevel;
@@ -226,6 +228,7 @@ export function buildMuscleRead(input: {
   coached: boolean;
   /** how a supporting muscle's set counts (half by default) */
   supportCredit?: SupportCredit;
+  plan?: import("@/lib/analytics/training-load").PlanRow[];
   /** yyyy-mm-dd: a period that runs past today is compared up to today */
   today?: string;
 }): MuscleRead {
@@ -241,7 +244,10 @@ export function buildMuscleRead(input: {
   const weeks = Math.max(1, input.weeks);
   const enoughData = !input.partial && input.weeks >= 2 && input.sets.length >= 20;
   const counted = (ss: LoadSet[]) => ss.filter((s) => s.day && s.reps > 0 && patternOf(s) !== null);
-  const periodSets = counted(input.sets);
+  const periodSets = counted(input.sets).filter(s=>s.day <= (input.today ?? input.end));
+  const planned = new Map<FineMuscle,number>();
+  const effort = new Map<FineMuscle,{sum:number;n:number}>();
+  for(const p of input.plan??[]){if(!p.day||p.day<input.start||p.day>input.end||p.day>(input.today??input.end)||!(Number(p.sets)>0)||patternOf(p)===null)continue;for(const [m,w] of muscleCredits(p))planned.set(m,(planned.get(m)??0)+Number(p.sets)*(w>=1?1:credit));}
   // the exercises behind each muscle, and the period's own counts
   const byMuscle = new Map<FineMuscle, Map<string, { sets: number; direct: boolean }>>();
   const tally = new Map<FineMuscle, { direct: number; supporting: number; days: Set<string> }>();
@@ -249,6 +255,7 @@ export function buildMuscleRead(input: {
     const credits = muscleCredits(s);
     for (const [m, w] of credits) {
       const direct = w >= MUSCLE_CREDIT.primary;
+      const rating=s.rpe??(s.rir==null?null:10-s.rir);if((direct||credit>0)&&rating!=null&&rating>=1&&rating<=10){const e=effort.get(m)??{sum:0,n:0};e.sum+=rating;e.n++;effort.set(m,e);}
       const ex = byMuscle.get(m) ?? new Map();
       const cur = ex.get(s.exercise) ?? { sets: 0, direct: false };
       cur.sets += 1;
@@ -437,8 +444,13 @@ export function buildMuscleRead(input: {
         };
       }
     }
+    const targetSets=planned.size?round1(planned.get(muscle)??0):null;
+    if(targetSets!=null){fit=targetSets===0?{status:total>0?"more":"supported",words:total>0?"Training outside the elapsed plan.":"No work planned in elapsed period.",floor:0}:{status:total<targetSets*.8?"gap":total>targetSets*1.2?"more":"supported",words:`${fmtSets(total)} completed / ${fmtSets(targetSets)} planned credited sets in elapsed period.`,floor:targetSets};}
+    const ratings=effort.get(muscle);
     return {
       muscle,
+      averageRpe:ratings?round1(ratings.sum/ratings.n):null,
+      targetSets,
       role,
       perWeek,
       directPerWeek: direct,
