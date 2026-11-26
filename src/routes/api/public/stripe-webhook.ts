@@ -361,6 +361,22 @@ export async function currentSubscription(snapshot: any, apiKey: string | null |
   }
 }
 
+/**
+ * Does this refund end the sale? Only a charge refunded in full on a one-time purchase. A partial
+ * refund (a goodwill credit, a tax correction) is recorded and nothing else changes, and a
+ * subscription sale ends through its own cancellation (customer.subscription.deleted), never
+ * because one of its monthly charges was refunded.
+ */
+export function refundEndsSale(
+  charge: { refunded?: boolean | null; amount?: number | null; amount_refunded?: number | null },
+  purchase: { is_recurring?: boolean | null; stripe_subscription_id?: string | null },
+): boolean {
+  const amount = Number(charge?.amount ?? 0);
+  const refunded = Number(charge?.amount_refunded ?? 0);
+  const full = charge?.refunded === true || (amount > 0 && refunded >= amount);
+  return full && !purchase?.is_recurring && !purchase?.stripe_subscription_id;
+}
+
 /** Is this invoice paid or void by now (a late payment_failed after a successful retry)? */
 export async function invoiceSettled(invoice: any, apiKey: string | null | undefined): Promise<boolean> {
   if (!invoice?.id || !apiKey) return false;
@@ -1485,13 +1501,20 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
               if (await reverseCreditsForCharge(obj)) break;
               const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.payment_intent });
               if (purchase) {
-                await supabase.from("purchase_records").update({
-                  payment_status: "Refunded",
-                  // Fix 1: revoke access on refund
-                  service_status: "Cancelled",
-                  last_payment_update_source: "stripe_webhook",
-                  last_payment_update_at: now,
-                }).eq("id", purchase.id);
+                const endsSale = refundEndsSale(obj, purchase);
+                if (endsSale) {
+                  await supabase.from("purchase_records").update({
+                    payment_status: "Refunded",
+                    // A one-time purchase refunded in full: access ends with it.
+                    service_status: "Cancelled",
+                    last_payment_update_source: "stripe_webhook",
+                    last_payment_update_at: now,
+                  }).eq("id", purchase.id);
+                } else {
+                  console.info("[stripe-webhook] refund recorded; the sale stays as it is", {
+                    charge: obj.id, purchaseId: purchase.id, amount: obj.amount, refunded: obj.amount_refunded,
+                  });
+                }
 
                 // Persist each Stripe refund as its own transaction. A charge
                 // can emit charge.refunded more than once as partial refunds
@@ -1535,7 +1558,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     });
                   }
                 }
-                await revokeMemberFromPurchase(supabase, purchase);
+                if (endsSale) await revokeMemberFromPurchase(supabase, purchase);
               } else {
                 await flagUnlinked(
                   supabase,

@@ -10,8 +10,19 @@ export async function pingClientActivity(route?: string | null): Promise<void> {
   }
 }
 
+// One app open fires INITIAL_SESSION, SIGNED_IN and the getSession() restore together; one
+// call per login a minute is enough (the database also records a sign-in at most every 2 minutes).
+const SIGN_IN_MARK_GAP_MS = 60_000;
+const lastSignInMark = new Map<string, number>();
+
 /** Record a successful sign-in / session restore for the authenticated client. */
-export async function markClientSignedIn(): Promise<void> {
+export async function markClientSignedIn(uid?: string | null): Promise<void> {
+  if (uid) {
+    const now = Date.now();
+    const last = lastSignInMark.get(uid);
+    if (last != null && now - last < SIGN_IN_MARK_GAP_MS) return;
+    lastSignInMark.set(uid, now);
+  }
   try {
     await supabase.rpc("mark_client_signed_in");
   } catch {

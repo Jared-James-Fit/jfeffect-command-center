@@ -32,6 +32,7 @@ import { CompetitionsCard } from "@/components/competition/competitions-card";
 import { PainWatchCard } from "@/components/pain/pain-watch-card";
 import { RoadmapBoardCard } from "@/components/nutrition-roadmap/roadmap-board-card";
 import { CheckinsToReviewCard, useReviewQueue } from "@/components/forms/checkins-to-review-card";
+import { HeadshotReviewCard } from "@/components/headshots/headshot-admin";
 import { AutopilotBoardCard, AutopilotBoardPage, AUTOPILOT_LAYER } from "@/components/autopilot/autopilot-board";
 import { useFullScreenLayer } from "@/components/full-screen-page";
 
@@ -295,6 +296,11 @@ function AdminDashboard() {
         {/* ---------------- CHECK-INS: what clients sent that's waiting on a review (hidden when none) ---------------- */}
         <SectionErrorBoundary label="Check-ins to review">
           <CheckinsToReviewCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- ACCOUNT HEADSHOTS: new ones waiting on approval, approve inline (hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Account headshots">
+          <HeadshotReviewCard />
         </SectionErrorBoundary>
 
         {/* ---------------- COACHING UPDATES: the week's autopilot assessments, exceptions first (hidden when none) ---------------- */}

@@ -294,7 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (sess && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
-        void markClientSignedIn();
+        void markClientSignedIn(sess.user?.id);
       }
       // Only invalidate caches on a real identity change.
       if (identityChanged && (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED")) {
@@ -327,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // revalidate in the background without blocking the dashboard.
         setLoading(false);
       }
-      void markClientSignedIn();
+      void markClientSignedIn(restoredUid);
     }).catch(() => {
       // A transient getSession exception on PWA resume should try the persisted
       // refresh session once before exposing the Login screen.

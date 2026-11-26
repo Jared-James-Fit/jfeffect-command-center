@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -191,6 +192,10 @@ function DocumentDetail({ documentId }: { documentId: string }) {
     | null
   >(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  // Publishing asks for the review in the dialog itself (an unticked box), never through a switch
+  // that had to be saved first: the old Publish read the saved draft, so turning "Still needs
+  // professional legal review" off did nothing until Save draft, and nothing on a phone said so.
+  const [reviewed, setReviewed] = useState(false);
 
   const [form, setForm] = useState<any>(null);
   const current = form ?? editing ?? {
@@ -206,21 +211,23 @@ function DocumentDetail({ documentId }: { documentId: string }) {
   };
   const set = (k: string, v: any) => setForm({ ...(form ?? editing ?? current), [k]: v });
 
+  const dirty = form !== null;
+  const draftPayload = () => ({
+    id: editing?.id,
+    document_id: documentId,
+    title: current.title,
+    summary: current.summary,
+    body: current.body,
+    signature_method: current.signature_method,
+    requires_reacceptance: !!current.requires_reacceptance,
+    reacceptance_audience: current.reacceptance_audience ?? "all_clients",
+    effective_date: current.effective_date ?? null,
+    needs_legal_review: !!current.needs_legal_review,
+    legal_review_note: current.legal_review_note ?? null,
+  });
   const save = async () => {
     try {
-      await saveFn({ data: {
-        id: editing?.id,
-        document_id: documentId,
-        title: current.title,
-        summary: current.summary,
-        body: current.body,
-        signature_method: current.signature_method,
-        requires_reacceptance: !!current.requires_reacceptance,
-        reacceptance_audience: current.reacceptance_audience ?? "all_clients",
-        effective_date: current.effective_date ?? null,
-        needs_legal_review: !!current.needs_legal_review,
-        legal_review_note: current.legal_review_note ?? null,
-      }});
+      await saveFn({ data: draftPayload() });
       toast.success("Draft saved.");
       qc.invalidateQueries({ queryKey: ["legal-versions", documentId] });
       qc.invalidateQueries({ queryKey: ["legal-admin-docs"] });
@@ -228,7 +235,10 @@ function DocumentDetail({ documentId }: { documentId: string }) {
     } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
   };
 
-  const publish = (versionId: string) => setConfirmState({ kind: "publish", versionId });
+  const publish = (versionId: string) => {
+    setReviewed(false);
+    setConfirmState({ kind: "publish", versionId });
+  };
   const archive = (versionId: string) => setConfirmState({ kind: "archive", versionId });
 
   const runConfirm = async () => {
@@ -236,6 +246,12 @@ function DocumentDetail({ documentId }: { documentId: string }) {
     setConfirmBusy(true);
     try {
       if (confirmState.kind === "publish") {
+        if (!reviewed) return;
+        // What's on screen is what's published: unsaved edits go into the draft first.
+        if (dirty && editing?.id === confirmState.versionId) {
+          await saveFn({ data: { ...draftPayload(), needs_legal_review: false } });
+          setForm(null);
+        }
         await publishFn({ data: { versionId: confirmState.versionId, confirmLegalReview: true } });
         toast.success("Published.");
       } else {
@@ -323,11 +339,10 @@ function DocumentDetail({ documentId }: { documentId: string }) {
             </SheetContent>
           </Sheet>
           <Button onClick={save}>Save draft</Button>
-          {editing && !editing.needs_legal_review && (
-            <Button onClick={() => publish(editing.id)} className="bg-emerald-600 hover:bg-emerald-700">Publish</Button>
-          )}
-          {editing && editing.needs_legal_review && (
-            <Button disabled title="Turn off 'Still needs professional legal review' once it has been reviewed.">Publish</Button>
+          {editing && (
+            <Button onClick={() => publish(editing.id)} className="bg-emerald-600 hover:bg-emerald-700" data-legal-publish>
+              Publish v{editing.version_number}
+            </Button>
           )}
         </div>
       </Card>
@@ -352,7 +367,7 @@ function DocumentDetail({ documentId }: { documentId: string }) {
               </div>
               <div className="flex gap-2">
                 <AcceptancesSheet versionId={v.id} versionLabel={`v${v.version_number}`} />
-                {v.status === "published" && (
+                {(v.status === "published" || (v.status === "draft" && v.id !== editing?.id)) && (
                   <Button size="sm" variant="outline" onClick={() => archive(v.id)}>Archive</Button>
                 )}
               </div>
@@ -371,14 +386,22 @@ function DocumentDetail({ documentId }: { documentId: string }) {
             </AlertDialogTitle>
             <AlertDialogDescription className="whitespace-pre-line">
               {confirmState?.kind === "publish"
-                ? "Publishing makes this version legally effective.\n\nConfirm that the wording has been reviewed by a qualified attorney for the jurisdictions where you operate. The previously published version (if any) will be replaced and historical acceptance records will continue to point to their original accepted version."
+                ? `Publishing makes this version the one in effect. The version published now (if any) is replaced, and acceptance records keep pointing at the version each person accepted.${
+                    current.requires_reacceptance ? "\n\nEveryone it applies to will be asked to accept it again." : "\n\nNobody is asked to accept it again."
+                  }${dirty ? "\n\nYour unsaved changes are saved into this version first." : ""}`
                 : "Archive this version? Historical acceptance evidence is preserved."}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {confirmState?.kind === "publish" && (
+            <label className="flex items-start gap-3 rounded-lg border p-3 text-sm" data-legal-reviewed>
+              <Checkbox checked={reviewed} onCheckedChange={(v) => setReviewed(v === true)} className="mt-0.5" />
+              <span>I've reviewed this wording (with a lawyer where it needs one) and want it in effect now.</span>
+            </label>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={confirmBusy}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={confirmBusy}
+              disabled={confirmBusy || (confirmState?.kind === "publish" && !reviewed)}
               onClick={(e) => { e.preventDefault(); runConfirm(); }}
               className={confirmState?.kind === "publish" ? "bg-emerald-600 hover:bg-emerald-700" : undefined}
             >

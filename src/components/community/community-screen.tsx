@@ -34,8 +34,10 @@ import { openAppMore } from "@/lib/shell-events";
 import { bubbleFold, ease, FIRST_POST_RADIUS, FIRST_UNDER_MIN, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
 import { rankingsFromHash } from "@/lib/rankings-hash";
 import { manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
-import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import { caughtUpAt, inFeed, inFollowingFeed, storiesNeedMore, uniquePosts, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { cachedListPost, markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import { postOpenFromHash, slideForExercise, toPostOpen, withoutPostHash, type PostOpen } from "@/lib/post-open";
+import { rememberCarouselPlace } from "@/lib/carousel-places";
+import { caughtUpAt, inFeed, inFollowingFeed, isAutoPost, postSlides, storiesNeedMore, uniquePosts, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
@@ -49,6 +51,7 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 import { LeagueWeekScreen } from "@/components/community/league-week-card";
 import { useLeagueWeek, useLeagueWeekSeen } from "@/lib/league-week.queries";
 import { spotlightReady } from "@/lib/league-week";
+import { CrewPhotoReminderScreen, crewPhotoShownThisSession, useCrewPhotoReminder } from "@/components/community/crew-photo-reminder";
 import { ownAudience } from "@/lib/rankings-audience";
 import { useRankingsAudience } from "@/lib/use-rankings-audience";
 import { useServiceTier } from "@/lib/service-tier";
@@ -62,13 +65,20 @@ import { useServiceTier } from "@/lib/service-tier";
  */
 type Tab = "feed" | "rankings" | "you" | "members" | "activity" | "manage";
 /** A tab, or someone else's profile opened from one. */
-type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
+type PageScope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
+/**
+ * One post on its own screen, exactly as the feed shows it (Nov 26 2026): from
+ * Activity, a push, the bell, a link, a story's View post, a profile's grid or
+ * the coach's Manage. The page it was opened from stays mounted under it
+ * (hidden), and ‹ back lands on it where it was (`y`).
+ */
+type Scope = PageScope | { kind: "post"; open: PostOpen; back: PageScope; y: number };
 const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", you: "You", members: "Find athletes", activity: "Activity", manage: "Manage" };
 /** Pages opened from another one, and where their back arrow goes. */
 /** (Find athletes goes back to wherever it was opened from: the feed, Activity, a tab.) */
 const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed", manage: "feed" };
 
-/** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
+/** `#post=<id>`: the finance login's card feed opens a post's page straight away (everyone else: postOpenFromHash). */
 function postFromHash(): string | null {
   if (typeof window === "undefined") return null;
   const m = window.location.hash.match(/post=([0-9a-f-]{36})/i);
@@ -166,6 +176,12 @@ export function CommunityScreen({
   // cleanup, so it runs before the cards' own cleanups take them off screen
   useLayoutEffect(() => () => attentionExit(), []);
   const [scope, setScope] = useState<Scope>(() => {
+    const base = initialPageScope();
+    // a push, the bell or a link (#post=…): straight onto the post's own screen, the feed under it for ‹ back
+    const open = !hideTabs && typeof window !== "undefined" ? postOpenFromHash(window.location.hash) : null;
+    return open ? { kind: "post", open, back: base, y: 0 } : base;
+  });
+  function initialPageScope(): PageScope {
     const person = personFromHash();
     if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "feed" };
     // the finance login's look at the crew is just the feed
@@ -176,8 +192,11 @@ export function CommunityScreen({
     if (rankingsFromHash()) return { kind: "rankings" };
     if (youFromHash() && !previewOnly) return { kind: "you" };
     return { kind: "feed" };
-  });
-  const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
+  }
+  // what's under a post's screen (or on screen, with none): the page ‹ back from the post lands on
+  const view: PageScope = scope.kind === "post" ? scope.back : scope;
+  const postOpen = scope.kind === "post" ? scope.open : null;
+  const tab: Tab = view.kind === "author" ? view.from : view.kind;
   // Find athletes: where its back arrow goes, and whether the search box takes the keyboard straight away
   const [discoverBack, setDiscoverBack] = useState<Tab>("feed");
   const [discoverFocus, setDiscoverFocus] = useState(false);
@@ -195,7 +214,8 @@ export function CommunityScreen({
   const [reel, setReel] = useState<ReelStart | null>(null);
   const reelUsed = useOpenedOnce(reel !== null);
   const openReel = useCallback((post: CommunityPost, path: string) => setReel({ postId: post.id, path }), []);
-  const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
+  // the old workout page: only the finance login's feed of cards (no bar of its own) still opens it
+  const [detailId, setDetailId] = useState<string | null>(() => (hideTabs ? postFromHash() : null));
   const detailUsed = useOpenedOnce(detailId !== null);
   useEffect(() => preloadCrewViews(), []);
   // where the post's page opens: on the workout itself from the feed's View workout, else at its top
@@ -269,17 +289,14 @@ export function CommunityScreen({
       ? (feedPosts.find((p) => p.kind !== "note" && !!p.stats)?.id ?? null)
       : null;
   const onRecapSeen = useCallback(() => markHint(OPEN_HINT), [markHint]);
-  const openPost = useCallback((post: CommunityPost) => {
-    if (post.kind !== "note") markHint(OPEN_HINT);
-    setDetailAt(null);
-    setDetailId(post.id);
-  }, [markHint]);
-  // a feed post's View workout: the page opens on the workout, past the picture they were just watching
+  // the finance login's feed of cards: a post's View workout opens its page on the workout itself
   const openWorkout = useCallback((post: CommunityPost) => {
-    openPost(post);
+    if (post.kind !== "note") markHint(OPEN_HINT);
+    setDetailId(post.id);
     setDetailAt({ id: post.id, at: "workout" });
-  }, [openPost]);
-  const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? feedPosts : []);
+  }, [markHint]);
+  // (the feed's own thumbnails, kept while a post's screen is over it so going back paints at once)
+  const { data: urls } = usePostMediaUrls(view.kind === "feed" ? feedPosts : []);
 
   // Seeing the feed clears the "new posts" badge (server-side, every device). Only the
   // feed: opening on Rankings mustn't clear a count you haven't looked at.
@@ -312,7 +329,7 @@ export function CommunityScreen({
     const onRetap = (e: Event) => {
       if ((e as CustomEvent).detail !== window.location.pathname) return;
       // out of someone's profile first, out of yours to the feed; on the feed, back to the top and fresh
-      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" || sc.kind === "activity" || sc.kind === "manage" ? { kind: "feed" } : sc));
+      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" || sc.kind === "activity" || sc.kind === "manage" || sc.kind === "post" ? { kind: "feed" } : sc));
       if (scopeRef.current.kind === "feed") showNew.current();
     };
     window.addEventListener("nav-retap", onRetap);
@@ -335,10 +352,15 @@ export function CommunityScreen({
   // null: also apply the hash once on arrival (the router's, not window's).
   const seenHash = useRef<string | null>(null);
   const coachPage = !!coach;
+  // (showPost is defined further down: the hash reads it through here)
+  const showPostRef = useRef<(target: string | PostOpen) => void>(() => {});
   useEffect(() => {
     if (hideTabs || routeHash === seenHash.current) return;
     seenHash.current = routeHash;
-    if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
+    const open = postOpenFromHash(`#${routeHash}`);
+    // a push or the bell while Crew is up (#post=…): the post's own screen, over what's here
+    if (open) showPostRef.current(open);
+    else if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
     // the coach's Manage, any tab (a push, an old link, the Posts tab's own pages)
     else if (coachPage && manageTabFromHash(`#${routeHash}`)) setScope({ kind: "manage" });
     else if (youFromHash(`#${routeHash}`) && !previewOnly) setScope({ kind: "you" });
@@ -354,6 +376,10 @@ export function CommunityScreen({
   // floating over its top (it stays put) and the tab bar over its bottom; screens are the
   // window's measured height (--feed-vh). The coach's Crew page is the same feed (Nov 14 2026).
   const paging = ownBar && scope.kind === "feed";
+  // a post on its own screen is one of those screens (the same window, snapping, dark, Crew's bar over it)
+  const pagedLook = paging || (ownBar && scope.kind === "post");
+  // the feed as screens, also while a post's screen covers it (kept as it is, so ‹ back lands on the same post)
+  const feedPaged = ownBar && view.kind === "feed";
 
   // Last week in the League (Nov 19 2026): once a week, a screen of the feed right after the first post
   // (Instagram's spot), from Monday 6 AM on the person's own clock until they've seen it. Decided once a
@@ -377,15 +403,26 @@ export function CommunityScreen({
     const unseen = previewOnly || weekSeen.data === false;
     setWeekSlot(unseen && window.scrollY < window.innerHeight * 0.5 ? "show" : "skip");
   }, [weekSlot, weekOn, scope.kind, weekQ.isPending, weekQ.isError, week, previewOnly, weekSeen.isPending, weekSeen.data]);
+  // "Make your Crew profile yours!" (crew-photo-reminder.tsx): someone with no Crew picture, at the admin's
+  // moments, once a session at most, decided while still on the first screen and never on a League week
+  const photoOn = ownBar && !coach && !previewOnly && scope.kind === "feed";
+  const photoQ = useCrewPhotoReminder(photoOn);
+  const [photoSlot, setPhotoSlot] = useState<"wait" | "show" | "skip">("wait");
+  useEffect(() => {
+    if (photoSlot !== "wait" || !photoOn || weekSlot === "wait") return;
+    if (weekSlot === "show" || crewPhotoShownThisSession()) return setPhotoSlot("skip");
+    if (photoQ.isPending && !photoQ.isError) return;
+    setPhotoSlot(photoQ.data?.show && window.scrollY < window.innerHeight * 0.5 ? "show" : "skip");
+  }, [photoSlot, photoOn, weekSlot, photoQ.isPending, photoQ.isError, photoQ.data]);
   useLayoutEffect(() => {
-    if (!paging) return;
+    if (!pagedLook) return;
     setFeedPaging(true);
     const unwatch = watchFeedViewport();
     return () => {
       unwatch();
       setFeedPaging(false);
     };
-  }, [paging]);
+  }, [pagedLook]);
   const barHidden = useBarHidden(ownBar && scope.kind === "feed" && !paging);
   // on the paged feed a post's words and comments open in one sheet (Reels'): "… more" at the caption, 💬 at the comments
   const [sheet, setSheet] = useState<{ post: CommunityPost; at: PostSheetAt } | null>(null);
@@ -393,11 +430,60 @@ export function CommunityScreen({
   const openCommentsSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "comments" }), []);
   // a workout's every set, from its recap: the same sheet on its Workout tab, over the post (it stays on the slide it was on)
   const openWorkoutSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "workout" }), []);
+  // a post's screen asking for more of the post (a lock in's "Locked in", a Pulse's View workout): the same sheet, never another page
+  const openMore = useCallback((p: CommunityPost) => setSheet({ post: p, at: p.stats ? "workout" : "caption" }), []);
   useEffect(() => {
-    if (!paging) setSheet(null);
-  }, [paging]);
+    if (!pagedLook) setSheet(null);
+  }, [pagedLook]);
+  // a post on its own screen, as its screen has it now (read on its own: community_post)
+  const [screenPost, setScreenPost] = useState<CommunityPost | null>(null);
   // the post as the feed has it now (a like or a comment count moves with it)
-  const sheetPost = sheet ? feedPosts.find((p) => p.id === sheet.post.id) ?? sheet.post : null;
+  const sheetPost = sheet ? feedPosts.find((p) => p.id === sheet.post.id) ?? (screenPost?.id === sheet.post.id ? screenPost : sheet.post) : null;
+
+  /**
+   * Open a post on its own screen, exactly as the feed shows it (post-open.ts):
+   * on the slide it's about, its comments up when asked. Over whatever page is
+   * up, which ‹ back returns to where it was; another post opened from it takes
+   * its place (‹ back still goes to that page). The finance login's feed of
+   * cards has no screens: its post's page.
+   */
+  const showPost = useCallback(
+    (target: string | PostOpen) => {
+      const open = toPostOpen(target);
+      if (!open) return;
+      if (hideTabs) return setDetailId(open.id);
+      const sc = scopeRef.current;
+      // already on screen, opened the same way (a link's hash read again on arrival): leave it as it is
+      if (sc.kind === "post" && sc.open.id === open.id && sc.open.exercise === open.exercise && sc.open.sheet === open.sheet) return;
+      if (sc.kind === "feed") feedY.current = window.scrollY;
+      setSheet(null);
+      setCommentsFor(null);
+      setReel(null);
+      setScope((cur) => (cur.kind === "post" ? { ...cur, open } : { kind: "post", open, back: cur, y: window.scrollY }));
+    },
+    [hideTabs],
+  );
+  showPostRef.current = showPost;
+  // a profile's grid: the post on its own screen (the profile under it)
+  const openPost = useCallback(
+    (post: CommunityPost) => {
+      if (post.kind !== "note") markHint(OPEN_HINT);
+      showPost(post.id);
+    },
+    [markHint, showPost],
+  );
+  /** ‹ back from a post's screen: the page it was opened from, where it was. */
+  const leavePost = () => {
+    const sc = scopeRef.current;
+    if (sc.kind !== "post") return;
+    restoreY.current = sc.y;
+    setSheet(null);
+    setScope(sc.back);
+    // the coach's Needs you: a comment answered from the post is off its list when it comes back
+    if (sc.back.kind === "manage") void qc.invalidateQueries({ queryKey: ["community-pulse"] });
+    // a push or a link's #post=… is spent: a reload lands on the page, not the post again
+    if (/(?:^#|&)post=/.test(window.location.hash)) history.replaceState(null, "", window.location.pathname + window.location.search + withoutPostHash(window.location.hash));
+  };
   // your profile is a page with a way back to the feed (on the coach's page, and now on Crew's bar too)
   const youAsPage = scope.kind === "you";
 
@@ -416,10 +502,10 @@ export function CommunityScreen({
     };
   }, []);
   useEffect(() => {
-    if (scope.kind !== "feed" || restoreY.current == null) return;
+    if (scope.kind === "post" || restoreY.current == null) return;
     const y = restoreY.current;
     restoreY.current = null;
-    // after the feed is back on the page (it comes straight from the cache)
+    // after the page is back (the feed from the cache; a page a post's screen covered was only hidden)
     requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
   }, [scope.kind]);
   /** Open a page from the feed (or anywhere): at its top. */
@@ -456,7 +542,7 @@ export function CommunityScreen({
   };
 
   // (Rankings keeps its own sideways swipe between boards, so no swipe-back there.)
-  const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
+  const canSwipeBack = scope.kind === "post" || inProfile || youAsPage || !!parent || !!backTo;
   const leaveAuthor = () => {
     if (youAsPage) return goBack("feed");
     if (scope.kind !== "author") return;
@@ -464,6 +550,7 @@ export function CommunityScreen({
     if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
   };
   const swipeBack = () => {
+    if (scopeRef.current.kind === "post") return leavePost();
     if (inProfile || youAsPage) return leaveAuthor();
     if (parent) return goBack(parent);
     if (!backTo) return;
@@ -475,14 +562,15 @@ export function CommunityScreen({
   const feedReady = ranked.isSuccess || feedPosts.length > 0;
   useEffect(() => {
     // after the double-tap tip (never both at once), once the feed is up
-    if (!canSwipeBack || !swipeVisit || swipeTipShownThisVisit || !feedReady || hintId) return;
+    // (never over a post's own screen: nothing covers a post's words)
+    if (!canSwipeBack || scope.kind === "post" || !swipeVisit || swipeTipShownThisVisit || !feedReady || hintId) return;
     const t = window.setTimeout(() => {
       swipeTipShownThisVisit = true;
       markHint(swipeVisit);
       setSwipeTip(true);
     }, 900);
     return () => window.clearTimeout(t);
-  }, [canSwipeBack, swipeVisit, feedReady, hintId, markHint]);
+  }, [canSwipeBack, scope.kind, swipeVisit, feedReady, hintId, markHint]);
   useEffect(() => {
     if (!swipeTip) return;
     const t = window.setTimeout(() => setSwipeTip(false), 12_000);
@@ -503,15 +591,15 @@ export function CommunityScreen({
       requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
       setFlash(jumpTo);
       window.setTimeout(() => setFlash(null), 1800);
-    } else setDetailId(jumpTo);
+    } else showPost(jumpTo);
     setJumpTo(null);
-  }, [jumpTo, ranked.isSuccess, feedPosts.length]);
+  }, [jumpTo, ranked.isSuccess, feedPosts.length, showPost]);
 
   // "See the post" on a shared comment opens the post it came from.
   useEffect(() => {
+    // an id, or where to open it (the slide a notice is about, its comments up)
     const open = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
-      if (typeof id === "string" && id) setDetailId(id);
+      showPostRef.current((e as CustomEvent<string | PostOpen>).detail);
     };
     window.addEventListener(OPEN_POST_EVENT, open);
     return () => window.removeEventListener(OPEN_POST_EVENT, open);
@@ -527,7 +615,8 @@ export function CommunityScreen({
       rememberFeedPlace();
       setDetailId(null);
       setScope((sc) => {
-        const from = sc.kind === "author" ? sc.from : sc.kind;
+        const under = sc.kind === "post" ? sc.back : sc;
+        const from = under.kind === "author" ? under.from : under.kind;
         return meRef.current.includes(id) ? { kind: "you" } : { kind: "author", author: { user_id: id, name: "", avatar_url: null, is_coach: false }, from };
       });
       window.scrollTo({ top: 0 });
@@ -636,7 +725,10 @@ export function CommunityScreen({
   const swipeToCreate = useSwipeToCreate({ enabled: paging && canShare && !coach && !previewOnly, onOpen: () => cameraRef.current?.() });
 
   // Crew's one bar, per page. Find athletes keeps its own search field at the top instead.
-  const crewBar = !ownBar ? null : scope.kind === "feed" || scope.kind === "rankings" ? (
+  const crewBar = !ownBar ? null : scope.kind === "post" ? (
+    // a post on its own screen: ‹ back over its top (TikTok's), see-through like the feed's bar; everything else is the post's own
+    <CrewBar label="Post" overlay left={<BarBack label={`Back to ${TAB_LABEL[tab]}`} onClick={leavePost} />} />
+  ) : scope.kind === "feed" || scope.kind === "rankings" ? (
     <CrewBar
       label="Crew"
       hidden={barHidden}
@@ -694,7 +786,7 @@ export function CommunityScreen({
         !previewOnly && (
           <>
             {/* Activity: who liked, commented, followed; what's new rises out of it in a bubble, then a dot until it's read */}
-            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !commentsFor && !reel && !sheet} />
+            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !postOpen && !commentsFor && !reel && !sheet} />
             {/* you: your own profile (posts, followers, edit), with your photo */}
             <BarButton label="Your profile" onClick={openMe} data-my-profile>
               <MyTabPhoto size={27} />
@@ -751,21 +843,35 @@ export function CommunityScreen({
 
   return (
     // every photo under Crew rings when that person has a story up, and plays it on a tap (story-ring.tsx)
-    <StoryHostProvider posts={posts} unit={unit} viewerIsStaff={viewerIsStaff} onOpenPost={(id) => setDetailId(id)} onJumpTo={setJumpTo} onOpenPerson={openAuthor}>
+    <StoryHostProvider posts={posts} unit={unit} viewerIsStaff={viewerIsStaff} onOpenPost={showPost} onJumpTo={setJumpTo} onOpenPerson={openAuthor}>
     {crewBar}
     {swipeToCreate}
     {/* Find athletes has no bar: its search field starts right under the status bar */}
     {ownBar && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "var(--app-safe-top)" }} />}
     {/* a staff login that's also a client: its My Workouts / Staff switch, under Crew's bar instead of the shell's */}
     {ownBar && <DualAccountSwitcher />}
-    <div
-      ref={rootRef}
-      className={cn(
-        "mx-auto w-full max-w-[560px] [touch-action:pan-x_pan-y]",
-        paging ? "" : "space-y-3 px-3 pb-12 sm:px-4",
-        paging ? "" : ownBar ? "pt-1.5" : "pt-3",
+    <div ref={rootRef} className="mx-auto w-full max-w-[560px] [touch-action:pan-x_pan-y]">
+      {/* a post on its own screen, exactly as the feed shows it; the page it came from stays mounted under it, hidden */}
+      {postOpen && (
+        <PostScreen
+          key={`${postOpen.id}|${postOpen.exercise ?? ""}|${postOpen.sheet ?? ""}`}
+          open={postOpen}
+          unit={unit}
+          viewerIsStaff={viewerIsStaff}
+          sheetOpen={sheet?.post.id === postOpen.id}
+          onPost={setScreenPost}
+          onOpen={openMore}
+          onOpenComments={openCommentsSheet}
+          onOpenCaption={openCaptionSheet}
+          onOpenWorkout={openWorkoutSheet}
+          onOpenAuthor={openAuthor}
+        />
       )}
-    >
+      <div
+        hidden={!!postOpen}
+        className={cn(feedPaged ? "" : "space-y-3 px-3 pb-12 sm:px-4", feedPaged ? "" : ownBar ? "pt-1.5" : "pt-3")}
+        data-crew-page
+      >
       {ownBar ? null : inProfile || youAsPage ? (
         <Button
           type="button"
@@ -777,31 +883,31 @@ export function CommunityScreen({
         </Button>
       ) : null}
 
-      {scope.kind === "manage" && coach ? (
+      {view.kind === "manage" && coach ? (
         coach.manage
-      ) : scope.kind === "rankings" ? (
+      ) : view.kind === "rankings" ? (
         // a tab, not a page: it eases in from the side the tab sits on
         <div className="animate-in fade-in-0 slide-in-from-right-3 duration-200 motion-reduce:animate-none" data-crew-tab-body="rankings">
           <Suspense fallback={<RankingsFallback />}>
             <RankingsHub />
           </Suspense>
         </div>
-      ) : scope.kind === "activity" ? (
+      ) : view.kind === "activity" ? (
         <Suspense fallback={<RankingsFallback />}>
           <CrewActivity
             header={!ownBar}
             onBack={() => goBack("feed")}
-            onOpenPost={(id) => setDetailId(id)}
+            onOpenPost={showPost}
             onOpenPerson={openAuthor}
             onFindPeople={() => openDiscover("activity", true)}
           />
         </Suspense>
-      ) : scope.kind === "members" ? (
+      ) : view.kind === "members" ? (
         <DiscoverPage onBack={() => goBack(discoverBack)} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => go({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
-      ) : scope.kind === "you" && user?.id ? (
+      ) : view.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
-      ) : scope.kind === "author" ? (
-        <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
+      ) : view.kind === "author" ? (
+        <ProfileView userId={view.author.user_id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : ranked.isLoading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
@@ -823,7 +929,7 @@ export function CommunityScreen({
           body={canShare ? "Share a session from this month. Your crew sees the work, your coach sees it too." : "When clients share a workout, it shows up here."}
           action={canShare ? <ShareWorkoutButton unit={unit} label="Share your last workout" variant="block" previewOnly={previewOnly} /> : null}
         />
-      ) : paging ? (
+      ) : feedPaged ? (
         <FeedPager
           firstScreen={firstScreen}
           rail={
@@ -831,7 +937,7 @@ export function CommunityScreen({
               posts={railPosts}
               unit={unit}
               viewerIsStaff={viewerIsStaff}
-              onOpenPost={(id) => setDetailId(id)}
+              onOpenPost={showPost}
               onOpenPerson={openAuthor}
               onJumpTo={setJumpTo}
               addStory={canStory ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
@@ -869,7 +975,7 @@ export function CommunityScreen({
                   thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
                   unit={unit}
                   viewerIsStaff={viewerIsStaff}
-                  onOpen={openWorkout}
+                  onOpen={openMore}
                   onOpenComments={openCommentsSheet}
                   onOpenCaption={openCaptionSheet}
                   onOpenWorkout={openWorkoutSheet}
@@ -888,8 +994,11 @@ export function CommunityScreen({
             // last week in the League takes the spot right after the first post, once a week (then people to follow do)
             const weekCard = i === 0 && !following && weekSlot === "show" && week;
             if (weekCard) out.push({ key: "league-week", node: <LeagueWeekScreen week={week} onRankings={openRankings} /> });
+            // no Crew picture yet: the occasional, dismissible nudge takes that spot on the visits it shows
+            const photoCard = i === 0 && !following && !weekCard && photoSlot === "show";
+            if (photoCard) out.push({ key: "crew-photo", node: <CrewPhotoReminderScreen /> });
             // people to follow right after the first post (Instagram's spot), a screen of their own (never the coach's)
-            if (!previewOnly && !following && !coach && i === 0 && !weekCard)
+            if (!previewOnly && !following && !coach && i === 0 && !weekCard && !photoCard)
               out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
             if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
               out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });
@@ -931,7 +1040,7 @@ export function CommunityScreen({
             posts={railPosts}
             unit={unit}
             viewerIsStaff={viewerIsStaff}
-            onOpenPost={(id) => setDetailId(id)}
+            onOpenPost={showPost}
             onOpenPerson={openAuthor}
             onJumpTo={setJumpTo}
             addStory={canStory ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
@@ -1001,13 +1110,14 @@ export function CommunityScreen({
           )}
         </>
       )}
+      </div>
       {reelUsed && (
         <Suspense fallback={null}>
           <ReelsViewer start={reel} posts={feedPosts} viewerIsStaff={viewerIsStaff} onClose={() => setReel(null)} onOpenComments={setCommentsFor} onOpenAuthor={openAuthor} />
         </Suspense>
       )}
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
-      {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} unit={unit} />}
+      {pagedLook && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} unit={unit} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
       {/* a warning from the team, shown once (members only) */}
@@ -1343,6 +1453,106 @@ function useStoriesMotion(
 
 /** A feed moment's screen (all caught up, people to follow…): clear of Crew's bar above and the tab bar below. */
 const SCREEN_ROOM = { paddingTop: "var(--feed-bar-room)", paddingBottom: "var(--bottom-nav-clearance)" } as const;
+
+/**
+ * One post on its own screen, exactly as the feed shows it (Nov 26 2026: Activity's "liked your Belt Squat PR"
+ * opened the old workout page, a different layout of the same post). The feed's own screen (PostRow
+ * layout="page": the post filling it, its slides, ❤️ 💬 🔁 ✈️ 🔖 down the right, its sheet for the words,
+ * comments and every set), on the slide it was opened for (post-open.ts: that set's clip) with its comments up
+ * when asked. It paints at once from a list already on the phone while the post itself is read.
+ */
+function PostScreen({
+  open,
+  unit,
+  viewerIsStaff,
+  sheetOpen,
+  onPost,
+  onOpen,
+  onOpenComments,
+  onOpenCaption,
+  onOpenWorkout,
+  onOpenAuthor,
+}: {
+  open: PostOpen;
+  unit: "kg" | "lb";
+  viewerIsStaff: boolean;
+  sheetOpen: boolean;
+  /** The post as its screen has it now (the sheet reads the same one). */
+  onPost: (p: CommunityPost | null) => void;
+  onOpen: (p: CommunityPost) => void;
+  onOpenComments: (p: CommunityPost) => void;
+  onOpenCaption: (p: CommunityPost) => void;
+  onOpenWorkout: (p: CommunityPost) => void;
+  onOpenAuthor: (a: CommunityAuthor) => void;
+}) {
+  const qc = useQueryClient();
+  const [placeholder] = useState(() => cachedListPost(qc, open.id));
+  const { data, isPending, isError, refetch } = usePostDetail(open.id, { placeholder });
+  const post = (data ?? null) as CommunityPost | null;
+  const { data: urls } = usePostMediaUrls(post ? [post] : []);
+  const thumb = post ? urls?.[post.media_thumb_path ?? (post.media_type === "image" ? post.media_path ?? "" : "")] ?? null : null;
+  // the slide it opens on, set where its carousel looks before the carousel mounts (carousel-places.ts):
+  // a notice about one set ("Belt Squat PR") on that set's clip, anything else on its first
+  const placed = useRef(false);
+  if (post && !placed.current) {
+    placed.current = true;
+    rememberCarouselPlace(`page:${post.id}`, isAutoPost(post) ? 0 : slideForExercise(postSlides(post), post.film, open.exercise));
+  }
+  useEffect(() => {
+    onPost(post);
+  }, [post, onPost]);
+  useEffect(() => () => onPost(null), [onPost]);
+  // a comment or a reply: the comments up over it, once it's there
+  const askedComments = useRef(false);
+  useEffect(() => {
+    if (!post || open.sheet !== "comments" || askedComments.current) return;
+    askedComments.current = true;
+    onOpenComments(post);
+  }, [post, open.sheet, onOpenComments]);
+  // its screen right under the status bar, where the feed snaps one (the bar's room above it is the page's own)
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const put = () => pageRef.current?.scrollIntoView({ block: "start" });
+    put();
+    // again once the window snaps and the screen's measured height is in (the feed's paging comes on with it)
+    const raf = requestAnimationFrame(put);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="dark bg-black text-foreground" data-post-screen>
+      <div ref={pageRef} data-post-id={open.id} className="feed-page">
+        {post ? (
+          <PostRow
+            post={post}
+            thumbUrl={thumb}
+            unit={unit}
+            viewerIsStaff={viewerIsStaff}
+            onOpen={onOpen}
+            onOpenComments={onOpenComments}
+            onOpenCaption={onOpenCaption}
+            onOpenWorkout={onOpenWorkout}
+            sheetOpen={sheetOpen}
+            onOpenAuthor={onOpenAuthor}
+            layout="page"
+          />
+        ) : isPending ? (
+          <div className="grid h-full place-items-center text-muted-foreground" role="status" aria-label="Opening the post" data-post-screen-loading>
+            <ActivitySpinner size={28} />
+          </div>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center" style={SCREEN_ROOM} data-post-unavailable>
+            <p className="text-[15px] text-muted-foreground">{isError ? "Couldn't open this post." : "This post isn't available any more."}</p>
+            {isError && (
+              <Button type="button" variant="outline" onClick={() => void refetch()}>
+                Try again
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * One row owns its mutation so an optimistic reaction only re-renders that card.

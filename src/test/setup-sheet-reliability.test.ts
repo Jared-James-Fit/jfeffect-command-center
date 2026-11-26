@@ -1,14 +1,8 @@
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  DRAFT_KEEP_MS,
   draftChanged,
   draftFromSetup,
-  draftKey,
-  forgetDraft,
-  keepDraft,
-  parseKept,
-  readKeptDraft,
   revealDelta,
   savedForm,
   settingInputMode,
@@ -17,43 +11,46 @@ import {
 } from "@/lib/equipment/setup-draft";
 import { noAutofill } from "@/lib/no-autofill";
 
-// The exercise Setup sheet (Nov 20 2026): what's typed is a draft until Done
-// saves it, an exit with changes asks first, the sheet stays put over the iOS
-// keyboard, and nothing in it ever drives the workout card behind it.
+// The exercise Setup sheet: what's on screen is compared with what's saved so
+// only real changes are sent (Nov 26 2026: it saves as it's changed, nothing
+// asks before closing, a change that can't be sent waits on the phone), the
+// sheet stays put over the iOS keyboard, and nothing in it ever drives the
+// workout card behind it.
 
 const read = (p: string) => readFileSync(p, "utf8");
 const saved = (settings: Array<[string, string]>, notes: string | null = null, photo: string | null = null) => ({
   settings: settings.map(([label, value]) => ({ label, value })),
   notes,
   photo_path: photo,
+  photo_paths: photo ? [photo] : [],
 });
 
 describe("what counts as a change", () => {
   const base = draftFromSetup("rack", saved([["J-hooks", "9"]]));
-  it("offers the kind's usual settings, empty, after what's saved", () => {
+  it("offers the equipment's usual settings, empty, after what's saved (J-hooks is the rack height)", () => {
     expect(base.fields).toEqual([
       { label: "J-hooks", value: "9" },
-      { label: "Safeties", value: "" },
+      { label: "Safety height", value: "" },
     ]);
   });
   it("an offered setting left empty, a renamed empty label or spaces in the note change nothing", () => {
     expect(draftChanged({ ...base, fields: [...base.fields, { label: "Bench", value: "" }] }, base)).toBe(false);
     expect(draftChanged({ ...base, fields: [{ label: "J-hooks", value: "9" }, { label: "Safety pins", value: "" }] }, base)).toBe(false);
     expect(draftChanged({ ...base, notes: "   " }, base)).toBe(false);
-    expect(draftChanged({ ...base, fields: [{ label: "J-hooks", value: " 9 " }, { label: "Safeties", value: "" }] }, base)).toBe(false);
+    expect(draftChanged({ ...base, fields: [{ label: "J-hooks", value: " 9 " }, { label: "Safety height", value: "" }] }, base)).toBe(false);
   });
   it("a value, a note or a photo is a change; typing it back is not", () => {
-    const typed: SetupDraft = { ...base, fields: [{ label: "J-hooks", value: "9" }, { label: "Safeties", value: "4" }] };
+    const typed: SetupDraft = { ...base, fields: [{ label: "J-hooks", value: "9" }, { label: "Safety height", value: "4" }] };
     expect(draftChanged(typed, base)).toBe(true);
     expect(draftChanged({ ...base, notes: "feet on the line" }, base)).toBe(true);
-    expect(draftChanged({ ...base, photo: "c1/p.jpg" }, base)).toBe(true);
-    expect(draftChanged({ ...typed, fields: [{ label: "J-hooks", value: "9" }, { label: "Safeties", value: "" }] }, base)).toBe(false);
+    expect(draftChanged({ ...base, photos: ["c1/p.jpg"] }, base)).toBe(true);
+    expect(draftChanged({ ...typed, fields: [{ label: "J-hooks", value: "9" }, { label: "Safety height", value: "" }] }, base)).toBe(false);
   });
   it("saves only labelled values, the note trimmed", () => {
-    expect(savedForm({ fields: [{ label: "J-hooks", value: "9" }, { label: "Safeties", value: "" }, { label: "", value: "3" }], notes: "  ok ", photo: null })).toEqual({
+    expect(savedForm({ fields: [{ label: "J-hooks", value: "9" }, { label: "Safeties", value: "" }, { label: "", value: "3" }], notes: "  ok ", photos: [] })).toEqual({
       settings: [{ label: "J-hooks", value: "9" }],
       notes: "ok",
-      photo: null,
+      photos: [],
     });
   });
 });
@@ -87,45 +84,6 @@ describe("switching equipment with changes", () => {
   });
 });
 
-// the phone's storage, for a node test run
-const mem = new Map<string, string>();
-const localStorage = {
-  getItem: (k: string) => mem.get(k) ?? null,
-  setItem: (k: string, v: string) => void mem.set(k, String(v)),
-  removeItem: (k: string) => void mem.delete(k),
-  clear: () => mem.clear(),
-};
-(globalThis as any).window ??= {};
-(globalThis as any).window.localStorage = localStorage;
-
-describe("a draft an interruption cut short", () => {
-  const d: SetupDraft = { fields: [{ label: "J-hooks", value: "11" }], notes: "", photo: null };
-  afterEach(() => localStorage.clear());
-  it("comes back while it's fresh and typed over the setup as saved now", () => {
-    const k = draftKey("c1", "ex1", "eq1");
-    keepDraft(k, d, "2026-11-20T10:00:00Z");
-    expect(readKeptDraft(k, "2026-11-20T10:00:00Z")).toEqual(d);
-  });
-  it("one typed over an older version (the coach changed it since) is let go, never saved over the newer one", () => {
-    const k = draftKey("c1", "ex1", null);
-    keepDraft(k, d, "2026-11-20T10:00:00Z");
-    expect(readKeptDraft(k, "2026-11-20T11:00:00Z")).toBeNull();
-    expect(localStorage.getItem(k)).toBeNull();
-  });
-  it("a day old is abandoned, not interrupted", () => {
-    const raw = JSON.stringify({ draft: d, base: null, at: 1_000 });
-    expect(parseKept(raw, null, 1_000 + DRAFT_KEEP_MS - 1)).toEqual(d);
-    expect(parseKept(raw, null, 1_000 + DRAFT_KEEP_MS + 1)).toBeNull();
-    expect(parseKept("not json", null, 0)).toBeNull();
-  });
-  it("is kept per athlete, exercise and equipment", () => {
-    expect(draftKey("c1", "ex1", null)).not.toBe(draftKey("c1", "ex1", "eq1"));
-    keepDraft(draftKey("c1", "ex1", "eq1"), d, null);
-    forgetDraft(draftKey("c1", "ex1", "eq1"));
-    expect(readKeptDraft(draftKey("c1", "ex1", "eq1"), null)).toBeNull();
-  });
-});
-
 describe("the field being typed in stays in view", () => {
   it("scrolls just enough, never past the field's top", () => {
     expect(revealDelta({ top: 100, bottom: 144, viewTop: 0, viewBottom: 400 })).toBe(0);
@@ -154,21 +112,20 @@ describe("no contact AutoFill on these boxes", () => {
 
 describe("the setup sheet", () => {
   const sheet = read("src/components/equipment/setup-sheet.tsx");
-  it("never saves half-typed: no autosave timer, Done saves and closes, one save at a time", () => {
-    expect(sheet).not.toContain("SAVE_DELAY_MS");
-    expect(sheet).toContain("if (saving.current) return saving.current;");
-    expect(sheet).toContain('onClick={() => void finish()}');
-    expect(sheet).toContain('toast.success("Setup saved");');
-    // "Saved" only once the server has it
-    expect(sheet).toMatch(/await actions\.saveSetup\([\s\S]{0,1400}setSaveState\("saved"\)/);
+  it("saves as it's changed: one autosave per open sheet, a change goes to it, a flush on the way out", () => {
+    expect(sheet).toContain("createAutosave<Snap>({");
+    expect(sheet).toContain("a.change({ form, eqId: on, outbox: outboxKey(clientId, exercise.id, on), at: Date.now() }, versionKey(on, d));");
+    // closing never loses a change, and never asks
+    expect(sheet).toContain("void a.flush();");
+    expect(sheet).not.toContain("data-setup-confirm-save");
+    expect(sheet).not.toContain("AlertDialog");
+    expect(sheet).toContain("onOpenChange={(o) => (o ? onOpenChange(true) : void close())}");
   });
-  it("any other way out with changes asks: Save changes, Discard changes, Keep editing", () => {
-    expect(sheet).toContain("onOpenChange={(o) => (o ? onOpenChange(true) : requestClose())}");
-    expect(sheet).toContain("data-setup-confirm-save");
-    expect(sheet).toContain("data-setup-confirm-discard");
-    expect(sheet).toContain("data-setup-confirm-keep");
-    // a swipe that didn't close is put back
-    expect(sheet).toContain('el.style.transform = "";');
+  it("a change is kept on the phone before it's sent, and let go only once the server has it", () => {
+    expect(sheet).toMatch(/putOutbox\(\{ clientId, exerciseId: exercise\.id, equipmentId: snap\.eqId, \.\.\.snap\.form, at: snap\.at \}\);\s+await actionsRef\.current\.saveSetup\(/);
+    expect(sheet).toMatch(/await actionsRef\.current\.saveSetup\([\s\S]{0,300}\}\);\s+dropOutbox\(snap\.outbox, snap\.at\);/);
+    // the app going to the background keeps what's waiting and sends it
+    expect(sheet).toContain('window.addEventListener("pagehide", now);');
   });
   it("is pinned to the visible part of the screen while the keyboard is up, never offset by the keyboard's height", () => {
     expect(sheet).not.toContain("var(--keyboard-inset");
@@ -177,18 +134,26 @@ describe("the setup sheet", () => {
     // with the keyboard up a pull down takes the keyboard down, never the sheet
     expect(sheet).toContain("swipeToClose={!kb}");
   });
-  it("keeps its own place while open: a refetch never resets the view or the equipment", () => {
+  it("keeps its own place while open: a refetch never resets the view, the equipment or what's being typed", () => {
     expect(sheet).toContain("if (open && !wasOpen.current) {");
-    expect(sheet).toContain("if (same && (latest.current.dirty || saving.current)) return;");
+    expect(sheet).toContain("if (auto.current?.busy()) return;");
+    // our own save coming back moves nothing on screen; another change keeps the rows' ids
+    expect(sheet).toContain("// our own save coming back: the same thing, nothing on screen moves");
+    expect(sheet).toContain("setRows((cur) => mergeRows(cur, fresh.fields));");
   });
   it("rows keep their own keys, so removing one never moves the box being typed in", () => {
     expect(sheet).toContain("key={f.id}");
     expect(sheet).not.toContain("<li key={i}");
   });
-  it("the photo slot never deletes a file itself (a draft can still be discarded)", () => {
+  it("photos are never deleted when taken off a setup: an earlier version can bring them back", () => {
+    expect(sheet).not.toContain("removeEquipmentPhoto(");
     const photo = read("src/components/equipment/equipment-photo.tsx");
     expect(photo).not.toContain("removeEquipmentPhoto(");
-    expect(sheet).toContain("if (before && before !== form.photo) void removeEquipmentPhoto(before);");
+  });
+  it("earlier versions are one tap from back, and a restore can be undone", () => {
+    expect(sheet).toContain("data-setup-history");
+    expect(sheet).toContain("await actions.restoreSetup(r.id, exercise.id);");
+    expect(sheet).toMatch(/x\.reason === "restore"/);
   });
 });
 

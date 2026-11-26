@@ -41,6 +41,7 @@ Rules:
 - "feedback" is coaching feedback the coach gave (what they see, what's limiting progress). "objective" is a measurable objective set in the meeting (a number, a frequency, a date), only as said.
 - Speakers: use "coach" or "athlete" only when the transcript's labels say so. Lines labelled "Speaker A", "Speaker 1" and the like are not identified: use "unclear", and never decide who said something from what it says.
 - Loads: say a load only with the unit as spoken. A number said with no unit stays as said; never assume kg or lb.
+- Goals: every target the athlete names (a lift, an attempt, a total, a bodyweight, a body or performance goal, how they want to approach a meet) is its own "goal" item: the lift and the numbers exactly as said (a range stays a range, "squat around 220 to 225"), what it's for (a third attempt, a meet, a date) and "due" when a date was given or the meeting's event is the date. Never round, convert or complete a number.
 - Training that wasn't logged is "not logged", never "missed", unless the conversation says it was skipped.
 - Emotional context only as the person said it ("I'm nervous about the meet"), never inferred.
 - "agreement" only when both sides clearly settled it. If either hedged ("maybe", "let's see", "we'll try"), it's "tentative". Your own reading of the conversation is basis "interpretation".

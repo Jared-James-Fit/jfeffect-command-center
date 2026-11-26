@@ -1,11 +1,12 @@
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   Dumbbell, Plus, CalendarDays, Apple, HeartPulse,
   MessageSquare, ClipboardCheck, CreditCard, User, Archive,
-  Download, Loader2, ShoppingCart, Eye, ArrowRightLeft,
+  Download, Loader2, ShoppingCart, Eye, ArrowRightLeft, UserRound,
 } from "lucide-react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { QuickSellSheet } from "./quick-sell-sheet";
 import { ScheduleWorkoutSheet } from "@/components/schedule/ScheduleWorkoutSheet";
 import {
@@ -22,6 +23,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
+
+// Loaded on first open: the Clients list never pays for the headshot screens.
+const HeadshotSheet = lazyWithRetry(() => import("@/components/headshots/headshot-admin").then((m) => ({ default: m.HeadshotSheet })));
 
 /**
  * The Clients list row's ⋯ (Nov 23 2026): what the row's own buttons don't already do, grouped
@@ -80,6 +84,8 @@ export function ClientMoreMenu({
   const [sellOpen, setSellOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [headshotOpen, setHeadshotOpen] = useState(false);
+  const [headshotMounted, setHeadshotMounted] = useState(false);
   const assignProgram = () => (onAssignProgram ? onAssignProgram() : setAssignOpen(true));
   // A block that's ended or ending with nothing queued after it.
   const needsNextBlock = !!r.block_id && !!blockEnd(r.block_end, r.next_block_id)?.needsNext;
@@ -185,6 +191,9 @@ export function ClientMoreMenu({
             <User className="h-4 w-4" /> Account, access & agreement
           </ClientNameLink>
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => { setHeadshotMounted(true); setHeadshotOpen(true); }} data-row-headshot>
+          <UserRound className="h-4 w-4" /> Account headshot
+        </DropdownMenuItem>
         {onChangePlan && (
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onChangePlan(); }}>
             <ArrowRightLeft className="h-4 w-4" /> Change plan
@@ -221,6 +230,11 @@ export function ClientMoreMenu({
       clientId={r.id}
       clientName={r.full_name}
     />
+    {headshotMounted && (
+      <Suspense fallback={null}>
+        <HeadshotSheet open={headshotOpen} onOpenChange={setHeadshotOpen} clientId={r.id} clientName={r.full_name} />
+      </Suspense>
+    )}
     <TrainingReportSheet
       open={reportOpen}
       onOpenChange={setReportOpen}

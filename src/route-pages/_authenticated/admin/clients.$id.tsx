@@ -47,7 +47,7 @@ import { ClientCalendarSyncStatus } from "@/components/admin/client-calendar-syn
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { History, Send } from "lucide-react";
-import { FolderOpen, Eye, PauseCircle, Power } from "lucide-react";
+import { FolderOpen, Eye, PauseCircle, Power, UserRound } from "lucide-react";
 import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
@@ -95,9 +95,11 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
+const GoalSummary = lazyDefault(() => import("@/components/goals/goal-summary"), "GoalSummary");
 const ClientDocumentsPanel = lazyDefault(() => import("@/components/documents/documents-pages"), "ClientDocumentsPanel");
 const HealthCard = lazyDefault(() => import("@/components/health/HealthCard"), "HealthCard");
-const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
+const AccountHeadshotPanel = lazyDefault(() => import("@/components/headshots/headshot-admin"), "AccountHeadshotPanel");
+const HeadshotSheet = lazyDefault(() => import("@/components/headshots/headshot-admin"), "HeadshotSheet");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
 const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
@@ -264,6 +266,9 @@ export function ClientProfileWorkspace({
   };
 
   const [accessLogOpen, setAccessLogOpen] = useState(false);
+  // The account headshot, one tap from the header's ⋯ (mounted on first open).
+  const [headshotOpen, setHeadshotOpen] = useState(false);
+  const [headshotMounted, setHeadshotMounted] = useState(false);
 
   if (!form) {
     // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
@@ -493,53 +498,6 @@ export function ClientProfileWorkspace({
     qc.invalidateQueries({ queryKey: ["client", id] });
   };
 
-  const adminUpdatePicture = async (path: string) => {
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        profile_picture_url: path,
-        profile_picture_updated_at: new Date().toISOString(),
-        profile_picture_updated_by: "admin",
-        profile_picture_source: "admin_override",
-        profile_picture_needs_update: false,
-        profile_picture_needs_update_at: null,
-        profile_picture_needs_update_reason: null,
-      })
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    markSaved({
-      profile_picture_url: path,
-      profile_picture_needs_update: false,
-      profile_picture_needs_update_at: null,
-      profile_picture_needs_update_reason: null,
-    });
-  };
-
-  const requestPictureUpdate = async () => {
-    const reason = window.prompt(
-      "Reason for requesting a new profile picture (optional, shown to the client):",
-      "Please take a new clear headshot.",
-    );
-    if (reason === null) return;
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        profile_picture_needs_update: true,
-        profile_picture_needs_update_at: new Date().toISOString(),
-        profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
-      })
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Client will be asked to update their profile picture on next login.");
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    markSaved({
-      profile_picture_needs_update: true,
-      profile_picture_needs_update_at: new Date().toISOString(),
-      profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
-    });
-  };
-
   // An empty preview helps nobody: client view needs their login.
   const needsLogin = () => {
     if (form.user_id) return false;
@@ -586,7 +544,10 @@ export function ClientProfileWorkspace({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+        <DropdownMenuLabel>Account</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => { setHeadshotMounted(true); setHeadshotOpen(true); }} data-header-headshot>
+          <UserRound className="mr-2 h-4 w-4" />Account headshot
+        </DropdownMenuItem>
         {form.status === "Deactivated" || form.deactivate_at ? (
           <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Power className="mr-2 h-4 w-4" />{form.status === "Deactivated" ? "Reactivate" : "Cancel the deactivation"}</DropdownMenuItem>
         ) : (
@@ -600,7 +561,16 @@ export function ClientProfileWorkspace({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-  const accessLog = <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />;
+  const accessLog = (
+    <>
+      <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />
+      {headshotMounted && (
+        <Suspense fallback={null}>
+          <HeadshotSheet open={headshotOpen} onOpenChange={setHeadshotOpen} clientId={id} clientName={form.full_name} />
+        </Suspense>
+      )}
+    </>
+  );
 
   const links = [
     ["Program Sheet", form.program_sheet_link],
@@ -1045,6 +1015,12 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="info" className={WORKSPACE_GRID_CLASS}>
+          {/* the account headshot first: status, a photo waiting to review, request / retake (private reason), take it with them */}
+          <div className="md:col-span-3">
+            <Suspense fallback={<TabFallback />}>
+              <AccountHeadshotPanel clientId={id} clientName={form.preferred_name || form.first_name || form.full_name || undefined} />
+            </Suspense>
+          </div>
           <div className="md:col-span-2 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card/60 px-4 py-3">
               <div>
@@ -1097,40 +1073,6 @@ export function ClientProfileWorkspace({
               <div><span className="text-muted-foreground">Basic info completed:</span> {fmtDate(form.basic_info_completed_at)}</div>
             </div>
           </div>
-
-          <Card className="border-border bg-card p-6 space-y-3">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
-            <Suspense fallback={<TabFallback />}>
-              <ProfilePictureCapture
-                userId={form.user_id ?? id}
-                currentUrl={form.profile_picture_url}
-                onUploaded={adminUpdatePicture}
-                allowFileUpload
-              />
-            </Suspense>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" className="min-h-[44px]" onClick={requestPictureUpdate}>
-                {form.profile_picture_needs_update ? "Update reminder active" : "Request client to update"}
-              </Button>
-              <span className="text-[11px] text-muted-foreground">
-                Status:{" "}
-                {form.profile_picture_needs_update
-                  ? "Needs Update"
-                  : form.profile_picture_url
-                  ? "Complete"
-                  : "Required"}
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Admin can capture or upload on behalf of the client. Source:{" "}
-              {form.profile_picture_source ?? "—"} · Updated by: {form.profile_picture_updated_by ?? "—"}
-            </p>
-            {form.profile_picture_needs_update && form.profile_picture_needs_update_reason && (
-              <p className="text-[11px] text-warning">
-                Reason shown to client: {form.profile_picture_needs_update_reason}
-              </p>
-            )}
-          </Card>
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground">Communication Preferences</h3>
@@ -1975,6 +1917,12 @@ function ClientOverviewSnapshot({
       {form.service_tier !== "self_serve" && (
         <Suspense fallback={null}>
           <ClientPackageCard clientId={clientId} />
+        </Suspense>
+      )}
+      {/* What they're working toward (the goal ledger): their target, Cleo's projection, the approved target, feasibility, time left, Cleo's action. */}
+      {form.service_tier !== "self_serve" && (
+        <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
+          <GoalSummary clientId={clientId} onOpenTraining={() => onGoToTab("training")} />
         </Suspense>
       )}
       {/* The coach's notes on this client (Quick Notes saved to them land here). */}

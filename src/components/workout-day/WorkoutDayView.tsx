@@ -124,7 +124,7 @@ import {
   cardSetupView,
   comparesAcrossEquipment,
   equipmentName,
-  offersSetup,
+  setupPhotos,
   settingsFromNote,
 } from "@/lib/equipment/equipment";
 import { useViewingAsClient } from "@/lib/client-impersonation";
@@ -3628,12 +3628,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const cardSetup = useMemo(() => {
     if (!equipmentOn) return null;
     // cardSetupView (equipment.ts): the same line the coach's workout quick view shows
-    const { equipmentId: shownId, equipment: eq, summary } = cardSetupView(equipmentData, exerciseId, existingResults as any[]);
+    const { equipmentId: shownId, equipment: eq, setup, summary } = cardSetupView(equipmentData, exerciseId, existingResults as any[]);
     const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
+    const photos = setupPhotos(setup);
     return {
       equipmentId: shownId,
       equipment: eq,
       summary,
+      photo: photos[0] ?? null,
+      photoCount: photos.length,
       mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
       // a PR on a machine says which (its weight means nothing on another one)
       prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
@@ -4905,7 +4908,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
       )}
       {equipmentOn && (
         <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
-          <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
+          <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary || cardSetup?.photo ? "Setup & equipment" : "Add your setup"}
         </CardMenuItem>
       )}
       {canSuggest && !readonly && (
@@ -5072,12 +5075,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
-      {cardSetup && (cardSetup.summary || (cardSetup.mode === "live" && completedSetCount === 0 && offersSetup({ name, equipment: (exercise as any)?.equipment ?? null }))) && (
-        <SetupLine text={cardSetup.summary} retired={!!cardSetup.equipment?.archived_at} onOpen={() => setSetupOpen(true)} />
+      {/* The athlete's own setup, on every card (any exercise, list or Focus, live or finished):
+          what's saved on one slim line with its photo, else a quiet "Add your setup". Never required. */}
+      {cardSetup && (cardSetup.summary || cardSetup.photo || cardSetup.mode !== "view") && (
+        <SetupLine
+          text={cardSetup.summary}
+          retired={!!cardSetup.equipment?.archived_at}
+          photo={cardSetup.photo}
+          photoCount={cardSetup.photoCount}
+          onOpen={() => setSetupOpen(true)}
+        />
       )}
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
           "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
-      <div className="mt-2.5 flex items-center justify-between gap-3">
+      <div className={cn("flex items-center justify-between gap-3", cardSetup ? "mt-1.5" : "mt-2.5")}>
       <div className={cn("min-w-0 flex-1 font-bold leading-tight tracking-tight text-foreground break-words", runRow || cardioRow ? "text-lg" : "text-2xl")} data-run-rx={runRow || undefined} data-rx>
         {runRow || cardioRow ? runPrescription({
           run: runRow,

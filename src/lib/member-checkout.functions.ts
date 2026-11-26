@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { customerIdempotencyKey } from "@/lib/stripe-idempotency";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { sanitizeSubscriptionParams } from "@/lib/billing-schedule";
@@ -20,10 +21,14 @@ function formEncode(params: Record<string, string | undefined | null>): string {
   return u.toString();
 }
 
-async function stripeFetch(path: string, init: { method?: string; body?: string } = {}) {
+async function stripeFetch(path: string, init: { method?: string; body?: string; idempotencyKey?: string } = {}) {
   const res = await fetch(`${STRIPE_API}${path}`, {
     method: init.method ?? "GET",
-    headers: { Authorization: `Bearer ${getStripeKey()}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      Authorization: `Bearer ${getStripeKey()}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...(init.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
+    },
     body: init.body,
   });
   const json: any = await res.json().catch(() => ({}));
@@ -86,14 +91,16 @@ export const createMemberCheckoutSession = createServerFn({ method: "POST" })
       if (existing?.data?.[0]?.id) {
         stripeCustomerId = existing.data[0].id;
       } else {
+        const customerBody = formEncode({
+          email,
+          name: member?.full_name ?? undefined,
+          "metadata[member_id]": member?.id ?? "",
+          "metadata[user_id]": userId,
+        });
         const created = await stripeFetch("/customers", {
           method: "POST",
-          body: formEncode({
-            email,
-            name: member?.full_name ?? undefined,
-            "metadata[member_id]": member?.id ?? "",
-            "metadata[user_id]": userId,
-          }),
+          body: customerBody,
+          idempotencyKey: customerIdempotencyKey("member", member?.id ?? userId, customerBody),
         });
         stripeCustomerId = created.id;
       }

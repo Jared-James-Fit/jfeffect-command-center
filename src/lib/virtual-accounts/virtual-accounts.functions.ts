@@ -29,6 +29,34 @@ export type VirtualAccount = {
   likes_total: number;
   followers: number;
   last_like_at: string | null;
+  /** The person's gender the name was made for ('u' when the pool uses it for both), its surname's origin. */
+  name_gender: "f" | "m" | "u" | null;
+  name_origin: string | null;
+  /** How it got its name: a starter, generated, typed by an admin, or a placeholder replaced automatically. */
+  name_source: "starter" | "generated" | "admin" | "corrected" | null;
+  name_set_at: string | null;
+  /** What's wrong with the name now (a member who joined since goes by it, say), else null. Never fixed on its own. */
+  name_problem: string | null;
+  /** When it started liking (switched on by hand or by the gradual start), else null. */
+  likes_started_at: string | null;
+  /** Its place in the gradual start's queue (1 = next), else null. */
+  rollout_position: number | null;
+};
+
+/** A generated name: never a placeholder, a member's, a famous person's or another virtual account's. */
+export type SuggestedName = {
+  first_name: string;
+  last_name: string;
+  gender: "f" | "m";
+  origin: string;
+  username: string;
+};
+
+export type NameCheck = {
+  problem: string | null;
+  username: string | null;
+  gender: "f" | "m" | "u" | null;
+  origin: string | null;
 };
 
 export type VirtualSettings = {
@@ -37,17 +65,39 @@ export type VirtualSettings = {
   max_post_age_hours: number;
   min_post_age_minutes: number;
   include_coach_posts: boolean;
+  /** The gradual start: queued accounts start one at a time. */
+  rollout_enabled: boolean;
+  /** At least this many days between one account starting and the next. */
+  rollout_gap_days: number;
+};
+
+/** When the next queued account starts, or why it's waiting (the tick's own rule). */
+export type RolloutState = {
+  enabled: boolean;
+  gap_days: number;
+  next_user_id: string | null;
+  queued: number;
+  last_started_at: string | null;
+  /** The gap has passed after this. */
+  due_after: string | null;
+  /** No automated like since the last start yet: the next one waits for real activity. */
+  needs_like: boolean;
 };
 
 export const listVirtualAccountsFn = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ accounts: VirtualAccount[]; settings: VirtualSettings }> => {
+  .handler(async ({ context }): Promise<{ accounts: VirtualAccount[]; settings: VirtualSettings; rollout: RolloutState | null }> => {
     const { db, viewOnly } = await readClientFor(context as any);
     const call = (fn: string) => (viewOnly ? rpcRead(db, fn, {}) : (context.supabase as any).rpc(fn));
-    const [a, s] = await Promise.all([call("admin_virtual_accounts"), call("admin_virtual_settings")]);
+    const [a, s, r] = await Promise.all([call("admin_virtual_accounts"), call("admin_virtual_settings"), call("admin_virtual_rollout_state")]);
     if (a.error) throw new Error(a.error.message);
     if (s.error) throw new Error(s.error.message);
-    return { accounts: (a.data ?? []) as VirtualAccount[], settings: s.data as VirtualSettings };
+    return {
+      accounts: (a.data ?? []) as VirtualAccount[],
+      settings: s.data as VirtualSettings,
+      // the rollout read is extra: an older database without it still lists the accounts
+      rollout: r.error ? null : (r.data as RolloutState),
+    };
   });
 
 export const virtualActivityFn = createServerFn({ method: "GET" })
@@ -85,6 +135,7 @@ export const createStarterVirtualAccountsFn = createServerFn({ method: "POST" })
         _bio: p.bio,
         _background: p.background,
         _disciplines: p.disciplines,
+        _name_source: "starter",
       });
       if (e) skipped.push(`${p.slug}: ${e.message}`);
       else made++;
@@ -141,6 +192,8 @@ export const setVirtualSettingsFn = createServerFn({ method: "POST" })
         max_post_age_hours: z.number().int().min(6).max(96),
         min_post_age_minutes: z.number().int().min(5).max(240),
         include_coach_posts: z.boolean(),
+        rollout_enabled: z.boolean(),
+        rollout_gap_days: z.number().int().min(1).max(14),
       })
       .partial()
       .parse(i),
@@ -149,4 +202,94 @@ export const setVirtualSettingsFn = createServerFn({ method: "POST" })
     const { data: s, error } = await (context.supabase as any).rpc("admin_virtual_settings_set", { _patch: data });
     if (error) throw new Error(error.message);
     return s as VirtualSettings;
+  });
+
+/** The gradual start's queue: these accounts, in this order; any other account not liking yet leaves it. */
+export const setVirtualRolloutFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ order: z.array(z.string().uuid()).max(100) }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { error } = await (context.supabase as any).rpc("admin_virtual_rollout_set", { _order: data.order });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+const genderSchema = z.enum(["f", "m"]).nullable().optional();
+
+/** Fresh names from the database's one generator (for a new account, or to rename `userId`). */
+export const suggestVirtualNamesFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ count: z.number().int().min(1).max(12).default(3), gender: genderSchema, userId: z.string().uuid().nullable().optional() }).parse(i ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<SuggestedName[]> => {
+    const { data: rows, error } = await (context.supabase as any).rpc("admin_virtual_name_suggestions", {
+      _count: data.count,
+      _gender: data.gender ?? null,
+      _uid: data.userId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as SuggestedName[];
+  });
+
+/** The database's check of a typed name, and a free username for it. */
+export const checkVirtualNameFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ first: z.string().max(80), last: z.string().max(80), userId: z.string().uuid().nullable().optional() }).parse(i),
+  )
+  .handler(async ({ data, context }): Promise<NameCheck> => {
+    const { data: r, error } = await (context.supabase as any).rpc("admin_virtual_name_check", {
+      _first: data.first,
+      _last: data.last,
+      _uid: data.userId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return r as NameCheck;
+  });
+
+const nameInput = z.object({
+  first: z.string().trim().min(1).max(40),
+  last: z.string().trim().min(1).max(40),
+  username: z.string().trim().toLowerCase().max(24).nullable().optional(),
+  gender: z.enum(["f", "m", "u"]).nullable().optional(),
+  origin: z.string().max(40).nullable().optional(),
+  source: z.enum(["generated", "admin"]).default("admin"),
+});
+
+/** Rename a virtual account (checked by the database), optionally with a new username. Keeps its id and history. */
+export const renameVirtualAccountFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => nameInput.extend({ userId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { error } = await (context.supabase as any).rpc("admin_virtual_account_rename", {
+      _uid: data.userId,
+      _first: data.first,
+      _last: data.last,
+      _username: data.username ?? null,
+      _gender: data.gender ?? null,
+      _origin: data.origin ?? null,
+      _source: data.source,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+/** Add one virtual account with a generated (or typed) name. Words only: no bio, photo or media. */
+export const addVirtualAccountFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => nameInput.extend({ username: z.string().trim().toLowerCase().min(3).max(24) }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { data: id, error } = await (context.supabase as any).rpc("admin_virtual_account_create", {
+      _slug: data.username,
+      _first: data.first,
+      _last: data.last,
+      _bio: "",
+      _background: null,
+      _disciplines: [],
+      _name_source: data.source,
+      _name_gender: data.gender ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { userId: id as string };
   });

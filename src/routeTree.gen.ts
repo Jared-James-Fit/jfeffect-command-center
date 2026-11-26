@@ -52,6 +52,7 @@ import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
 import { Route as CoachingIndexRouteImport } from './routes/coaching.index'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as HTokenRouteImport } from './routes/h.$token'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as MWelcomeRouteImport } from './routes/m.welcome'
 import { Route as PPostIdRouteImport } from './routes/p.$postId'
@@ -289,6 +290,7 @@ import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/p
 import { Route as ApiPublicHooksVelocityWorkerRouteImport } from './routes/api/public/hooks/velocity-worker'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
+import { Route as ApiPublicHooksGoalIntelTickRouteImport } from './routes/api/public/hooks/goal-intel-tick'
 import { Route as ApiPublicHooksJfLibraryInstallRouteImport } from './routes/api/public/hooks/jf-library-install'
 import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/public/hooks/lead-replies-tick'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
@@ -562,6 +564,11 @@ const CoachingApplyRoute = CoachingApplyRouteImport.update({
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HTokenRoute = HTokenRouteImport.update({
+  id: '/h/$token',
+  path: '/h/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalSlugRoute = LegalSlugRouteImport.update({
@@ -1952,6 +1959,12 @@ const ApiPublicHooksGcalSessionImportRoute =
     path: '/api/public/hooks/gcal-session-import',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksGoalIntelTickRoute =
+  ApiPublicHooksGoalIntelTickRouteImport.update({
+    id: '/api/public/hooks/goal-intel-tick',
+    path: '/api/public/hooks/goal-intel-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksJfLibraryInstallRoute =
   ApiPublicHooksJfLibraryInstallRouteImport.update({
     id: '/api/public/hooks/jf-library-install',
@@ -2341,6 +2354,7 @@ export interface FileRoutesByFullPath {
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/h/$token': typeof HTokenRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/p/$postId': typeof PPostIdRoute
@@ -2561,6 +2575,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2677,6 +2692,7 @@ export interface FileRoutesByTo {
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/h/$token': typeof HTokenRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/p/$postId': typeof PPostIdRoute
@@ -2896,6 +2912,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -3017,6 +3034,7 @@ export interface FileRoutesById {
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/h/$token': typeof HTokenRoute
   '/legal/$slug': typeof LegalSlugRoute
   '/m/welcome': typeof MWelcomeRoute
   '/p/$postId': typeof PPostIdRoute
@@ -3237,6 +3255,7 @@ export interface FileRoutesById {
   '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -3358,6 +3377,7 @@ export interface FileRouteTypes {
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
+    | '/h/$token'
     | '/legal/$slug'
     | '/m/welcome'
     | '/p/$postId'
@@ -3578,6 +3598,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -3694,6 +3715,7 @@ export interface FileRouteTypes {
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
+    | '/h/$token'
     | '/legal/$slug'
     | '/m/welcome'
     | '/p/$postId'
@@ -3913,6 +3935,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -4033,6 +4056,7 @@ export interface FileRouteTypes {
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
+    | '/h/$token'
     | '/legal/$slug'
     | '/m/welcome'
     | '/p/$postId'
@@ -4253,6 +4277,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/goal-intel-tick'
     | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
@@ -4368,6 +4393,7 @@ export interface RootRouteChildren {
   BookSlugRoute: typeof BookSlugRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
+  HTokenRoute: typeof HTokenRoute
   LegalSlugRoute: typeof LegalSlugRoute
   MWelcomeRoute: typeof MWelcomeRoute
   PPostIdRoute: typeof PPostIdRoute
@@ -4411,6 +4437,7 @@ export interface RootRouteChildren {
   ApiPublicHooksVelocityWorkerRoute: typeof ApiPublicHooksVelocityWorkerRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
+  ApiPublicHooksGoalIntelTickRoute: typeof ApiPublicHooksGoalIntelTickRoute
   ApiPublicHooksJfLibraryInstallRoute: typeof ApiPublicHooksJfLibraryInstallRoute
   ApiPublicHooksLeadRepliesTickRoute: typeof ApiPublicHooksLeadRepliesTickRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
@@ -4755,6 +4782,13 @@ declare module '@tanstack/react-router' {
       path: '/email/unsubscribe'
       fullPath: '/email/unsubscribe'
       preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/h/$token': {
+      id: '/h/$token'
+      path: '/h/$token'
+      fullPath: '/h/$token'
+      preLoaderRoute: typeof HTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal/$slug': {
@@ -6416,6 +6450,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGcalSessionImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/goal-intel-tick': {
+      id: '/api/public/hooks/goal-intel-tick'
+      path: '/api/public/hooks/goal-intel-tick'
+      fullPath: '/api/public/hooks/goal-intel-tick'
+      preLoaderRoute: typeof ApiPublicHooksGoalIntelTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/jf-library-install': {
       id: '/api/public/hooks/jf-library-install'
       path: '/api/public/hooks/jf-library-install'
@@ -7551,6 +7592,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookSlugRoute: BookSlugRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
+  HTokenRoute: HTokenRoute,
   LegalSlugRoute: LegalSlugRoute,
   MWelcomeRoute: MWelcomeRoute,
   PPostIdRoute: PPostIdRoute,
@@ -7606,6 +7648,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksVelocityWorkerRoute: ApiPublicHooksVelocityWorkerRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
+  ApiPublicHooksGoalIntelTickRoute: ApiPublicHooksGoalIntelTickRoute,
   ApiPublicHooksJfLibraryInstallRoute: ApiPublicHooksJfLibraryInstallRoute,
   ApiPublicHooksLeadRepliesTickRoute: ApiPublicHooksLeadRepliesTickRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
