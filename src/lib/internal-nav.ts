@@ -327,6 +327,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/settings/ai", label: "AI & Cleo", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "cleo", "assistant", "who has cleo", "cleo access", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "errors"] },
+  { to: "/admin/settings/velocity", label: "Bar speed from videos", icon: ShieldCheck, group: "Settings", searchOnly: true,
+    visibleTo: ["admin"], section: "Advanced", keywords: ["velocity", "bar speed", "bar path", "set videos", "video analysis", "avg vel", "mcv", "worker", "failed analysis", "diagnostics"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings", searchOnly: true,

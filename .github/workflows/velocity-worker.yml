@@ -1,0 +1,78 @@
+name: Velocity worker (bar speed from set videos)
+
+# Reads bar path, reps and bar speed from every barbell set video on the
+# server, so nothing waits for an athlete or coach to open the app
+# (scripts/velocity-worker/worker.ts). Each run keeps polling the app for
+# waiting videos for RUN_MINUTES; runs start every 30 minutes and never
+# overlap, so a new upload is picked up within a minute or two while a run is
+# going, and within half an hour at most.
+#
+# It authenticates to the app with this job's GitHub OIDC token (id-token:
+# write): the app checks GitHub's signature and that the token is this
+# repository's own workflow on main (src/lib/lift-analysis/worker-oidc.ts). No
+# secret is stored here or in the app. The logs are public: the worker prints
+# no names, ids or links, only counts and timings.
+on:
+  schedule:
+    - cron: '4,34 * * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'How long to keep reading (minutes)'
+        required: false
+        default: '25'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: velocity-worker
+  cancel-in-progress: false
+
+jobs:
+  read:
+    name: Read waiting set videos
+    if: github.repository == 'Jared-James-Fit/jfeffect-command-center'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Tools (only what the reader needs, not the whole app)
+        run: |
+          mkdir -p /tmp/vw && cd /tmp/vw
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund --loglevel=error playwright@1.63.0 mediabunny@1.61.3 esbuild@0.25.12 tsx@4.21.0
+          ln -s /tmp/vw/node_modules "$GITHUB_WORKSPACE/node_modules"
+          command -v ffmpeg > /dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg)
+          ffmpeg -version | head -1
+
+      - name: Cache the browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.63.0
+
+      - name: Chromium
+        working-directory: /tmp/vw
+        run: npx playwright install --with-deps chromium
+
+      - name: Bundle the reading page (the phone's own pipeline)
+        run: |
+          mkdir -p /tmp/vw-page
+          node_modules/.bin/esbuild scripts/lift-analysis/browser/entry.ts --bundle --format=esm \
+            --outfile=/tmp/vw-page/bundle.js --tsconfig=tsconfig.json --log-level=warning
+
+      - name: Read
+        env:
+          VELOCITY_HOOK_URL: ${{ vars.VELOCITY_HOOK_URL || 'https://project--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app/api/public/hooks/velocity-worker' }}
+          RUN_MINUTES: ${{ github.event.inputs.minutes || '25' }}
+          PAGE_BUNDLE_DIR: /tmp/vw-page
+        run: node_modules/.bin/tsx --tsconfig tsconfig.json scripts/velocity-worker/worker.ts

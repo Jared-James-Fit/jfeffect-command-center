@@ -243,6 +243,7 @@ import { Route as AuthenticatedAdminSettingsAiRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminSettingsNutritionAutomationRouteImport } from './routes/_authenticated/admin/settings_.nutrition-automation'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
+import { Route as AuthenticatedAdminSettingsVelocityRouteImport } from './routes/_authenticated/admin/settings_.velocity'
 import { Route as AuthenticatedPortalAgreementsNativePackageIdRouteImport } from './routes/_authenticated/portal/agreements-native.$packageId'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins_.$formId'
@@ -286,6 +287,7 @@ import { Route as ApiPublicHooksCompetitionSelfcheckRouteImport } from './routes
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
+import { Route as ApiPublicHooksVelocityWorkerRouteImport } from './routes/api/public/hooks/velocity-worker'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksGoalIntelTickRouteImport } from './routes/api/public/hooks/goal-intel-tick'
@@ -1678,6 +1680,12 @@ const AuthenticatedAdminSettingsSmsRoute =
     path: '/settings/sms',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminSettingsVelocityRoute =
+  AuthenticatedAdminSettingsVelocityRouteImport.update({
+    id: '/settings_/velocity',
+    path: '/settings/velocity',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedPortalAgreementsNativePackageIdRoute =
   AuthenticatedPortalAgreementsNativePackageIdRouteImport.update({
     id: '/agreements-native/$packageId',
@@ -1932,6 +1940,12 @@ const ApiPublicHooksFeedCopiesTickRoute =
   ApiPublicHooksFeedCopiesTickRouteImport.update({
     id: '/api/public/hooks/feed-copies-tick',
     path: '/api/public/hooks/feed-copies-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksVelocityWorkerRoute =
+  ApiPublicHooksVelocityWorkerRouteImport.update({
+    id: '/api/public/hooks/velocity-worker',
+    path: '/api/public/hooks/velocity-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
@@ -2521,6 +2535,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
+  '/admin/settings/velocity': typeof AuthenticatedAdminSettingsVelocityRoute
   '/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
@@ -2557,6 +2572,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -2856,6 +2872,7 @@ export interface FileRoutesByTo {
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
+  '/admin/settings/velocity': typeof AuthenticatedAdminSettingsVelocityRoute
   '/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
@@ -2892,6 +2909,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -3197,6 +3215,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/_authenticated/admin/settings_/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
+  '/_authenticated/admin/settings_/velocity': typeof AuthenticatedAdminSettingsVelocityRoute
   '/_authenticated/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/_authenticated/portal/check-ins_/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
@@ -3233,6 +3252,7 @@ export interface FileRoutesById {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -3538,6 +3558,7 @@ export interface FileRouteTypes {
     | '/admin/settings/chat'
     | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
+    | '/admin/settings/velocity'
     | '/portal/agreements-native/$packageId'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
@@ -3574,6 +3595,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -3873,6 +3895,7 @@ export interface FileRouteTypes {
     | '/admin/settings/chat'
     | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
+    | '/admin/settings/velocity'
     | '/portal/agreements-native/$packageId'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
@@ -3909,6 +3932,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -4213,6 +4237,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings_/chat'
     | '/_authenticated/admin/settings_/nutrition-automation'
     | '/_authenticated/admin/settings_/sms'
+    | '/_authenticated/admin/settings_/velocity'
     | '/_authenticated/portal/agreements-native/$packageId'
     | '/_authenticated/portal/check-ins_/$formId'
     | '/_authenticated/portal/events/$id'
@@ -4249,6 +4274,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -4408,6 +4434,7 @@ export interface RootRouteChildren {
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
+  ApiPublicHooksVelocityWorkerRoute: typeof ApiPublicHooksVelocityWorkerRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksGoalIntelTickRoute: typeof ApiPublicHooksGoalIntelTickRoute
@@ -6094,6 +6121,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSettingsSmsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/settings_/velocity': {
+      id: '/_authenticated/admin/settings_/velocity'
+      path: '/settings/velocity'
+      fullPath: '/admin/settings/velocity'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsVelocityRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/portal/agreements-native/$packageId': {
       id: '/_authenticated/portal/agreements-native/$packageId'
       path: '/agreements-native/$packageId'
@@ -6393,6 +6427,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/feed-copies-tick'
       fullPath: '/api/public/hooks/feed-copies-tick'
       preLoaderRoute: typeof ApiPublicHooksFeedCopiesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/velocity-worker': {
+      id: '/api/public/hooks/velocity-worker'
+      path: '/api/public/hooks/velocity-worker'
+      fullPath: '/api/public/hooks/velocity-worker'
+      preLoaderRoute: typeof ApiPublicHooksVelocityWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/fillout': {
@@ -7090,6 +7131,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
   AuthenticatedAdminSettingsNutritionAutomationRoute: typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
+  AuthenticatedAdminSettingsVelocityRoute: typeof AuthenticatedAdminSettingsVelocityRoute
   AuthenticatedAdminAgreementsNativeIndexRoute: typeof AuthenticatedAdminAgreementsNativeIndexRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
   AuthenticatedAdminChallengesIndexRoute: typeof AuthenticatedAdminChallengesIndexRoute
@@ -7262,6 +7304,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSettingsNutritionAutomationRoute:
       AuthenticatedAdminSettingsNutritionAutomationRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
+    AuthenticatedAdminSettingsVelocityRoute: AuthenticatedAdminSettingsVelocityRoute,
     AuthenticatedAdminAgreementsNativeIndexRoute:
       AuthenticatedAdminAgreementsNativeIndexRoute,
     AuthenticatedAdminAgreementsIndexRoute:
@@ -7602,6 +7645,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
+  ApiPublicHooksVelocityWorkerRoute: ApiPublicHooksVelocityWorkerRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksGoalIntelTickRoute: ApiPublicHooksGoalIntelTickRoute,

@@ -9,7 +9,14 @@ import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import { olympicExercise } from "@/lib/lift-analysis/exercise";
 
 const db = supabase as any;
-const STATUS: Record<string,string> = { queued:"Waiting to read", running:"Reading on an open device", done:"Read complete", needs_calibration:"Needs calibration", needs_review:"Needs a look", failed:"Read stopped", cancelled:"Video removed", skipped:"Automatic reading off" };
+const STATUS: Record<string,string> = { queued:"Waiting to read (automatic, no need to keep the app open)", running:"Reading", done:"Read complete", needs_calibration:"Needs calibration", needs_review:"Read: no speed logged", failed:"Read stopped", cancelled:"Video removed", skipped:"Automatic reading off" };
+/** Where a job is, in words: the server's reader names its stage. */
+function jobLine(j: any): string {
+  if (!j) return "Not queued";
+  if (j.status === "running") return j.worker === "server" ? `Reading on the server${j.stage ? ` (${j.stage})` : ""}` : "Reading on this device";
+  if (j.status === "queued" && j.available_at && Date.parse(j.available_at) > Date.now()) return "Will try again shortly (automatic)";
+  return STATUS[j.status] ?? "Not queued";
+}
 
 export function VelocityControls({ videoId, analysis, exerciseName, onCalibrate }: { videoId:string; analysis:LiftAnalysis|null; exerciseName:string; onCalibrate:()=>void }) {
   const qc=useQueryClient();
@@ -36,14 +43,14 @@ export function VelocityControls({ videoId, analysis, exerciseName, onCalibrate 
   const quality=analysis?setupQuality(analysis):null;
   const olympic=olympicExercise(exerciseName);
   return <section className="mb-4 space-y-2 border-b border-border pb-3" aria-label="Velocity controls">
-    <p className="text-sm font-medium" role="status">{job.error?"Could not read job status":STATUS[job.data?.status]??"Not queued"}{job.data?.attempts>0?` · attempt ${job.data.attempts} of 3`:""}</p>
+    <p className="text-sm font-medium" role="status">{job.error?"Could not read job status":jobLine(job.data)}{job.data?.server_attempts>0?` · server attempt ${job.data.server_attempts} of 4`:""}</p>
     {job.data?.error && <p className="text-xs text-muted-foreground">{job.data.error}</p>}
     {olympic && <p className="text-xs text-muted-foreground">Olympic lifts log each set's average peak bar speed, with the bar path. Pull, catch and jerk phases aren't split out.</p>}
     {quality && <details className="text-xs text-muted-foreground" data-setup-accuracy><summary>Camera &amp; setup accuracy {quality.score}/100</summary><ul className="mt-1">{quality.parts.map(p=><li key={p.name}>{p.name}: {p.points}/{p.max}</li>)}</ul></details>}
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" disabled={busy} onClick={onCalibrate}>Calibrate / rerun</Button>
       <Button size="sm" variant="ghost" disabled={busy} onClick={()=>void run("velocity_job_retry",{_video:videoId,_enabled:!job.data?.enabled})}>{job.data?.enabled?"Turn off auto read":"Enable auto read"}</Button>
-      {job.data?.status==="failed" && <Button size="sm" variant="outline" disabled={busy} onClick={()=>void run("velocity_job_retry",{_video:videoId,_enabled:true})}>Try again</Button>}
+      {(job.data?.status==="failed"||job.data?.status==="needs_review") && <Button size="sm" variant="outline" disabled={busy} onClick={()=>void run("velocity_job_retry",{_video:videoId,_enabled:true})}>Read again automatically</Button>}
       <Button size="sm" variant="ghost" disabled={busy||!analysis} onClick={()=>void control(meta.data?.excluded?"include":"exclude",{_reason:meta.data?.excluded?"Included after review":"Flagged inaccurate"})}>{meta.data?.excluded?"Use this read again":"Flag as inaccurate"}</Button>
       <Button size="sm" variant="ghost" disabled={busy} onClick={()=>setEdit(!edit)}>Edit set speed</Button>
       <Button size="sm" variant="ghost" disabled={busy||!analysis} onClick={()=>void control("select")}>{meta.data?.set?.velocity_selected_video_id===videoId?"Selected clip":"Use this clip for the set"}</Button>

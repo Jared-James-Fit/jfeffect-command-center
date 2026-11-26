@@ -76,7 +76,9 @@ export type QualityNote =
   /** A rise after the set, never seen coming back down, wasn't counted as a rep. */
   | "after_set"
   /** The athlete took out a rise that isn't a rep. */
-  | "reps_edited";
+  | "reps_edited"
+  /** Read by the server's estimate (estimate.ts: the bar's end followed by its picture, its height the ruler). */
+  | "estimated_track";
 
 export type LiftAnalysis = {
   engine: string;

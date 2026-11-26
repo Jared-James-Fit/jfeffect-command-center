@@ -167,8 +167,14 @@ async function pump() {
             why: res.why,
           }, { lease, computeMs: Math.round(performance.now()-started) });
         }
-        if (!res.ok && res.why === "cancelled") await db.rpc("velocity_job_fail", { _video: job.setVideoId, _lease: lease, _reason: "Paused; resume when the app is open", _retry: true });
-        // cancelled: nothing kept, it's tried again on the next open
+        // cancelled (the app went to the background): the job goes back, the try not counted, and the
+        // server's reader picks it up; nothing waits for this phone to be opened again
+        if (!res.ok && res.why === "cancelled")
+          await db.rpc("velocity_job_release", { _video: job.setVideoId, _lease: lease }).then(
+            (r: { error?: unknown }) => {
+              if (r?.error) return db.rpc("velocity_job_fail", { _video: job.setVideoId, _lease: lease, _reason: "Handed to the server", _retry: true });
+            },
+          );
       } catch {
         if (lease) await db.rpc("velocity_job_fail", { _video: job.setVideoId, _lease: lease, _reason: "The read could not finish. Try again.", _retry: true });
       } finally {
