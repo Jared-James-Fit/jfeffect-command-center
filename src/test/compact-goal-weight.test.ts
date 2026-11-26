@@ -17,3 +17,31 @@ describe("compact goal weight", () => {
     expect(roundUpWeight(NaN, 2.5)).toBeNull();
   });
 });
+
+import { discussedKg, nearestMeetTarget, validMeetIncrement, inferredUnitKey, reviewedSourceUnit, reviewTarget } from "@/lib/goal-intel/competition-review";
+describe("competition review", () => {
+  it("rounds draft targets without altering the original pounds", () => {
+    const source = { client_unit: "lb" as const, client_value: 220, client_value_max: 225 };
+    expect(nearestMeetTarget(discussedKg(source), 2.5)).toBe(102.5);
+    expect(nearestMeetTarget(inputKg(115,"lb"), 2.5)).toBe(52.5);
+    expect(nearestMeetTarget(inputKg(280,"lb"), 2.5)).toBe(127.5);
+    expect(validMeetIncrement(inputKg(225,"lb"),2.5)).toBe(false);
+    expect(validMeetIncrement(102.5,2.5)).toBe(true);
+    expect(source.client_value_max).toBe(225);
+  });
+  it("does not infer a missing unit or accept stale source confirmation", () => {
+    expect(discussedKg({client_unit:null,client_value:225,client_value_max:null})).toBeNull();
+    const g = {id:"squat",version:1,client_unit:"lb" as const,client_unit_source:"inferred" as const};
+    const key = inferredUnitKey(g)!;
+    expect(reviewedSourceUnit(g,{[key]:true})).toBe("lb");
+    expect(reviewedSourceUnit({...g,version:2},{[key]:true})).toBeUndefined();
+  });
+});
+
+import type { GoalRow } from "@/lib/goal-intel/types";
+it("distinguishes a supported Cleo option from the discussed fallback", () => {
+  const g = {client_unit:"lb",client_value:220,client_value_max:225,feasibility:{confidence:"medium",recommended:"moderate",recommendedWhy:"Training supports this target",approaches:[{key:"moderate",label:"Moderate",targetKg:100,line:"Supported"}]}} as unknown as GoalRow;
+  expect(reviewTarget(g,2.5,"cleo")).toMatchObject({kg:100,basis:"Cleo suggested",approach:"Moderate",reason:"Training supports this target"});
+  expect(reviewTarget(g,2.5,"discussed").kg).toBe(102.5);
+  expect(reviewTarget({...g,feasibility:{...g.feasibility!,confidence:"low"}},2.5,"cleo").basis).toBe("Discussed range");
+});
