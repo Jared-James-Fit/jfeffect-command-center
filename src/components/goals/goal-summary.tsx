@@ -60,9 +60,6 @@ function scoreTone(score: number | null | undefined) {
   if (score >= 30) return "text-amber-700 dark:text-amber-300";
   return "text-destructive";
 }
-function barTone(score: number) {
-  return score >= 70 ? "bg-emerald-500" : score >= 30 ? "bg-amber-500" : "bg-destructive";
-}
 
 function goalWeight(kg: number | null | undefined, unit: Unit, hi: number | null = null, recorded?: Unit): DualWeight | null {
   return kg == null || !Number.isFinite(Number(kg)) ? null : dualRange(Number(kg), hi, unit, recorded);
@@ -246,6 +243,14 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
         </span>
       </div>
 
+      {g.source_kind && (
+        <div className="mt-1 text-xs leading-snug text-muted-foreground" data-goal-source>
+          <span className="font-medium">{SOURCE_WORD[g.source_kind] ?? "On file"}{g.source_at ? ` · ${ago(g.source_at)}` : ""}</span>
+          {g.source_speaker ? ` · ${g.source_speaker === "unclear" ? "Speaker unconfirmed" : g.source_speaker === "athlete" ? "Athlete" : "Coach"}` : ""}
+          {g.source_quote ? <p className="mt-0.5">“{g.source_quote}”</p> : g.source_context ? <p className="mt-0.5">{g.source_context}</p> : null}
+        </div>
+      )}
+
       {g.kind !== "preference" && (
         <dl className="mt-1.5 grid grid-cols-3 gap-2 text-xs" data-goal-numbers>
           <Num label="Client" value={clientWeight?.primary ?? said ?? (g.client_value != null ? "Unit needed" : "—")} secondary={clientWeight?.secondary} note={g.client_unit_source === "inferred" ? "unit inferred" : g.tentative ? "tentative" : null} />
@@ -260,14 +265,9 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
 
       {f && (
         <div className="mt-2" data-goal-feasibility>
-          {f.score != null && (
-            <div className="mb-1 h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-              <div className={cn("h-full rounded-full", barTone(f.score))} style={{ width: `${Math.max(4, f.score)}%` }} />
-            </div>
-          )}
-          <p className={cn("text-xs", scoreTone(f.score))}>
-            {f.headline}
-            {f.score != null && f.confidence !== "high" ? <span className="text-muted-foreground"> · {CONF_WORD[f.confidence]}</span> : null}
+          <p className={cn("text-xs", scoreTone(f.score))} title={f.headline + " · " + CONF_WORD[f.confidence]}>
+            {f.score == null ? "Not enough data" : f.score >= 70 ? "Supported" : f.score >= 30 ? "Stretch target" : "High risk"}
+            {f.recommendedWhy ? <span className="text-muted-foreground"> · {f.recommendedWhy}</span> : f.action?.line ? <span className="text-muted-foreground"> · {f.action.line}</span> : null}
           </p>
           {f.progress?.line && !compact && <p className="text-[11px] text-muted-foreground">Progress: {f.progress.line}{f.progress.pct != null ? ` (${f.progress.pct}%)` : ""}</p>}
         </div>
@@ -276,7 +276,6 @@ function GoalItem({ g, view, unit, compact, onOpenTraining }: { g: GoalRow; view
       {/* Cleo's recommended action and the coach's choices */}
       {g.status === "proposed" && g.kind !== "preference" && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {f?.action?.line && <p className="w-full text-xs text-muted-foreground" data-goal-action>{f.action.line}</p>}
           {measurable && said ? (
             <Button size="sm" className="h-9" disabled={busy} onClick={() => approveAs({ action: "approve" }, `Approved ${clientTop(g) ?? ""}`.trim())} data-goal-approve>
               Approve {clientWeight ? <WeightWords weight={goalWeight(sourceKg(g.client_value_max ?? g.client_value, g.client_unit, g.client_kg_max ?? g.client_kg), unit, null, g.client_unit ?? undefined)} /> : clientTop(g)}

@@ -14,6 +14,10 @@ import {
   type WorkspaceTab,
 } from "@/components/clients/client-workspace-tab-model";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
+import { openSummer } from "@/lib/cleo-open";
 
 export type { WorkspaceTab };
 
@@ -21,6 +25,7 @@ interface ClientWorkspaceTabsProps {
   activeTab: WorkspaceTab;
   onChange: (tab: WorkspaceTab) => void;
   heading?: string;
+  clientId?: string;
 }
 
 /**
@@ -31,7 +36,8 @@ interface ClientWorkspaceTabsProps {
  * the row, never sits off the edge). Every existing tab stays: the work you
  * do with a client in the row, profile and setup pages under More.
  */
-export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWorkspaceTabsProps) {
+export function ClientWorkspaceTabs({ activeTab, onChange, heading, clientId }: ClientWorkspaceTabsProps) {
+  const canAsk = useCleoAccess();
   const activeMore = CLIENT_WORKSPACE_MORE_TABS.find((item) => item.value === activeTab);
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -46,8 +52,15 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWork
 
   return (
     <div className="mb-4 bg-background" data-client-tabs>
-      {heading ? (
-        <div className="pb-1 text-[12px] font-medium text-muted-foreground">{heading}</div>
+      {heading || (canAsk && clientId) ? (
+        <div className="flex items-center justify-between gap-2 pb-1">
+          <div className="text-[12px] font-medium text-muted-foreground">{heading ?? "Workspace"}</div>
+          {canAsk && clientId ? (
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => openSummer({ clientId })}>
+              <CleoAvatar className="h-4 w-4" /> Ask Cleo
+            </Button>
+          ) : null}
+        </div>
       ) : null}
       <nav aria-label="Client workspace" className="border-b border-border">
         <div

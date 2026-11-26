@@ -113,7 +113,7 @@ export function guessCategory(text: string, section?: CleoSection | null): CleoC
 // ---------------------------------------------------------------------------
 // Where the coach is: the client and the section a page is about.
 
-export const CLEO_SECTIONS = ["client", "workouts", "nutrition", "cardio", "builder", "intelligence", "analytics", "checkins", "messages"] as const;
+export const CLEO_SECTIONS = ["client", "workouts", "nutrition", "cardio", "builder", "intelligence", "analytics", "checkins", "messages", "competition", "meetings", "forms", "sessions", "billing", "details", "goals", "coaching", "notes", "documents", "account"] as const;
 export type CleoSection = (typeof CLEO_SECTIONS)[number];
 
 export const SECTION_LABEL: Record<CleoSection, string> = {
@@ -126,6 +126,17 @@ export const SECTION_LABEL: Record<CleoSection, string> = {
   analytics: "Analytics",
   checkins: "Weekly check-ins",
   messages: "Messages",
+  competition: "Competition",
+  meetings: "Meetings",
+  forms: "Forms",
+  sessions: "Sessions",
+  billing: "Billing",
+  details: "Client details",
+  goals: "Goals and intake",
+  coaching: "Coaching setup",
+  notes: "Coach notes",
+  documents: "Documents",
+  account: "Login and access",
 };
 
 export const SECTION_CATEGORY: Record<CleoSection, CleoCategory> = {
@@ -138,6 +149,7 @@ export const SECTION_CATEGORY: Record<CleoSection, CleoCategory> = {
   analytics: "analytics",
   checkins: "checkins",
   messages: "general",
+  competition: "program", meetings: "general", forms: "checkins", sessions: "general", billing: "general", details: "general", goals: "general", coaching: "general", notes: "general", documents: "general", account: "general",
 };
 
 export function isSection(v: unknown): v is CleoSection {
@@ -160,8 +172,9 @@ const CLIENT_TAB_SECTION: Record<string, CleoSection> = {
   nutrition: "nutrition",
   cardio: "cardio",
   metrics: "analytics",
-  coaching: "checkins",
-  "goals-setup": "client",
+  coaching: "coaching",
+  "goals-setup": "goals",
+  competition: "competition", meetings: "meetings", documents: "forms", sessions: "sessions", purchases: "billing", info: "details", notes: "notes", files: "documents", account: "account",
   summary: "client",
 };
 

@@ -60,7 +60,7 @@ export async function getSessionsHome(c: Caller, data: any) {
   const [{ data: sessions }, { data: memories }, { data: openRecs }] = await Promise.all([
     supabase
       .from("coaching_sessions")
-      .select("id, event, format, status, scheduled_at, minutes, created_at, analysis_status, shared_at, write_up_status, pt_session_id, coach_reviewed_at, changes, agenda, auto_prepared")
+      .select("id, event, format, status, scheduled_at, minutes, created_at, analysis_status, shared_at, write_up_status, pt_session_id, coach_reviewed_at, changes, agenda, auto_prepared, analysis")
       .eq("client_id", data.clientId)
       .order("created_at", { ascending: false })
       .limit(30),
@@ -70,13 +70,14 @@ export async function getSessionsHome(c: Caller, data: any) {
   const ptById = new Map(calls.map((x: any) => [x.id, x]));
   const list = ((sessions ?? []) as any[]).map((s) => {
     const pt = s.pt_session_id ? ptById.get(s.pt_session_id) : null;
-    const { agenda, ...rest } = s;
+    const { agenda, analysis, ...rest } = s;
     const changedSinceReview = ((s.changes ?? []) as any[]).filter((x) => !s.coach_reviewed_at || x.at > s.coach_reviewed_at).length;
     const recs = ((openRecs ?? []) as any[]).filter((r) => r.session_id === s.id && !r.applied_at);
     return {
       ...rest,
       changes: undefined,
       objective: agenda?.objective ?? null,
+      summary: typeof analysis?.summary === "string" ? analysis.summary : null,
       changedSinceReview,
       openRecommendations: recs.length,
       appointment: pt

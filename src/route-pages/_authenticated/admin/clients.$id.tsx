@@ -128,10 +128,11 @@ function TabFallback() {
   );
 }
 
-function SectionNav({ activeTab, onChange, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
+function SectionNav({ activeTab, onChange, heading, clientId }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string; clientId?: string }) {
   return (
     <ClientWorkspaceTabs
       activeTab={activeTab as WorkspaceTab}
+      clientId={clientId}
       onChange={(next) => onChange(next as TabValue)}
       heading={heading}
     />
@@ -685,6 +686,7 @@ export function ClientProfileWorkspace({
       <Tabs value={tab ?? "summary"} onValueChange={(v) => setTab(v as TabValue)}>
         <SectionNav
           activeTab={(tab ?? "summary") as TabValue}
+          clientId={id}
           onChange={(v) => setTab(v)}
           compact={embedded}
           heading={embedded ? "Workspace" : undefined}

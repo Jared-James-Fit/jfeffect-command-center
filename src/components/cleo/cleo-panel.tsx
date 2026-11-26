@@ -76,6 +76,17 @@ const FINANCE_STARTERS = ["How much should be set aside for taxes right now?", "
 
 function clientStarters(first: string, section: string | null): string[] {
   switch (section) {
+    case "meetings": return ["Summarize the last meeting", "What decisions and follow-ups are on file?", "Show the attempts we discussed"];
+    case "competition": return ["Review competition readiness", "Show discussed and approved attempts", "What needs a decision?"];
+    case "billing": return ["Review payment history", "Explain the current plan", "Show outstanding payments"];
+    case "goals": return ["Review pending goals", "Where did these proposals come from?", "Show approved targets"];
+    case "forms": return ["Review recent forms", "Show missing responses"];
+    case "notes": return ["Summarize relevant coach notes", "Find past decisions"];
+    case "sessions": return ["Review session history", "What is coming up?"];
+    case "details": return ["Review client information", "What is missing?"];
+    case "coaching": return ["Review coaching setup", "What is still outstanding?"];
+    case "documents": return ["Find client documents", "What is on file?"];
+    case "account": return ["Review account setup", "What access issues are outstanding?"];
     case "nutrition":
       return [`How is ${first} doing on their nutrition plan?`, `Is ${first}'s bodyweight trend on track?`, `What would you change in ${first}'s plan?`];
     case "cardio":

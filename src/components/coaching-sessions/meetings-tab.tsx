@@ -9,9 +9,10 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarClock, ChevronDown, ChevronRight, History, Plus } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronRight, History, Info, Plus } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -29,6 +30,19 @@ import type { SessionEvent } from "@/lib/coaching-sessions/events";
 import { MemoryPanel } from "./memory-panel";
 import { STATE_WORDS, type AppointmentState } from "@/lib/coaching-sessions/lifecycle";
 import { meetingsKey } from "./keys";
+
+function MeetingHelp({ label, text }: { label: string; text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" title={text} aria-label={label} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 text-xs" align="start">{text}</PopoverContent>
+    </Popover>
+  );
+}
 
 const FORMAT_WORDS: Record<string, string> = {
   call: "Call",
@@ -149,7 +163,7 @@ export function MeetingsWorkspace({
             className="h-9"
             onClick={() => setPrepare({ format: level === "touch_base" ? "touch_base" : "call" })}
           >
-            <Plus className="mr-1 h-4 w-4" /> Prepare a meeting
+            <Plus className="mr-1 h-4 w-4" /> New meeting
           </Button>
           <Button
             size="sm"
@@ -157,8 +171,9 @@ export function MeetingsWorkspace({
             className="h-9"
             onClick={() => setPrepare({ format: "retrospective" })}
           >
-            <History className="mr-1 h-4 w-4" /> Add a past meeting
+            <History className="mr-1 h-4 w-4" /> Log meeting
           </Button>
+          <MeetingHelp label="About meeting actions" text="New meeting creates an agenda for an upcoming conversation. Log meeting records a completed conversation using notes or a transcript." />
         </div>
       </section>
 
@@ -195,7 +210,7 @@ export function MeetingsWorkspace({
                         s.changedSinceReview && s.status !== "done"
                           ? `${s.changedSinceReview} new in the plan`
                           : null,
-                        s.openRecommendations ? `${s.openRecommendations} to act on` : null,
+                        s.openRecommendations ? `${s.openRecommendations} follow-ups` : null,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -213,6 +228,14 @@ export function MeetingsWorkspace({
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
+                {s.status === "done" && (
+                  <div className="space-y-1.5 px-4 pb-3 pl-11 text-xs">
+                    {s.summary ? <p className="whitespace-pre-wrap text-muted-foreground">{s.summary}</p> : null}
+                    {(d.intelligence as any[]).filter((i) => i.source_session_id === s.id && i.status !== "archived" && ["goal", "decision", "commitment"].includes(i.kind)).slice(0, 6).map((i) => (
+                      <p key={i.id} className="leading-snug"><span className="font-medium">{i.status === "confirmed" ? "Saved note" : "For review"}:</span> {i.text}</p>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -234,6 +257,7 @@ export function MeetingsWorkspace({
       {/* What Cleo remembers from conversations */}
       <MemoryPanel
         clientId={clientId}
+        title="Client memory"
         rows={(d.intelligence as any[]).filter((i) => i.status !== "archived")}
         today={d.today}
         onChange={() => qc.invalidateQueries({ queryKey: meetingsKey(clientId) })}
@@ -418,7 +442,7 @@ function PrepareSheet({
       >
         <SheetHeader>
           <SheetTitle>
-            {format === "retrospective" ? "Add a past meeting" : "Prepare a meeting"}
+            {format === "retrospective" ? "Log meeting" : "New meeting"}
           </SheetTitle>
         </SheetHeader>
         <div className="mt-3 space-y-5 pb-4" data-prepare-sheet>
@@ -501,7 +525,7 @@ function PrepareSheet({
           </div>
           <div className="space-y-2">
             <p className="text-[13px] font-medium text-muted-foreground">
-              What you want to decide (one a line, optional)
+              What you want to decide (one per line, optional)
             </p>
             <Textarea
               value={priorities}
@@ -516,7 +540,7 @@ function PrepareSheet({
             loading={go.isPending}
             onClick={() => go.mutate()}
           >
-            {format === "retrospective" ? "Add it" : "Prepare"}
+            {format === "retrospective" ? "Log meeting" : "Create agenda"}
           </Button>
         </div>
       </SheetContent>
