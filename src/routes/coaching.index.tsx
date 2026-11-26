@@ -37,7 +37,7 @@ import { trackSite } from "@/lib/site-funnel";
 import { shareMeta } from "@/lib/share-meta";
 import { hostedImageProps } from "@/lib/hosted-image";
 import { CoachingPackagesGrid, PackageCard } from "@/components/sales/coaching-packages";
-import { comparisonPackages, packageComparisonLink } from "@/lib/coaching-packages/packages";
+import { comparisonPackages, packageComparisonLink, publicComparisonRows, priceText } from "@/lib/coaching-packages/packages";
 import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
 import {
   callsPolicy,
@@ -719,9 +719,42 @@ function PackageComparisonPage({ packages, plans }: { packages: PublicPackage[];
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {rows.map((pkg) => <PackageCard key={pkg.slug} pkg={pkg} compact from="packages" />)}
             </div>
+            {rows.length > 1 && <PackageFeatureComparison packages={rows} />}
           </section>
         ))}
       </section>
     </SalesPageShell>
+  );
+}
+
+
+/** Optional comparison: no inferred entitlement claims, and no mixing one-off
+ * purchases with recurring services in the same table. */
+function PackageFeatureComparison({ packages }: { packages: PublicPackage[] }) {
+  const rows = publicComparisonRows(packages);
+  return (
+    <details className="rounded-2xl border border-border bg-card" data-package-feature-comparison>
+      <summary className="cursor-pointer px-5 py-4 text-sm font-semibold">Compare inclusions side by side</summary>
+      <div className="border-t border-border p-4">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-sm">
+            <caption className="sr-only">Listed package features and prices</caption>
+            <thead>
+              <tr className="border-b border-border text-left align-bottom">
+                <th scope="col" className="w-48 p-3 font-medium">Listed features</th>
+                {packages.map(p => <th scope="col" key={p.slug} className="min-w-36 max-w-56 p-3 font-semibold"><span className="block">{p.name}</span><span className="block pt-1 text-xs font-normal text-muted-foreground">{priceText(p)}</span></th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => <tr key={row.key} className="border-b border-border last:border-0">
+                <th scope="row" className="max-w-56 whitespace-normal p-3 text-left font-medium">{row.label}</th>
+                {row.listed.map((listed,i) => <td key={packages[i].slug} className="p-3 text-center">{listed ? <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /><span className="sr-only">Listed</span></span> : <span className="text-muted-foreground"><span aria-hidden="true">—</span><span className="sr-only">Not explicitly listed</span></span>}</td>)}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">A dash means this exact feature is not listed in the package description. Ask your coach if you need clarification.</p>
+      </div>
+    </details>
   );
 }

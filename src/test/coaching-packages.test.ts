@@ -5,6 +5,8 @@ import {
   callsLine,
   callsPolicy,
   comparisonPackages,
+  publicComparisonRows,
+  selectedPublicSlugs,
   packageComparisonLink,
   PACKAGES_PAGE_URL,
   centerpiece,
@@ -448,5 +450,22 @@ describe("shareable package comparisons", () => {
     expect(url.searchParams.get("view")).toBe("packages");
     expect(url.searchParams.get("plans")).toBe("complete,free");
     expect(url.pathname).toBe("/coaching");
+  });
+});
+
+describe("focused package comparison and sharing", () => {
+  it("only compares explicitly listed feature wording, without guessing synonyms or inclusions", () => {
+    const rows = publicComparisonRows([
+      { ...complete, features: ["Weekly check-ins", "Training", " weekly check-ins "] },
+      { ...free, features: [" WEEKLY CHECK-INS ", "Training templates"] },
+    ]);
+    expect(rows).toEqual([
+      { key: "weekly check-ins", label: "Weekly check-ins", listed: [true, true] },
+      { key: "training", label: "Training", listed: [true, false] },
+      { key: "training templates", label: "Training templates", listed: [false, true] },
+    ]);
+  });
+  it("rejects unlisted, unknown and duplicate selections", () => {
+    expect(selectedPublicSlugs([complete, free, plusDraft], ["plus", "complete", "unknown", "complete", "free"])).toEqual(["complete", "free"]);
   });
 });

@@ -168,6 +168,8 @@ function fake(via: string) {
 }
 
 const service = fake("service");
+const goalCalls = vi.hoisted(() => ({ decide: vi.fn(), recover: vi.fn(), assess: vi.fn() }));
+vi.mock("@/lib/goal-intel/goals.server", () => ({ decideGoal: goalCalls.decide, extractFromMeeting: goalCalls.recover, assessClient: goalCalls.assess }));
 const pushed: Row[] = [];
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: service }));
 vi.mock("@/lib/push/message-push.server", () => ({ pushNewMessage: async (_db: any, msg: Row) => { pushed.push(msg); return { results: [] }; } }));
@@ -177,6 +179,7 @@ describe("approving a coach's card", () => {
   beforeEach(() => {
     writes.length = 0;
     pushed.length = 0;
+    goalCalls.decide.mockReset(); goalCalls.recover.mockReset(); goalCalls.assess.mockReset();
     tables = {
       user_roles: [{ user_id: OWNER, role: "admin" }, { user_id: ANA, role: "coach" }],
       role_permissions: [],
@@ -205,6 +208,41 @@ describe("approving a coach's card", () => {
     const own = fake("owner");
     return { supabase: own, db: own, userId: OWNER };
   };
+
+  it("approves a reviewed goal through the ledger as the assigned coach", async () => {
+    const { approveAction } = await import("@/lib/cleo-actions.server");
+    const goal = crypto.randomUUID();
+    tables.client_goals = [{ id: goal, client_id: MARC, version: 2, status: "proposed", kind: "lift" }];
+    goalCalls.decide.mockResolvedValue({ title: "Squat target", approved_kg: 102.5 });
+    const id = card("approve_goal_target", { client_id: MARC, goal_id: goal, expected_version: 2, value: 102.5, unit: "kg", client_facing: false });
+    const result = await approveAction(ownerActor(), id);
+    expect(result.status).toBe("done");
+    expect(goalCalls.decide).toHaveBeenCalledWith(service, goal, { action: "approve", expectedVersion: 2, value: 102.5, unit: "kg", clientFacing: false }, { userId: ANA, kind: "coach" });
+  });
+
+  it("refuses a stale or mismatched goal before the ledger writes anything", async () => {
+    const { approveAction } = await import("@/lib/cleo-actions.server");
+    const goal = crypto.randomUUID();
+    tables.client_goals = [{ id: goal, client_id: MARC, version: 3, status: "proposed", kind: "lift" }];
+    const params = { client_id: MARC, goal_id: goal, expected_version: 2, value: 102.5, unit: "kg", client_facing: false };
+    expect((await approveAction(ownerActor(), card("approve_goal_target", params))).status).toBe("failed");
+    tables.client_goals[0].client_id = NICO;
+    expect((await approveAction(ownerActor(), card("approve_goal_target", { ...params, expected_version: 3 }))).status).toBe("failed");
+    expect(goalCalls.decide).not.toHaveBeenCalled();
+  });
+
+  it("recovers proposals only for a completed, analyzed meeting belonging to the client", async () => {
+    const { approveAction } = await import("@/lib/cleo-actions.server");
+    const session = crypto.randomUUID();
+    tables.coaching_sessions = [{ id: session, client_id: MARC, status: "done", analysis_status: "ready" }];
+    goalCalls.recover.mockResolvedValue({ created: 2, updated: 0 });
+    expect((await approveAction(ownerActor(), card("recover_meeting_goals", { client_id: MARC, session_id: session }))).status).toBe("done");
+    expect(goalCalls.recover).toHaveBeenCalledWith(service, session);
+    expect(goalCalls.decide).not.toHaveBeenCalled();
+    tables.coaching_sessions[0].status = "ready";
+    expect((await approveAction(ownerActor(), card("recover_meeting_goals", { client_id: MARC, session_id: session }))).status).toBe("failed");
+    expect(goalCalls.recover).toHaveBeenCalledTimes(1);
+  });
 
   it("sends the message as the coach, not the owner, and records who approved", async () => {
     const { approveAction } = await import("@/lib/cleo-actions.server");

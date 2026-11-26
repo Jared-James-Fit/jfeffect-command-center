@@ -1,3 +1,7 @@
+import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
+import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
+import { clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
+import { splitPlans } from "@/lib/nutrition-targets/plan-history";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion } from "@/components/ui/accordion";
@@ -263,6 +267,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cardioQ.data, days, cardioClient, initial?.id]);
 
+  const historyClient = form?.client_id || clientId || "";
+  const historyQ = useQuery({ ...clientPlansQuery(historyClient), enabled: open && !!historyClient });
+  const revisionsQ = useQuery({ ...nutritionRevisionQuery(historyClient), enabled: open && !!historyClient });
+  const history = splitPlans(historyQ.data ?? []);
+  const historyRefs = [...history.current.filter(p => p.id !== form?.id), ...orderPlanReferences(history.previous, revisionsQ.data ?? [])].filter(p => p.id !== form?.id);
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
@@ -490,6 +499,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </div>
           </div>
 
+          {open && historyClient && <NutritionWeekSummary key={historyClient} clientId={historyClient} days={days} references={historyRefs} historyUnavailable={historyQ.isError || revisionsQ.isError} historyLoading={historyQ.isLoading || revisionsQ.isLoading} currentId={form.id} anchor={form.start_date} />}
           <Accordion type="single" collapsible defaultValue={!initial && !prefill ? "paste" : undefined} className="rounded-xl border border-border">
             <Section value="paste" icon={ClipboardPaste} title="Paste a meal plan" meta="Fills the days">
               <MealPlanBulkPaste

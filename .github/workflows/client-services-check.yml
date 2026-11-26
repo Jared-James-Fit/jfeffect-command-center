@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'src/components/clients/**'
+      - 'src/components/sales/package-share-dialog.tsx'
+      - 'src/components/leads/lead-card.tsx'
+      - 'src/components/coaching-sessions/command-centre.tsx'
       - 'src/lib/clients-directory*'
       - 'src/lib/client-setup-requests.ts'
       - 'src/lib/client-goals/**'

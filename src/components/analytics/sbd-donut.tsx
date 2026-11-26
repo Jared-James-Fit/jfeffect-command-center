@@ -41,6 +41,7 @@ export function SbdDonut({
   today,
   unit,
   onRecords,
+  onCompetitions,
   periods = [],
   hideBodyweight = false,
 }: {
@@ -52,6 +53,7 @@ export function SbdDonut({
   today: string;
   unit: Unit;
   onRecords?: () => void;
+  onCompetitions?: () => void;
   periods?: Array<{id: string; name: string; start: string; end: string}>;
   hideBodyweight?: boolean;
 }) {
@@ -202,6 +204,7 @@ export function SbdDonut({
       <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
         <span>{view === "current" ? (fallback ? "Recent training only · projection unavailable" : total == null ? "Recent evidence needed" : `${projection.confidence} confidence · ${fmtDay(today)}`) : competition.meet && view === "competition" ? `${competition.meet.name ?? "Competition"} · ${fmtDay(competition.meet.date)}` : "Individual bests · different dates possible"}</span>
         <InfoTip label="About this total">{description}</InfoTip>
+        {view === "competition" && onCompetitions && <button type="button" className="min-h-10 shrink-0 font-medium text-foreground" onClick={onCompetitions}>Competitions ›</button>}
         {view === "gym" && onRecords && <button type="button" className="min-h-10 shrink-0 font-medium text-foreground" onClick={onRecords}>Records ›</button>}
       </div>
 
