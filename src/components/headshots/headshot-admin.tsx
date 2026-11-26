@@ -302,7 +302,7 @@ export function AccountHeadshotPanel({ clientId, clientName, bare = false }: { c
  * The account headshot in a sheet, so a retake is one tap from client management (the Clients
  * list row's ⋯) and from the client's header ⋯, without opening the client's details.
  */
-export function HeadshotSheet({ open, onOpenChange, clientId, clientName }: { open: boolean; onOpenChange: (o: boolean) => void; clientId: string; clientName?: string }) {
+export function HeadshotSheet({ open, onOpenChange, clientId, clientName }: { open: boolean; onOpenChange: (o: boolean) => void; clientId: string; clientName?: string | null }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" swipeToClose className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] sm:mx-auto sm:max-w-[560px]" data-headshot-sheet>
@@ -310,7 +310,7 @@ export function HeadshotSheet({ open, onOpenChange, clientId, clientName }: { op
           <SheetTitle>{clientName || "Account headshot"}</SheetTitle>
           <SheetDescription>Their private account headshot. Request one or a retake, approve one waiting, or take it with them.</SheetDescription>
         </SheetHeader>
-        <div className="mt-3">{open && <AccountHeadshotPanel clientId={clientId} clientName={clientName} bare />}</div>
+        <div className="mt-3">{open && <AccountHeadshotPanel clientId={clientId} clientName={clientName ?? undefined} bare />}</div>
       </SheetContent>
     </Sheet>
   );

@@ -35,6 +35,6 @@ describe("account headshot request is reachable", () => {
   it("the sheet shows the panel bare (no card inside a sheet)", () => {
     const src = read("src/components/headshots/headshot-admin.tsx");
     expect(src).toMatch(/export function HeadshotSheet/);
-    expect(src).toContain("<AccountHeadshotPanel clientId={clientId} clientName={clientName} bare />");
+    expect(src).toContain("<AccountHeadshotPanel clientId={clientId} clientName={clientName ?? undefined} bare />");
   });
 });
