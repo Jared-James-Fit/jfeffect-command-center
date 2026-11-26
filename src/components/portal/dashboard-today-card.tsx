@@ -103,7 +103,7 @@ function buildView(state: TodayState) {
       if (it.week?.week_index != null) meta.push(`Week ${it.week.week_index + 1}`);
       return {
         eyebrow: "Training Day",
-        title: `${dayDisplayTitle(it)}${it.day?.focus ? ` — ${it.day.focus}` : ""}`,
+        title: dayDisplayTitle(it),
         subtitle: meta.join(" · ") || undefined,
         icon: <Play className="h-5 w-5" />,
         iconBg: "bg-primary",
@@ -122,7 +122,7 @@ function buildView(state: TodayState) {
       const it = state.item;
       return {
         eyebrow: "In Progress",
-        title: `${dayDisplayTitle(it)}${it.day?.focus ? ` — ${it.day.focus}` : ""}`,
+        title: dayDisplayTitle(it),
         subtitle: "Pick up where you left off.",
         icon: <RotateCcw className="h-5 w-5" />,
         iconBg: "bg-amber-500",
@@ -159,7 +159,7 @@ function buildView(state: TodayState) {
       const it = state.item;
       return {
         eyebrow: "Upcoming",
-        title: `${dayDisplayTitle(it)}${it.day?.focus ? ` — ${it.day.focus}` : ""}`,
+        title: dayDisplayTitle(it),
         subtitle: state.whenLabel,
         icon: <Crosshair className="h-5 w-5" />,
         iconBg: "bg-primary",
@@ -177,7 +177,7 @@ function buildView(state: TodayState) {
       const it = state.item;
       return {
         eyebrow: "Missed",
-        title: `${dayDisplayTitle(it)}${it.day?.focus ? ` — ${it.day.focus}` : ""}`,
+        title: dayDisplayTitle(it),
         subtitle: state.whenLabel,
         icon: <AlertCircle className="h-5 w-5" />,
         iconBg: "bg-destructive",

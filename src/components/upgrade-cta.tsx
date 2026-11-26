@@ -11,13 +11,11 @@ type Props = {
   perks?: string[];
 };
 
-export function UpgradeCTA({
-  title = "Unlock the full app",
-  subtitle = "Upgrade your membership to access this content.",
-  inline = false,
-  perks,
-}: Props) {
+export function UpgradeCTA({ title: givenTitle, subtitle: givenSubtitle, inline = false, perks }: Props) {
   const native = isNative();
+  // the iPhone app says what it is, never "upgrade" (native-purchases.ts)
+  const title = givenTitle ?? (native ? "Not included in your account" : "Unlock the full app");
+  const subtitle = givenSubtitle ?? (native ? "" : "Upgrade your membership to access this content.");
 
   if (inline) {
     return (
@@ -25,11 +23,11 @@ export function UpgradeCTA({
         <div className="flex items-center gap-2 text-sm">
           <Lock className="h-4 w-4 text-amber-500" />
           <span className="font-medium">{title}</span>
-          <span className="text-muted-foreground hidden sm:inline">— {subtitle}</span>
+          {subtitle && <span className="text-muted-foreground hidden sm:inline">— {subtitle}</span>}
         </div>
-        {/* Upgrade button is web-only; on native, direct users to jfeffect.com */}
+        {/* Upgrade is web-only. The App Store build says nothing about buying elsewhere
+            (guideline 3.1.1 / 3.1.3: no calls to action for outside purchases). */}
         {!native && <Link to="/portal/plan"><Button size="sm">Upgrade</Button></Link>}
-        {native && <span className="text-xs text-muted-foreground">Available at jfeffect.com</span>}
       </div>
     );
   }
@@ -39,7 +37,7 @@ export function UpgradeCTA({
         <Lock className="h-5 w-5 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="text-lg font-bold">{title}</div>
-          <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>
+          {subtitle && <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>}
           {perks && perks.length > 0 && (
             <ul className="mt-3 space-y-1 text-sm">
               {perks.map((p) => <li key={p} className="flex items-center gap-2">✓ <span>{p}</span></li>)}
@@ -49,11 +47,6 @@ export function UpgradeCTA({
             <Link to="/portal/plan" className="mt-4 inline-block">
               <Button>See plans & upgrade</Button>
             </Link>
-          )}
-          {native && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              An existing JF Effect account is required. Purchases are not available inside the app.
-            </p>
           )}
         </div>
       </div>

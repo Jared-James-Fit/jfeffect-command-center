@@ -11,8 +11,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { readPovClient } from "@/lib/pov-guard";
 import { captureSource, currentDevice, visitorId } from "@/lib/join-funnel";
+import { sourceFrom } from "@/lib/join-source";
+import { drainEvents, installTelemetry, pendingEvents } from "./telemetry";
 import {
   BEAT_MS,
+  browserOf,
   featureOf,
   normalizePath,
   optedOut,
@@ -24,6 +27,25 @@ import {
 } from "./pulse-rules";
 
 const VISIT_KEY = "jf_visit_v1";
+/** "Don't use my visits for analytics" on this device (Account → Privacy & data), like GPC. */
+export const ANALYTICS_OFF_KEY = "jf_analytics_off";
+
+export function analyticsOffHere(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(ANALYTICS_OFF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setAnalyticsOffHere(off: boolean): void {
+  try {
+    if (off) window.localStorage.setItem(ANALYTICS_OFF_KEY, "1");
+    else window.localStorage.removeItem(ANALYTICS_OFF_KEY);
+  } catch {
+    /* private mode: nothing to remember */
+  }
+}
 
 /** The device's time zone (Intl), which the server reads only to place a visit within its country. */
 function deviceTimeZone(): string | null {
@@ -46,6 +68,8 @@ let visibleSince: number | null = null;
 let activeMs = 0;
 let sentFirst = false;
 let flushTimer: number | null = null;
+/** The page load's own landing (its address and referrer) is the touch of the first visit it opens only. */
+let loadTouchUsed = false;
 
 function uuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -133,16 +157,21 @@ async function send(final: boolean): Promise<void> {
   } catch {
     token = null;
   }
-  const out = optedOut(navigator as any, window as any);
+  const out = optedOut(navigator as any, window as any) || analyticsOffHere();
   if (povActive(uid)) {
     queue = [];
     activeMs = 0;
+    drainEvents(1000);
     return;
   }
   if (!uid && out) {
     queue = [];
+    drainEvents(1000);
     return;
   }
+  // an opted-out person's performance and errors aren't kept either
+  const drained = drainEvents(out ? 1000 : 30);
+  const events = out ? [] : drained;
   const vid = visitorId();
   if (!vid) return;
   const { id, fresh } = currentVisit(now);
@@ -150,7 +179,7 @@ async function send(final: boolean): Promise<void> {
   const views = queue.splice(0, 40);
   const seconds = Math.round(activeMs / 1000);
   activeMs = 0;
-  if (!views.length && seconds <= 0 && sentFirst && !final) return;
+  if (!views.length && seconds <= 0 && sentFirst && !final && !events.length) return;
   const first = !sentFirst;
   const path = lastPath ?? normalizePath(window.location.pathname);
   const body: Record<string, unknown> = {
@@ -159,6 +188,7 @@ async function send(final: boolean): Promise<void> {
     views,
     seconds,
     optOut: out,
+    events,
   };
   if (first) {
     const src = captureSource();
@@ -181,6 +211,8 @@ async function send(final: boolean): Promise<void> {
       utm_medium: src.utm_medium ?? null,
       utm_campaign: src.utm_campaign ?? null,
       tz: deviceTimeZone(),
+      browser: browserOf(navigator.userAgent, !!nativePlatform()),
+      touch: visitTouch(),
     };
   }
   sentFirst = true;
@@ -194,6 +226,18 @@ async function send(final: boolean): Promise<void> {
   } catch {
     // a lost beat loses a minute of counting, never anything the person did
   }
+}
+
+/**
+ * Where this visit itself came from (last-touch attribution): the page load's address and referrer
+ * for the first visit a page load opens; a visit that starts later in the same page load (back after
+ * 30 minutes away) came from nowhere new, so it's direct.
+ */
+function visitTouch(): { referrer: string | null; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; from: string | null } {
+  if (loadTouchUsed) return { referrer: null, utm_source: null, utm_medium: null, utm_campaign: null, from: null };
+  loadTouchUsed = true;
+  const t = sourceFrom(window.location.href, document.referrer);
+  return { referrer: t.referrer, utm_source: t.utm_source, utm_medium: t.utm_medium, utm_campaign: t.utm_campaign, from: t.source };
 }
 
 function record(pathname: string): void {
@@ -219,12 +263,17 @@ function record(pathname: string): void {
 export function startAppPulse(subscribe: (cb: (pathname: string) => void) => () => void): () => void {
   if (started || typeof window === "undefined" || blockedHost()) return () => {};
   started = true;
+  installTelemetry();
   visibleSince = document.visibilityState === "visible" ? Date.now() : null;
   record(window.location.pathname);
   const unsub = subscribe((p) => record(p));
   const beat = window.setInterval(() => {
     if (document.visibilityState === "visible") void send(false);
   }, BEAT_MS);
+  // a burst of events (errors, a failed screen) goes within a few seconds, not at the next minute
+  const eventCheck = window.setInterval(() => {
+    if (pendingEvents() >= 10 && sentFirst) void send(false);
+  }, 5_000);
   let lastTouch = 0;
   const onInput = () => {
     const now = Date.now();
@@ -253,6 +302,7 @@ export function startAppPulse(subscribe: (cb: (pathname: string) => void) => () 
   return () => {
     unsub();
     window.clearInterval(beat);
+    window.clearInterval(eventCheck);
     window.removeEventListener("pointerdown", onInput);
     window.removeEventListener("keydown", onInput);
     document.removeEventListener("visibilitychange", onVisibility);

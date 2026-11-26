@@ -1,4 +1,5 @@
 import { Fragment, Suspense, memo, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CrewPromoScreen, useCrewPromos } from "@/components/community/crew-promo";
 import { feedPostMounted } from "@/lib/feed-window";
 import { useOpenedOnce } from "@/hooks/use-opened-once";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ import { ShareWorkoutButton } from "@/components/community/share-workout-picker"
 import { useSwipeToCreate } from "@/components/community/swipe-to-create";
 import { StoryHostProvider, StoryRail } from "@/components/community/crew-stories";
 import { StoryReplyHost } from "@/components/community/story-reply-host";
+import { CrewWarningNotice } from "@/components/community/crew-rules-sheet";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { DiscoverPage } from "@/components/community/discover";
 import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
@@ -47,6 +49,9 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 import { LeagueWeekScreen } from "@/components/community/league-week-card";
 import { useLeagueWeek, useLeagueWeekSeen } from "@/lib/league-week.queries";
 import { spotlightReady } from "@/lib/league-week";
+import { ownAudience } from "@/lib/rankings-audience";
+import { useRankingsAudience } from "@/lib/use-rankings-audience";
+import { useServiceTier } from "@/lib/service-tier";
 
 /**
  * Crew opens on the feed, under one slim bar (TikTok's / Instagram's): + to
@@ -234,6 +239,8 @@ export function CommunityScreen({
   // the one being scrolled: its pages, its "more", its loading
   const activeFeed = following ? followingFeed : ranked;
   const feedPosts = useMemo(() => (!following ? ownPosts : followsNobody ? [] : followingPosts), [following, ownPosts, followsNobody, followingPosts]);
+  // JF Effect's own promos on the Crew tab (crew-ads/placement.ts): never for staff, a preview or a coach's page
+  const promos = useCrewPromos(feedPosts.length, !viewerIsStaff && !previewOnly && !coach && !following && !hideTabs);
   // the stories on the Following tab: the people you follow and yours, like its posts
   const railPosts = useMemo(() => (following ? posts.filter((p) => inFollowingFeed(p, followingIds)) : posts), [following, posts, followingIds]);
   // "You're all caught up" goes before the first post you'd already seen, when new ones came first
@@ -354,7 +361,10 @@ export function CommunityScreen({
   // Never on the coach's own page (their login isn't in the League); a coach viewing as a client sees the
   // client's card and records nothing.
   const weekOn = ownBar && !coach;
-  const weekQ = useLeagueWeek(weekOn);
+  // whose week: the board they last chose in Rankings, else the one they're on (a member's is Community's, since they aren't on JF Effect Athletes)
+  const { stored: storedAudience } = useRankingsAudience();
+  const { tier: weekTier } = useServiceTier();
+  const weekQ = useLeagueWeek(weekOn, ownAudience(storedAudience, weekTier));
   const week = weekQ.data ?? null;
   const weekSeen = useLeagueWeekSeen(week && !previewOnly ? week.week_start : null);
   const [weekSlot, setWeekSlot] = useState<"wait" | "show" | "skip">("wait");
@@ -883,6 +893,19 @@ export function CommunityScreen({
               out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
             if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
               out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });
+            const promo = promos.at(i);
+            if (promo)
+              out.push({
+                key: `promo-${promo.slot}-${promo.promo.id}`,
+                node: (
+                  <CrewPromoScreen
+                    promo={promo.promo}
+                    onSeen={() => promos.send(promo.promo.id, "impression")}
+                    onTap={() => promos.send(promo.promo.id, "click")}
+                    onDismiss={() => promos.dismiss(promo.promo.id)}
+                  />
+                ),
+              });
             return out;
           })}
           flash={flash}
@@ -987,6 +1010,8 @@ export function CommunityScreen({
       {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} unit={unit} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
+      {/* a warning from the team, shown once (members only) */}
+      {!previewOnly && !viewerIsStaff && <CrewWarningNotice />}
       {detailUsed && (
         <Suspense fallback={null}>
           <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} at={detailAt?.id === detailId ? detailAt.at : undefined} />

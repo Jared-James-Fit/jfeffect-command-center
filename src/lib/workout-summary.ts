@@ -170,11 +170,12 @@ export function computeWorkoutSummary(
  * The recap's score in plain words (the formula above, said, never changed):
  * the share of planned sets logged, 10 off when pain was reported, 3 on for a
  * note to the coach, and the stars as the score out of 5 (or their own
- * rating when it's higher).
+ * rating when it's higher). `stars: false` where no stars are shown (the
+ * completion screen's ring is the score, Nov 25 2026).
  */
 export function explainWorkoutScore(
   s: Pick<WorkoutSummary, "score" | "completedSets" | "prescribedSets" | "completionPct">,
-  o: { pain?: boolean | null; ownRating?: number | null } = {},
+  o: { pain?: boolean | null; ownRating?: number | null; stars?: boolean } = {},
 ): string[] {
   const lines: string[] = [];
   lines.push(
@@ -184,6 +185,6 @@ export function explainWorkoutScore(
   );
   lines.push(o.pain ? "Pain reported: 10 off." : "Reporting pain takes 10 off.");
   lines.push("A note for your coach adds 3. Weights and effort don't change it: it's how much of the plan got done.");
-  lines.push(o.ownRating ? "Stars: the score out of 5, or your own rating when it's higher." : "Stars: the score out of 5.");
+  if (o.stars !== false) lines.push(o.ownRating ? "Stars: the score out of 5, or your own rating when it's higher." : "Stars: the score out of 5.");
   return lines;
 }

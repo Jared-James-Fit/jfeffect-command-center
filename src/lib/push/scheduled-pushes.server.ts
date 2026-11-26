@@ -3,6 +3,8 @@
 //   1. release pushes that were held during quiet hours
 //   2. one morning game plan per person (8am local, only if something's due)
 //   3. monthly recap ready (the 1st, 9am local, only if they played)
+//   4. Cleo's weekly recap for Premium members (Monday 9am local, premium/weekly-recap.server.ts)
+//   5. Crew items waiting for review that nobody was told about (crew-reports.server.ts)
 import { digestLines, weighInDue } from "@/lib/checkin-coordination/plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLIENT_VIEW_HOME } from "@/lib/client-home";
@@ -34,11 +36,26 @@ export function digestBody(parts: Array<string | null | undefined | false>): str
 export async function runPushTick(admin: SupabaseClient, now = new Date()) {
   const db = admin as any;
   const queue = await deliverQueuedPushes(admin);
+  // Crew items waiting for review that nobody was told about yet (word-filter flags; a report whose push didn't go)
+  try {
+    const { notifyWaitingCrewReports } = await import("@/lib/push/crew-reports.server");
+    await notifyWaitingCrewReports(admin, now);
+  } catch (e) {
+    console.warn("[push-tick] crew reports failed", e);
+  }
+  // Cleo's weekly recap for Premium members (Monday 9am local; nobody until Premium is granted)
+  let cleoRecaps = 0;
+  try {
+    const { runWeeklyRecaps } = await import("@/lib/premium/weekly-recap.server");
+    cleoRecaps = (await runWeeklyRecaps(admin, now)).written;
+  } catch (e) {
+    console.warn("[push-tick] cleo recaps failed", e);
+  }
 
   // Only people with at least one active device.
   const { data: subs } = await db.from("push_subscriptions").select("user_id").eq("enabled", true);
   const userIds = [...new Set(((subs ?? []) as any[]).map((s) => s.user_id).filter(Boolean))] as string[];
-  if (!userIds.length) return { queue, digests: 0, recaps: 0 };
+  if (!userIds.length) return { queue, digests: 0, recaps: 0, cleoRecaps };
 
   const [{ data: prefs }, { data: roles }, { data: clients }] = await Promise.all([
     db.from("push_notification_preferences").select("user_id, timezone").in("user_id", userIds),
@@ -99,7 +116,7 @@ export async function runPushTick(admin: SupabaseClient, now = new Date()) {
       }
     }
   }
-  return { queue, digests, recaps };
+  return { queue, digests, recaps, cleoRecaps };
 }
 
 async function leagueParticipants(db: any, month: string): Promise<Set<string>> {
@@ -162,28 +179,57 @@ async function clientDigest(db: any, clientId: string, today: string) {
 
 async function staffDigest(db: any, uid: string, role: string, today: string) {
   let scope: string[] | null = null; // null = every client (admin)
+  const { data: coach } = await db.from("coaches").select("id").eq("user_id", uid).maybeSingle();
   if (role !== "admin") {
-    const { data: coach } = await db.from("coaches").select("id").eq("user_id", uid).maybeSingle();
     if (!coach) return null;
     const { data: mine } = await db.from("clients").select("id").eq("assigned_coach_id", coach.id).eq("archived", false);
     scope = ((mine ?? []) as any[]).map((c) => c.id);
     if (!scope.length) return null;
   }
   const inScope = (q: any) => (scope ? q.in("client_id", scope) : q);
+  const now = new Date();
+  const since7 = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+  const since3 = new Date(now.getTime() - 3 * 86_400_000).toISOString();
 
-  const [{ data: due }, { data: plans }, { count: videos }] = await Promise.all([
+  const [{ data: due }, { data: plans }, { count: videos }, { count: reviews }, { data: blocks }, { data: onboarding }, { data: failed }, { data: msgs }] = await Promise.all([
     inScope(db.from("nutrition_targets").select("client_id")
       .eq("status", "Active").not("end_date", "is", null).lte("end_date", addDays(today, 3))),
     inScope(db.from("nutrition_ai_plans").select("client_id").eq("status", "ready").is("applied_at", null)),
     inScope(db.from("lift_videos").select("id", { count: "exact", head: true }).eq("status", "New Upload")),
+    inScope(db.from("submission_reviews").select("id", { count: "exact", head: true })
+      .in("review_status", ["submitted", "needs_review", "draft_ready", "coach_editing"])),
+    inScope(db.from("pl_blocks").select("client_id, end_date").eq("archived", false).gte("end_date", today)).limit(2000),
+    (scope ? db.from("clients").select("id").in("id", scope) : db.from("clients").select("id").eq("archived", false))
+      .eq("status", "New Client").lt("created_at", since3).limit(500),
+    inScope(db.from("purchase_records").select("client_id").is("archived_at", null)
+      .in("payment_status", ["Payment Failed", "Past Due", "Overdue"])).limit(500),
+    inScope(db.from("messages").select("client_id, sender_role, created_at").eq("is_internal_note", false)
+      .gte("created_at", since7).order("created_at", { ascending: false })).limit(2000),
   ]);
-  const nDue = new Set(((due ?? []) as any[]).map((r) => r.client_id)).size;
-  const nPlans = new Set(((plans ?? []) as any[]).map((r) => r.client_id)).size;
-  const body = digestBody([
-    nDue > 0 && `${plural(nDue, "nutrition update")} due`,
-    nPlans > 0 && `${plural(nPlans, "nutrition plan")} to apply`,
-    (videos ?? 0) > 0 && `${plural(videos ?? 0, "lift video")} to review`,
-  ]);
-  if (!body) return null;
-  return { title: "Coach Game Plan ☕", body, url: nDue > 0 || nPlans > 0 ? "/admin/nutrition-targets" : "/admin/lift-videos" };
+  const lastByClient = new Map<string, { sender_role: string | null; created_at: string }>();
+  for (const m of (msgs ?? []) as any[]) if (!lastByClient.has(m.client_id)) lastByClient.set(m.client_id, m);
+
+  // today's sessions and calls, for the coach's own diary
+  let todayLine: string | null = null;
+  if (coach?.id) {
+    const { coachDayItems } = await import("@/lib/reminders/session-reminders.server");
+    const { daySummary } = await import("@/lib/reminders/session-reminders");
+    const { fmtClock } = await import("@/lib/schedule-time");
+    const { data: pref } = await db.from("push_notification_preferences").select("timezone").eq("user_id", uid).maybeSingle();
+    const tz = pref?.timezone || DEFAULT_TZ;
+    todayLine = daySummary(await coachDayItems(db, coach.id, tz, today), (iso) => fmtClock(new Date(iso), tz))?.line ?? null;
+  }
+
+  const { coachDigest, programsEndingCount, unansweredCount } = await import("@/lib/reminders/coach-digest");
+  return coachDigest({
+    today: todayLine,
+    checkInsToReview: reviews ?? 0,
+    programsEnding: programsEndingCount((blocks ?? []) as any[], today),
+    onboardingIncomplete: ((onboarding ?? []) as any[]).length,
+    failedPayments: new Set(((failed ?? []) as any[]).map((r) => r.client_id)).size,
+    unansweredMessages: unansweredCount(lastByClient.values(), now),
+    nutritionDue: new Set(((due ?? []) as any[]).map((r) => r.client_id)).size,
+    nutritionPlansToApply: new Set(((plans ?? []) as any[]).map((r) => r.client_id)).size,
+    liftVideos: videos ?? 0,
+  });
 }

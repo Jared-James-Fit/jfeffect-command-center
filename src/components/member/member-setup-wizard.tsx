@@ -46,7 +46,7 @@ const EXPERIENCE_OPTIONS = [
 type Step = SetupStep;
 
 import { WEEK_DAYS, SHORT_DAY } from "@/lib/training-schedule";
-import { isFreeAccount, setupStepsFor, type SetupStep } from "@/lib/member-setup-steps";
+import { isFreeAccount, openSetupSteps, type SetupStep } from "@/lib/member-setup-steps";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { useServiceTier } from "@/lib/service-tier";
 
@@ -74,7 +74,8 @@ export function MemberSetupWizard({
 
   // a free account is asked two things (goal + experience, then days); the paid membership all five
   const free = isFreeAccount(m);
-  const STEPS = setupStepsFor(m);
+  // only what's still open: never re-asks the goal and experience their application gave
+  const STEPS = openSetupSteps(m);
   const [picked, setStep] = useState<Step | null>(null);
   const step: Step = picked && STEPS.includes(picked) ? picked : STEPS[0];
   const [busy, setBusy] = useState(false);

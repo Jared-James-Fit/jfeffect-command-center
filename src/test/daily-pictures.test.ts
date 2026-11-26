@@ -527,8 +527,8 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     );
     // no direction given: recovery leans to a character moment; a frame carries no words, whatever the writer sent; a place that isn't a gym is the first one offered
     expect(c).toMatchObject({ pillar: "recovery", topic: "sleep_performance", crowd: "lifters", mood: "analytical", format: "coach_note", style: "side_profile", light: "fresh_morning", art: "drama", setting: "garage_gym", typography: "", message: "m", drafts: ["one", "two", "four"] });
-    // no read, treatment, palette or cast sent: anime key art, the first palette, someone in it
-    expect(c).toMatchObject({ rendering: "anime", palette: "crisp_white", cast: "newer_lifter" });
+    // no read, treatment, palette or cast sent: athletic photography (the identity since Nov 25 2026), the first palette, someone in it
+    expect(c).toMatchObject({ rendering: "photo", palette: "crisp_white", cast: "newer_lifter" });
     expect(c!.read).toBeUndefined();
     // a light from an older look isn't one any more: the first one offered
     expect(parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "light": "night_session", "captions": ["a"]}', choices)!.light).toBe("big_windows");
@@ -583,7 +583,7 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     // the palette, who's in it and the treatment are offered like the light
     expect(p).toContain('PALETTE, as "palette"');
     expect(p).toContain(`WHO'S IN IT, as "cast"`);
-    expect(p).toContain('TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it)');
+    expect(p).toContain('TREATMENT, as "rendering" (athletic photography for most posts, technical illustration for a breakdown; another only when the read calls for it)');
     expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: substance 3/5.");
     const kept = conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } });
     expect(kept).toContain("KEEP THIS CAPTION EXACTLY, word for word");
@@ -628,8 +628,9 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain("no studies, research, statistics or percentages");
     expect(CONCEPT_PROMPT).toContain('"every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time"');
     expect(CONCEPT_PROMPT).not.toContain("Normal sentence case");
-    // the picture is a frame from a serious powerlifting anime, of the lesson, the gear right, never a lifestyle scene
-    expect(CONCEPT_PROMPT).toContain("JF Effect's illustrated house style: a clean, bright 2D frame in the tradition of modern Japanese sports anime");
+    // the picture is premium athletic imagery of the lesson (photography most days), the gear right, never a lifestyle scene
+    expect(CONCEPT_PROMPT).toContain("JF Effect's visual identity: premium athletic imagery");
+    expect(CONCEPT_PROMPT).toContain("an illustrated or anime treatment only now and then");
     // the post is read before its picture is planned, and people aren't always needed
     expect(CONCEPT_PROMPT).toContain('3. Read the post like an art director before you plan any picture ("read")');
     expect(CONCEPT_PROMPT).toContain("whether people are needed at all (often they aren't");
@@ -647,7 +648,8 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain("Never the same person, cast, place, palette or composition as a recent post.");
     expect(CONCEPT_PROMPT).toContain("never cute, childish or comedic in a cartoon way, never a teenager or a school uniform, never fanservice");
     expect(CONCEPT_PROMPT).toContain("never a flat, centred, posed shot");
-    expect(CONCEPT_PROMPT).not.toMatch(/photograph|photo\b/);
+    // photography is a treatment of its own (Nov 25 2026), named in its list, never asked for by the look itself
+    expect(CONCEPT_PROMPT).toContain("Athletic photography for most posts");
     // not every post is technical, and still never a story he didn't live
     expect(VOICE_GUIDE).toContain("Not every post is technical: sometimes it's a quick observation about how lifters train, an opinion, or something competitive lifting teaches");
     // the rewrite speaks the same voice
@@ -663,8 +665,8 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     const p = picturePrompt({ style: "side_profile", light: "big_windows", art: "explainer", setting: "garage_gym", rendering: "graphic", cast: "masters", palette: "cool_blue", read, visual: "a conventional deadlift setup, side-on", typography: "", message: "m" });
     // the same house style, word for word, at the start of every prompt
     expect(p.startsWith(FILM_LOOK)).toBe(true);
-    expect(FILM_LOOK).toContain("JF Effect's illustrated house style: a clean, bright, hand-drawn 2D illustration in the tradition of modern Japanese sports anime");
-    expect(FILM_LOOK).toContain("a neutral white balance (whites read white, steel reads grey, skin reads as skin), soft open shadows that keep their detail");
+    expect(FILM_LOOK).toContain("JF Effect's visual identity: premium athletic imagery in the spirit of the best training brands");
+    expect(FILM_LOOK).toContain("a neutral white balance (whites read white, steel reads grey, skin reads as skin), shadows that keep their detail");
     expect(FILM_LOOK).toContain("Made for a phone screen: one clear subject that reads at a glance");
     expect(p).toContain(DAILY_RENDERINGS.graphic.look);
     expect(p).toContain(ART_STYLES.explainer.look);
@@ -864,7 +866,8 @@ describe("it learns what the crew likes, and never repeats itself", () => {
     expect(c.palettes).not.toContain("cool_blue");
     expect(c.palettes).not.toContain("sage_cream");
     expect(c.palettes).toHaveLength(DAILY_PALETTE_KEYS.length - 2);
-    expect(c.renderings).toEqual(["anime", "soft_anime", "manga_colour"]);
+    // photography and the technical drawing always; an illustrated or anime one only when not in the last three, never anime twice running
+    expect(c.renderings).toEqual(["photo", "technical"]);
     // a place used in the last week goes to the back of the list, never off it (a meet angle can go back to the meet)
     expect(SETTING_GAP_DAYS).toBe(8);
     expect(c.settings).toHaveLength(DAILY_SETTING_KEYS.length);
@@ -1003,7 +1006,7 @@ describe("the 2D film look reaches every day, tested first", () => {
 
 describe("the bright look: one house style, bright and true, real people, never a photo, a dark or orange frame or anything childish", () => {
   it("the house style is a clean, bright 2D frame, and nothing in the look asks for a photo, darkness, an orange cast or a lifestyle scene", () => {
-    for (const want of ["Japanese sports anime", "made for adults", "cel colour", "bright and evenly exposed", "a neutral white balance", "no colour grade over it", "one clear subject that reads at a glance"]) expect(FILM_LOOK, want).toContain(want);
+    for (const want of ["premium athletic imagery", "made for adults", "black, off-white, graphite", "bright and evenly exposed", "a neutral white balance", "no colour grade over it", "one clear subject that reads at a glance"]) expect(FILM_LOOK, want).toContain(want);
     for (const bad of ["photograph", "35mm", "50mm", "documentary", "camera"]) {
       expect(FILM_LOOK, bad).not.toContain(bad);
       for (const l of Object.values(DAILY_LIGHTS)) expect(l.look, bad).not.toContain(bad);
@@ -1019,14 +1022,14 @@ describe("the bright look: one house style, bright and true, real people, never 
     expect(DAILY_SETTINGS.meal_prep.look).toContain("(only for a post about food)");
     // every palette is bright and true; none is an orange cast
     for (const p of Object.values(DAILY_PALETTES)) expect(p.look).not.toMatch(/\b(orange|amber|golden|sepia|dark)\b/);
-    expect(FILM_LOOK_VERSION).toBe("anime_v2");
+    expect(FILM_LOOK_VERSION).toBe("athletic_v3");
   });
 
   it("who's in it decides how they're built: everyday people look everyday, and nobody is a bodybuilder unless they are one", () => {
     expect(DAILY_CASTS.newer_lifter.look).toContain("an adult newer lifter (20s to 40s)");
     expect(DAILY_CASTS.newer_lifter.look).toContain("an ordinary, healthy everyday build with little visible muscle definition");
     // adults from every angle: a newer lifter seen from behind once read as a child
-    expect(FILM_LOOK).toContain("People are adults (20s to 60s) with realistic adult proportions: a normal head-to-body ratio, adult faces and adult builds, never childlike, chibi or big-headed, from any angle.");
+    expect(FILM_LOOK).toContain("People are adults (20s to 60s) with realistic adult proportions and their own faces, never childlike, from any angle.");
     expect(REVIEW_PROMPT).toContain("anyone who looks under 20 or has a child's proportions (a head too big for the body, a small childlike build, from any angle, the back included)");
     expect(DAILY_CASTS.powerlifter.look).toContain("never a bodybuilder");
     expect(DAILY_CASTS.physique.look).toContain("never stage-ready, bulky or oversized");
@@ -1041,7 +1044,7 @@ describe("the bright look: one house style, bright and true, real people, never 
   it("four directions and four treatments, each for its kind of point; old looks keep their names", async () => {
     const { ART_STYLES, artForPillar } = await import("@/lib/daily-visuals");
     expect(Object.keys(ART_STYLES)).toEqual(["key_frame", "drama", "insert", "explainer"]);
-    expect(Object.keys(DAILY_RENDERINGS)).toEqual(["anime", "soft_anime", "graphic", "manga_colour"]);
+    expect(Object.keys(DAILY_RENDERINGS)).toEqual(["photo", "technical", "anime", "soft_anime", "graphic", "manga_colour"]);
     expect(artForPillar("powerlifting_iq")).toBe("explainer");
     expect(artForPillar("mistakes")).toBe("key_frame");
     expect(artForPillar("recovery")).toBe("drama");

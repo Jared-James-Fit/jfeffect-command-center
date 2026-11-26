@@ -54,7 +54,7 @@ describe("the read after the set", () => {
     { timeout: T },
     () => {
       const clip = renderClip(scene({}));
-      const res = runEngine(clip.frames, { dirHint: "lift_first" });
+      const res = runEngine(clip.frames, { plate:{mm:450,rel:0.01,confirmed:true}, dirHint: "lift_first" });
       if (!res.ok) throw new Error(res.why);
       const a = res.analysis;
       expect(a.reps.length).toBe(4);
@@ -69,7 +69,7 @@ describe("the read after the set", () => {
     { timeout: T },
     () => {
       const clip = renderClip(scene({ phases: deadliftThenMove(4, false) }));
-      const res = runEngine(clip.frames, { dirHint: "lift_first" });
+      const res = runEngine(clip.frames, { plate:{mm:450,rel:0.01,confirmed:true}, dirHint: "lift_first" });
       if (!res.ok) throw new Error(res.why);
       const a = res.analysis;
       expect(canEditReps(a)).toBe(true);
@@ -95,7 +95,7 @@ describe("the read after the set", () => {
 describe("velocity loss is only said when it can be trusted", () => {
   it("is never shown wider than the estimate bar", { timeout: T }, () => {
     const clip = renderClip(scene({ phases: deadliftThenMove(4, false) }));
-    const res = runEngine(clip.frames, { dirHint: "lift_first" });
+    const res = runEngine(clip.frames, { plate:{mm:450,rel:0.01,confirmed:true}, dirHint: "lift_first" });
     if (!res.ok) throw new Error(res.why);
     const vl = res.analysis.set.velocityLoss;
     if (vl.tier !== "unavailable") expect(vl.u!).toBeLessThanOrEqual(VL_ESTIMATE_PTS);
@@ -106,7 +106,7 @@ describe("velocity loss is only said when it can be trusted", () => {
     const clip = renderClip(
       scene({ phases: deadliftThenMove(4, false), walker: { t0: 6.9, t1: 8.4 } }),
     );
-    const res = runEngine(clip.frames, { dirHint: "lift_first" });
+    const res = runEngine(clip.frames, { plate:{mm:450,rel:0.01,confirmed:true}, dirHint: "lift_first" });
     if (!res.ok) throw new Error(res.why);
     const a = res.analysis;
     const unread = a.reps.some((r) => r.complete && r.mcv.tier === "unavailable");

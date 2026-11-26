@@ -340,7 +340,10 @@ export const getCurrentMember = createServerFn({ method: "GET" })
       .select("*")
       .eq("member_id", member.id)
       .eq("active", true);
-    return { member, access: access ?? [] };
+    // the iPhone app: a self-serve member's access is the free account's (option B, native-purchases.ts)
+    const { accessForShell } = await import("@/lib/native-purchases");
+    const { digitalPaidAllowedFor } = await import("@/lib/native-purchases.server");
+    return { member, access: accessForShell((access ?? []) as any[], await digitalPaidAllowedFor(userId)) };
   });
 
 /* ---------- self: update own marketing preferences ---------- */

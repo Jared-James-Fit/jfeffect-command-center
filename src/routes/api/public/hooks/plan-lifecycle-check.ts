@@ -14,7 +14,10 @@ export const Route = createFileRoute("/api/public/hooks/plan-lifecycle-check")({
         if (!(await authorizeHookRequest(request))) return new Response("unauthorized", { status: 401 });
         const { runStripeLifecycleCheck } = await import("@/lib/plans/stripe-lifecycle-check.server");
         try {
-          return Response.json(await runStripeLifecycleCheck());
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const body = (await request.json().catch(() => ({}))) as { part?: string };
+          const part = body.part === "core" || body.part === "more" ? body.part : "all";
+          return Response.json(await runStripeLifecycleCheck(supabaseAdmin as any, part));
         } catch (e: any) {
           return Response.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
         }

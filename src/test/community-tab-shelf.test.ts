@@ -185,25 +185,28 @@ describe("the recap: Story is the quick share, Crew the considered post (Nov 18 
     expect(quick).not.toMatch(/useEffect\([^)]*share\(\)/);
   });
   it("Create Crew Post opens the full studio carrying the words; it shows what it earns only when it really earns", () => {
-    expect(footer).toContain("onClick={() => onStudio(story.caption.trim())} data-recap-crew-post");
+    // the Share sheet's Create Crew Post row (Nov 25 2026)
+    expect(footer).toContain("onStudio(story.caption.trim());");
+    expect(footer).toContain('data="crew-post"');
     expect(footer).toContain('const earn = hint?.tone === "earn" && points ? points.points : 0;');
-    expect(footer).toContain("{earn > 0 && <span");
+    expect(footer).toContain("sub={earn > 0 ? `+${earn} league points`");
     expect(read("src/components/community/use-workout-studio.ts")).toContain("caption: existing ? existing.caption : draftCaption,");
   });
   it("says once where the workout already is; a lock-in never counts as one", () => {
-    expect(footer).toContain("In the Crew feed");
+    expect(footer).toContain("Shared to Crew");
+    expect(footer).toContain("data-recap-status-view");
     expect(footer).toContain("Posted to your story automatically");
     expect(footer).not.toContain("locked_in_at");
     expect(footer).toContain('useMyPostForCompletion(completionId, true, "lockin")');
   });
   it("an automatic story (switched on in Privacy) can be hidden, and one they make takes its place", () => {
     expect(footer).toContain('saveCommunityPost({ completionId, caption: "", visibility: "private", media: { action: "keep" } })');
-    expect(footer).toContain("onClick={() => void hideAuto()}");
+    expect(footer).toContain("onClick={() => void share.hideAuto()}");
     expect(footer).toContain("if (replaces) await hideAuto(true);");
   });
   it("one share at a time; Done always closes", () => {
     expect(quick).toContain("if (busyRef.current || !data || !look) return null;");
-    expect(footer).toContain("onClick={onDone} data-recap-done");
+    expect(read("src/components/workout-submission-summary.tsx")).toContain("onClick={close} data-recap-done");
     // the review stays with the coach: nothing of it reaches a story or a post
     expect(footer).not.toMatch(/feedback|\bpain\b|session_rpe|pl_workout_feedback/);
   });

@@ -175,11 +175,13 @@ describe("current plan", () => {
 });
 
 describe("transitions (every valid move)", () => {
+  // a member the coach approved for coaching (the gate itself is plan-approvals.test.ts)
+  const approved = { coaching: { state: "approved" as const, packageId: null, packageName: null, expiresAt: "2026-12-24T00:00:00Z" } };
   const free = currentPlanOf({ tier: "self_serve", enrollment: null, sale: null, catalog });
   const complete = currentPlanOf({ tier: "coaching", enrollment: { id: "e1", package_id: "p-comp", sale_id: "sale-1", contracted_price_cents: 13000 }, sale: liveSale(), catalog });
 
   it("free → coaching is a checkout, effective once paid", () => {
-    expect(transitionFor(free, byslug("complete"))).toMatchObject({ kind: "start", action: "checkout", timing: "after_payment", available: true });
+    expect(transitionFor(free, byslug("complete"), approved)).toMatchObject({ kind: "start", action: "checkout", timing: "after_payment", available: true });
   });
   it("coaching → a bigger package is now, prorated", () => {
     expect(transitionFor(complete, byslug("plus"))).toMatchObject({ kind: "upgrade", action: "swap_now", timing: "now", available: true });
@@ -198,7 +200,7 @@ describe("transitions (every valid move)", () => {
     const f = currentPlanOf({ tier: "self_serve", enrollment: null, sale: null, catalog: cat });
     const to = (s: string) => cat.find((o) => o.slug === s)!;
     expect(transitionFor(f, to("membership")).action).toBe("checkout");
-    expect(transitionFor(mem, to("complete")).action).toBe("swap_now");
+    expect(transitionFor(mem, to("complete"), approved).action).toBe("swap_now");
     expect(transitionFor(mem, to("free")).action).toBe("cancel_later");
     const comp = currentPlanOf({ tier: "coaching", enrollment: { id: "e1", package_id: "p-comp", sale_id: "sale-1", contracted_price_cents: null }, sale: liveSale(), catalog: cat });
     expect(transitionFor(comp, to("membership")).action).toBe("swap_later");
@@ -209,13 +211,13 @@ describe("transitions (every valid move)", () => {
     expect(transitionFor(complete, byslug("plus"), { open: { id: "c", status: "scheduled", kind: "downgrade", toName: "Nutrition Coaching", effectiveAt: null } })).toMatchObject({ available: false, blocked: "Undo your scheduled change first" });
     expect(transitionFor(complete, byslug("plus"), { open: { id: "c", status: "awaiting_payment", kind: "upgrade", toName: "Coaching Plus", effectiveAt: null } }).available).toBe(false);
     // an unfinished checkout never blocks starting again (the old one is expired)
-    expect(transitionFor(free, byslug("plus"), { open: { id: "c", status: "checkout", kind: "start", toName: "Coaching Plus", effectiveAt: null } }).available).toBe(true);
+    expect(transitionFor(free, byslug("plus"), { ...approved, open: { id: "c", status: "checkout", kind: "start", toName: "Coaching Plus", effectiveAt: null } }).available).toBe(true);
     const failing = { ...complete, status: "past_due" as const };
     expect(transitionFor(failing, byslug("plus"))).toMatchObject({ available: false, blocked: "Update your card first" });
     expect(transitionFor(failing, byslug("free")).available).toBe(true);
     const ending = { ...complete, status: "ending" as const };
     expect(transitionFor(ending, byslug("plus")).blocked).toBe("Keep your plan first to change it");
-    expect(transitionFor(free, byslug("plus"), { native: true })).toMatchObject({ available: false, blocked: "Upgrade on the web at jfeffect.com" });
+    expect(transitionFor(free, byslug("plus"), { ...approved, native: true })).toMatchObject({ available: false, blocked: "Not available in the app" });
     // a downgrade or a cancel doesn't charge, so it works in the phone app too
     expect(transitionFor(complete, byslug("free"), { native: true }).available).toBe(true);
     const broken = { ...byslug("plus"), problem: "Its product has no Stripe price" };

@@ -3,13 +3,14 @@ import { describe, expect, it } from "vitest";
 
 describe("Workouts page: program roadmap under the calendar", () => {
   const src = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
-  it("renders after the day (calendar / Block view), before readiness and the month", () => {
-    const blockView = src.indexOf("<BlockViewTab");
+  it("renders last on the page, after the day and Recovery & Performance; the Training plan opens full screen", () => {
+    const day = src.indexOf("<SelectedDayList");
     const card = src.indexOf("<ProgramRoadmapCard");
-    expect(blockView).toBeGreaterThan(-1);
-    expect(card).toBeGreaterThan(blockView);
-    // the program summary, then the Performance card
-    expect(card).toBeLessThan(src.indexOf("<PerformanceCard"));
+    expect(day).toBeGreaterThan(-1);
+    expect(card).toBeGreaterThan(src.indexOf("<RecoveryPerformanceSection"));
+    expect(src).toContain('onOpenPlan={() => openLayer("plan")}');
+    // Block View (every exercise in a block) lives inside the Training plan now
+    expect(src.indexOf("<BlockViewTab")).toBeGreaterThan(src.indexOf('<FullScreenPage\n        open={layer === "plan"}'));
     // the day's cardio is the day's (useDayCardio in SelectedDayList), never a section at the bottom
     expect(src).not.toContain("<ClientCardioSection");
   });

@@ -26,10 +26,9 @@
  * only "needs a look"); a speed already on the set is never touched.
  */
 import { supabase } from "@/integrations/supabase/client";
-import { analyzeVideo } from "@/lib/lift-analysis/run";
-import { analysableExercise, guideLift, repDirection } from "@/lib/lift-analysis/exercise";
+import { readInWorker as analyzeVideo } from "@/lib/lift-analysis/worker-client";
+import { analysableExercise, guideLift, movementOf, repDirection } from "@/lib/lift-analysis/exercise";
 import {
-  hasAnalysis,
   proposalSuggestions,
   saveAnalysis,
   saveNotRead,
@@ -81,7 +80,6 @@ export function queueLiftReread(job: Omit<Auto, "reread"> & { plan: RereadPlan }
 /** Queue a sent set video for analysis (a no-op for exercises without a bar to follow). */
 export function queueLiftAnalysis(job: Auto) {
   if (!job.setVideoId || seen.has(job.setVideoId)) return;
-  if (!analysableExercise(job.exerciseName)) return;
   seen.add(job.setVideoId);
   queue.push(job);
   void pump();
@@ -111,29 +109,42 @@ async function pump() {
       // let the set's own upload and the next clip go first: analysis waits for a quiet moment
       for (let i = 0; i < 60 && getSetVideoJobs().some(isActiveJob); i++) await wait(2_000);
       await whenVisible();
-      const job = queue.shift()!;
+      const job = queue.shift();
+      if (!job) break;
       const re = job.reread;
+      let lease: string | null = null;
       try {
-        if (!re && (await hasAnalysis(job.setVideoId))) continue;
+        const { data: claim, error: claimError } = await db.rpc("velocity_job_claim", { _video: job.setVideoId });
+        if (claimError) throw claimError;
+        if (!claim) continue;
+        lease = claim.lease_id;
+        const started = performance.now();
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), 100_000);
+        const onHide = () => { if (document.visibilityState === "hidden") abort.abort(); };
+        document.addEventListener("visibilitychange", onHide);
         noteTry(re ? rereadKey(job.setVideoId) : job.setVideoId);
         const seed: ShownSeed | undefined =
           re?.mode === "keys" ? { kind: "keys", keys: re.keys } : undefined;
-        const res = await analyzeVideo({
+        let res: Awaited<ReturnType<typeof analyzeVideo>>;
+        try { res = await analyzeVideo({
           source: job.file,
           seed,
           plate:
             re?.mode === "keys" && re.plateMm
               ? { mm: re.plateMm, rel: 0.005, confirmed: true }
               : undefined,
-          dirHint: repDirection(job.exerciseName) ?? undefined,
-          lift: guideLift(job.exerciseName),
+          dirHint: repDirection(claim.exercise_name) ?? undefined,
+          lift: guideLift(claim.exercise_name),
+          movement: movementOf(claim.exercise_name),
           exclude: re?.mode === "keys" ? re.exclude : undefined,
           onProgress: (p) => setRunning(job.setVideoId, p),
-        });
+          signal: abort.signal,
+        }); } finally { clearTimeout(timer); document.removeEventListener("visibilitychange", onHide); }
         // read again meanwhile by hand (Fix tracking, Start over): theirs wins
         if (re && (await readByThisEngine(job.setVideoId))) continue;
         if (res.ok) {
-          await saveAnalysis(job.setVideoId, res.analysis);
+          await saveAnalysis(job.setVideoId, res.analysis, { lease, computeMs: Math.round(performance.now()-started) });
         } else if (re && re.was === "done") {
           // the old read stays: a doubt from the new engine is never worse than a read
         } else if (
@@ -148,18 +159,20 @@ async function pump() {
             status: "needs_tap",
             why: res.why,
             suggestions: proposalSuggestions(res.proposal ?? null),
-          });
+          }, { lease, computeMs: Math.round(performance.now()-started) });
         } else if (!re && (res.why === "unreadable" || res.why === "too_short")) {
           await saveNotRead(job.setVideoId, {
             engine: ENGINE_VERSION,
             status: "failed",
             why: res.why,
-          });
+          }, { lease, computeMs: Math.round(performance.now()-started) });
         }
+        if (!res.ok && res.why === "cancelled") await db.rpc("velocity_job_fail", { _video: job.setVideoId, _lease: lease, _reason: "Paused; resume when the app is open", _retry: true });
         // cancelled: nothing kept, it's tried again on the next open
       } catch {
-        /* nothing kept: the sheet still offers Analyze, and the next open tries again */
+        if (lease) await db.rpc("velocity_job_fail", { _video: job.setVideoId, _lease: lease, _reason: "The read could not finish. Try again.", _retry: true });
       } finally {
+        seen.delete(job.setVideoId);
         setRunning(job.setVideoId, null);
       }
       await wait(500);
@@ -214,132 +227,26 @@ const db = supabase as any;
 export async function resumeLiftAnalyses(uid: string): Promise<number> {
   const conn = (navigator as any)?.connection;
   if (conn?.saveData) return 0;
-  const since = new Date(Date.now() - RESUME_WINDOW_MS).toISOString();
-  const { data, error } = await db
-    .from("pl_set_videos")
-    .select("id, storage_path, exercise_name, duration_s, set_index")
-    .eq("uploaded_by", uid)
-    .is("deleted_at", null)
-    .gte("created_at", since)
-    .gte("set_index", 1)
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (error || !data?.length) return 0;
-  const candidates = (data as any[]).filter(
-    (v) =>
-      v.storage_path &&
-      analysableExercise(v.exercise_name ?? "") &&
-      !seen.has(v.id) &&
-      (v.duration_s == null || Number(v.duration_s) <= RESUME_MAX_SECONDS),
-  );
-  if (!candidates.length) return 0;
-  const { data: done } = await db
-    .from("pl_set_video_analyses")
-    .select("set_video_id")
-    .in(
-      "set_video_id",
-      candidates.map((v) => v.id),
-    );
-  const stored = new Set(((done ?? []) as any[]).map((r) => r.set_video_id));
-  const tries = readTries();
-  const todo = candidates
-    .filter((v) => !stored.has(v.id) && (tries[v.id] ?? 0) < MAX_TRIES)
-    .slice(0, RESUME_MAX_PER_OPEN);
-  let queued = 0;
-  for (const v of todo) {
-    const { data: signed } = await supabase.storage
-      .from("message-attachments")
-      .createSignedUrl(v.storage_path, 3600);
-    if (!signed?.signedUrl) continue;
-    queueLiftAnalysis({
-      setVideoId: v.id,
-      file: signed.signedUrl,
-      exerciseName: v.exercise_name ?? "",
-    });
-    queued++;
-  }
-  return queued + (await resumeRereads(uid).catch(() => 0));
-}
-
-type RecentVideo = {
-  id: string;
-  storage_path: string | null;
-  exercise_name: string | null;
-  duration_s: number | string | null;
-};
-type OldRow = {
-  set_video_id: string;
-  status: string | null;
-  engine: string | null;
-  source: string | null;
-  velocity_accepted: boolean | null;
-  result_engine: string | null;
-  frame: unknown;
-  plate: unknown;
-  keys: unknown;
-};
-
-/** The athlete's own set videos of the last two weeks that an older engine left unfinished or refused. */
-async function resumeRereads(uid: string): Promise<number> {
-  const since = new Date(Date.now() - REREAD_WINDOW_MS).toISOString();
-  const { data: vids, error } = await db
-    .from("pl_set_videos")
-    .select("id, storage_path, exercise_name, duration_s")
-    .eq("uploaded_by", uid)
-    .is("deleted_at", null)
-    .gte("created_at", since)
-    .gte("set_index", 1)
-    .order("created_at", { ascending: false })
-    .limit(40);
-  if (error || !vids?.length) return 0;
-  const byId = new Map<string, RecentVideo>(
-    (vids as RecentVideo[])
-      .filter(
-        (v) =>
-          v.storage_path &&
-          analysableExercise(v.exercise_name ?? "") &&
-          (v.duration_s == null || Number(v.duration_s) <= RESUME_MAX_SECONDS),
-      )
-      .map((v) => [v.id, v]),
-  );
-  if (!byId.size) return 0;
-  const { data: rows } = await db
-    .from("pl_set_video_analyses")
-    // only what the plan reads: never the whole series of every old read
-    .select(
-      "set_video_id, status, engine, source, velocity_accepted, result_engine:result->>engine, frame:result->frame, plate:result->plate, keys:result->track->keys",
-    )
-    .in("set_video_id", [...byId.keys()])
-    .neq("engine", ENGINE_VERSION);
-  const tries = readTries();
-  let queued = 0;
-  for (const r of (rows ?? []) as OldRow[]) {
-    if (queued >= REREAD_MAX_PER_OPEN) break;
-    if ((tries[rereadKey(r.set_video_id)] ?? 0) >= MAX_TRIES) continue;
-    const plan = rereadPlan(
-      {
-        status: r.status,
-        engine: r.engine ?? r.result_engine,
-        velocity_accepted: r.velocity_accepted,
-        source: r.source,
-        result: { frame: r.frame, plate: r.plate, track: { keys: r.keys } },
-      },
-      ENGINE_VERSION,
-    );
-    if (!plan) continue;
-    const v = byId.get(r.set_video_id);
+  // RLS returns the signed-in athlete's or coach's authorized pending jobs, regardless of uploader.
+  const { data: pending, error: pendingError } = await db.from("set_velocity_jobs")
+    .select("set_video_id, exercise_name, available_at, lease_until, status, attempts")
+    .in("status", ["queued", "running"]).eq("enabled", true).lt("attempts", 3)
+    .order("available_at").limit(20);
+  if (pendingError) throw pendingError;
+  let recovered = 0;
+  for (const p of pending ?? []) {
+    if (recovered >= RESUME_MAX_PER_OPEN || seen.has(p.set_video_id) || Date.parse(p.available_at)>Date.now() ||
+        (p.status === "running" && Date.parse(p.lease_until)>Date.now())) continue;
+    const { data: v, error: videoError } = await db.from("pl_set_videos").select("storage_path").eq("id",p.set_video_id).is("deleted_at",null).maybeSingle();
+    if (videoError) throw videoError;
     if (!v?.storage_path) continue;
-    const { data: signed } = await supabase.storage
-      .from("message-attachments")
-      .createSignedUrl(v.storage_path, 3600);
+    const { data: signed, error: signError } = await supabase.storage.from("message-attachments").createSignedUrl(v.storage_path,3600);
+    if (signError) throw signError;
     if (!signed?.signedUrl) continue;
-    queueLiftReread({
-      setVideoId: v.id,
-      file: signed.signedUrl,
-      exerciseName: v.exercise_name ?? "",
-      plan,
-    });
-    queued++;
+    queueLiftAnalysis({ setVideoId:p.set_video_id, file:signed.signedUrl, exerciseName:p.exercise_name });
+    recovered++;
   }
-  return queued;
+  return recovered;
+
 }
+

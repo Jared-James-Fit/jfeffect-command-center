@@ -10,12 +10,17 @@
  *                  from; "Not a lift" takes the read off.
  *   ChatLiftOnSet  a read on a set: which one, and Change.
  *
+ * Attach to workout (Nov 25 2026, filming reminders): a video sent in chat
+ * counts as the workout's footage only once a person puts it on a set
+ * (`set_video_attach_to_workout`, `set_video_mark_attached`); one the read
+ * linked by itself offers Attach to workout to make it count.
+ *
  * The heavy reading code loads only when a video is read.
  */
 import { Suspense, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Activity, Check, ChevronRight, Loader2 } from "lucide-react";
+import { Activity, Check, ChevronRight, Link2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { importWithRetry } from "@/lib/chunk-import";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -49,10 +54,15 @@ export type ChatSetVideo = {
   day_id?: string | null;
   row_id?: string | null;
   label?: string | null;
+  /** A person put it on its set: it counts as the workout's footage. */
+  attached?: boolean;
   suggest?: { row_id: string; set: number; exercise?: string; set_name?: string } | null;
 };
 
 type Msg = { id: string; created_at: string; body?: string | null };
+
+/** A person put this chat video on its set: it's the workout's footage now (filming reminders). */
+const markAttached = (id: string) => db.rpc("set_video_mark_attached", { _id: id }).then(() => {}, () => {});
 
 const lineCls =
   "flex h-10 w-full min-w-0 items-center gap-2 rounded-lg px-1 text-left text-sm text-muted-foreground";
@@ -116,7 +126,10 @@ export function ChatLiftOffer({
         </span>
       </div>
     );
-  if (!staff) return null;
+  if (!staff)
+    return (
+      <AttachToWorkout message={message} storagePath={storagePath} className={className} />
+    );
   return (
     <button
       type="button"
@@ -190,6 +203,7 @@ export function ChatLiftPlace({
     });
     setBusy(null);
     if (error) return toast.error(error.message || "Couldn't put it on that set. Try again.");
+    await markAttached(sv.id);
     refresh();
   };
   const notALift = async () => {
@@ -211,7 +225,7 @@ export function ChatLiftPlace({
           onCancel={() => setPicking(false)}
           onMoved={() => {
             setPicking(false);
-            refresh();
+            void markAttached(sv.id).then(refresh);
           }}
         />
       </Suspense>
@@ -293,7 +307,7 @@ export function ChatLiftOnSet({
           onCancel={() => setPicking(false)}
           onMoved={() => {
             setPicking(false);
-            void qc.invalidateQueries({ queryKey: ["messages"] });
+            void markAttached(sv.id).then(() => qc.invalidateQueries({ queryKey: ["messages"] }));
           }}
         />
       </Suspense>
@@ -309,6 +323,21 @@ export function ChatLiftOnSet({
       <span className="min-w-0 flex-1 truncate">
         On {sv.exercise ?? "its set"} · {sv.set_name || (sv.set ? `Set ${sv.set}` : "")}
       </span>
+      {!sv.attached && (
+        <button
+          type="button"
+          onClick={() =>
+            void markAttached(sv.id).then(() => {
+              toast.success("Attached to your workout");
+              void qc.invalidateQueries({ queryKey: ["messages"] });
+            })
+          }
+          className="h-9 shrink-0 rounded-full px-2 font-medium text-foreground/80 hover:text-foreground"
+          data-chat-lift-attach
+        >
+          Attach to workout
+        </button>
+      )}
       {sv.day_id && (
         <button
           type="button"
@@ -320,5 +349,39 @@ export function ChatLiftOnSet({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * A video the athlete sent in their coach chat, on no workout yet: Attach to
+ * workout puts it on the workout nearest the message (one done in the 18 hours
+ * before it was sent), then they pick the set, so it counts as that workout's
+ * footage. The chat's message never changes.
+ */
+function AttachToWorkout({ message, storagePath, className }: { message: Msg; storagePath: string; className?: string }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const attach = async () => {
+    if (busy) return;
+    setBusy(true);
+    const { data, error } = await db.rpc("set_video_attach_to_workout", { _message_id: message.id, _storage_path: storagePath });
+    setBusy(false);
+    if (error) return toast.error(error.message || "Couldn't attach it. Try again.");
+    if (!data?.day_id) toast("No workout logged around this video to attach it to.");
+    else if (data.linked) toast.success("Attached to your workout");
+    // otherwise the line under it now asks which set it is
+    void qc.invalidateQueries({ queryKey: ["messages"] });
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void attach()}
+      disabled={busy}
+      className={cn(lineCls, "hover:text-foreground", className)}
+      data-chat-attach-workout
+    >
+      {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Link2 className="h-4 w-4 shrink-0" />}
+      <span className="min-w-0 flex-1 truncate">Attach to workout</span>
+    </button>
   );
 }

@@ -1,10 +1,9 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { Loader2, Zap } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { MessagesInbox } from "@/route-pages/_authenticated/admin/messages";
 import { useAdminNavBadgeCounts } from "@/hooks/use-admin-nav-badges";
 import { onPhoneLayoutChange, phoneLayoutNow } from "@/lib/portrait-only";
@@ -21,12 +20,14 @@ function TabFallback() {
   );
 }
 
+// Where the page can open. Messages is the inbox (client chats, members'
+// Support chats and group chats in one list); `groups` opens it on the
+// Groups filter; `support` is app alerts (a workout that didn't load, a sync
+// that failed), reached from the inbox's ⋯.
 const TABS = [
-  { value: "messages", label: "1:1 Chats" },
+  { value: "messages", label: "Messages" },
   { value: "groups", label: "Groups" },
-  // App problems (a workout that didn't load, a sync that failed). Members'
-  // Support chats are 1:1 Chats rows, answered like any chat.
-  { value: "support", label: "Alerts" },
+  { value: "support", label: "App alerts" },
 ] as const;
 type TabKey = typeof TABS[number]["value"];
 
@@ -42,7 +43,7 @@ function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
-type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string; recovery?: string };
+type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string; recovery?: string; openipf?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -60,6 +61,8 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
     if (support) return { tab: "messages", support };
     // the Recovery queue on one item (a push about a reply waiting for approval)
     if (typeof raw?.recovery === "string" && UUID.test(raw.recovery)) return { tab: "messages", recovery: raw.recovery };
+    // OpenIPF's review (a push about athletes found on OpenIPF or new meets)
+    if (raw?.openipf != null && raw.openipf !== "") return { tab: "messages", openipf: "1" };
     if (isTab(t)) return { tab: t, client, sub, ...(msg && t === "messages" ? { msg } : {}) };
     // No ?tab= opens Chats, never whichever tab was used last.
     return { tab: "messages", client, sub, ...(msg ? { msg } : {}) };
@@ -80,31 +83,6 @@ function CommunicationWorkspace() {
   const viewportLockedTab = tab === "messages" || tab === "groups" || tab === "support";
   const { data: badgeCounts } = useAdminNavBadgeCounts();
   const supportCount = badgeCounts?.supportAlerts ?? 0;
-
-  // Tabs scroll sideways on phones: fade whichever edge has more tabs, and
-  // keep the active tab in view.
-  const tabsRef = useRef<HTMLDivElement>(null);
-  const [tabFade, setTabFade] = useState<string | null>(null);
-  const updateTabFade = () => {
-    const el = tabsRef.current;
-    if (!el) return;
-    const left = el.scrollLeft > 4;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
-    setTabFade(left || right
-      ? `linear-gradient(to right, ${left ? "transparent, #000 28px" : "#000"}, ${right ? "#000 calc(100% - 28px), transparent" : "#000"})`
-      : null);
-  };
-  useEffect(() => {
-    const el = tabsRef.current;
-    const btn = el?.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
-    if (el && btn) {
-      const target = btn.offsetLeft - (el.clientWidth - btn.offsetWidth) / 2;
-      el.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
-    }
-    updateTabFade();
-    window.addEventListener("resize", updateTabFade);
-    return () => window.removeEventListener("resize", updateTabFade);
-  }, [tab]);
 
   useEffect(() => {
     if (!viewportLockedTab || typeof window === "undefined") return;
@@ -170,57 +148,25 @@ function CommunicationWorkspace() {
           "calc(var(--vv-h, 100dvh) - var(--app-top-chrome, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
-      {/* Desktop-only page header. On mobile the screen jumps straight to the
-          communication tabs to avoid wasting vertical space above the inbox. */}
+      {/* Desktop-only page title. On a phone the inbox starts right under the
+          app bar: its own search, the four filters and ⋯ are everything
+          (no tab row: group chats are a filter, app alerts are in ⋯). */}
       <div className="hidden md:block">
-        <PageHeader
-          title="Communication"
-          subtitle="Chats (members' Support chats too), group chats and app alerts. Popups and chat media live in Settings."
-        />
+        <PageHeader title={tab === "support" ? "App alerts" : "Messages"} />
       </div>
-      <div className="flex shrink-0 items-center border-b border-border bg-background/50">
-        <div
-          ref={tabsRef}
-          onScroll={updateTabFade}
-          className="-mb-px flex min-w-0 flex-1 overflow-x-auto px-1.5 md:gap-1 md:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          style={tabFade ? { WebkitMaskImage: tabFade, maskImage: tabFade } : undefined}
-        >
-          {TABS.map((t) => {
-            const active = t.value === tab;
-            return (
-              <button
-                key={t.value}
-                type="button"
-                data-tab={t.value}
-                onClick={() => setTab(t.value)}
-                className={cn(
-                  "shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2.5 md:px-3 text-[13px] font-semibold transition-colors md:text-sm md:py-3",
-                  active
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                {t.label}
-                {t.value === "support" && supportCount > 0 && (
-                  <span className="ml-1.5 rounded-full bg-destructive px-1.5 align-[1px] text-[10px] font-bold leading-4 text-destructive-foreground">
-                    {supportCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+      {tab === "support" && (
+        <div className="flex shrink-0 items-center gap-1 border-b border-border bg-background px-1.5 py-1 md:px-3">
+          <button
+            type="button"
+            onClick={() => setTab("messages")}
+            className="inline-flex h-10 items-center gap-1 rounded-full px-2 text-[15px] font-semibold text-foreground transition hover:bg-secondary"
+            data-alerts-back
+          >
+            <ChevronLeft className="h-5 w-5" /> Messages
+          </button>
+          <span className="ml-1 text-[15px] font-semibold md:hidden">App alerts{supportCount > 0 ? ` · ${supportCount}` : ""}</span>
         </div>
-        <Link
-          to="/admin/automations"
-          aria-label="Automations"
-          title="Automated texts, messages and posts"
-          className="mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground md:mr-4 md:w-auto md:gap-1 md:px-3 md:inline-flex md:text-xs md:font-semibold"
-        >
-          <Zap className="h-4 w-4" />
-          <span className="hidden md:inline">Automations</span>
-        </Link>
-      </div>
+      )}
       {/* Chat-like tabs own their own scroll (inbox list + thread).
           Page-style tabs scroll the whole panel. Mixing the two causes the
           messenger header/sidebar to drift as the outer container scrolls. */}

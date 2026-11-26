@@ -6,6 +6,7 @@
  * (NutritionPlanChatCard).
  */
 import { planPeriod, type PlanRow } from "@/lib/nutrition-targets/plan-history";
+import { textHash } from "@/lib/plan-changes";
 
 export const PLAN_MESSAGE_KIND = "nutrition_plan";
 /** The page a client opens from the card (and the push). */
@@ -23,6 +24,8 @@ export type PlanMessageAttachment = {
   target_id: string;
   /** The plan's last_updated_at when it was announced: one message per version. */
   version: string | null;
+  /** What the client sees of the plan (`planContentKey`): a save that changes none of it isn't announced. */
+  content?: string | null;
   update: "new" | "changed";
   period: string;
   phase: string | null;
@@ -57,11 +60,29 @@ export function planMessageCard(plan: PlanRow, previous: PlanRow | null, update:
     name: "Your nutrition plan",
     target_id: plan.id,
     version: plan.last_updated_at ?? null,
+    content: planContentKey(plan),
     update,
     period: planPeriod(plan),
     phase: (plan.custom_phase || plan.phase || null) as string | null,
     days,
   };
+}
+
+/**
+ * A short hash of everything the client sees of a plan: each day's numbers,
+ * steps, meals and when it's used, and the plan's phase, water, notes for
+ * them, weighing rules, supplements and PDF. Never its dates, status or the
+ * coach's private notes: re-saving, re-dating or a private note isn't news.
+ */
+export function planContentKey(plan: PlanRow): string {
+  const t = (v: unknown) => (v == null ? "" : typeof v === "string" ? v.replace(/\s+/g, " ").trim() : JSON.stringify(v));
+  const days = (plan.nutrition_target_days ?? [])
+    .map((d) =>
+      [key(d.day_label), num(d.calories), num(d.protein), num(d.carbs), num(d.fats), num(d.fibre), num(d.steps), t(d.use_on), t(d.weekdays), textHash(d.notes) ?? ""].join("|"),
+    )
+    .sort();
+  const head = [plan.phase, plan.custom_phase, plan.water, plan.client_notes, plan.food_weighing_rules, plan.supplements, plan.pdf_url, plan.visible_to_client === false ? "hidden" : ""].map(t);
+  return textHash([...head, ...days].join("\n")) ?? "empty";
 }
 
 /** The words over the card, in the coach's voice. */

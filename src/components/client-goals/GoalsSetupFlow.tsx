@@ -28,6 +28,7 @@ import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
 import { refreshScheduleViews, toastScheduleSaved } from "@/components/training-schedule-card";
 import { SHORT_DAY, WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 import { cn } from "@/lib/utils";
+import { LifestyleStep } from "@/components/client-context/lifestyle-questions";
 import {
   classifyLocation,
   EQUIPMENT_GROUPS,
@@ -46,6 +47,7 @@ const STEPS = [
   "Goals",
   "Training availability",
   "Training experience",
+  "Work & lifestyle",
   "Gym & equipment",
   "Nutrition",
   "Injuries",
@@ -60,6 +62,8 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const navigate = useNavigate();
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [stepSaveFailed, setStepSaveFailed] = useState<string | null>(null);
+  // Work & lifestyle saves each answer itself (client_lifestyle); a new client answers employment first
+  const [lifestyleReady, setLifestyleReady] = useState(true);
   const draftKey = `goals-setup-draft:${clientId}`;
 
   const { data: row, isLoading } = useQuery({
@@ -283,10 +287,13 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
           />
         )}
         {step === 2 && <ExperienceStep value={local} setField={setField} />}
-        {step === 3 && <EquipmentStep value={local} setField={setField} />}
-        {step === 4 && <NutritionStep value={local} setField={setField} />}
-        {step === 5 && <InjuriesStep value={local} setField={setField} />}
-        {step === 6 && <FinalStep value={local} setField={setField} />}
+        {step === 3 && (
+          <LifestyleStep clientId={clientId} requireEmployment={!row?.completed_at} onReady={setLifestyleReady} onSkip={() => void saveAndAdvance()} />
+        )}
+        {step === 4 && <EquipmentStep value={local} setField={setField} />}
+        {step === 5 && <NutritionStep value={local} setField={setField} />}
+        {step === 6 && <InjuriesStep value={local} setField={setField} />}
+        {step === 7 && <FinalStep value={local} setField={setField} />}
       </Card>
 
       {saveFailed && (
@@ -359,7 +366,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
               Save & continue later
             </Button>
             {step < STEPS.length - 1 ? (
-              <Button onClick={() => saveAndAdvance()} disabled={upsert.isPending}>
+              <Button onClick={() => saveAndAdvance()} disabled={upsert.isPending || (STEPS[step] === "Work & lifestyle" && !lifestyleReady)}>
                 {upsert.isPending ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving</> : <>Next <ChevronRight className="ml-1 h-4 w-4" /></>}
               </Button>
             ) : (

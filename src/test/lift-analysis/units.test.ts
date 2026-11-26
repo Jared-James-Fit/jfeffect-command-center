@@ -113,6 +113,7 @@ describe("the scale guard", () => {
   it("drops the scale when the 'plate' gave numbers no barbell can (a rep over a metre)", () => {
     // a small round thing taken for a 450 mm plate: every distance comes out huge
     const a = analyzeTrack(track({ r: 12, rom: 98 }), {
+      plate: {mm:450,rel:0.01,confirmed:true},
       source: "auto",
       seed: { x: 140, y: 160, r: 12, t: 0 },
       frame: { w: 270, h: 480 },
@@ -126,6 +127,7 @@ describe("the scale guard", () => {
   });
   it("keeps a real plate's scale", () => {
     const a = analyzeTrack(track(), {
+      plate: {mm:450,rel:0.01,confirmed:true},
       source: "auto",
       seed: { x: 140, y: 160, r: 40, t: 0 },
       frame: { w: 270, h: 480 },
@@ -214,6 +216,7 @@ describe("how numbers are said", () => {
   });
   it("a set in one line", () => {
     const a = analyzeTrack(track(), {
+      plate: {mm:450,rel:0.01,confirmed:true},
       source: "auto",
       seed: { x: 140, y: 160, r: 40, t: 0 },
       frame: { w: 270, h: 480 },

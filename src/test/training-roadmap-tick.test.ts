@@ -14,6 +14,9 @@ vi.mock("@/lib/ai/model-client.server", () => ({
   },
 }));
 
+// every client here has allowed AI processing (src/lib/ai-consent; the refusal is tested in ai-consent-gaps.test.ts)
+vi.mock("@/lib/ai-consent/consent.server", () => ({ clientAllowsAi: async () => ({ ok: true, name: null }) }));
+
 import { runRoadmapTick, TICK_BUDGET_MS, TICK_LIMIT_MS } from "@/lib/training-roadmap.server";
 
 /** A database where every queued block is gone (so a block is one quick read), and each read takes `stepMs`. */

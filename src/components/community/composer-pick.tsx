@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { preloadMediaTools } from "@/lib/community-media";
+import { hasNativePhotos } from "@/lib/native-photos";
 
 /**
  * The phone's own photo library and camera for the New post screen, always
@@ -37,9 +38,15 @@ export function useComposerPicker(onFiles: (files: File[], live: boolean) => voi
   return { inputs, library: () => lib.current?.click(), camera: () => cam.current?.click(), open };
 }
 
-/** A phone or tablet (a finger, not a mouse): the + opens the photo library in the same tap, Instagram's way. */
+/**
+ * A phone or tablet (a finger, not a mouse): the + opens the photo library in
+ * the same tap, Instagram's way. Not in the iPhone app with its camera roll
+ * (native-photos.ts): New post shows the photos itself, so Apple's
+ * "Photo Library / Take Photo / Choose Files" menu never comes up there.
+ */
 export function opensLibraryOnTap(): boolean {
   try {
+    if (hasNativePhotos()) return false;
     return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
   } catch {
     return false;

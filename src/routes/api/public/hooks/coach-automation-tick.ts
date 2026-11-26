@@ -7,6 +7,9 @@ import { createFileRoute } from "@tanstack/react-router";
  * (`coach-automation-missed-scan`, 20270510100000_coaching_automation_categories.sql).
  * Claims and works items for up to ~50 s. See runAutomationTick and
  * scanMissedSessions in src/lib/recovery-automation/run.server.ts.
+ * Hourly with `{ "scan": "autopilot" }` (`cleo-autopilot-hourly`,
+ * 20270527105000_cleo_autopilot.sql) it runs Cleo Autopilot's pass instead:
+ * scanAutopilot in src/lib/autopilot/run.server.ts.
  */
 export const Route = createFileRoute("/api/public/hooks/coach-automation-tick")({
   server: {
@@ -16,14 +19,24 @@ export const Route = createFileRoute("/api/public/hooks/coach-automation-tick")(
         if (!(await authorizeHookRequest(request))) return new Response("unauthorized", { status: 401 });
         let itemId: string | null = null;
         let scan = false;
+        let autopilot = false;
         try {
           const body = (await request.json()) as { itemId?: unknown; scan?: unknown };
           if (typeof body?.itemId === "string" && /^[0-9a-f-]{36}$/i.test(body.itemId)) itemId = body.itemId;
           scan = body?.scan === "missed";
+          autopilot = body?.scan === "autopilot";
         } catch {
           // no body: whatever is due
         }
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        if (autopilot) {
+          const { scanAutopilot } = await import("@/lib/autopilot/run.server");
+          try {
+            return Response.json(await scanAutopilot(supabaseAdmin as any, { budgetMs: 100_000 }));
+          } catch (e: any) {
+            return Response.json({ error: String(e?.message ?? e) }, { status: 500 });
+          }
+        }
         const { runAutomationTick, scanMissedSessions } = await import("@/lib/recovery-automation/run.server");
         try {
           const missed = scan ? await scanMissedSessions(supabaseAdmin as any) : null;

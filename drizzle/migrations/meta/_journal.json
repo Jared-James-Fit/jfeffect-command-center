@@ -99,6 +99,34 @@
       "when": 1795036566231,
       "tag": "0013_tighten_open_read_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795550903002,
+      "tag": "0014_velocity_jobs_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795551001306,
+      "tag": "0015_velocity_calibration_and_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795551574460,
+      "tag": "0016_velocity_worker_service_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795627758369,
+      "tag": "0017_bind_agreement_versions_and_documents_reads",
+      "breakpoints": true
     }
   ]
 }

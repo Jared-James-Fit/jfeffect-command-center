@@ -132,7 +132,10 @@ import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
 import { setPrItems } from "@/lib/set-pr-items";
-import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
+import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos, useSetVideosForDay } from "@/components/workout-day/set-video-cell";
+import { FilmingReminder } from "@/components/workout-day/filming-reminder";
+import { analysableExercise } from "@/lib/lift-analysis/exercise";
+import type { ReminderRow } from "@/lib/set-videos/filming-reminder";
 import { setVideoLabel } from "@/lib/set-videos/label";
 import {
   DeferredQuickSwapSheet,
@@ -479,6 +482,9 @@ function markOwnResultWrite(rowId: unknown, setIndex: unknown) {
   ownResultWrites.set(`${rowId}:${setIndex}`, now);
 }
 function isOwnResultEcho(row: any): boolean {
+  // a bar speed the server put on the set from its video is never this device's echo: it can land
+  // in the same moment as the athlete's own save (the set linking its video), and must show at once
+  if (row?.velocity_source === "video") return false;
   const t = row ? ownResultWrites.get(`${row.row_id}:${row.set_index}`) : undefined;
   return t !== undefined && Date.now() - t < 10_000;
 }
@@ -2603,6 +2609,29 @@ function WorkoutDay({
     t = window.setTimeout(tryOpen, 700);
     return () => window.clearTimeout(t);
   }, [quickLogDue, quickLogOpen]);
+  // The smart filming reminder (filming-reminder.tsx): the client's own logger only, a coaching
+  // client with set videos, while the workout is open and no other intro holds the screen.
+  const filmingOn =
+    quickLogVideo && !readonly && !isImpersonating && !!client?.id && rowsLoaded && resultsLoaded &&
+    !completionPending && !completion?.completed_at && !quickLogDue && !quickLogOpen && !focusTipsOpen;
+  const { data: dayClips } = useSetVideosForDay(dayId, filmingOn);
+  const filmingRows = useMemo<ReminderRow[]>(() => {
+    if (!filmingOn) return [];
+    return (rows as any[]).map((r) => {
+      const ex = r.exercises ?? {};
+      const name = (r.exercise_name_override as string | null) || (ex.name as string | null) || "Exercise";
+      const mine = (results as any[]).filter((x) => x.row_id === r.id);
+      return {
+        rowId: r.id as string,
+        name,
+        main: !!ex.is_competition_lift || !!ex.competition_lift_type || /\b(top|main|comp|competition|primary)\b/i.test(String(r.purpose_label ?? "")),
+        sets: Math.max(1, Number(r.sets) || 1),
+        logged: mine.filter((x) => x.actual_reps != null || x.actual_load != null).map((x) => Number(x.set_index)),
+        filmed: (dayClips ?? []).filter((v) => v.row_id === r.id && (v.set_index ?? 0) > 0).map((v) => Number(v.set_index)),
+        barbell: analysableExercise(name, ex.equipment ?? null),
+      };
+    });
+  }, [filmingOn, rows, results, dayClips]);
   const closeQuickLog = useCallback(() => {
     setQuickLogOpen(false);
     if (!loggingTipsSeen && !isImpersonating) markLoggingTipsSeen();
@@ -3210,6 +3239,9 @@ function WorkoutDay({
         />
       )}
       {quickLogOpen && <QuickLogTips onClose={closeQuickLog} videoOn={quickLogVideo} unit={(rows as any[])[0] ? unitForRow((rows as any[])[0]) : unit} />}
+      {client?.id && filmingOn && !storyOpen && (
+        <FilmingReminder clientId={client.id} dayId={dayId} rows={filmingRows} enabled={filmingOn && !storyOpen} />
+      )}
 
       {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && reviewReady)) && (
         <WorkoutReviewEditor
@@ -6138,6 +6170,7 @@ function SetRow({
   const serverVelocityRef = useRef(serverVelocityText);
   serverVelocityRef.current = serverVelocityText;
   const velocityFromVideo = (existing as any)?.velocity_source === "video";
+  const velocityEstimated = (existing as any)?.velocity_quality === "estimated";
   const [velocity, setVelocity] = useState(serverVelocityText);
   // what this set is expected to move at, from the athlete's own measured sets (velocity-model.ts):
   // shown only in the empty box, as "≈0.42", never as a value
@@ -7499,7 +7532,7 @@ function SetRow({
       {showVelocity && (
         <div className="relative min-w-0">
           <Input
-            value={velocity}
+            value={velocityFocusedRef.current ? velocity : velocity ? Number(velocity).toFixed(2) : ""}
             data-velocity-expected={expectedVelocity ? expectedVelocity.v.toFixed(2) : undefined}
             onChange={(e) => setVelocity(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
             onFocus={() => { velocityFocusedRef.current = true; }}
@@ -7518,12 +7551,12 @@ function SetRow({
             disabled={readonly}
             data-velocity-source={velocityFromVideo && !velocityChanged(velocity) ? "video" : undefined}
             className={cn(
-              "px-1.5 text-center tabular-nums",
+              "min-w-0 px-0.5 text-center tabular-nums",
               focusMode ? "h-12 text-base sm:h-10 sm:text-sm" : "h-11 text-sm sm:h-8 sm:text-xs",
             )}
           />
           {velocityFromVideo && !velocityChanged(velocity) && (
-            <Video aria-hidden className="pointer-events-none absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground" />
+            velocityEstimated ? <span aria-label="Estimated speed" className="pointer-events-none absolute left-0.5 top-0 text-[10px] text-muted-foreground">≈</span> : <Video aria-hidden className="pointer-events-none absolute right-1 top-0 h-2 w-2 text-muted-foreground" />
           )}
         </div>
       )}

@@ -53,6 +53,10 @@ const AI_AREA: Record<string, AreaKey> = {
   checkin_recap: "coaching",
   recovery_write: "coaching",
   cardio_plan: "coaching",
+  competition: "coaching",
+  competition_extract: "coaching",
+  session_brief: "coaching",
+  session_analysis: "coaching",
   coach_write: "coaching",
   form_draft: "coaching",
   // what people use themselves
@@ -63,6 +67,7 @@ const AI_AREA: Record<string, AreaKey> = {
   exercise_identify: "clients",
   pain_describe: "clients",
   pain_transcribe: "clients",
+  support_answer: "clients",
   // Crew
   post_write: "crew",
   daily_visual: "crew",

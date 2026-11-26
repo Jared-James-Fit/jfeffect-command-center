@@ -95,10 +95,14 @@ describe("the colour panel", () => {
 });
 
 describe("picking media", () => {
-  it("the phone's own picker, by kind (a web page can't read albums; the picker has them)", () => {
+  it("one way to the phone's picker: the grid's Library tile (no landing button, no duplicate chips)", () => {
     const pick = read("src/components/community/composer-pick.tsx");
-    expect(pick).toContain('accept="image/*" multiple hidden');
+    // the videos-only picker stays for a clip too big for the camera roll
     expect(pick).toContain('accept="video/*" multiple hidden');
-    expect(read("src/components/community/post-composer.tsx")).toContain('data-composer-pick={k}');
+    const composer = read("src/components/community/post-composer.tsx");
+    expect(composer).toContain("data-composer-library-tile");
+    expect(composer).not.toContain("data-composer-pick={k}");
+    expect(composer).not.toContain("data-composer-open-library");
+    expect(composer).not.toContain("Choose from library");
   });
 });

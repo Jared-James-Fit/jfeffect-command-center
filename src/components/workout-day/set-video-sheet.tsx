@@ -29,7 +29,6 @@ import { setTitle, setWord } from "@/lib/set-videos/label";
 import { setVideosKey, type SetVideo } from "@/components/workout-day/set-video-cell";
 import { filmedFile, forgetFilmed, useUnsavedFilmed } from "@/lib/set-videos/phone-copy";
 import {
-  dismissPhoneCopyOffer,
   isUnsavedFilmed,
   jobIdForSetVideo,
   phoneSaveWords,
@@ -104,7 +103,6 @@ export default function SetVideoSheet({
       void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
       void qc.invalidateQueries({ queryKey: ["messages"] });
       // let go of on purpose: stop offering it for the phone
-      dismissPhoneCopyOffer(jobIdForSetVideo(v.id, unsaved));
       if (user?.id) forgetFilmed(user.id, { setVideoIds: [v.id] });
       toast.success(
         v.origin === "chat" ? "Taken off the set. It's still in the chat." : "Video removed from the set and the chat",

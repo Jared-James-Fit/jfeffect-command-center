@@ -14,173 +14,49 @@
  * send in flight ignores another), and holds nothing itself: the caller keeps
  * the draft (persisted per conversation, cleo-drafts.ts).
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, Check, Loader2, Mic, Paperclip, Square, X } from "lucide-react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, type ReactNode } from "react";
+import { ArrowUp, Loader2, Mic, Paperclip, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { blobToBase64, micSupported, useSummerMic, type MicTake } from "@/hooks/use-summer-mic";
-import { isAudioSessionError } from "@/lib/audio-session";
-import { feedback } from "@/lib/feedback";
+import { useVoiceDictation, type Transcribe } from "@/hooks/use-voice-dictation";
+import { VoiceRecordingBar } from "@/components/voice/voice-recorder";
+
+export type { Transcribe } from "@/hooks/use-voice-dictation";
 
 export const DICTATION_MAX_MS = 5 * 60_000;
 
-export type Transcribe = (audio: string, mime: string) => Promise<{ ok: true; text: string } | { ok: false; reason: string }>;
-
-export type DictationState = "idle" | "recording" | "transcribing" | "failed";
-
-/** Recording, turning it into words, and why it didn't work: one place for every Cleo box. */
+/**
+ * Recording, turning it into words, and why it didn't work: one place for
+ * every Cleo box, on the app's one dictation hook (useVoiceDictation: the
+ * recording is temporary, kept in memory for Try again, never stored).
+ */
 export function useCleoDictation(transcribe: Transcribe | null, onText: (text: string) => void) {
-  const mic = useSummerMic({ dictate: true, maxMs: DICTATION_MAX_MS });
-  const [state, setState] = useState<DictationState>("idle");
-  const [fail, setFail] = useState<{ message: string; take: MicTake | null } | null>(null);
-  const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0));
-  const onTextRef = useRef(onText);
-  onTextRef.current = onText;
-  const supported = typeof window !== "undefined" && !!transcribe && micSupported();
-  const cancelled = useRef(false);
-
-  // a rolling picture of the voice for the waveform (about 12 samples a second)
-  const lastSample = useRef(0);
-  useEffect(() => {
-    if (state !== "recording") return;
-    const now = performance.now();
-    if (now - lastSample.current < 80) return;
-    lastSample.current = now;
-    setLevels((l) => [...l.slice(1), mic.level]);
-  }, [mic.level, state]);
-
-  const hear = useCallback(
-    async (take: MicTake) => {
-      if (!transcribe) return;
-      setFail(null);
-      setState("transcribing");
-      try {
-        const r = await transcribe(await blobToBase64(take.blob), take.mime);
-        if (r.ok && r.text.trim()) {
-          feedback("tap");
-          setState("idle");
-          onTextRef.current(r.text.trim());
-        } else if (r.ok) {
-          setFail({ message: "Didn't catch any words. Try again a little closer, or type it.", take: null });
-          setState("failed");
-        } else {
-          setFail({ message: r.reason, take });
-          setState("failed");
-        }
-      } catch {
-        setFail({ message: "Couldn't send that. Check your connection and try again.", take });
-        setState("failed");
-      }
-    },
-    [transcribe],
-  );
-
-  const start = useCallback(async () => {
-    if (!supported || state === "recording" || state === "transcribing") return;
-    feedback("press");
-    setFail(null);
-    cancelled.current = false;
-    setLevels(Array(28).fill(0));
-    setState("recording");
-    const began = Date.now();
-    try {
-      const take = await mic.start();
-      if (cancelled.current) {
-        setState("idle");
-        return;
-      }
-      if (!take) {
-        if (Date.now() - began < 1200) {
-          setFail({ message: "That was too short. Tap the mic, speak, then tap ✓.", take: null });
-          setState("failed");
-        } else setState("idle");
-        return;
-      }
-      await hear(take);
-    } catch (e: any) {
-      const denied = e?.name === "NotAllowedError" || e?.name === "SecurityError";
-      setFail({
-        message: denied
-          ? "The microphone is off for JF Effect. Turn it on in your browser or phone settings, or type it."
-          : isAudioSessionError(e)
-            ? "Your phone's audio is busy (music or a call?). Pause it and tap the mic again."
-            : e?.message ?? "Couldn't use the microphone. Type it instead.",
-        take: null,
-      });
-      setState("failed");
-    }
-  }, [supported, state, mic, hear]);
-
-  return {
-    supported,
-    state,
-    levels,
-    seconds: Math.floor(mic.elapsedMs / 1000),
-    fail,
-    start,
-    /** Done talking: turn it into words. */
-    finish: () => mic.stop(),
-    /** Throw the take away. */
-    cancel: () => {
-      cancelled.current = true;
-      mic.cancel();
-      setFail(null);
-      setState("idle");
-    },
-    retry: () => (fail?.take ? void hear(fail.take) : undefined),
-    dismiss: () => {
-      setFail(null);
-      setState("idle");
-    },
-  };
+  return useVoiceDictation({
+    transcribe,
+    onText,
+    maxMs: DICTATION_MAX_MS,
+    tooShort: "That was too short. Tap the mic, speak, then tap ✓.",
+  });
 }
 
 export type CleoDictation = ReturnType<typeof useCleoDictation>;
 
-function clock(s: number): string {
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-/** The recording strip: cancel, the live waveform, the time, done. */
+/** The recording strip: cancel, the time, the live waveform, done; then turning it into words. */
 export function DictationStrip({ dictation, className }: { dictation: CleoDictation; className?: string }) {
-  const left = DICTATION_MAX_MS / 1000 - dictation.seconds;
   if (dictation.state === "recording")
     return (
-      <div className={cn("flex min-h-11 items-center gap-2", className)} role="status" aria-live="polite" data-cleo-recording>
-        <button
-          type="button"
-          onClick={dictation.cancel}
-          className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Cancel recording"
-          title="Cancel"
-        >
-          <X className="h-5 w-5" />
-        </button>
-        <div className="flex h-8 min-w-0 flex-1 items-center justify-center gap-[3px] overflow-hidden" aria-hidden>
-          {dictation.levels.map((l, i) => (
-            <span key={i} className="w-[3px] shrink-0 rounded-full bg-foreground/80 transition-[height] duration-100" style={{ height: `${Math.round(3 + Math.min(1, l * 1.6) * 26)}px` }} />
-          ))}
-        </div>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" aria-hidden />
-          {left < 30 ? `${clock(dictation.seconds)} · ${left}s left` : clock(dictation.seconds)}
-        </span>
-        <button
-          type="button"
-          onClick={dictation.finish}
-          className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full bg-foreground text-background hover:opacity-90"
-          aria-label="Done: turn it into text"
-          title="Done"
-          data-cleo-dictation-done
-        >
-          <Check className="h-5 w-5" />
-        </button>
-      </div>
+      <VoiceRecordingBar
+        meter={dictation.meter}
+        onCancel={dictation.cancel}
+        onDone={dictation.finish}
+        doneLabel="Done: turn it into text"
+        className={className}
+      />
     );
-  if (dictation.state === "transcribing")
+  if (dictation.state === "requesting" || dictation.state === "processing" || dictation.state === "transcribing")
     return (
-      <div className={cn("flex min-h-11 items-center gap-2 px-2 text-sm text-muted-foreground", className)} role="status">
-        <Loader2 className="h-4 w-4 animate-spin" /> Turning what you said into text…
+      <div className={cn("flex min-h-11 items-center gap-2 px-2 text-sm text-muted-foreground", className)} role="status" data-cleo-transcribing>
+        <Loader2 className="h-4 w-4 animate-spin" /> {dictation.state === "requesting" ? "Waiting for the microphone…" : "Turning what you said into text…"}
       </div>
     );
   return null;
@@ -282,15 +158,15 @@ export const CleoComposer = forwardRef<
     }
   };
 
-  const recording = dictation.state === "recording" || dictation.state === "transcribing";
+  const recording = dictation.state === "recording" || dictation.state === "requesting" || dictation.state === "processing" || dictation.state === "transcribing";
 
   return (
     <div className={cn("w-full", className)} data-cleo-composer>
       {above}
-      {dictation.state === "failed" && dictation.fail && (
+      {dictation.state === "error" && dictation.fail && (
         <div className="mb-1.5 flex flex-wrap items-center gap-x-2 rounded-lg bg-muted/60 px-2.5 py-1.5 text-xs text-foreground" role="alert" data-cleo-dictation-failed>
           <span className="min-w-0 flex-1">{dictation.fail.message}</span>
-          {dictation.fail.take && (
+          {dictation.fail.canRetry && (
             <button type="button" onClick={() => dictation.retry()} className="cursor-pointer font-semibold underline underline-offset-2">
               Try again
             </button>

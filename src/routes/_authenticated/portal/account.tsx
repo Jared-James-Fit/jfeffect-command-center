@@ -37,8 +37,10 @@ import {
   Watch,
   SlidersHorizontal,
   Layers,
+  Briefcase,
 } from "lucide-react";
 import { AppearanceSection } from "@/components/appearance-section";
+import { CompleteProfileCard, LifestyleForm, lifestyleSummary, useLifestyle } from "@/components/client-context/lifestyle-questions";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
@@ -50,6 +52,8 @@ import { healthStoreProvider } from "@/platform/health";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DeactivateAccountPanel, DeleteAccountPanel, useLifecycleStatus } from "@/components/account/account-lifecycle";
+import { AiConsentPanel } from "@/components/ai-consent/ai-consent";
+import { UsageAnalyticsPanel } from "@/components/privacy/usage-analytics-panel";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS, SOCIAL_PLATFORMS } from "@/lib/social-handles";
@@ -76,6 +80,8 @@ import { billingDay } from "@/lib/date-range";
 import { useMyBilling } from "@/components/billing/use-my-billing";
 import { UpdateCardButton } from "@/components/billing/my-purchases-view";
 import type { MySummary } from "@/lib/my-purchases";
+import { HelpTutorialsHub } from "@/components/tutorials/tutorials";
+import { LifeBuoy } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -93,6 +99,7 @@ type SectionId =
   | "notifications"
   | "coaching-agreement"
   | "health"
+  | "work"
   | "competition"
   | "basic-information"
   | "profile-picture"
@@ -102,6 +109,7 @@ type SectionId =
   | "legal"
   | "billing"
   | "ai-credits"
+  | "help"
   | "deactivate";
 
 const SECTION_ALIASES: Record<string, SectionId> = {
@@ -116,6 +124,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   agreement: "coaching-agreement",
   health: "health",
   injuries: "health",
+  work: "work",
+  lifestyle: "work",
+  "work-lifestyle": "work",
   competition: "competition",
   "weight-class": "competition",
   medications: "health",
@@ -128,6 +139,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   devices: "devices",
   password: "password",
   legal: "legal",
+  help: "help",
+  tutorials: "help",
+  "help-tutorials": "help",
   "legal-safety": "legal",
   privacy: "legal",
   billing: "billing",
@@ -175,6 +189,8 @@ function AccountPage() {
 
   // Health & injuries: a coaching client's (their coach plans around it).
   const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
+  // Work & lifestyle: a coaching client's (their coach fits the plan around their day)
+  const { data: lifestyleData } = useLifestyle(goalsOn ? client?.id : null);
   // the classes they compete in: only for someone who competes (a meet prep, a powerlifting goal, anything on file)
   const competes = useCompetes(client?.id);
   const { data: competition } = useCompetitionProfile(competes ? client?.id : null);
@@ -466,6 +482,13 @@ function AccountPage() {
         {/* ── Only while something's missing, or the coach asked for a review ── */}
         <ProfileStatusCard missing={missing} onOpen={openSection} />
 
+        {/* Work & lifestyle: the next missing answer, right here (coaching clients only; gone once complete) */}
+        {goalsOn && client?.id && (
+          <SectionErrorBoundary label="Complete your profile">
+            <CompleteProfileCard clientId={client.id} preview={isImpersonating} />
+          </SectionErrorBoundary>
+        )}
+
         {form.info_update_requested && (
           <Card className="border-warning/40 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -531,6 +554,15 @@ function AccountPage() {
                 title="Goals & setup"
                 summary={goalsSummary(goalsStatus)}
               />
+            )}
+
+            {/* Work & lifestyle: what their coach fits training, recovery and meals around; each answer saves at once. */}
+            {goalsOn && client && (
+              <SettingsSection id="work" icon={Briefcase} title="Work & lifestyle" summary={lifestyleSummary(lifestyleData?.lifestyle)}>
+                <SectionErrorBoundary label="Work & lifestyle">
+                  <LifestyleForm clientId={client.id} preview={isImpersonating} />
+                </SectionErrorBoundary>
+              </SettingsSection>
             )}
 
             {/* Health & injuries: what their coach plans training, nutrition and supplements around. */}
@@ -637,6 +669,13 @@ function AccountPage() {
 
           {/* Account */}
           <SettingsGroup>
+            {/* Help & Tutorials: replay a tutorial, finish setup, search help, ask Cleo (support chat links here) */}
+            <SettingsSection id="help" icon={LifeBuoy} title="Help & Tutorials">
+              <SectionErrorBoundary label="Help & Tutorials">
+                <HelpTutorialsHub />
+              </SectionErrorBoundary>
+            </SettingsSection>
+
             {!native && <InstallAppRow />}
 
             <SettingsSection id="password" icon={KeyRound} title="Password">
@@ -655,13 +694,29 @@ function AccountPage() {
                   <ClientLegalSafety bare />
                 </SectionErrorBoundary>
               )}
+              {/* AI processing: the person's own permission (OpenAI, Google), so never in "View as client" */}
+              {!isImpersonating && (
+                <div className="mt-5 border-t border-border pt-5">
+                  <SectionErrorBoundary label="AI processing">
+                    <AiConsentPanel />
+                  </SectionErrorBoundary>
+                </div>
+              )}
+              {!isImpersonating && (
+                <div className="mt-5 border-t border-border pt-5">
+                  <SectionErrorBoundary label="Usage analytics">
+                    <UsageAnalyticsPanel />
+                  </SectionErrorBoundary>
+                </div>
+              )}
               <div className={cn(!isImpersonating && "mt-5 border-t border-border pt-5")} id="delete-account">
                 <DeleteAccountPanel />
               </div>
             </SettingsSection>
 
-            {/* ── Your plan: Free, a membership or coaching, one account (Manage plan, /portal/plan) ── */}
-            {!tierLoading && tier && (
+            {/* ── Your plan: Free, a membership or coaching, one account (Manage plan, /portal/plan);
+                 not in the iPhone app, which opens no plan or billing page (native-purchases.ts) ── */}
+            {!tierLoading && tier && !native && (
               <SettingsLink
                 to="/portal/plan"
                 icon={Layers}
@@ -670,7 +725,7 @@ function AccountPage() {
               />
             )}
 
-            {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited) ── */}
+            {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited); in the iPhone app a member's free ones only (option B, the server decides) ── */}
             {aiCredits.data && !aiCredits.data.unlimited && (
               <SettingsSection
                 id="ai-credits"

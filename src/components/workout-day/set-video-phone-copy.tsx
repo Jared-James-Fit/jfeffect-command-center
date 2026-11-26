@@ -2,20 +2,22 @@
  * Set videos filmed in the app go to the phone too (set-videos/phone-copy.ts
  * says which ones and why it takes a tap: iOS only saves to Photos through the
  * share sheet's Save Video, from a tap):
- *   · offerPhoneCopy: the moment a set is filmed, "Save it to your Photos too?" · Save
  *   · useSaveSetVideos: Save to Photos on a clip in the set's sheet, and before one is removed
- *   · PhoneCopyReminder: at the end of the workout, "2 videos you filmed aren't in your Photos" · Save
+ *   · SaveVideosInline: on the finished workout's recap, one small "↓ Save 2 videos to
+ *     device", at most once per workout (save-offer.ts); nothing pops up after filming,
+ *     nothing during the review, nothing when a finished workout is reopened
+ *   · useEligibleSetVideoSaves: the same clips for the recap's Share sheet (Save videos)
  * Saving hands the clip filmed this session straight to the share sheet (the
  * original, nothing downloaded); after a reload it comes back down from storage.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Smartphone } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowDownToLine, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useViewingAsClient } from "@/lib/client-impersonation";
-import { isTouchDevice, saveFiles } from "@/lib/file-share";
+import { isTouchDevice } from "@/lib/file-share";
+import { markOffered, saveVideosLabel, shouldOfferSave, wasOffered } from "@/lib/set-videos/save-offer";
 import { holdSaveFile, warmSave, type SaveItem } from "@/lib/save-media";
 import { useSaveMedia } from "@/components/messages/save-media";
 import { getSetVideoJobs } from "@/lib/set-videos/jobs";
@@ -36,41 +38,6 @@ export function phoneSaveWords(os = phoneOS()) {
   if (os === "ios") return { label: "Save to Photos", place: "in your Photos", how: "Tap Save, then Save Video." };
   if (os === "android") return { label: "Save to phone", place: "on your phone", how: "Tap Save to keep a copy on your phone." };
   return { label: "Download", place: "saved", how: "" };
-}
-
-/**
- * Right after a set is filmed in the app: one tap away from Save Video (the
- * share sheet opens from the toast's button, with the clip as it was filmed).
- * Only on a phone (a computer's file is already on the computer).
- */
-const offerId = (jobId: string) => `phone-copy-${jobId}`;
-
-/** Saved (or removed) some other way: its offer comes down. */
-export function dismissPhoneCopyOffer(jobId: string | null | undefined) {
-  if (jobId) toast.dismiss(offerId(jobId));
-}
-
-export function offerPhoneCopy(userId: string, jobId: string, file: File) {
-  if (!isTouchDevice() || !userId || !file) return;
-  const w = phoneSaveWords();
-  const id = offerId(jobId);
-  const show = (again: boolean) =>
-    toast(again ? "Tap Save again" : w.label === "Save to Photos" ? "Save it to your Photos too?" : "Keep a copy on your phone?", {
-      id,
-      description: again ? w.how : `Filmed in the app, it only goes to your coach. ${w.how}`,
-      duration: 20_000,
-      action: {
-        label: "Save",
-        onClick: () => {
-          void saveFiles([file]).then((o) => {
-            if (o === "shared" || o === "saved") forgetFilmed(userId, { jobIds: [jobId] });
-            else if (o === "again") show(true);
-            else if (o === "failed") toast.error("Couldn't save it. Try Save on the set's video.");
-          });
-        },
-      },
-    });
-  show(false);
 }
 
 /** A clip to save: the one filmed this session (`jobId`) or the stored one (`path`). */
@@ -127,7 +94,6 @@ export function useSaveSetVideos() {
               jobIds,
               setVideoIds: targets.map((t) => t.setVideoId).filter((x): x is string => !!x),
             });
-          jobIds.forEach(dismissPhoneCopyOffer);
           opts.onSaved?.();
         },
       });
@@ -152,11 +118,11 @@ export function isUnsavedFilmed(setVideoId: string, unsaved: FilmedEntry[]): boo
 }
 
 /**
- * The end of a workout: the clips filmed in the app that aren't on the phone,
- * saved in one go ("Save 2 Videos" in the share sheet). Only the athlete's own,
- * on a phone, never a coach viewing as them; gone once they're saved.
+ * The clips filmed in the app for this workout that aren't saved to the phone
+ * yet (the athlete's own, never a coach viewing as them, only on a phone):
+ * what "Save N videos to device" hands to the share sheet in one go.
  */
-export function PhoneCopyReminder({ dayId, className }: { dayId: string | null | undefined; className?: string }) {
+export function useEligibleSetVideoSaves(dayId: string | null | undefined) {
   const { user } = useAuth();
   const viewingAsClient = useViewingAsClient();
   const unsaved = useUnsavedFilmed(viewingAsClient ? null : user?.id);
@@ -180,34 +146,48 @@ export function PhoneCopyReminder({ dayId, className }: { dayId: string | null |
       }),
     [mine, videos],
   );
-  if (viewingAsClient || !dayId || !targets.length || !isTouchDevice()) return null;
+  const eligible = viewingAsClient || !dayId || !isTouchDevice() ? [] : targets;
+  return { targets: eligible, userId: user?.id ?? null, viewingAsClient, save, warm };
+}
+
+/**
+ * The recap's one small save utility: "↓ Save 7 videos to device", shown the
+ * first time this workout's recap has clips to save and never again for it
+ * (shown or dismissed is remembered, save-offer.ts). It never says the clips
+ * are in Photos: a save hands them to the phone's share sheet, and once that
+ * happened they stop counting, so the line simply goes.
+ */
+export function SaveVideosInline({ dayId, workoutKey, className }: { dayId: string | null | undefined; workoutKey: string | null | undefined; className?: string }) {
+  const { targets, userId, save, warm } = useEligibleSetVideoSaves(dayId);
+  const [show, setShow] = useState<boolean | null>(null);
   const n = targets.length;
-  const w = phoneSaveWords();
+  useEffect(() => {
+    if (show !== null || !userId || !workoutKey || n === 0) return;
+    let storage: Storage;
+    try {
+      storage = window.localStorage;
+    } catch {
+      return;
+    }
+    const offer = shouldOfferSave({ eligible: n, viewingAsClient: false, phone: true, offeredBefore: wasOffered(storage, userId, workoutKey) });
+    if (offer) markOffered(storage, userId, workoutKey);
+    setShow(offer);
+  }, [show, userId, workoutKey, n]);
+  if (!show || n === 0) return null;
   return (
-    <div
-      className={cn("flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3", className)}
-      data-phone-copy-reminder={n}
-    >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground" aria-hidden>
-        <Smartphone className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">
-          {n === 1 ? "A video you filmed isn't" : `${n} videos you filmed aren't`} {w.place}
-        </span>
-        <span className="block text-xs leading-snug text-muted-foreground">
-          Filmed in the app, {n === 1 ? "it's" : "they're"} only with your coach. {w.how}
-        </span>
-      </span>
-      <Button
+    <div className={cn("flex items-center justify-center gap-1", className)} data-save-videos-inline={n}>
+      <button
         type="button"
-        variant="outline"
-        className="h-10 shrink-0 px-3"
         onPointerDown={() => warm(targets)}
         onClick={() => save(targets)}
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-foreground active:bg-muted"
       >
-        Save
-      </Button>
+        <ArrowDownToLine className="h-4 w-4" aria-hidden />
+        {saveVideosLabel(n)}
+      </button>
+      <button type="button" onClick={() => setShow(false)} className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground active:bg-muted" aria-label="Not now">
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

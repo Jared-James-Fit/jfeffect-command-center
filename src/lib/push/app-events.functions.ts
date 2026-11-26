@@ -157,7 +157,9 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
         clientId = data.id;
         // The update lands in their chat as a message with the plan's card (once per plan version).
         const { postPlanMessage } = await import("@/lib/nutrition-targets/plan-message.server");
-        await postPlanMessage(sb, { clientId: data.id, actorUserId: userId });
+        const posted = await postPlanMessage(sb, { clientId: data.id, actorUserId: userId });
+        // a save the client wouldn't notice (or one already announced) sends no push either
+        if (posted.reason === "no_change" || posted.reason === "already_sent") return { skipped: true };
         // One per client per day at most (rate limit inside handles bursts).
         sourceId = `${data.id}:${new Date().toISOString().slice(0, 10)}`;
         break;

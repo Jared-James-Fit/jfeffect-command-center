@@ -44,7 +44,7 @@ describe("Monthly board: you first, one board, the rest folded", () => {
     expect(card).not.toContain("pts to crack the Top 10");
   });
   it("one query for the board and its sheets (shared with Home)", () => {
-    expect(card).toContain('usePerformanceLeague("current")');
+    expect(card).toContain('usePerformanceLeague("current", audience)');
     expect(card).not.toContain("get_monthly_athlete_rankings");
   });
   it("last month's final standings and the rules sit under the board, the rules folded", () => {

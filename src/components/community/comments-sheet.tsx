@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowUp, Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Share2, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowUp, Copy, CornerUpLeft, Eye, EyeOff, Flag, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Share2, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { StoryAvatar } from "@/components/community/story-ring";
 import { CoachBadge } from "@/components/community/post-card";
 import { SharedCommentCard } from "@/components/community/shared-comment";
+import { ReportSheet } from "@/components/community/report-sheet";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { followLabel, useFollow, useFollowState } from "@/lib/community-social";
@@ -48,26 +49,47 @@ const REPLIES_SHOWN = 2;
  * Light chatter on a post. Coaching conversations stay in Messages — this is
  * the "nice work" and the banter.
  */
-export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
+export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor, story = false, open }: {
   post: CommunityPost | null;
   viewerIsStaff: boolean;
   onClose: () => void;
   /** A commenter's photo or name opens their profile (the sheet closes first). */
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  /**
+   * Opened over a story (the story viewer's 💬): a shorter sheet over a light dim, so the story stays
+   * in view above it, and a line saying these comments are public, unlike a message to the poster.
+   */
+  story?: boolean;
+  /** Open or not, with the post kept so it slides away with its comments still in it (default: open while there's a post). */
+  open?: boolean;
 }) {
   return (
-    <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" swipeToClose hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
+    <Sheet open={open ?? !!post} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="bottom"
+        swipeToClose
+        hideCloseButton
+        overlayClassName={story ? "bg-black/25" : undefined}
+        className={cn("flex max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]", story ? "h-[64dvh]" : "h-[78dvh]")}
+        data-story-comments={story ? "" : undefined}
+      >
         {post && (
           <>
             <SheetHeader className="relative shrink-0 space-y-0 pb-2 pt-2 text-center">
               <span aria-hidden className="mx-auto block h-1 w-10 rounded-full bg-muted-foreground/35" />
               <SheetTitle className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</SheetTitle>
-              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s post`}</SheetDescription>
+              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s ${story ? "story" : "post"}`}</SheetDescription>
               <SheetClose className="absolute right-2 top-[14px] grid h-10 w-10 place-items-center rounded-full text-foreground active:scale-95" aria-label="Close comments">
                 <X className="h-[22px] w-[22px]" strokeWidth={1.75} />
               </SheetClose>
             </SheetHeader>
+            {story && (
+              <p className="shrink-0 border-b border-border/60 px-5 pb-2.5 text-center text-[12px] leading-snug text-muted-foreground" data-story-comments-note>
+                {post.is_mine
+                  ? "Comments show to everyone who can see your story."
+                  : `Comments show to everyone who can see this story. To tell ${post.author.name.split(" ")[0]} privately, send a message instead.`}
+              </p>
+            )}
             <CommentThread
               key={post.id}
               post={post}
@@ -118,6 +140,10 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
   const [menuFor, setMenuFor] = useState<CommunityComment | null>(null);
   const [shareFor, setShareFor] = useState<CommunityComment | null>(null);
   const [deleteFor, setDeleteFor] = useState<CommunityComment | null>(null);
+  // Report: mounted on first use, kept for its closing slide
+  const [reportFor, setReportFor] = useState<CommunityComment | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const { isImpersonating } = useClientImpersonation();
   const [viewing, setViewing] = useState<CommunityComment | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -427,7 +453,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
             }}
           />
           {recorder.recording ? (
-            <RecordingBar elapsed={recorder.elapsed} levels={recorder.levels} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
+            <RecordingBar meter={recorder.meter} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
           ) : (
             <>
               <UserAvatar src={me.avatar_url} name={me.name} size={32} expandable={false} className="mb-1.5" />
@@ -509,7 +535,16 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
         canPin={(c) => post.is_mine && !c.parent_id && !c.hidden && !c.pending}
         pinnedId={pinnedId}
         onPin={togglePin}
+        // someone else's comment goes to the team (staff hide or delete it instead; never in View as client)
+        canReport={(c) => !c.is_mine && !c.pending && !viewerIsStaff && !isImpersonating}
+        onReport={(c) => {
+          setReportFor(c);
+          setReporting(true);
+        }}
       />
+      {reportFor && (
+        <ReportSheet kind="comment" targetId={reportFor.id} author={reportFor.author} postId={post.id} open={reporting} onOpenChange={setReporting} />
+      )}
       <ShareCommentSheet c={shareFor} onClose={() => setShareFor(null)} postAuthor={post.author.name} />
       {trimmer.element}
       <MediaViewer c={viewing} thumbUrl={viewing ? urlFor(viewing, urls) : null} onClose={() => setViewing(null)} />
@@ -793,7 +828,7 @@ function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | n
   );
 }
 
-/** What holding a comment opens. Delete only shows for its writer, the post's owner and coaches. */
+/** What holding a comment opens. Delete only shows for its writer, the post's owner and coaches; Report on anyone else's. */
 function CommentMenu({
   c,
   onClose,
@@ -806,6 +841,8 @@ function CommentMenu({
   canPin,
   pinnedId,
   onPin,
+  canReport,
+  onReport,
 }: {
   c: CommunityComment | null;
   onClose: () => void;
@@ -819,6 +856,8 @@ function CommentMenu({
   canPin: (c: CommunityComment) => boolean;
   pinnedId: string | null;
   onPin: (c: CommunityComment) => void;
+  canReport: (c: CommunityComment) => boolean;
+  onReport: (c: CommunityComment) => void;
 }) {
   const act = (fn: () => void) => () => {
     onClose();
@@ -877,6 +916,7 @@ function CommentMenu({
                 />
               )}
               {c.can_delete && <MenuRow icon={Trash2} label="Delete" danger onClick={act(() => onDelete(c))} />}
+              {canReport(c) && <MenuRow icon={Flag} label="Report" sub="Report it or block them" danger onClick={act(() => onReport(c))} />}
             </div>
           </>
         )}

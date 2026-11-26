@@ -29,6 +29,8 @@ export type AppEvent =
   | "health_updated"
   | "weight_review_ready"
   | "roadmap_review_ready"
+  | "competition_assessment_ready"
+  | "competition_assessment_urgent"
   | "support_message"
   | "account_deactivated"
   | "account_deactivation_scheduled"
@@ -48,7 +50,9 @@ export type AppEvent =
   | "session_booked"
   | "support_reply"
   | "roadmap_checkin_due"
-  | "roadmap_update_ready";
+  | "roadmap_update_ready"
+  | "competition_update_released"
+  | "competition_plan_released";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -104,7 +108,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: () => "💬 JF Effect Support",
     // `n` is whoever answered ("Coach Jared"), so they know a person read it.
     body: (n) => `${n} replied to your message. Tap to read it.`,
-    url: () => "/portal/support", rateMinutes: 10,
+    url: () => "/portal/messages?chat=support", rateMinutes: 10,
   },
   // A client asked for a session from their Schedule; the request card is in their chat.
   session_requested: {
@@ -207,6 +211,20 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     body: () => "There's a change to approve or something worth checking. Tap to review it.",
     url: (id) => `/admin/clients/${id}?tab=nutrition#roadmap`, rateMinutes: 3 * 24 * 60,
   },
+  // Competition Intelligence finished a scheduled assessment (competition/worker.server.ts). Content-free:
+  // the summary lives in the app (the Competition tab and Messages' Competitions row). One per assessment.
+  competition_assessment_ready: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n}'s competition assessment is ready`,
+    body: () => "Cleo's read is in. Tap to review it.",
+    url: (id, assessmentId) => `/admin/clients/${id}?tab=competition${assessmentId ? `&assessment=${assessmentId}` : ""}`, rateMinutes: 60,
+  },
+  competition_assessment_urgent: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n}'s competition prep needs you`,
+    body: () => "Cleo found something that needs a decision. Tap to review it.",
+    url: (id, assessmentId) => `/admin/clients/${id}?tab=competition${assessmentId ? `&assessment=${assessmentId}` : ""}`, rateMinutes: 60,
+  },
   health_updated: {
     to: "staff", category: "check_ins",
     title: (n) => `${n} updated their health info`,
@@ -281,6 +299,21 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     url: () => "/portal/nutrition-targets#roadmap", rateMinutes: 2 * 24 * 60,
   },
   // A self-coached athlete's roadmap has an update for them to accept or decline.
+  // A competition update released to the athlete (competition/release.server.ts): the game plan
+  // the coach approved, or a preparation update. Opens their Competition page.
+  competition_plan_released: {
+    to: "client", category: "workouts",
+    title: () => "Your competition game plan is ready",
+    body: (n) => `${n} has completed your game plan. Tap to review your attempts and the day.`,
+    url: (_id, assessmentId) => `/portal/competition${assessmentId ? `?update=${assessmentId}` : ""}`, rateMinutes: 60,
+  },
+  competition_update_released: {
+    to: "client", category: "workouts",
+    title: () => "Competition prep update",
+    // names the coach without claiming they wrote it (an update can be an automated one)
+    body: (n) => `Your meet prep with ${n} has a new update. Tap to read it.`,
+    url: (_id, assessmentId) => `/portal/competition${assessmentId ? `?update=${assessmentId}` : ""}`, rateMinutes: 60,
+  },
   roadmap_update_ready: {
     to: "client", category: "check_ins",
     title: () => "Your nutrition roadmap",

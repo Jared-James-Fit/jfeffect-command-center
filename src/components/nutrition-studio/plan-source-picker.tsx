@@ -23,6 +23,7 @@ import { startMealPlanImport, type StartImportResult } from "@/lib/nutrition-imp
 import { MEAL_IMPORT_PRIVACY_TEXT, MEAL_IMPORT_RIGHTS_EXPLAINER, rightsTextFor } from "@/lib/nutrition-import/rights";
 import type { MealImportResult } from "@/lib/nutrition-import/types";
 import type { SourceDoc } from "@/lib/program-import/types";
+import { isAiConsentDismissed, useAiConsentInline } from "@/components/ai-consent/ai-consent";
 
 const COST = FEATURE_COSTS.nutrition_import;
 const BUCKET = "nutrition-imports";
@@ -93,7 +94,7 @@ export function PlanSourcePicker({
   className?: string;
 }) {
   const { user } = useAuth();
-  const start = useServerFn(startMealPlanImport);
+  const [start, consentAsk] = useAiConsentInline(useServerFn(startMealPlanImport), "reads your meal plan");
   const member = audience === "member";
   const credits = useAiCredits(member);
   const setCredits = useSetCreditState();
@@ -233,7 +234,7 @@ export function PlanSourcePicker({
       }
       setError(r.message);
     } catch (e: any) {
-      setError(String(e?.message ?? "Something went wrong. Try again."));
+      if (!isAiConsentDismissed(e)) setError(String(e?.message ?? "Something went wrong. Try again."));
     } finally {
       // a file that went up for an import that didn't start isn't kept
       if (uploaded.length) void supabase.storage.from(BUCKET).remove(uploaded);
@@ -375,6 +376,8 @@ export function PlanSourcePicker({
         <summary className="cursor-pointer py-1 font-medium">How your file is handled</summary>
         <p className="mt-1 leading-relaxed">{MEAL_IMPORT_PRIVACY_TEXT}</p>
       </details>
+
+      {consentAsk}
 
       {error && (
         <p className="mt-4 rounded-xl bg-destructive/10 px-4 py-3 text-[14px] text-destructive" role="alert" data-meal-import-error>

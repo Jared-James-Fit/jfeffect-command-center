@@ -52,7 +52,7 @@ import { NoteCaption, PICTURE_CAPTION_LIMITS } from "@/components/community/note
 import { PollCard } from "@/components/community/poll";
 import { InstagramShareSheet, PostShareSheet, preloadShareSheets } from "@/components/community/lazy-sheets";
 import { PostArtImage } from "@/components/community/post-art";
-import { instagramPlan } from "@/lib/instagram-export";
+import { instagramPlan, type IgCard } from "@/lib/instagram-export";
 import { PostScoreChip, PostScoreRow } from "@/components/community/post-score";
 import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
@@ -133,7 +133,7 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
 export function AutoPostHero({ post, thumbUrl, unit, full = false, page = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean; page?: boolean }) {
   const plan = instagramPlan(post);
   const card = isAutoPost(post) ? plan.card : null;
-  if (card === "deck") return <DeckHero post={post} thumbUrl={thumbUrl} unit={unit} full={full} page={page} count={plan.cards ?? 1} />;
+  if (card === "deck" || ((card === "wins" || card === "recap") && (plan.cards ?? 1) > 1)) return <DeckHero post={post} card={card} thumbUrl={thumbUrl} unit={unit} full={full} page={page} count={plan.cards ?? 1} />;
   // `page`: a post's own screen in the feed, where the card it opens on holds the post's words until it's ready (all at once)
   if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} page={page} hold={page} />} />;
   if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill page={page} /> : undefined} />;
@@ -150,7 +150,7 @@ export function AutoPostHero({ post, thumbUrl, unit, full = false, page = false 
  * (a slide off to the side is clipped by the carousel, which an observer on
  * the slide itself would never call near).
  */
-function DeckHero({ post, thumbUrl, unit, full, page, count }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full: boolean; page: boolean; count: number }) {
+function DeckHero({ post, card = "deck", thumbUrl, unit, full, page, count }: { post: CommunityPost; card?: IgCard; thumbUrl: string | null; unit: "kg" | "lb"; full: boolean; page: boolean; count: number }) {
   const box = useRef<HTMLDivElement | null>(null);
   const [near, setNear] = useState(full);
   useEffect(() => {
@@ -166,9 +166,9 @@ function DeckHero({ post, thumbUrl, unit, full, page, count }: { post: Community
     io.observe(el);
     return () => io.disconnect();
   }, [near, count]);
-  if (count < 2 && !post.media_type) return <PostArtImage post={post} card="deck" unit={unit} eager={full} page={page} hold={page} />;
+  if (count < 2 && !post.media_type) return <PostArtImage post={post} card={card} unit={unit} eager={full} page={page} hold={page} />;
   const slides = Array.from({ length: count }, (_, i) => (
-    <PostArtImage key={i} post={post} card="deck" slide={i} unit={unit} fill eager={i === 0 ? full : near} page={page} hold={page && i === 0} />
+    <PostArtImage key={i} post={post} card={card} slide={i} unit={unit} fill eager={i === 0 ? full : near} page={page} hold={page && i === 0} />
   ));
   return (
     <div ref={box} data-deck={count}>
@@ -361,7 +361,7 @@ export { WIN_STYLE };
 /**
  * Pulse: a finished workout, posted by itself. It leads with the session's
  * one real win (pickWorkoutWin: a PR, a milestone, the top set), tinted to
- * match. Celebrating it is the heart under it (or a double-tap), like any post.
+ * match. Liking it is the heart under it (or a double-tap), like any post.
  */
 export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: WorkoutShareStats; unit: "kg" | "lb" }) {
   const win = pickWorkoutWin(stats, unit);

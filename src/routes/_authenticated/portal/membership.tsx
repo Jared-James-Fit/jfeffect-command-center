@@ -11,6 +11,7 @@ import { CancelFlow } from "@/components/billing/cancel-flow";
 import { toast } from "sonner";
 import { CreditCard, RefreshCw, ExternalLink, AlertTriangle, ShieldAlert, Info as InfoIcon } from "lucide-react";
 import { isNative } from "@/platform";
+import { goToPayment } from "@/lib/native-purchases";
 
 export const Route = createFileRoute("/_authenticated/portal/membership")({ component: BillingPage });
 
@@ -44,7 +45,7 @@ function BillingPage() {
 
   const portal = useMutation({
     mutationFn: () => portalFn({ data: { return_url: window.location.href } }),
-    onSuccess: (r) => window.location.assign(r.url),
+    onSuccess: (r) => void goToPayment(r.url),
     onError: (e: any) => toast.error(e.message),
   });
   const sync = useMutation({
@@ -64,7 +65,7 @@ function BillingPage() {
   });
   const restart = useMutation({
     mutationFn: () => restartFn({ data: { origin: window.location.origin } }),
-    onSuccess: (r: any) => { if (r?.url) window.location.assign(r.url); },
+    onSuccess: (r: any) => { if (r?.url) goToPayment(r.url); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -96,14 +97,15 @@ function BillingPage() {
       <PageHeader title="Billing" subtitle="Manage your JF Membership subscription." />
       <div className="space-y-5 p-4 md:p-6">
 
-      {/* Native: inform user that billing changes must be done on the web */}
+      {/* Native: billing isn't in the app (and never says where else to pay) */}
       {native && (
         <Card className="flex items-start gap-3 border-amber-500/30 bg-amber-500/10 p-4 text-sm">
           <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           <div>
-            <div className="font-semibold">Manage billing at jfeffect.com</div>
+            {/* no pointer to an outside purchase in the App Store build (guideline 3.1.1 / 3.1.3) */}
+            <div className="font-semibold">Billing isn't available in the app</div>
             <div className="text-muted-foreground text-xs mt-0.5">
-              Subscription changes, payment updates, and cancellations are handled at jfeffect.com. Your access updates automatically in the app.
+              Your access updates automatically in the app.
             </div>
           </div>
         </Card>

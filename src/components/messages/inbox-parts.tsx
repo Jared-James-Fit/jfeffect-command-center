@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SwipeableRow, type SwipeAction } from "@/components/ui/swipeable-row";
 import { UserAvatar } from "@/components/user-avatar";
-import { LiveAvatar } from "@/components/live-indicator";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useCommunityMembers } from "@/lib/community.queries";
 import type { CommunityAuthor } from "@/lib/community";
@@ -30,7 +29,6 @@ import { useBlockedPeople, useBlockPerson, useStartDirect, type DirectThread } f
 import { useFollowState } from "@/lib/community-social";
 import type { CrewThread } from "@/lib/crew-chats";
 import { TallSheet } from "@/components/crew-chat";
-import { UNREAD_DOT } from "@/components/messages/chat-list-row";
 
 /* ------------------------------ hold menu ------------------------------ */
 
@@ -171,81 +169,6 @@ export function ChatRowShell({
   );
   if (!swipe?.length) return body;
   return <SwipeableRow actions={swipe}>{body}</SwipeableRow>;
-}
-
-/* ------------------------------ pinned faces ------------------------------ */
-
-export function PinTile({
-  name, avatar, unread, preview, alone, muted, live, selected, onOpen, onHold,
-}: {
-  name: string;
-  avatar: ReactNode;
-  unread: boolean;
-  /** What's new, shown in a bubble over the face while unread (iMessage pins). */
-  preview?: string | null;
-  /** The only pin in its row: its bubble may be wider than the tile. */
-  alone?: boolean;
-  muted?: boolean;
-  live?: boolean;
-  selected?: boolean;
-  onOpen: () => void;
-  onHold?: () => void;
-}) {
-  const press = useLongPress(() => onHold?.());
-  const bubble = unread ? preview?.trim() || null : null;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      {...(onHold ? press : {})}
-      aria-label={`${name}${unread ? `, unread${bubble ? `: ${bubble}` : ""}` : ""}`}
-      className={cn(
-        "flex w-1/3 select-none flex-col items-center gap-1.5 rounded-2xl px-1 py-2 transition [-webkit-touch-callout:none] active:scale-95",
-        selected && "bg-secondary/70",
-      )}
-    >
-      {/* iMessage pins: the newest message rises out of the face in a bubble
-          (its tail touching the face) and pops in again when another one
-          lands (keyed by the text). */}
-      {bubble && (
-        <span
-          key={bubble}
-          className={cn(
-            "relative z-10 -mb-2 origin-bottom rounded-[18px] bg-secondary px-3 py-[7px] shadow-[0_2px_10px_rgba(0,0,0,0.18)] animate-in fade-in zoom-in-75 slide-in-from-bottom-2 duration-300",
-            alone ? "w-max max-w-[13.5rem]" : "max-w-full",
-          )}
-          data-pin-preview
-          aria-hidden
-        >
-          <span className="line-clamp-2 break-words text-left text-[12.5px] font-medium leading-[1.3] text-foreground">{bubble}</span>
-          <span className="absolute -bottom-[5px] left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 rounded-[3px] bg-secondary" />
-        </span>
-      )}
-      <span className="relative">
-        {/* one signal at a time: live is the dot on the photo (an unread chat
-            still shows in the bold name); otherwise the unread badge, sitting
-            on the face's left edge, clear of the bubble. A muted chat's bell
-            takes the dot's corner. A ring around a photo only ever means a
-            story. */}
-        <LiveAvatar live={live && !muted} size={60}>{avatar}</LiveAvatar>
-        {unread && !live && (
-          <span
-            data-pin-unread
-            className={cn("absolute -left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full ring-[3px] ring-card animate-in zoom-in-50 duration-200", UNREAD_DOT)}
-            aria-hidden
-          />
-        )}
-        {muted && (
-          <span className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-card text-muted-foreground ring-1 ring-border">
-            <BellOff className="h-3 w-3" />
-          </span>
-        )}
-      </span>
-      <span className={cn("max-w-full truncate text-[13px]", unread ? "font-semibold text-foreground" : "text-muted-foreground")}>
-        {name}
-      </span>
-    </button>
-  );
 }
 
 /* ------------------------------ new message ------------------------------ */

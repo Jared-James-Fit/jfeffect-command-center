@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { bakeKey } from "@/lib/media/bake-key";
 import { AlertCircle, Camera, Images, Play, Scissors, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -29,6 +30,17 @@ export type TrayItem = {
   progress: number;
   /** Local preview (just picked / shot). */
   preview: string | null;
+  /**
+   * A small copy for tiles and strips (a photo's 720 px thumbnail): a grid of
+   * ten picks never decodes ten full-size photos (Nov 25 2026). Unset: `preview`.
+   */
+  tile?: string | null;
+  /**
+   * What the uploaded slide was last made from (its framing, filter, cover and
+   * shape, `bakeKey`): posting again (a retry) with nothing changed makes
+   * nothing twice, and the edits stay on the slide for the editor.
+   */
+  baked?: string | null;
   /** A clip just picked or recorded: its local file, to play while you write the caption. */
   video?: string | null;
   /** The part of that clip that goes (null: all of it), and how long that runs. */
@@ -168,7 +180,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
             job.resolve(null);
             return;
           }
-          patch(id, { status: "done", progress: 100, slide });
+          // a fresh upload is the picture as picked: nothing made from it yet
+          patch(id, { status: "done", progress: 100, slide, baked: null });
           job.resolve(slide);
         })
         .catch((e) => {
@@ -226,9 +239,10 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
    * `place`: how a clip filmed in the camera sits (Nov 23 2026): filling the
    * frame, framed exactly as the viewfinder showed it, never decided again from
    * its shape (a 3:4 recording used to start "whole", boxed in on a story).
+   * `onAdded`: the new slides' ids, in order (none for a file that didn't fit).
    */
   const add = useCallback(
-    async (files: File[], place?: { framing?: Framing | null; whole?: boolean }) => {
+    async (files: File[], place?: { framing?: Framing | null; whole?: boolean }, opts?: { onAdded?: (ids: string[]) => void }) => {
       const current = [...Array.from({ length: coverCount }, () => ({ kind: "image" as const })), ...itemsRef.current.map((it) => ({ kind: it.kind }))];
       const tagged = files.map((file) => ({ file, kind: (file.type.startsWith("video/") ? "video" : "image") as "image" | "video" }));
       const fit = fitSlides(current, tagged);
@@ -237,6 +251,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       const placed = place ? { ...(place.framing ? { framing: place.framing } : {}), ...(place.whole !== undefined ? { whole: place.whole } : {}) } : {};
       setItems((list) => [...list, ...fresh.map((f) => ({ id: f.id, kind: f.kind, status: "preparing" as const, progress: 0, preview: null, slide: null, existing: false, ...placed }))]);
       for (const f of fresh) defer(f.id);
+      // which slides these files became (the camera roll ties each tile to its slide)
+      opts?.onAdded?.(fresh.map((f) => f.id));
       // read them one at a time (decoding is the heavy bit; a long clip opens the trimmer); each uploads as soon as it's ready
       const clips = fresh.filter((f) => f.kind === "video" || looksLikeVideo(f.file));
       for (const f of fresh) {
@@ -338,7 +354,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
     (id: string, grade: MediaGrade | null) => {
       const it = itemsRef.current.find((x) => x.id === id);
       if (!it || it.existing) return;
-      patch(id, { grade });
+      patch(id, { grade, baked: null });
       if (it.kind !== "video") return;
       const old = gradeTimers.current.get(id);
       if (old) clearTimeout(old);
@@ -414,6 +430,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
     if (!it.existing && it.status === "done" && it.slide) void removeCommunityFiles([it.slide.path, it.slide.thumb]);
     const job = jobs.current.get(id);
     if (it.preview?.startsWith("blob:") && it.preview !== job?.picked?.previewUrl) URL.revokeObjectURL(it.preview);
+    if (it.tile?.startsWith("blob:")) URL.revokeObjectURL(it.tile);
     if (job?.picked) releasePicked(job.picked);
   }, []);
 
@@ -433,12 +450,12 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       if (!it) return;
       const job = jobs.current.get(id);
       if (it.preview?.startsWith("blob:") && it.preview !== job?.picked?.previewUrl) URL.revokeObjectURL(it.preview);
-      patch(id, { cover, preview: URL.createObjectURL(cover) });
+      patch(id, { cover, preview: URL.createObjectURL(cover), baked: null });
     },
     [patch],
   );
   /** How a slide sits in the post's frame (drag / pinch in the studio). */
-  const setFraming = useCallback((id: string, framing: Framing | null) => patch(id, { framing }), [patch]);
+  const setFraming = useCallback((id: string, framing: Framing | null) => patch(id, { framing, baked: null }), [patch]);
   /** A story's clip: whole over a blur of itself, or filling the story. */
   const setWhole = useCallback((id: string, whole: boolean) => patch(id, { whole }), [patch]);
 
@@ -458,9 +475,12 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       const picked = jobs.current.get(it.id)?.picked ?? null;
       const box = shape ? { w: shape, h: 1 } : null;
       const up = (file: File) => uploadLiftFileToStorage({ file, userId: uid, bucket: COMMUNITY_BUCKET }).then((r) => r.path);
+      const key = bakeKey(it, shape);
+      // posted again (a retry) with nothing changed since it was made: nothing is made twice
+      if (it.baked && it.baked === key) return slide;
       const done = (next: PostSlide) => {
-        // posted again (a retry): nothing is made twice
-        patch(it.id, { cover: null, framing: null, slide: next });
+        // the edits stay on the slide (going back to edit after a failed post shows them as they were)
+        patch(it.id, { baked: key, slide: next });
         return next;
       };
       try {
@@ -470,8 +490,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
           const size = drawableSize(src);
           const f = clampFraming(it.framing ?? CENTRED, size, box);
           const grade = compiledFor(it.grade);
-          // already the post's shape and untouched (no filter): as it was uploaded
-          if (!grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;
+          // already the post's shape and untouched (no filter), and still the upload as picked: as it was uploaded
+          if (!it.baked && !grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001 && !f.r) return slide;
           const { main, thumb: small } = await framedPhoto(src, f, shape, grade);
           if (!main) return slide;
           const [path, thumb] = await Promise.all([up(main), small ? up(small).catch(() => null) : Promise.resolve(null)]);
@@ -545,7 +565,10 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
 
   const releaseAll = useCallback(() => {
     for (const job of jobs.current.values()) if (job.picked) releasePicked(job.picked);
-    for (const it of itemsRef.current) if (it.preview?.startsWith("blob:")) URL.revokeObjectURL(it.preview);
+    for (const it of itemsRef.current) {
+      if (it.preview?.startsWith("blob:")) URL.revokeObjectURL(it.preview);
+      if (it.tile?.startsWith("blob:")) URL.revokeObjectURL(it.tile);
+    }
     jobs.current.clear();
     queue.current = [];
   }, []);
@@ -603,6 +626,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
 /** What the strip shows for a picked photo or clip. */
 function itemFields(m: PickedMedia): Partial<TrayItem> {
   return {
+    // a photo's small copy for tiles (its 720 px thumbnail, already made for the upload)
+    tile: m.kind === "image" && m.thumb ? URL.createObjectURL(m.thumb) : null,
     preview: m.kind === "image" ? m.previewUrl : (m.thumb ? URL.createObjectURL(m.thumb) : null),
     video: m.kind === "video" ? m.previewUrl : null,
     w: m.width,

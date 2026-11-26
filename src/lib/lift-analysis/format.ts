@@ -82,7 +82,7 @@ const NOTE: Record<QualityNote, { title: string; tip: string }> = {
   },
   plate_size_assumed: {
     title: "Read from a standard 450 mm plate",
-    tip: "Every 20 kg, 25 kg and 45 lb plate and every bumper is 450 mm across. If the biggest plate on the bar is smaller, set its size.",
+    tip: "Every 20 kg, 25 kg and 45 lb plate and every bumper is 450 mm across, so the speed is logged as an estimate (≈). If the biggest plate on the bar is smaller, set its size.",
   },
   low_fps: {
     title: "Filmed at 30 fps",

@@ -65,7 +65,7 @@ export function ProgramIntelligencePage({ clientId, search }: { clientId: string
   if (viewOnly)
     return (
       <>
-        <PageHeader title="Program Intelligence" backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
+        <PageHeader title="Program Intelligence" backTo={`/admin/clients/${clientId}?tab=training`} backLabel="Training" />
         <div className="p-4 text-sm text-muted-foreground">Program Intelligence is for coaches. It isn't available in a view-only login.</div>
       </>
     );

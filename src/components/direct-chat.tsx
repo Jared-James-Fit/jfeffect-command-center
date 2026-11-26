@@ -206,7 +206,7 @@ function RequestBar({ name, busy, onAction, onLater }: { name: string; busy: boo
 }
 
 /** A direct chat in the Chats list. */
-export function DirectRow({ thread, me, selected, onClick, unread: markedUnread, muted, leading }: {
+export function DirectRow({ thread, me, selected, onClick, unread: markedUnread, muted, pinned, leading }: {
   thread: DirectThread;
   me: string | null | undefined;
   selected: boolean;
@@ -215,6 +215,8 @@ export function DirectRow({ thread, me, selected, onClick, unread: markedUnread,
   unread?: boolean;
   /** Hide Alerts is on. */
   muted?: boolean;
+  /** Pinned to the top of the list. */
+  pinned?: boolean;
   /** Shown before the avatar (a checkbox while selecting). */
   leading?: ReactNode;
 }) {
@@ -225,6 +227,7 @@ export function DirectRow({ thread, me, selected, onClick, unread: markedUnread,
       selected={selected}
       unread={unread}
       muted={muted}
+      pinned={pinned}
       leading={leading}
       at={thread.last?.created_at}
       unreadLabel="New"

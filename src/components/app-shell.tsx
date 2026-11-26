@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { GlobalStoryHost } from "@/components/community/global-story-host";
-import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { CrewRulesHost } from "@/components/community/crew-rules-sheet";
+import { Link, useRouterState, useNavigate, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -1024,7 +1025,7 @@ export function AppShell({
                 onSignOut={handleSignOut}
                 trigger={
                   <Button variant="ghost" size="sm" aria-label="Settings" className="h-10 w-10 shrink-0 rounded-full px-0">
-                    <SettingsIcon className="h-4 w-4" />
+                    <SettingsIcon className="h-5 w-5" />
                   </Button>
                 }
               />
@@ -1058,6 +1059,8 @@ export function AppShell({
           {!pageBar && <DualAccountSwitcher />}
           {/* story rings on photos outside Crew (Messages, chat lists): the crew's stories already on the phone */}
           <ShellPageContext.Provider value><GlobalStoryHost>{children}</GlobalStoryHost></ShellPageContext.Provider>
+          {/* the one-time Crew community rules, asked by the first post or comment (withCrewRules) */}
+          <CrewRulesHost />
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
@@ -1962,16 +1965,20 @@ function MoreNavSlot({ active, onOpenMore, dense }: { active: boolean; onOpenMor
 
 /**
  * A page's back button: back through the app's own history when there is
- * some, otherwise to `backTo` (opened from a link or a notification).
+ * some (the router's own count, never `window.history.length`, which also
+ * counts pages from before the app and forward entries), otherwise to
+ * `backTo` (opened from a link, a refresh or a notification). The fallback
+ * replaces, so a later back never returns to the page that was left.
  */
 export function usePageBack(backTo?: string): () => void {
   const navigate = useNavigate();
+  const router = useRouter();
   return () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      window.history.back();
+    if (router.history.canGoBack()) {
+      router.history.back();
       return;
     }
-    if (backTo) navigate({ to: backTo });
+    if (backTo) void navigate({ href: backTo, replace: true });
   };
 }
 

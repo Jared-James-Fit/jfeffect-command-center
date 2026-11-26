@@ -42,6 +42,7 @@ import {
 } from "@/lib/nutrition-import/import.functions";
 import { usableTargets, type CreateAnswers } from "@/lib/nutrition-import/create";
 import { seedFromPlan, type StudioSeed } from "@/lib/nutrition-import/seed";
+import { isAiConsentDismissed, useAiConsentInline } from "@/components/ai-consent/ai-consent";
 
 type Mode = "import" | "cleo";
 
@@ -148,7 +149,7 @@ function StudioStart({ mode }: { mode: Mode }) {
 function CleoStart({ onStarted }: { onStarted: (id: string) => void }) {
   const targetsFn = useServerFn(getActiveMemberTargets);
   const targetsQ = useQuery({ queryKey: ["m-nutrition-targets-studio"], queryFn: () => targetsFn({}), retry: false });
-  const start = useServerFn(startMealPlanCreate);
+  const [start, consentAsk] = useAiConsentInline(useServerFn(startMealPlanCreate), "writes your meal plan draft");
   const credits = useAiCredits();
   const setCredits = useSetCreditState();
   const [busy, setBusy] = useState(false);
@@ -174,13 +175,13 @@ function CleoStart({ onStarted }: { onStarted: (id: string) => void }) {
       }
       setError(r.message);
     } catch (e: any) {
-      setError(String(e?.message ?? "Something went wrong. Try again."));
+      if (!isAiConsentDismissed(e)) setError(String(e?.message ?? "Something went wrong. Try again."));
     } finally {
       setBusy(false);
     }
   };
 
-  return <CleoQuestions targets={targets} targetsLoading={targetsQ.isLoading} busy={busy} error={error} outOfCredits={outOfCredits} onSubmit={submit} />;
+  return <CleoQuestions targets={targets} targetsLoading={targetsQ.isLoading} busy={busy} error={error} outOfCredits={outOfCredits} onSubmit={submit} consent={consentAsk} />;
 }
 
 /** One import or draft, whatever stage it's at. */
@@ -263,7 +264,7 @@ function ImportState({
 }
 
 function Failed({ row, mode, onReset, reload }: { row: MealImportRow; mode: Mode; onReset: () => void; reload: () => Promise<void> }) {
-  const retry = useServerFn(retryMealPlanImport);
+  const [retry, consentAsk] = useAiConsentInline(useServerFn(retryMealPlanImport), mode === "cleo" ? "writes your meal plan draft" : "reads your meal plan");
   const setCredits = useSetCreditState();
   const [busy, setBusy] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
@@ -282,8 +283,8 @@ function Failed({ row, mode, onReset, reload }: { row: MealImportRow; mode: Mode
         return;
       }
       await reload();
-    } catch {
-      toast.error("Couldn't start it again. Try again.");
+    } catch (e) {
+      if (!isAiConsentDismissed(e)) toast.error("Couldn't start it again. Try again.");
     } finally {
       setBusy(false);
     }
@@ -305,6 +306,7 @@ function Failed({ row, mode, onReset, reload }: { row: MealImportRow; mode: Mode
         <Button variant="ghost" onClick={onReset}>
           Start over
         </Button>
+        {consentAsk}
       </div>
       <AiCreditsSheet open={creditsOpen} onOpenChange={setCreditsOpen} out feature={mode === "cleo" ? "nutrition_create" : "nutrition_import"} />
     </div>

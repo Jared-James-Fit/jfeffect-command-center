@@ -29,6 +29,7 @@ import {
 import { PlusTax } from "@/components/billing/plus-tax";
 import { cn } from "@/lib/utils";
 import { isNative } from "@/platform";
+import { goToPayment } from "@/lib/native-purchases";
 import { usePovArgs } from "@/lib/client-pov-args";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import {
@@ -171,7 +172,7 @@ export function AiCreditsPanel({
       const { url } = await start({
         data: { pack: pack.key, origin: window.location.origin, returnPath },
       });
-      window.location.href = url;
+      if (!goToPayment(url)) setBusy(null);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open checkout");
       setBusy(null);
@@ -219,11 +220,8 @@ export function AiCreditsPanel({
         </p>
       </div>
 
-      {native ? (
-        <p className="text-[13px] text-muted-foreground" data-ai-credits-native>
-          Purchases aren't available in the app.
-        </p>
-      ) : (
+      {/* the iPhone app neither sells credits nor says where they're sold (native-purchases.ts) */}
+      {native ? null : (
         <div className="space-y-2" data-ai-credits-packs>
           <div className="text-[15px] font-semibold">Get more credits</div>
           {CREDIT_PACKS.map((p) => (

@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Archive, ArchiveRestore, Download, Flag, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
+import { Archive, ArchiveRestore, Ban, Download, Flag, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -18,6 +18,7 @@ import { pictureKind } from "@/lib/post-pictures";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { InstagramShareSheet } from "@/components/community/lazy-sheets";
 import { ReportSheet } from "@/components/community/report-sheet";
+import { BlockConfirmSheet } from "@/components/community/block-person-sheet";
 import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
 import { peekPostArt, postArtKey } from "@/lib/post-art";
 import { deckOf } from "@/lib/post-decks";
@@ -47,6 +48,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const stickerMounted = useOpenedOnce(sticker);
   // mounted on first tap, like Instagram
   const [reporting, setReporting] = useState<boolean | null>(null);
+  const [blocking, setBlocking] = useState<boolean | null>(null);
   // mounted on first open (a feed of posts never runs it for nothing), kept for its closing slide
   const [ig, setIg] = useState<boolean | null>(null);
   const del = useDeletePost();
@@ -79,8 +81,9 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const qc = useQueryClient();
   const makePicture = useServerFn(makePostPicture);
   const [making, setMaking] = useState(false);
-  // anyone can report someone else's post to the team (staff remove it instead)
+  // anyone can report someone else's post to the team (staff remove it instead), and block its author (never a coach)
   const canReport = !mine && !viewerIsStaff;
+  const canBlock = canReport && !post.author.is_coach;
   if (!canEdit && !canDelete && !onIt && !canInstagram && !canReport) return null;
 
   const newPicture = async () => {
@@ -210,6 +213,11 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
               <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={act(() => setReporting(true))} data-report-post>
                 <Flag className="mr-2 h-4 w-4" /> Report
               </DropdownMenuItem>
+              {canBlock && (
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={act(() => setBlocking(true))} data-block-post-author>
+                  <Ban className="mr-2 h-4 w-4" /> Block {post.author.name.split(" ")[0]}
+                </DropdownMenuItem>
+              )}
             </>
           )}
         </DropdownMenuContent>
@@ -271,7 +279,10 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
           <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />
         </Suspense>
       )}
-      {canReport && reporting !== null && <ReportSheet kind="post" targetId={post.id} open={reporting} onOpenChange={setReporting} />}
+      {canReport && reporting !== null && (
+        <ReportSheet kind={post.story ? "story" : "post"} targetId={post.id} author={post.author} open={reporting} onOpenChange={setReporting} onReported={onGone} />
+      )}
+      {canBlock && blocking !== null && <BlockConfirmSheet author={post.author} blocked={false} open={blocking} onOpenChange={setBlocking} onDone={onGone} />}
     </>
   );
 }

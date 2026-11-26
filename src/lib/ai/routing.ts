@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract" | "session_brief" | "session_analysis" | "support_answer";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -28,7 +28,7 @@ export type Route = {
 };
 
 /** The top tier: models allowed to make a coaching decision. */
-export const STRONG_MODELS = ["openai:gpt-6-astra", "gateway:openai/gpt-6-astra", "gateway:anthropic/claude-opus-5-5", "openai:gpt-5.5", "gateway:openai/gpt-5.5"];
+export const STRONG_MODELS = ["openai:gpt-6.2-astra", "openai:gpt-6-astra", "gateway:openai/gpt-6-astra", "gateway:anthropic/claude-opus-5-5", "openai:gpt-5.5", "gateway:openai/gpt-5.5"];
 
 /**
  * Every default runs on the OpenAI key (`openai:`, background mode), never the Lovable gateway:
@@ -156,6 +156,40 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * Answered while the coach waits, so the quicker strong writer first; OpenAI key only.
    */
   cardio_plan: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
+  /**
+   * Competition Intelligence's strategic assessments (competition/write.server.ts, Nov 24 2026): an
+   * elite coach's read at each preparation milestone, which may challenge the deterministic engines'
+   * baseline (competition/brief.ts) with structured, evidence-cited proposals that code checks and
+   * the engines rebuild from (competition/proposals.ts). A coaching judgement, so the strong tier
+   * only at high effort, like the program strategy; every number in the answer is checked
+   * (grounding.ts). GPT-6.2 Astra (the newest Astra on the account, listed Nov 24 2026) first, then
+   * the benchmarked GPT-6 Astra, then GPT-5.5. In the background (staged calls); OpenAI key only,
+   * never Lovable credits.
+   */
+  competition: { models: ["openai:gpt-6.2-astra", "openai:gpt-6-astra", "openai:gpt-5.5"], effort: "high", maxOutputTokens: 40_000, strongOnly: true },
+  /**
+   * Copying a meet roster, a competitor's training caption or a screenshot into structured rows
+   * (competition/extract.server.ts): copying, never deciding, checked by code against the source
+   * (a name or a number that isn't in it is dropped). Answered while the coach waits. OpenAI only.
+   */
+  competition_extract: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
+  /**
+   * Coaching sessions (docs/COACHING_SESSIONS.md, Nov 25 2026). The pre-call brief only organizes
+   * the sourced prep (coaching-sessions/brief.ts checks every ref and number), so GPT-5.5 at low
+   * effort, then GPT-5 mini. Reading a meeting's notes or transcript is the harder read (who said
+   * what, what was agreed and what was only floated), checked by code against the transcript
+   * (analysis.ts); GPT-5.5 at medium, then GPT-6 Astra. Both in the background; OpenAI key only.
+   */
+  session_brief: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
+  session_analysis: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 24_000, strongOnly: false },
+  /**
+   * Cleo as JF Effect Support's first line (support-cleo/, Nov 25 2026): a short answer from the
+   * support knowledge base (src/content/support-kb.ts) or a hand-off to the team, as JSON that code
+   * checks before anyone reads it (parseCleoReply, cleanAnswer: only knowledge-base links, short).
+   * Someone is waiting in the chat, so the quick writer first at low effort, GPT-5.5 behind it.
+   * Never a coaching decision (those are handed off); OpenAI key only.
+   */
+  support_answer: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 3_000, strongOnly: false },
 };
 
 /**

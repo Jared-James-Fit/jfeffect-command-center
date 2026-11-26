@@ -341,6 +341,7 @@ export function FilterPanel({
           <button
             type="button"
             disabled={!changed}
+            data-no-sheet-drag
             onPointerDown={() => changed && compare(true)}
             onPointerUp={() => compare(false)}
             onPointerLeave={() => comparing && compare(false)}
@@ -460,7 +461,7 @@ export function FilterPanel({
           </div>
 
           {/* the edit as a whole: back to the original, keep it as a preset or the default, other slides */}
-          <div className="mt-1.5 flex h-9 items-center gap-0.5 overflow-x-auto text-[13px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mt-1.5 flex h-9 min-w-0 items-center gap-0.5 text-[13px]" data-filter-actions>
             <button type="button" onClick={() => go(-1)} disabled={!canUndo} className="grid h-9 w-9 shrink-0 place-items-center rounded-full active:bg-white/10 disabled:opacity-30" aria-label="Undo" data-filter-undo>
               <Undo2 className="h-[18px] w-[18px]" />
             </button>
@@ -474,21 +475,22 @@ export function FilterPanel({
                 feedback("tap");
                 set({ filter: "original", intensity: 1 }, true);
               }}
-              className="flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5 font-semibold text-white/80 active:bg-white/10 disabled:opacity-35"
+              className="flex h-9 shrink-0 items-center gap-1 rounded-full px-2 font-semibold text-white/80 active:bg-white/10 disabled:opacity-35"
               data-filter-reset
+              aria-label="Reset"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset
+              <RotateCcw className="h-[18px] w-[18px] min-[420px]:h-3.5 min-[420px]:w-3.5" />
+              <span className="hidden min-[420px]:inline">Reset</span>
             </button>
             {onSavePreset && (
-              <button type="button" disabled={!changed} onClick={() => onSavePreset(current)} className="flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5 font-semibold text-white/80 active:bg-white/10 disabled:opacity-35" aria-label="Save this look as a preset" data-filter-save-preset>
-                <Star className="h-3.5 w-3.5" />
-                Preset
+              <button type="button" disabled={!changed} onClick={() => onSavePreset(current)} className="flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5 font-semibold text-white/80 active:bg-white/10 disabled:opacity-35" aria-label="Save this look as a preset" title="Preset" data-filter-save-preset>
+                <Star className="h-[18px] w-[18px] min-[420px]:h-3.5 min-[420px]:w-3.5" />
+                <span className="hidden min-[420px]:inline">Preset</span>
               </button>
             )}
-            <span className="flex-1" />
+            <span className="min-w-0 flex-1" />
             {scope && scope.items.length > 1 && !picking && (
-              <button type="button" onClick={() => setPicking(new Set(scope.items.map((i) => i.id)))} className="h-9 shrink-0 rounded-full bg-white/10 px-3 font-semibold active:bg-white/20" data-filter-apply-to>
+              <button type="button" onClick={() => setPicking(new Set(scope.items.map((i) => i.id)))} className="h-9 shrink-0 whitespace-nowrap rounded-full bg-white/10 px-3 font-semibold active:bg-white/20" data-filter-apply-to>
                 Other slides…
               </button>
             )}
@@ -500,7 +502,7 @@ export function FilterPanel({
             ) : (
               onSaveDefault &&
               (changed || defaultGrade) && (
-                <button type="button" onClick={onSaveDefault} className="h-9 shrink-0 px-1.5 font-semibold text-white/85 underline-offset-2 active:underline" data-filter-default="save">
+                <button type="button" onClick={onSaveDefault} className="h-9 shrink-0 whitespace-nowrap px-1.5 font-semibold text-white/85 underline-offset-2 active:underline" data-filter-default="save">
                   Set as default
                 </button>
               )

@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ChevronLeft, Layers, List, Search, X, AlertTriangle, Trash2, Mic, Square, Loader2, PenLine, Check } from "lucide-react";
+import { ChevronLeft, Layers, List, Search, X, AlertTriangle, Trash2, Mic, Loader2, PenLine, Check } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,9 @@ import { followUpFor, shortDay, type PainEntry } from "@/lib/pain/history";
 import { addPick, answerFollowUp, applyDescribed, mirrorOf, pickScore, recentSites, scorePatch, setSideChoice, sideChoiceOf, unrated, updatePaired, type PainPick, type SideChoice } from "@/lib/pain/picks";
 import { chooseSide, describePain, describedGroups, describedLine, type DescribeResult, type DescribedPlace } from "@/lib/pain/describe";
 import { readPainDescriptionFn, transcribePainVoiceFn } from "@/lib/pain/describe.functions";
-import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
+import { AiConsentInline, useMyAiConsent } from "@/components/ai-consent/ai-consent";
+import { useVoiceDictation } from "@/hooks/use-voice-dictation";
+import { VoiceMicButton, VoiceStatusLine } from "@/components/voice/voice-recorder";
 import { CLIENT_SAFETY_NOTICE, needsSafetyNotice, URGENT_SIGNS } from "@/lib/pain/safety";
 import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
@@ -599,21 +601,6 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
 // ── describe it ─────────────────────────────────────────────────────────
 
 /** Five bars that move with their voice, so they can see it's hearing them. */
-function VoiceLevel({ level }: { level: number }) {
-  const shape = [0.55, 0.85, 1, 0.85, 0.55];
-  return (
-    <span className="flex h-6 shrink-0 items-center gap-[3px]" aria-hidden data-pain-voice-level>
-      {shape.map((k, i) => (
-        <span
-          key={i}
-          className="w-[3px] rounded-full bg-foreground transition-[height] duration-100"
-          style={{ height: `${Math.round(4 + Math.min(1, level * 1.4) * k * 20)}px` }}
-        />
-      ))}
-    </span>
-  );
-}
-
 /**
  * Type or say what hurts. The app's own reader goes first (instant, free);
  * only when it can't place anything does the server read it. Every place comes
@@ -629,16 +616,9 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
   // rows they took off the confirm list
   const [dropped, setDropped] = useState<Set<string>>(new Set());
   const [reading, setReading] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [hearing, setHearing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  // a take that couldn't be turned into words: kept so "Try again" never asks them to say it twice
-  const [voiceFail, setVoiceFail] = useState<{ message: string; take: { blob: Blob; mime: string } | null } | null>(null);
   const readFn = useServerFn(readPainDescriptionFn);
   const hearFn = useServerFn(transcribePainVoiceFn);
-  const mic = useSummerMic({ dictate: true, maxMs: 60_000 });
-  const canMic = typeof window !== "undefined" && micSupported();
-
   const read = async (words: string) => {
     const t = words.trim();
     if (t.length < 3) return;
@@ -666,50 +646,27 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
     }
   };
 
-  const hear = async (take: { blob: Blob; mime: string }) => {
-    setVoiceFail(null);
-    setHearing(true);
-    try {
-      const r = await hearFn({ data: { audio: await blobToBase64(take.blob), mime: take.mime } });
-      if (r.ok && r.text) {
-        feedback("tap");
-        const typed = textRef.current.trim();
-        const next = (typed ? `${typed} ${r.text}` : r.text).slice(0, 600);
-        setText(next);
-        await read(next);
-      } else if (r.ok) setVoiceFail({ message: "Didn't catch any words. Try again a little closer to the phone, or type it.", take: null });
-      else setVoiceFail({ message: r.reason, take });
-    } catch {
-      setVoiceFail({ message: "Couldn't send that. Check your connection and try again.", take });
-    } finally {
-      setHearing(false);
-    }
-  };
-
-  const record = async () => {
-    if (recording) {
-      mic.stop();
-      return;
-    }
-    feedback("tap");
-    setVoiceFail(null);
-    setRecording(true);
-    const began = Date.now();
-    try {
-      const take = await mic.start();
-      setRecording(false);
-      if (!take) {
-        if (Date.now() - began < 1500) setVoiceFail({ message: "That was too short. Tap the mic, say it, then tap the square.", take: null });
-        return;
-      }
-      await hear(take);
-    } catch (e: any) {
-      const denied = e?.name === "NotAllowedError" || e?.name === "SecurityError";
-      setVoiceFail({ message: denied ? "The microphone is off for JF Effect. Turn it on in your phone's settings, or type it." : (e?.message ?? "Couldn't use the microphone. Type it instead."), take: null });
-    } finally {
-      setRecording(false);
-    }
-  };
+  // Say it: the app's one dictation (a take that couldn't be turned into words is
+  // kept in memory for Try again, never stored); the words join what's typed and are read.
+  const voice = useVoiceDictation({
+    maxMs: 60_000,
+    transcribe: async (audio, mime) => {
+      const r = await hearFn({ data: { audio, mime } });
+      return r.ok ? { ok: true, text: r.text ?? "" } : { ok: false, reason: r.reason };
+    },
+    onText: (said) => {
+      const typed = textRef.current.trim();
+      const next = (typed ? `${typed} ${said}` : said).slice(0, 600);
+      setText(next);
+      void read(next);
+    },
+  });
+  // speech goes to OpenAI or Google: someone who hasn't allowed that is asked in place first
+  const aiConsent = useMyAiConsent();
+  const [askVoice, setAskVoice] = useState(false);
+  const canMic = voice.supported;
+  const recording = voice.state === "recording";
+  const hearing = voice.state === "requesting" || voice.state === "processing" || voice.state === "transcribing";
 
   const groups = useMemo(() => (result ? describedGroups(result.places).filter((g) => !dropped.has(g.key)) : []), [result, dropped]);
   const finalPlaces = useMemo(
@@ -747,49 +704,22 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
               data-pain-describe-text
             />
             {canMic && (
-              <button
-                type="button"
-                onClick={record}
-                disabled={busy}
-                className={cn(
-                  "absolute bottom-2.5 right-2.5 inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                  recording ? "bg-primary text-primary-foreground" : "bg-white/[0.1] text-foreground hover:bg-white/[0.16]",
-                )}
-                aria-label={recording ? "Stop and use what I said" : "Say it instead"}
-                data-pain-describe-mic
-              >
-                {hearing ? <Loader2 className="h-4 w-4 animate-spin" /> : recording ? <Square className="h-4 w-4" fill="currentColor" /> : <Mic className="h-5 w-5" />}
-              </button>
+              <VoiceMicButton
+                state={voice.state}
+                onClick={() => (aiConsent.needsYes && !recording ? setAskVoice((a) => !a) : voice.toggle())}
+                disabled={reading}
+                label="Say it instead"
+                className={cn("absolute bottom-2.5 right-2.5 h-10 w-10", !recording && "bg-white/[0.1] hover:bg-white/[0.16]")}
+              />
             )}
           </div>
-          {recording ? (
-            <div className="flex items-center gap-3" aria-live="polite" data-pain-describe-listening>
-              <VoiceLevel level={mic.level} />
-              <p className="min-w-0 flex-1 text-[13px] text-foreground">
-                Listening <span className="tabular-nums text-muted-foreground">{Math.round(mic.elapsedMs / 1000)}s</span>
-                <span className="text-muted-foreground"> · tap the square when you're done</span>
-              </p>
-            </div>
-          ) : hearing ? (
-            <p className="flex items-center gap-2 text-[13px] text-foreground" aria-live="polite" data-pain-describe-hearing>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Turning what you said into words…
-            </p>
-          ) : voiceFail ? (
-            <div className="space-y-2 rounded-lg bg-white/[0.06] p-3" role="alert" data-pain-describe-voice-error>
-              <p className="text-[13px] text-foreground">{voiceFail.message}</p>
-              {voiceFail.take && (
-                <button
-                  type="button"
-                  onClick={() => voiceFail.take && hear(voiceFail.take)}
-                  className="inline-flex h-10 items-center rounded-lg bg-white/[0.12] px-4 text-[14px] font-semibold"
-                  data-pain-describe-voice-retry
-                >
-                  Try again
-                </button>
-              )}
-            </div>
-          ) : (
-            <p className="text-[12px] text-muted-foreground">Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept.</p>
+          <VoiceStatusLine
+            voice={voice}
+            className="text-[13px]"
+            idle={<p className="text-[12px] text-muted-foreground">Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept.</p>}
+          />
+          {askVoice && aiConsent.needsYes && (
+            <AiConsentInline use="turns what you say into words" via="OpenAI (or Google if OpenAI can't)" onAllowed={() => setAskVoice(false)} onNo={() => setAskVoice(false)} />
           )}
           {!result && (
             <button

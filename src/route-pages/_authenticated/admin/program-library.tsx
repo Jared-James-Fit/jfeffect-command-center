@@ -1073,7 +1073,7 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
           job.completeStep(3);
           setPendingIssues(null);
           onClose();
-          navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+          navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any });
           job.completeStep(4);
         },
       );

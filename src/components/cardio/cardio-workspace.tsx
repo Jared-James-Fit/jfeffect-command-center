@@ -7,6 +7,7 @@
  * reaches the client until they publish. Before the workspace's tables exist
  * on a database, the classic cardio editor stands in.
  */
+import { useCleoHandoff } from "@/lib/cleo-handoff";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -16,7 +17,8 @@ import { Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { CleoDockFrame, DockBrief, useCleoDock } from "@/components/program-ai/cleo-dock";
-import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
+import { PlanIntelligence, pendingReminder } from "@/components/plan-quality/plan-intelligence";
+import { cardioFingerprint, cardioSlots, sameFingerprint } from "@/lib/plan-changes";
 import { CardioTargetsPanel } from "@/components/cardio-targets-panel";
 import { CardioOverview } from "@/components/cardio/cardio-overview";
 import { CardioBuilder, type PublishInput } from "@/components/cardio/cardio-builder";
@@ -95,6 +97,8 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   const navigate = useNavigate();
   const cleo = useCleoAccess();
   const dock = useCleoDock();
+  // a meeting's approved change lands in this dock's box (cleo-handoff.ts)
+  useCleoHandoff(clientId, "cardio", dock.ask);
   const save = useServerFn(saveCardioDraftFn);
   const discard = useServerFn(discardCardioDraftFn);
   const publish = useServerFn(publishCardioPlanFn);
@@ -112,6 +116,8 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   const [restoring, setRestoring] = useState<string | null>(null);
   const [source, setSource] = useState<"coach" | "cleo" | "restore">("coach");
   const [restoredFrom, setRestoredFrom] = useState<string | null>(null);
+  // Cleo's next step after "Apply to draft": open the publish dialog (now, or scheduled for a date)
+  const [publishNonce, setPublishNonce] = useState(0);
   const dirty = useRef(false);
 
   // a fresh read (after publishing, restoring) starts the draft from it
@@ -179,6 +185,15 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
   };
 
   const draftScore = useMemo(() => (view.draft ? scoreCardioPlan(history.plan, view.scoreCtx).score : null), [view.draft, view.scoreCtx, history.plan]);
+
+  // a finished draft or proposal nobody has acted on: a quiet reminder on the strip (never a popup)
+  const pending = useMemo(() => {
+    const old = (at: string | null | undefined) => !!at && Date.now() - Date.parse(at) >= 30 * 60_000;
+    if (view.draft && old(view.draft.updatedAt) && !sameFingerprint(cardioFingerprint(cardioSlots(view.live.sessions as any[])), cardioFingerprint(cardioSlots(view.draft.plan.sessions as any[]))))
+      return pendingReminder("cardio_draft", view.draft.updatedAt, { cleo, onOpen: () => setMode("builder") });
+    const waiting = view.proposals.find((p) => p.status === "proposed" && Array.isArray(p.sessions) && p.sessions.length > 0 && old(p.created_at));
+    return waiting ? pendingReminder("cardio_proposal", waiting.created_at, { cleo, onOpen: () => dock.ask() }) : null;
+  }, [view, cleo, dock]);
 
   const onPublish = async (x: PublishInput) => {
     setPublishing(true);
@@ -262,6 +277,10 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
           setSource("cleo");
           setMode("builder");
         }}
+        onPublishDraft={() => {
+          setMode("builder");
+          setPublishNonce((n) => n + 1);
+        }}
         onNutritionNote={(n) => {
           navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "nutrition" } as any }).then(() => window.setTimeout(() => prefillPlanAiChange(clientId, n), 400));
         }}
@@ -287,6 +306,8 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
           draft={view.draft ? { score: draftScore, label: "Draft" } : null}
           onOptimize={(q) => dock.optimize({ domain: "cardio", what: "cardio plan", quality: q })}
           onAskCleo={() => dock.ask()}
+          messageClientId={clientId}
+          pending={pending}
         />
       )}
       {mode === "overview" ? (
@@ -328,6 +349,7 @@ function Workspace({ view, refetch }: { view: CardioWorkspaceView; refetch: () =
           publishing={publishing}
           dock={dock}
           onAskCleo={(a) => ask(a)}
+          publishNonce={publishNonce}
         />
       )}
       {cleoPanel}

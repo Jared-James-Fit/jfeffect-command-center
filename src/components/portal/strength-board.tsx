@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, Scale, ShieldCheck, Swords, Trophy } from "lucide-react";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { usePortalUserId } from "@/lib/client-impersonation";
+import { useBlockedClientIds, withoutBlocked } from "@/lib/crew-safety";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -16,6 +17,8 @@ import { ATHLETE_SEX_KEYS, SexChoice } from "@/components/athlete-sex";
 import { saveMySexFn } from "@/lib/athlete-sex.functions";
 import type { AthleteSex } from "@/lib/athlete-sex";
 import { useWeightUnit } from "@/lib/use-weight-unit";
+import { onAudience, type RankingsAudience } from "@/lib/rankings-audience";
+import { useServiceTier } from "@/lib/service-tier";
 import { PowerliftingCareer } from "@/components/portal/powerlifting-career";
 import { LEVELS, type MeetLevel } from "@/lib/powerlifting-career";
 import type { WeightUnit } from "@/lib/weight-lifted";
@@ -47,13 +50,23 @@ import {
 
 const db = supabase as any;
 
-export function useStrengthBoard() {
+/** The boards never show someone blocked either way (their row leaves; ranks stay the database's). */
+function useHideBlocked<R extends { client_id?: string | null; key?: string }>(): ((rows: R[]) => R[]) | undefined {
+  const blocked = useBlockedClientIds().data;
+  const hide = useCallback((rows: R[]) => withoutBlocked(rows, blocked), [blocked]);
+  return blocked?.length ? hide : undefined;
+}
+
+/** `audience`: Community (everyone, the Hall as it has always been) or JF Effect Athletes (active coaching clients; ranks and counts among them). */
+export function useStrengthBoard(audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  const hideBlocked = useHideBlocked<ReturnType<typeof normalizeAllRow>>();
   return useQuery({
-    queryKey: ["strength-board", "all", viewerId],
+    select: hideBlocked,
+    queryKey: ["strength-board", "all", viewerId, audience],
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await db.rpc("get_strength_board_all", viewerId ? { _as_user: viewerId } : {});
+      const { data, error } = await db.rpc("get_strength_board_all", { ...(viewerId ? { _as_user: viewerId } : {}), _audience: audience });
       if (error) throw error;
       return ((data ?? []) as any[]).map(normalizeAllRow);
     },
@@ -61,26 +74,30 @@ export function useStrengthBoard() {
 }
 
 /** Everyone in the Hall, ranked or not (every client ever, plus meet athletes). */
-function useStrengthRoster() {
+function useStrengthRoster(audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  const hideBlocked = useHideBlocked<ReturnType<typeof normalizeRosterRow>>();
   return useQuery({
-    queryKey: ["strength-board", "roster", viewerId],
+    select: hideBlocked,
+    queryKey: ["strength-board", "roster", viewerId, audience],
     staleTime: 10 * 60_000,
     queryFn: async () => {
-      const { data, error } = await db.rpc("get_strength_board_roster", viewerId ? { _as_user: viewerId } : {});
+      const { data, error } = await db.rpc("get_strength_board_roster", { ...(viewerId ? { _as_user: viewerId } : {}), _audience: audience });
       if (error) throw error;
       return ((data ?? []) as any[]).map(normalizeRosterRow);
     },
   });
 }
 
-export function useMeetBoard() {
+export function useMeetBoard(audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  const hideBlocked = useHideBlocked<ReturnType<typeof normalizeMeetRow>>();
   return useQuery({
-    queryKey: ["strength-board", "meets", viewerId],
+    select: hideBlocked,
+    queryKey: ["strength-board", "meets", viewerId, audience],
     staleTime: 10 * 60_000,
     queryFn: async () => {
-      const { data, error } = await db.rpc("get_strength_board_meets", viewerId ? { _as_user: viewerId } : {});
+      const { data, error } = await db.rpc("get_strength_board_meets", { ...(viewerId ? { _as_user: viewerId } : {}), _audience: audience });
       if (error) throw error;
       return ((data ?? []) as any[]).map(normalizeMeetRow);
     },
@@ -281,10 +298,12 @@ export function defaultDivision(rows: StrengthRow[]): Division {
   return rows.find((r) => r.is_me && r.sex)?.sex ?? "all";
 }
 
-export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null }: {
+export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null, audience = "community" }: {
   initialMode?: BoardMode;
   /** A Rankings podium's division (Women, Men); otherwise your own. */
   initialDivision?: Division | null;
+  /** Whose Hall: JF Effect Athletes or Community (Rankings' switch; the coach's own League page is Community). */
+  audience?: RankingsAudience;
 } = {}) {
   // Tapping a lifter opens their total taken apart (the split, what it says,
   // ratios), with their meet career and the head to head a tap from there.
@@ -298,10 +317,13 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
   // Opens on your own division (the board Home shows you); All if we don't know it yet.
   const [picked, setDivision] = useState<Division | null>(initialDivision);
   const [showAll, setShowAll] = useState(false);
-  const allTime = useStrengthBoard();
+  const allTime = useStrengthBoard(audience);
   const division: Division = picked ?? defaultDivision(allTime.data ?? []);
-  const meets = useMeetBoard();
-  const roster = useStrengthRoster();
+  const meets = useMeetBoard(audience);
+  const roster = useStrengthRoster(audience);
+  // a member reading JF Effect Athletes is looking at a board they can't be on: no "log a lift" nudge, say where they rank
+  const { tier } = useServiceTier();
+  const awayFromBoard = !onAudience(audience, tier) && tier === "self_serve";
   const active = source === "all" ? allTime : meets;
   const data = active.data ?? [];
   const isPending = active.isPending;
@@ -326,7 +348,8 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
   // the split shows on the Total board: a fingerprint under every lifter
   const splits = lift === "total";
   const hint =
-    source === "meets" ? null
+    awayFromBoard ? "This board is for coaching clients. You rank in Community."
+    : source === "meets" ? null
     : status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
     : status.kind === "no-division" ? "Pick Men or Women in your profile to rank here"
     : status.kind === "other-division" ? null

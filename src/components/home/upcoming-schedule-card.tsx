@@ -264,11 +264,10 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   );
   const dayTimed = useMemo(() => entries.filter((e) => e.date === anchor && !!e.startsAt), [entries, anchor]);
   const homeEntries = useMemo(() => calendarItems.map(entryOf), [calendarItems]);
-  // Month: what's on each day, sessions first then in time order (cancelled ones left out).
+  // Month: what's on each day, sessions first then in time order; cancelled ones crossed out after them.
   const namesByDay = useMemo(() => {
     const m = new Map<string, HomeEntry[]>();
     for (const e of homeEntries) {
-      if (e.status === "Cancelled") continue;
       m.set(e.date, [...(m.get(e.date) ?? []), e]);
     }
     for (const list of m.values()) list.sort(monthChipOrder);

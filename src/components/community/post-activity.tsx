@@ -253,7 +253,7 @@ function PersonRow({ p, onOpen, follow = false }: { p: ActivityPerson; onOpen?: 
           {(note || p.username) && <span className="block truncate text-[13px] text-muted-foreground">{note ?? `@${p.username}`}</span>}
         </span>
       </button>
-      {follow && <FollowIfNot p={p} />}
+      {follow && !p.is_me && <FollowIfNot p={p} />}
     </div>
   );
 }

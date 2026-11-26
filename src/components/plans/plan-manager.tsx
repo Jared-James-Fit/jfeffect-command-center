@@ -10,26 +10,43 @@
  * is worked out here except the words.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, CreditCard, History, Info, Loader2, Minus, Plus, ShieldCheck, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, CreditCard, FileText, History, Info, Loader2, Minus, Plus, ShieldCheck, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { StatusChip } from "@/components/nutrition/nutrition-ui";
 import { billingDay } from "@/lib/date-range";
 import { ALWAYS_KEPT, money, quoteLines, type ConfirmResult, type PlanPreview } from "@/lib/plans/plan-engine";
 import type { PlanCard, PlanView } from "@/lib/plans/plans.functions";
 import { cn } from "@/lib/utils";
+import { isNative } from "@/platform";
+import { plansForShell, showPlanPrice, goToPayment } from "@/lib/native-purchases";
+
+export type ApplyInput = { goal: string; outcome: string; timeline: string; phone?: string | null; packageSlug?: string | null };
 
 export type PlanApi = {
   preview: (toSlug: string) => Promise<PlanPreview>;
-  confirm: (toSlug: string, extra: { prorationDate?: number | null; note?: string | null; noCharge?: boolean }) => Promise<ConfirmResult>;
+  confirm: (toSlug: string, extra: { prorationDate?: number | null; note?: string | null; noCharge?: boolean; acknowledgeForfeit?: boolean }) => Promise<ConfirmResult>;
   undo: (changeId: string) => Promise<unknown>;
   keep: () => Promise<unknown>;
   /** Stripe's own page for their card (clients only). */
   updateCard?: ReactNode;
+  /** Stripe's billing page: card, billing details, invoices and receipts (clients only). */
+  billingDetails?: ReactNode;
+  /** Apply for coaching (a member who's never been coached). */
+  apply?: (input: ApplyInput) => Promise<unknown>;
+  /** Answer the coach's offer (clients only). */
+  acceptOffer?: (changeId: string, consentText: string) => Promise<ConfirmResult>;
+  declineOffer?: (changeId: string) => Promise<unknown>;
+  /** The coach takes an open offer back (staff only). */
+  withdrawOffer?: (changeId: string) => Promise<unknown>;
+  /** The Coaching Agreement signing flow (clients only). */
+  agreementFlow?: (p: { open: boolean; onOpenChange: (v: boolean) => void; onSigned: () => void }) => ReactNode;
 };
 
 const day = (iso: string | null | undefined) => (iso ? billingDay(iso.slice(0, 10)) : null);
@@ -103,8 +120,14 @@ function CurrentPlanCard({ view, api, busy, onKeep, who }: { view: PlanView; api
       )}
       {c.managed === "custom" && c.customReason && (
         <p className="text-[13px] text-muted-foreground" data-plan-custom>
-          {c.customReason} {who === "client" ? "Pick a plan below to ask." : ""}
+          {c.customReason} {who === "client" ? (c.cancelable ? "Pick a plan below to ask, or move to the free app to cancel." : "Pick a plan below to ask.") : ""}
         </p>
+      )}
+      {api.billingDetails && (c.managed === "stripe" || c.subscriptionId) && c.status !== "past_due" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3" data-plan-billing-details>
+          <span className="text-[13px] text-muted-foreground">Card, billing details and receipts</span>
+          {api.billingDetails}
+        </div>
       )}
     </Card>
   );
@@ -169,12 +192,16 @@ function buttonWord(p: PlanCard, who: "client" | "admin"): string {
       return p.family === "free" ? "Move to the free app" : "Switch";
     case "request":
       return who === "client" ? "Ask about this plan" : "Requested only";
+    case "apply":
+      return who === "client" ? "Apply for coaching" : "Applies first";
+    case "comeback":
+      return who === "client" ? "Ask to come back" : "Asks first";
     default:
       return "Your plan";
   }
 }
 
-function PlanOptionCard({ p, onPick, who, canChange }: { p: PlanCard; onPick: () => void; who: "client" | "admin"; canChange: boolean }) {
+function PlanOptionCard({ p, onPick, who, canChange, native }: { p: PlanCard; onPick: () => void; who: "client" | "admin"; canChange: boolean; native: boolean }) {
   const t = p.transition;
   const current = t.kind === "current" && t.blocked === "Your current plan";
   return (
@@ -187,10 +214,13 @@ function PlanOptionCard({ p, onPick, who, canChange }: { p: PlanCard; onPick: ()
           </div>
           {p.tagline ? <p className="mt-0.5 text-[14px] text-muted-foreground">{p.tagline}</p> : null}
         </div>
-        <div className="shrink-0 text-right">
-          <div className="text-base font-semibold">{p.family === "free" ? "Free" : money(p.priceCents)}</div>
-          {p.family !== "free" && <div className="text-[12px] text-muted-foreground">a month + tax</div>}
-        </div>
+        {/* the iPhone app prints no price for a plan the person isn't on (web-only purchases, native-purchases.ts) */}
+        {(p.family === "free" || showPlanPrice(p, native)) && (
+          <div className="shrink-0 text-right">
+            <div className="text-base font-semibold">{p.family === "free" ? "Free" : money(p.priceCents)}</div>
+            {p.family !== "free" && <div className="text-[12px] text-muted-foreground">a month + tax</div>}
+          </div>
+        )}
       </div>
       {!current && (p.gain.length > 0 || p.lose.length > 0) && (
         <ul className="space-y-1.5" data-plan-diff>
@@ -215,7 +245,7 @@ function PlanOptionCard({ p, onPick, who, canChange }: { p: PlanCard; onPick: ()
           <Button
             className="h-11 w-full"
             variant="outline"
-            disabled={!t.available || !canChange || (t.kind === "request" && who === "admin")}
+            disabled={!t.available || !canChange || (who === "admin" && (t.kind === "request" || t.kind === "apply" || t.kind === "comeback"))}
             onClick={onPick}
             data-plan-pick={p.slug}
           >
@@ -265,16 +295,22 @@ function ConfirmSheet({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [noCharge, setNoCharge] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [reload, setReload] = useState(0);
   const slug = open ? target?.slug ?? null : null;
 
-  // one preview per open (a fresh proration date each time)
+  // one preview per open (a fresh proration date each time), again after signing the agreement
   useEffect(() => {
     if (!slug) return;
     let live = true;
     setPreview(null);
     setError(null);
-    setNote("");
-    setNoCharge(false);
+    if (reload === 0) {
+      setNote("");
+      setNoCharge(false);
+      setAck(false);
+    }
     setLoading(true);
     api
       .preview(slug)
@@ -286,9 +322,14 @@ function ConfirmSheet({
     };
     // the api object changes every render; the slug is what a preview is for
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  }, [slug, reload]);
+  useEffect(() => {
+    if (!open) setReload(0);
+  }, [open]);
 
-  const isRequest = target?.transition.kind === "request";
+  const isRequest = target?.transition.kind === "request" || target?.transition.kind === "comeback";
+  const needsAck = who === "client" && !!preview?.forfeit;
+  const needsAgreement = who === "client" && !!preview?.agreement;
   const q = preview?.quote ?? null;
   const lines = q ? quoteLines(q, (iso) => billingDay(iso)) : null;
   const available = preview ? preview.transition.available : false;
@@ -298,9 +339,13 @@ function ConfirmSheet({
     setBusy(true);
     setError(null);
     try {
-      const r = await api.confirm(target.slug, { prorationDate: preview?.prorationDate ?? null, note: note.trim() || null, noCharge });
+      const r = await api.confirm(target.slug, { prorationDate: preview?.prorationDate ?? null, note: note.trim() || null, noCharge, acknowledgeForfeit: ack });
       if (r.result === "failed") {
         setError(r.message);
+        return;
+      }
+      if (r.result === "agreement_required") {
+        setReload((n) => n + 1);
         return;
       }
       onDone(r);
@@ -314,7 +359,7 @@ function ConfirmSheet({
   const action = (() => {
     if (!target || !preview) return "Confirm";
     const k = preview.transition.kind;
-    if (k === "request") return who === "client" ? "Send to my coach" : "Send";
+    if (k === "request" || k === "comeback") return who === "client" ? "Send to my coach" : "Send";
     if (k === "start") return "Continue to checkout";
     if (k === "upgrade") return noCharge ? "Switch now, no charge" : q?.todayCents ? `Upgrade and pay ${money(q.todayCents)}` : "Upgrade now";
     if (k === "cancel") return `Confirm, ends ${billingDay(q?.effectiveDate ?? null) ?? "then"}`;
@@ -334,9 +379,11 @@ function ConfirmSheet({
         <SheetHeader className="px-5 pb-2 pt-3 text-left">
           <SheetTitle className="text-xl">{preview?.headline ?? (target ? (isRequest ? `Ask about ${target.name}` : target.name) : "")}</SheetTitle>
           <SheetDescription className="text-[14px]">
-            {isRequest
-              ? "Your plan is set up with your coach, so this goes to them as a message. Nothing changes or gets charged until they set it up."
-              : "Here's exactly what happens. Nothing changes until you confirm."}
+            {target?.transition.kind === "comeback"
+              ? "Your coach reads it and gets back to you here. Nothing is charged until you pick a package."
+              : isRequest
+                ? "Your plan is set up with your coach, so this goes to them as a message. Nothing changes or gets charged until they set it up."
+                : "Here's exactly what happens. Nothing changes until you confirm."}
           </SheetDescription>
         </SheetHeader>
 
@@ -422,10 +469,45 @@ function ConfirmSheet({
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 500))}
-              placeholder="Anything your coach should know? (optional)"
+              placeholder={target?.transition.kind === "comeback" ? "What would you like help with now? (optional)" : "Anything your coach should know? (optional)"}
               className="min-h-[88px] text-[16px]"
             />
           )}
+
+          {preview?.forfeit && (
+            <label className="flex gap-3 rounded-xl border border-warning/40 p-3" data-plan-forfeit>
+              {who === "client" ? (
+                <Checkbox checked={ack} onCheckedChange={(v) => setAck(v === true)} className="mt-0.5" aria-label="I understand my current price ends" />
+              ) : (
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+              )}
+              <span className="text-[14px] leading-snug">
+                {who === "client"
+                  ? preview.forfeit.text
+                  : `They pay ${money(preview.forfeit.priceCents)} a month now, a price that ends with this change.`}
+              </span>
+            </label>
+          )}
+
+          {needsAgreement && preview?.agreement && (
+            <div className="space-y-2 rounded-xl border border-border p-3" data-plan-agreement>
+              <p className="text-[14px] leading-snug">
+                First, read and accept the Coaching Agreement ({preview.agreement.version}). It covers billing, switching and cancelling in the app.
+                {preview.agreement.signedVersion ? ` What you signed before (${preview.agreement.signedVersion}) stays on your record.` : ""}
+              </p>
+              <Button size="sm" variant="outline" className="h-10" onClick={() => setSigning(true)} disabled={!api.agreementFlow}>
+                <FileText className="mr-1.5 h-4 w-4" />Read and accept
+              </Button>
+            </div>
+          )}
+          {api.agreementFlow?.({
+            open: signing,
+            onOpenChange: setSigning,
+            onSigned: () => {
+              setSigning(false);
+              setReload((n) => n + 1);
+            },
+          })}
 
           {who === "admin" && preview?.transition.kind === "upgrade" && (
             <label className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
@@ -444,7 +526,12 @@ function ConfirmSheet({
           )}
 
           <div className="space-y-2 pt-1">
-            <Button className="h-12 w-full text-[15px]" disabled={!preview || !available || busy} onClick={confirm} data-plan-confirm-button>
+            <Button
+              className="h-12 w-full text-[15px]"
+              disabled={!preview || !available || busy || (needsAck && !ack) || needsAgreement}
+              onClick={confirm}
+              data-plan-confirm-button
+            >
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {action}
             </Button>
@@ -458,6 +545,238 @@ function ConfirmSheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/* ───────────────────────── coming to coaching ───────────────────────── */
+
+function AccessBanner({ view, who }: { view: PlanView; who: "client" | "admin" }) {
+  const a = view.access;
+  let text: string | null = null;
+  if (a.state === "approved") {
+    text =
+      who === "client"
+        ? `Your coach approved you for ${a.packageName ?? "coaching"}. Pick it below to get started. This is open until ${day(a.expiresAt) ?? "soon"}.`
+        : `Approved for ${a.packageName ?? "any coaching package"} until ${day(a.expiresAt) ?? "soon"}.`;
+  } else if (a.state === "applied") {
+    text = who === "client" ? "Your application is with your coach. You'll hear back here and by email." : `Applied ${day(a.at) ?? ""}, waiting for your decision.`;
+  } else if (a.state === "comeback_pending") {
+    text = who === "client" ? "You asked to come back to coaching. Your coach will get back to you." : `Asked to come back ${day(a.at) ?? ""}, waiting for your decision.`;
+  }
+  if (!text) return null;
+  return (
+    <Card className="p-4" data-plan-access={a.state}>
+      <p className="text-[14px] leading-snug">{text}</p>
+    </Card>
+  );
+}
+
+function ApplySheet({ target, open, onOpenChange, api, onDone }: { target: PlanCard | null; open: boolean; onOpenChange: (v: boolean) => void; api: PlanApi; onDone: () => void }) {
+  const [goal, setGoal] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (open) setError(null);
+  }, [open]);
+  const ready = goal.trim().length >= 2 && outcome.trim().length >= 2 && timeline.trim().length >= 1;
+  const send = async () => {
+    if (!api.apply || busy || !ready) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.apply({ goal, outcome, timeline, phone: phone.trim() || null, packageSlug: target?.slug ?? null });
+      toast.success("Application sent", { description: "Your coach reads every one and gets back to you here." });
+      onDone();
+    } catch (e: any) {
+      setError(e?.message ?? "Couldn't send your application");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const TIMES = ["Right away", "In the next month", "In a few months"];
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        swipeToClose
+        hideCloseButton
+        className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),1rem)] sm:mx-auto sm:max-w-[520px]"
+        data-plan-apply
+      >
+        <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-muted" aria-hidden />
+        <SheetHeader className="px-5 pb-2 pt-3 text-left">
+          <SheetTitle className="text-xl">Apply for coaching</SheetTitle>
+          <SheetDescription className="text-[14px]">
+            {target ? `For ${target.name}. ` : ""}I read every application. Once I've said yes, you pick your package here and pay. Applying is free.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4 px-5 pb-4">
+          <label className="block space-y-1.5">
+            <span className="text-[14px] font-medium">What's your main goal?</span>
+            <Input value={goal} onChange={(e) => setGoal(e.target.value.slice(0, 500))} placeholder="Get stronger, compete, lose fat…" className="h-12 text-[16px]" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-[14px] font-medium">What would a great result look like?</span>
+            <Textarea value={outcome} onChange={(e) => setOutcome(e.target.value.slice(0, 1000))} className="min-h-[88px] text-[16px]" />
+          </label>
+          <div className="space-y-1.5">
+            <span className="text-[14px] font-medium">When do you want to start?</span>
+            <div className="flex flex-wrap gap-2">
+              {TIMES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTimeline(t)}
+                  className={cn("h-10 rounded-lg border px-3 text-[14px]", timeline === t ? "border-foreground bg-foreground text-background" : "border-border")}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="block space-y-1.5">
+            <span className="text-[14px] font-medium">Phone (optional)</span>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value.slice(0, 40))} inputMode="tel" className="h-12 text-[16px]" />
+          </label>
+          {error && (
+            <p className="rounded-xl border border-destructive/40 p-3 text-[14px] text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <Button className="h-12 w-full text-[15px]" disabled={!ready || busy} onClick={send} data-plan-apply-send>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Send application
+          </Button>
+          <Button variant="ghost" className="h-11 w-full" onClick={() => onOpenChange(false)}>
+            Not now
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ───────────────────────── an offer from the coach ───────────────────────── */
+
+function OfferCard({ view, api, who, onChanged }: { view: PlanView; api: PlanApi; who: "client" | "admin"; onChanged: () => void }) {
+  const o = view.offer;
+  const [ack, setAck] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [signing, setSigning] = useState(false);
+  if (!o) return null;
+  const act = async (fn: () => Promise<unknown>) => {
+    if (busy) return;
+    if (!view.canChange) {
+      toast.info(view.preview ? "Preview only. Only the client can answer an offer." : "This plan can't be changed right now.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e: any) {
+      setError(e?.message ?? "Couldn't answer the offer");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const accept = () =>
+    act(async () => {
+      const r = await api.acceptOffer!(o.id, o.consentText);
+      if (r.result === "agreement_required") {
+        setSigning(true);
+        return;
+      }
+      if (r.result === "redirect" || r.result === "needs_payment") {
+        goToPayment(r.url);
+        return;
+      }
+      if (r.result === "failed") {
+        setError(r.message);
+        return;
+      }
+      toast.success(r.result === "scheduled" ? `Accepted. You move to ${o.toName} on ${billingDay(r.effectiveDate) ?? "your next billing date"}.` : `You're on ${o.toName} now`);
+      onChanged();
+    });
+  return (
+    <Card className="space-y-3 border-foreground/30 p-4" data-plan-offer>
+      <div>
+        <div className="text-[13px] text-muted-foreground">{who === "client" ? "An offer from your coach" : "Offer waiting for their answer"}</div>
+        <div className="text-lg font-semibold leading-tight">{o.toName}</div>
+        {o.expiresAt ? <div className="text-[13px] text-muted-foreground">Open until {day(o.expiresAt)}</div> : null}
+      </div>
+      {o.note ? <p className="rounded-xl bg-muted p-3 text-[14px] leading-snug">{o.note}</p> : null}
+      <ul className="space-y-1.5">
+        {o.lines.map((l) => (
+          <li key={l} className="flex gap-2 text-[14px] leading-snug">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            {l}
+          </li>
+        ))}
+      </ul>
+      {who === "client" ? (
+        <>
+          <label className="flex gap-3 rounded-xl border border-border p-3" data-plan-offer-consent>
+            <Checkbox checked={ack} onCheckedChange={(v) => setAck(v === true)} className="mt-0.5" aria-label="I agree" />
+            <span className="text-[14px] leading-snug">{o.consentText}</span>
+          </label>
+          {error && (
+            <p className="rounded-xl border border-destructive/40 p-3 text-[14px] text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button className="h-11 flex-1" disabled={!ack || busy || !api.acceptOffer} onClick={accept} data-plan-offer-accept>
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}Accept
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 flex-1"
+              disabled={busy || !api.declineOffer}
+              onClick={() =>
+                act(async () => {
+                  await api.declineOffer!(o.id);
+                  toast.success("Offer declined. Your plan stays as it is.");
+                  onChanged();
+                })
+              }
+            >
+              No thanks
+            </Button>
+          </div>
+          {api.agreementFlow?.({
+            open: signing,
+            onOpenChange: setSigning,
+            onSigned: () => {
+              setSigning(false);
+              void accept();
+            },
+          })}
+        </>
+      ) : (
+        view.canChange &&
+        api.withdrawOffer && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-10"
+            disabled={busy}
+            onClick={() =>
+              act(async () => {
+                await api.withdrawOffer!(o.id);
+                toast.success("Offer withdrawn");
+                onChanged();
+              })
+            }
+          >
+            Withdraw offer
+          </Button>
+        )
+      )}
+    </Card>
   );
 }
 
@@ -497,6 +816,7 @@ function PlanHistory({ view }: { view: PlanView }) {
 
 export function PlanManager({ view, api, who, onChanged }: { view: PlanView; api: PlanApi; who: "client" | "admin"; onChanged: () => void }) {
   const [picked, setPicked] = useState<PlanCard | null>(null);
+  const [applying, setApplying] = useState<PlanCard | null>(null);
   const [busy, setBusy] = useState(false);
 
   const run = async (fn: () => Promise<unknown>, done: string) => {
@@ -522,7 +842,7 @@ export function PlanManager({ view, api, who, onChanged }: { view: PlanView; api
     switch (r.result) {
       case "redirect":
       case "needs_payment":
-        window.location.assign(r.url);
+        goToPayment(r.url);
         return;
       case "applied":
         toast.success("Your new plan is active");
@@ -542,24 +862,39 @@ export function PlanManager({ view, api, who, onChanged }: { view: PlanView; api
       toast.info(view.preview ? "Preview only. Only the client can change their plan." : "This plan can't be changed right now.");
       return;
     }
-    setPicked(p);
+    if (p.transition.kind === "apply") setApplying(p);
+    else setPicked(p);
   };
 
-  const others = view.options.filter((p) => !(p.transition.kind === "current" && p.transition.blocked === "Your current plan"));
+  // the iPhone app never lists a plan that needs a purchase (web only), and prints no price for one it lists
+  const native = who === "client" && isNative();
+  const others = plansForShell(view.options.filter((p) => !(p.transition.kind === "current" && p.transition.blocked === "Your current plan")), native);
   return (
     <div className="space-y-4" data-plan-manager={who}>
       <CurrentPlanCard view={view} api={api} busy={busy} who={who} onKeep={() => run(api.keep, "You're keeping your plan")} />
       <OpenChangeBanner view={view} busy={busy} onUndo={() => view.open && run(() => api.undo(view.open!.id), "Done. Your plan stays as it was.")} />
+      <OfferCard view={view} api={api} who={who} onChanged={onChanged} />
+      <AccessBanner view={view} who={who} />
       {others.length > 0 && (
         <div className="space-y-3">
           <h2 className="px-1 text-base font-semibold">{who === "client" ? "Other plans" : "Change their plan"}</h2>
           {others.map((p) => (
-            <PlanOptionCard key={p.slug} p={p} who={who} canChange={view.canChange} onPick={() => pick(p)} />
+            <PlanOptionCard key={p.slug} p={p} who={who} canChange={view.canChange} native={native} onPick={() => pick(p)} />
           ))}
         </div>
       )}
       <PlanHistory view={view} />
       <ConfirmSheet target={picked} open={!!picked} onOpenChange={(v) => !v && setPicked(null)} api={api} who={who} onDone={onDone} />
+      <ApplySheet
+        target={applying}
+        open={!!applying}
+        onOpenChange={(v) => !v && setApplying(null)}
+        api={api}
+        onDone={() => {
+          setApplying(null);
+          onChanged();
+        }}
+      />
     </div>
   );
 }

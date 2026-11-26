@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.velocity_job_claim(uuid),public.velocity_job_retry(uuid,boolean),public.velocity_job_fail(uuid,uuid,text,boolean),public.velocity_analysis_commit(uuid,jsonb,uuid,timestamptz,integer),public.velocity_control(uuid,text,numeric,text,uuid) TO service_role;

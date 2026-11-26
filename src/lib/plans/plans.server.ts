@@ -16,9 +16,16 @@
  * Every function here takes the service-role client; callers check who's asking.
  */
 import { stripeFetch, formEncode, getStripeKeyForMode, detectStripeKeyMode, type StripeMode } from "@/lib/stripe.server";
+import { compareVersions as compareVersion } from "@/lib/coaching-agreement/version";
 import {
+  agreementNeeded,
   baseFeatures,
   buildCatalog,
+  forfeitText,
+  offerFromRow,
+  offerTerms,
+  PLAN_AGREEMENT_VERSION,
+  type CoachingAccess,
   changeVerb,
   currentPlanOf,
   featureDiff,
@@ -60,8 +67,14 @@ type Db = any;
 const SALE_COLUMNS =
   "id, client_id, offer_id, offer_name, stripe_subscription_id, stripe_subscription_status, payment_status, next_billing_date, cancel_at_period_end, full_payable_amount, contract_value_cents, stripe_price_id, stripe_product_id, stripe_mode, is_fixed_term_commitment, sessions_purchased, archived_at, is_recurring, payment_structure, payment_frequency, created_at";
 
-const CHANGE_COLUMNS =
-  "id, client_id, kind, status, source, from_package_id, to_package_id, from_family, to_family, from_label, to_label, from_price_cents, to_price_cents, effective_at, sale_id, stripe_subscription_id, stripe_checkout_session_id, stripe_invoice_id, stripe_from_price_id, stripe_to_price_id, proration_date, amount_due_now_cents, next_amount_cents, previous_coach_id, warnings, note, error, requested_by, attempts, created_at, updated_at, applied_at, cancelled_at";
+export const CHANGE_COLUMNS =
+  "id, client_id, kind, status, source, from_package_id, to_package_id, from_family, to_family, from_label, to_label, from_price_cents, to_price_cents, effective_at, sale_id, stripe_subscription_id, stripe_checkout_session_id, stripe_invoice_id, stripe_from_price_id, stripe_to_price_id, proration_date, amount_due_now_cents, next_amount_cents, previous_coach_id, warnings, note, error, requested_by, attempts, created_at, updated_at, applied_at, cancelled_at, offer_timing, offer_expires_at, consented_at, consent_text, decided_by, decided_at, decision_note, agreement_version";
+
+/** How long a coach's yes to coaching lasts, and how long an offer stays open. */
+export const APPROVAL_DAYS = 30;
+export const OFFER_DAYS = 14;
+/** An application counts as waiting for this long (older ones are history). */
+const APPLICATION_WAIT_DAYS = 90;
 
 export class PlanError extends Error {
   constructor(message: string, readonly config = false) {
@@ -94,6 +107,14 @@ export type PlanState = {
   current: CurrentPlan;
   open: Record<string, any> | null;
   history: Array<Record<string, any>>;
+  /** May they buy coaching (approval, application, a request to come back)? */
+  access: CoachingAccess;
+  /** The live approval behind `access` (consumed by the purchase it allowed). */
+  approval: Record<string, any> | null;
+  /** The Coaching Agreement they last signed, and an admin exemption. */
+  agreement: { version: string | null; exempt: boolean };
+  /** A switch the coach offered that's waiting for their answer. */
+  offer: Record<string, any> | null;
 };
 
 export async function loadPlanState(db: Db, clientId: string): Promise<PlanState> {
@@ -105,7 +126,8 @@ export async function loadPlanState(db: Db, clientId: string): Promise<PlanState
   if (error) throw new Error(error.message);
   if (!client) throw new PlanError("Couldn't find this account.");
 
-  const [pk, en, open, hist, sales, member] = await Promise.all([
+  const nowIso = new Date().toISOString();
+  const [pk, en, open, hist, sales, member, appr, comeback, offer, appl, sig, agState, ended, fromCoaching, moved] = await Promise.all([
     db.from("coaching_packages").select("*").neq("status", "archived"),
     db.from("coaching_package_enrollments").select("id, package_id, sale_id, contracted_price_cents, starts_on, status, period_anchor").eq("client_id", clientId).eq("status", "active").maybeSingle(),
     db.from("plan_changes").select(CHANGE_COLUMNS).eq("client_id", clientId).in("status", OPEN_CHANGE_STATUSES as unknown as string[]).maybeSingle(),
@@ -114,8 +136,17 @@ export async function loadPlanState(db: Db, clientId: string): Promise<PlanState
     client.user_id
       ? db.from("app_members").select("id, stripe_subscription_id, subscription_status").eq("user_id", client.user_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    db.from("coaching_purchase_approvals").select("id, package_id, source, expires_at, approved_at, application_id, request_change_id").eq("client_id", clientId).is("used_at", null).is("revoked_at", null).gt("expires_at", nowIso).order("approved_at", { ascending: false }).limit(1),
+    db.from("plan_changes").select(CHANGE_COLUMNS).eq("client_id", clientId).eq("kind", "reactivate").eq("status", "requested").limit(1),
+    db.from("plan_changes").select(CHANGE_COLUMNS).eq("client_id", clientId).eq("status", "offered").gt("offer_expires_at", nowIso).limit(1),
+    db.from("coaching_applications").select("id, status, created_at, is_test").eq("client_id", clientId).eq("is_test", false).order("created_at", { ascending: false }).limit(1),
+    db.from("coaching_agreement_signatures").select("signed_at, coaching_agreement_versions(version)").eq("client_id", clientId).order("signed_at", { ascending: false }).limit(1),
+    db.from("coaching_agreement_client_state").select("exempt_kind").eq("client_id", clientId).maybeSingle(),
+    db.from("coaching_package_enrollments").select("package_id").eq("client_id", clientId).eq("status", "ended").limit(20),
+    db.from("plan_changes").select("id").eq("client_id", clientId).eq("from_family", "coaching").eq("status", "applied").limit(1),
+    db.from("account_lifecycle_events").select("id").eq("client_id", clientId).eq("event", "moved_to_membership").limit(1),
   ]);
-  for (const r of [pk, en, open, hist, sales]) if (r.error) throw new Error(r.error.message);
+  for (const r of [pk, en, open, hist, sales, appr, comeback, offer]) if (r.error) throw new Error(r.error.message);
   const packages = (pk.data ?? []) as CatalogPackage[];
   const productIds = [...new Set(packages.map((p) => p.product_id).filter(Boolean))] as string[];
   const { data: products, error: prodErr } = productIds.length
@@ -133,7 +164,10 @@ export async function loadPlanState(db: Db, clientId: string): Promise<PlanState
   const legacyMembership =
     !!member?.data?.stripe_subscription_id && /^(active|trialing|past due)/i.test(String(member?.data?.subscription_status ?? ""));
 
-  const tier: "coaching" | "self_serve" = client.service_tier === "self_serve" ? "self_serve" : "coaching";
+  // A lead (an application's or a site checkout's record: status Lead, no coach) isn't coached yet,
+  // whatever the column's default says, so it buys like a free member.
+  const lead = client.status === "Lead" && !client.assigned_coach_id;
+  const tier: "coaching" | "self_serve" = client.service_tier === "self_serve" || lead ? "self_serve" : "coaching";
   let current = currentPlanOf({
     tier,
     enrollment,
@@ -142,6 +176,11 @@ export async function loadPlanState(db: Db, clientId: string): Promise<PlanState
     coachingLabel: client.coaching_package,
     otherLiveSale,
   });
+  // A legacy subscription is cancelled here only when it's their one live subscription.
+  const liveOthers = allSales.filter((s) => s.id !== enrolledSale?.id && saleIsLive(s));
+  if (current.managed === "custom" && current.cancelable && liveOthers.length !== 1) {
+    current = { ...current, cancelable: false, subscriptionId: null, status: "custom" };
+  }
   // A member still paying for something else (the retired JF Membership, a stray subscription)
   // never gets a second subscription on top: their changes go through support.
   if (current.managed === "free" && (otherLiveSale || legacyMembership)) {
@@ -155,17 +194,49 @@ export async function loadPlanState(db: Db, clientId: string): Promise<PlanState
     };
   }
 
+  // Who may buy coaching: a coaching client switches; anyone else needs the coach's yes first.
+  const approval = appr.data?.[0] ?? null;
+  const signedVersion = (() => {
+    const v = sig.data?.[0]?.coaching_agreement_versions;
+    return (Array.isArray(v) ? v[0]?.version : v?.version) ?? null;
+  })();
+  const subscriptionPkgIds = new Set(packages.filter((p) => p.kind === "subscription").map((p) => p.id));
+  const coachedBefore =
+    !!signedVersion ||
+    (ended.data ?? []).some((e: any) => subscriptionPkgIds.has(e.package_id)) ||
+    !!fromCoaching.data?.length ||
+    !!moved.data?.length;
+  const lastApp = appl.data?.[0] ?? null;
+  const appWaiting =
+    !!lastApp &&
+    !["Rejected", "Approved", "Declined"].includes(String(lastApp.status ?? "")) &&
+    Date.now() - Date.parse(lastApp.created_at) < APPLICATION_WAIT_DAYS * 86_400_000;
+  const pkgName = (id: string | null) => (id ? packages.find((p) => p.id === id)?.name ?? null : null);
+  let access: CoachingAccess;
+  if (tier === "coaching") access = { state: "client" };
+  else if (approval) access = { state: "approved", packageId: approval.package_id ?? null, packageName: pkgName(approval.package_id ?? null), expiresAt: approval.expires_at };
+  else if (comeback.data?.[0]) access = { state: "comeback_pending", at: comeback.data[0].created_at, changeId: comeback.data[0].id };
+  else if (appWaiting) access = { state: "applied", at: lastApp!.created_at, applicationId: lastApp!.id };
+  else access = coachedBefore ? { state: "comeback" } : { state: "apply" };
+
+  // A cancelable legacy subscription is the sale the plan is billed on.
+  const billingSale = enrolledSale ?? (current.cancelable ? otherLiveSale : null);
+
   return {
     client: { ...client, archived: !!client.archived, service_tier: tier },
     packages,
     products: (products ?? []) as CatalogProduct[],
     catalog,
     enrollment,
-    sale: enrolledSale,
+    sale: billingSale,
     otherLiveSale,
     current,
     open: open.data ?? null,
     history: hist.data ?? [],
+    access,
+    approval,
+    agreement: { version: signedVersion, exempt: !!agState.data?.exempt_kind },
+    offer: offer.data?.[0] ?? null,
   };
 }
 
@@ -261,7 +332,7 @@ function dayToIso(day: string | null): string | null {
 export async function previewChange(db: Db, state: PlanState, targetSlug: string, opts: { native?: boolean } = {}): Promise<PlanPreview> {
   const target = state.catalog.find((o) => o.slug === targetSlug);
   if (!target) throw new PlanError("That plan isn't available.");
-  const tr = transitionFor(state.current, target, { native: opts.native, open: openChangeOf(state.open) });
+  const tr = transitionFor(state.current, target, { native: opts.native, open: openChangeOf(state.open), coaching: state.access });
   const diff = featureDiff(state.current.features, target.features, baseFeatures(state.catalog));
   const preview: PlanPreview = {
     toSlug: target.slug,
@@ -274,13 +345,23 @@ export async function previewChange(db: Db, state: PlanState, targetSlug: string
     keep: ALWAYS_KEPT,
     warnings: [],
     prorationDate: null,
+    forfeit: null,
+    agreement: null,
   };
+  if (tr.action === "apply") {
+    preview.warnings.push(`Coaching starts with a short application. I read every one, and once I've said yes you can pick ${target.name} here and pay.`);
+    return preview;
+  }
+  if (tr.action === "comeback") {
+    preview.warnings.push("Ask to come back and I'll get back to you. Once I've said yes you can pick your package here and pay.");
+    return preview;
+  }
   if (!tr.available || !tr.action || tr.action === "request") return preview;
 
-  const leavingCoaching = state.current.family === "coaching" && target.family !== "coaching";
-  if (state.current.specialPrice && state.current.priceCents != null) {
-    preview.warnings.push(`You pay ${money(state.current.priceCents)} a month now, a price you only keep on this plan. Switching ends it.`);
-  }
+  const leavingCoaching = (state.current.family === "coaching" || state.current.family === "custom") && target.family !== "coaching";
+  const ft = forfeitText(state.current);
+  if (ft && state.current.priceCents != null) preview.forfeit = { priceCents: state.current.priceCents, text: ft };
+  preview.agreement = agreementNeeded(tr, target, state.agreement);
   if (leavingCoaching) {
     preview.warnings.push("The program your coach wrote stays on your calendar. You can keep training it; it just won't be updated.");
     preview.warnings.push("Your messages with your coach stay saved. Check-ins and coach feedback stop when the change happens.");
@@ -298,7 +379,7 @@ export async function previewChange(db: Db, state: PlanState, targetSlug: string
       effectiveDate: null,
       creditCents: 0,
     };
-    if (target.family === "coaching") preview.warnings.push("You'll sign the Coaching Agreement in the app, and your coach will set up your program.");
+    if (target.family === "coaching") preview.warnings.push("Once you've paid, your coach sets up your program.");
     return preview;
   }
 
@@ -374,8 +455,9 @@ async function patchChange(db: Db, id: string, patch: Record<string, any>, onlyI
   return data ?? null;
 }
 
-function baseRow(state: PlanState, target: PlanOption, tr: Transition, actorUserId: string | null, source: "client" | "admin") {
+function baseRow(state: PlanState, target: PlanOption, tr: Transition, actorUserId: string | null, source: "client" | "admin", extra: Record<string, any> = {}) {
   return {
+    ...extra,
     client_id: state.client.id,
     kind: tr.kind,
     source,
@@ -396,7 +478,16 @@ export async function confirmChange(
   db: Db,
   state: PlanState,
   targetSlug: string,
-  opts: { actorUserId: string | null; source: "client" | "admin"; origin: string; prorationDate?: number | null; note?: string | null; adminNow?: boolean },
+  opts: {
+    actorUserId: string | null;
+    source: "client" | "admin";
+    origin: string;
+    prorationDate?: number | null;
+    note?: string | null;
+    adminNow?: boolean;
+    /** They ticked that their own price ends (required when it does). */
+    acknowledgeForfeit?: boolean;
+  },
 ): Promise<ConfirmResult> {
   const target = state.catalog.find((o) => o.slug === targetSlug);
   if (!target) throw new PlanError("That plan isn't available.");
@@ -404,15 +495,34 @@ export async function confirmChange(
     throw new PlanError("This account is paused, so its plan can't change.");
   }
   const open = openChangeOf(state.open);
-  const tr = transitionFor(state.current, target, { open });
+  // the coach changing a plan is the coach's approval
+  const access: CoachingAccess = opts.source === "admin" ? { state: "approved", packageId: null, packageName: null, expiresAt: "" } : state.access;
+  const tr = transitionFor(state.current, target, { open, coaching: access });
   if (!tr.available) throw new PlanError(tr.blocked ?? "That change isn't available.", !!tr.configProblem);
 
   if (tr.action === "request") return requestChange(db, state, target, opts);
+  if (tr.action === "apply") throw new PlanError("Apply for coaching first.");
+  if (tr.action === "comeback") return requestComeback(db, state, target, opts);
+
+  // Their own price ends: they say they understand, in their words, before anything changes.
+  const forfeit = forfeitText(state.current);
+  if (forfeit && opts.source === "client" && !opts.acknowledgeForfeit) {
+    throw new PlanError("Tick that you understand your current price ends, then confirm.");
+  }
+  // The Coaching Agreement that describes buying and switching coaching here comes first.
+  if (opts.source === "client" && agreementNeeded(tr, target, state.agreement)) {
+    return { result: "agreement_required", version: PLAN_AGREEMENT_VERSION };
+  }
+  const consent = {
+    consent_text: opts.source === "client" && forfeit ? forfeit : null,
+    consented_at: opts.source === "client" && forfeit ? new Date().toISOString() : null,
+    agreement_version: target.family === "coaching" ? state.agreement.version : null,
+  };
 
   // An unfinished checkout never blocks starting again: expire it first.
   if (state.open?.status === "checkout") await abandonCheckout(db, state.open, "Replaced by a new checkout");
 
-  if (tr.action === "checkout") return startCheckout(db, state, target, tr, opts);
+  if (tr.action === "checkout") return startCheckout(db, state, target, tr, { ...opts, consent });
 
   const apiKey = stripeKeyFor(state.sale);
   const sub = subState(await fetchSub(state.current.subscriptionId!, apiKey));
@@ -423,7 +533,7 @@ export async function confirmChange(
 
   if (tr.action === "cancel_later") {
     const change = await insertChange(db, {
-      ...baseRow(state, target, tr, opts.actorUserId, opts.source),
+      ...baseRow(state, target, tr, opts.actorUserId, opts.source, consent),
       status: "processing",
       sale_id: state.sale?.id ?? null,
       stripe_subscription_id: sub.id,
@@ -451,7 +561,7 @@ export async function confirmChange(
     // Admin "switch now, no charge": the price changes now with nothing prorated, and it applies now.
     const now = tr.action === "swap_now" && opts.adminNow;
     const change = await insertChange(db, {
-      ...baseRow(state, target, tr, opts.actorUserId, opts.source),
+      ...baseRow(state, target, tr, opts.actorUserId, opts.source, consent),
       status: "processing",
       sale_id: state.sale?.id ?? null,
       stripe_subscription_id: sub.id,
@@ -479,7 +589,7 @@ export async function confirmChange(
   // swap_now: charged now (prorated), applied once the charge succeeds
   const prorationDate = usableProrationDate(opts.prorationDate, Math.floor(Date.now() / 1000));
   const change = await insertChange(db, {
-    ...baseRow(state, target, tr, opts.actorUserId, opts.source),
+    ...baseRow(state, target, tr, opts.actorUserId, opts.source, consent),
     status: "processing",
     sale_id: state.sale?.id ?? null,
     stripe_subscription_id: sub.id,
@@ -542,7 +652,23 @@ async function abandonCheckout(db: Db, row: Record<string, any>, why: string) {
   await patchChange(db, row.id, { status: "cancelled", note: why.slice(0, 1000) }, ["checkout"]);
 }
 
-async function startCheckout(db: Db, state: PlanState, target: PlanOption, tr: Transition, opts: { actorUserId: string | null; source: "client" | "admin"; origin: string }): Promise<ConfirmResult> {
+async function startCheckout(
+  db: Db,
+  state: PlanState,
+  target: PlanOption,
+  tr: Transition,
+  opts: {
+    actorUserId: string | null;
+    source: "client" | "admin";
+    origin: string;
+    consent?: Record<string, any>;
+    existingChangeId?: string;
+    /** Where Stripe sends them back, by change id (the site's Ready to start lands on its own page). */
+    returnTo?: (changeId: string, outcome: "done" | "cancelled") => string;
+    /** Extra session + subscription metadata (e.g. channel: "site"). */
+    metadata?: Record<string, string>;
+  },
+): Promise<ConfirmResult> {
   const apiKey = stripeKeyFor(null);
   await verifyTargetPrice(db, target, apiKey);
   const { data: product, error: pErr } = await db.from("coaching_products").select("*").eq("id", target.productId).maybeSingle();
@@ -574,21 +700,26 @@ async function startCheckout(db: Db, state: PlanState, target: PlanOption, tr: T
   if (saleRes.error) throw new Error(saleRes.error.message);
   const saleId = saleRes.data.id as string;
 
-  const change = await insertChange(db, {
-    ...baseRow(state, target, tr, opts.actorUserId, opts.source),
-    status: "checkout",
-    sale_id: saleId,
-    amount_due_now_cents: target.priceCents,
-    next_amount_cents: target.priceCents,
-  });
+  const change = opts.existingChangeId
+    ? await patchChange(db, opts.existingChangeId, { status: "checkout", sale_id: saleId, amount_due_now_cents: target.priceCents, next_amount_cents: target.priceCents }, ["offered"]).then((r) => {
+        if (!r) throw new PlanError("This offer isn't open any more.");
+        return r;
+      })
+    : await insertChange(db, {
+        ...baseRow(state, target, tr, opts.actorUserId, opts.source, opts.consent ?? {}),
+        status: "checkout",
+        sale_id: saleId,
+        amount_due_now_cents: target.priceCents,
+        next_amount_cents: target.priceCents,
+      });
   try {
     const { createAssignmentCheckout } = await import("@/lib/stripe-checkout.functions");
     const origin = opts.origin.replace(/\/+$/, "");
     const r = await createAssignmentCheckout(db, opts.actorUserId, { purchaseRecordId: saleId, origin }, {
       updateSource: "plan_change",
-      successUrl: `${origin}/portal/plan?checkout=done&change=${change.id}`,
-      cancelUrl: `${origin}/portal/plan?checkout=cancelled&change=${change.id}`,
-      metadata: { plan_change_id: change.id, kind: "plan_change" },
+      successUrl: opts.returnTo ? `${origin}${opts.returnTo(change.id, "done")}` : `${origin}/portal/plan?checkout=done&change=${change.id}`,
+      cancelUrl: opts.returnTo ? `${origin}${opts.returnTo(change.id, "cancelled")}` : `${origin}/portal/plan?checkout=cancelled&change=${change.id}`,
+      metadata: { ...(opts.metadata ?? {}), plan_change_id: change.id, kind: "plan_change" },
       // the Coaching Agreement covers coaching; a membership has its own terms (accepted in the app)
       agreementNotice: target.family === "coaching",
     });
@@ -598,6 +729,54 @@ async function startCheckout(db: Db, state: PlanState, target: PlanOption, tr: T
     await patchChange(db, change.id, { status: "failed", error: String(e?.message ?? e).slice(0, 500) });
     throw new PlanError("Checkout couldn't be opened. Nothing was charged; please try again.");
   }
+}
+
+/**
+ * "Ready to start" on the site (coaching-sales/direct-checkout): the same checkout
+ * as Manage plan's, for a package the coach sells without an approval, on the
+ * lead record the intake made. Applies only once Stripe says it's paid (the
+ * webhook's onPlanCheckoutCompleted → applyChange → afterCoachingStart).
+ */
+export async function startDirectCheckout(
+  db: Db,
+  clientId: string,
+  slug: string,
+  opts: { origin: string; consentText: string; applicationId: string | null },
+): Promise<{ url: string; changeId: string }> {
+  const state = await loadPlanState(db, clientId);
+  if (state.client.user_id || state.client.archived || ["Deactivated", "Deleted"].includes(String(state.client.status ?? ""))) {
+    // an account (or a paused one) buys from inside the app, signed in, never from a typed email
+    throw new PlanError("That email already has a JF Effect account. Sign in and pick your plan from Account → Your plan.");
+  }
+  const target = state.catalog.find((o) => o.slug === slug && o.family === "coaching") ?? null;
+  if (!target || !target.directCheckout || !target.listed) throw new PlanError("This package can't be bought on the site right now. Book a call instead.");
+  if (target.problem) {
+    await flagConfig(db, target, target.problem);
+    throw new PlanError("This package can't be bought on the site right now. Book a call instead.", true);
+  }
+  // an earlier unfinished checkout from the site steps aside (one change in flight per client)
+  if (state.open?.status === "checkout") await abandonCheckout(db, state.open, "Replaced by a new checkout from the site");
+  const fresh = state.open?.status === "checkout" ? await loadPlanState(db, clientId) : state;
+  const tr = transitionFor(fresh.current, target, { open: openChangeOf(fresh.open), coaching: fresh.access });
+  if (!tr.available || tr.action !== "checkout") {
+    throw new PlanError(
+      fresh.current.family === "coaching" || fresh.current.managed === "custom"
+        ? "You're already set up with coaching. Sign in and change your plan from Account → Your plan."
+        : fresh.access.state === "comeback" || fresh.access.state === "comeback_pending"
+          ? "Welcome back. Sign in and ask to come back from Account → Your plan."
+          : tr.blocked ?? "This package can't be bought on the site right now.",
+    );
+  }
+  const r = await startCheckout(db, fresh, target, tr, {
+    actorUserId: null,
+    source: "client",
+    origin: opts.origin,
+    consent: { consented_at: new Date().toISOString(), consent_text: opts.consentText.slice(0, 2000), note: "Ready to start on the site" },
+    returnTo: (id, outcome) => `/coaching/apply?checkout=${outcome === "done" ? "paid" : "cancelled"}&package=${encodeURIComponent(target.slug)}&change=${id}`,
+    metadata: { channel: "site", ...(opts.applicationId ? { application_id: opts.applicationId } : {}) },
+  });
+  if (r.result !== "redirect") throw new PlanError("Checkout couldn't be opened. Nothing was charged; please try again.");
+  return { url: r.url, changeId: r.changeId };
 }
 
 async function requestChange(db: Db, state: PlanState, target: PlanOption, opts: { actorUserId: string | null; source: "client" | "admin"; note?: string | null }): Promise<ConfirmResult> {
@@ -625,6 +804,287 @@ async function requestChange(db: Db, state: PlanState, target: PlanOption, opts:
   }
   await notifyPlanChange(db, change, "requested");
   return { result: "requested", changeId: change.id };
+}
+
+/* ───────────────────────── coming to coaching ───────────────────────── */
+
+/** Tell the admins and the client's coach (push only), once per key. */
+async function pushStaff(db: Db, clientId: string, title: string, body: string, url: string, key: string, skip?: string | null) {
+  try {
+    const { sendWebPushToUser } = await import("@/lib/push/push.server");
+    const { staffUserIdsForClient } = await import("@/lib/push/app-events.server");
+    for (const uid of await staffUserIdsForClient(db, clientId)) {
+      if (uid === skip) continue;
+      await sendWebPushToUser(db, uid, { title, body, url, tag: `plan:${clientId}`, data: { kind: "plan_change", clientId } }, { category: "billing", eventKey: `${key}:${uid}`, priority: "normal" });
+    }
+  } catch (e) {
+    console.warn("[plans] staff push failed", e);
+  }
+}
+
+/** A former coaching client asks to come back (a request the coach approves or declines). */
+async function requestComeback(db: Db, state: PlanState, target: PlanOption, opts: { actorUserId: string | null; source: "client" | "admin"; note?: string | null }): Promise<ConfirmResult> {
+  let change: Record<string, any>;
+  try {
+    change = await insertChange(db, {
+      ...baseRow(state, target, { kind: "comeback", action: "comeback", timing: null, available: true, blocked: null, configProblem: null }, opts.actorUserId, opts.source),
+      kind: "reactivate",
+      status: "requested",
+      note: opts.note ?? null,
+    });
+  } catch (e) {
+    if (e instanceof PlanError) throw new PlanError("You've already asked. Your coach will get back to you.");
+    throw e;
+  }
+  await notifyPlanChange(db, change, "comeback_requested");
+  return { result: "requested", changeId: change.id };
+}
+
+export type InAppApplication = { goal: string; outcome: string; timeline: string; phone?: string | null; packageSlug?: string | null };
+
+/**
+ * A member who's never been coached applies from Manage plan: the same
+ * application the website takes (coaching_applications, the Leads page, the
+ * lead's drafted text), tied to their own account so the coach's yes reaches it.
+ */
+export async function applyInApp(db: Db, state: PlanState, input: InAppApplication, actorUserId: string): Promise<{ ok: true; applicationId: string }> {
+  if (state.access.state === "applied") throw new PlanError("Your application is with your coach already.");
+  if (state.access.state !== "apply") throw new PlanError(state.access.state === "client" ? "You're already a coaching client." : "Ask to come back instead.");
+  const { data: c } = await db.from("clients").select("id, first_name, last_name, full_name, email, phone, instagram").eq("id", state.client.id).maybeSingle();
+  if (!c?.email) throw new PlanError("Add your email in Account first, so your coach can reach you.");
+  const pkg = input.packageSlug ? state.catalog.find((o) => o.slug === input.packageSlug && o.family === "coaching") ?? null : null;
+  const full = (c.full_name || [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email).trim();
+  const { data: row, error } = await db
+    .from("coaching_applications")
+    .insert({
+      client_id: c.id,
+      first_name: c.first_name ?? full.split(/\s+/)[0],
+      last_name: c.last_name ?? null,
+      full_name: full,
+      email: c.email,
+      phone: (input.phone ?? "").trim() || c.phone || null,
+      instagram: c.instagram ?? null,
+      main_goal: input.goal.trim().slice(0, 500),
+      target_outcome: input.outcome.trim().slice(0, 1000),
+      timeline: input.timeline.trim().slice(0, 120),
+      coaching_interest: pkg?.name ?? null,
+      package_slug: pkg?.slug ?? null,
+      package_snapshot: pkg ? { slug: pkg.slug, name: pkg.name, price_cents: pkg.priceCents, billing_interval: "month" } : null,
+      application_source: "in_app_plan",
+      source: "coaching_application",
+      source_label: "In the app",
+      form_name: "In-app application",
+      application_status: "submitted",
+      call_status: "not_booked",
+      status: "New",
+      is_test: false,
+      submitted_at: new Date().toISOString(),
+      goals: [input.goal, input.outcome].filter(Boolean).join("\n\n") || null,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  await pushStaff(db, c.id, `${full} applied for coaching`, `From the app${pkg ? `, for ${pkg.name}` : ""}. Approve or decline it in Sales → Plans.`, "/admin/plans", `plan_apply:${row.id}`, actorUserId);
+  return { ok: true, applicationId: row.id };
+}
+
+/** The coach says yes to coaching: they can now pick a package and pay (for one package, or any). */
+export async function approveCoaching(
+  db: Db,
+  clientId: string,
+  input: { actorUserId: string; packageSlug?: string | null; note?: string | null; applicationId?: string | null; requestChangeId?: string | null },
+): Promise<{ ok: true; approvalId: string }> {
+  const state = await loadPlanState(db, clientId);
+  if (state.client.service_tier === "coaching") throw new PlanError("They're already a coaching client.");
+  if (state.client.archived || ["Deactivated", "Deleted"].includes(String(state.client.status ?? ""))) throw new PlanError("This account is paused.");
+  const pkg = input.packageSlug ? state.catalog.find((o) => o.slug === input.packageSlug && o.family === "coaching") ?? null : null;
+  if (input.packageSlug && !pkg) throw new PlanError("That package isn't on sale.");
+  const now = new Date();
+  await db.from("coaching_purchase_approvals").update({ revoked_at: now.toISOString() }).eq("client_id", clientId).is("used_at", null).is("revoked_at", null);
+  // the request or application it answers (else whichever is waiting)
+  const requestId = input.requestChangeId ?? (state.access.state === "comeback_pending" ? state.access.changeId : null);
+  let applicationId = input.applicationId ?? null;
+  if (!applicationId && !requestId) {
+    const { data: app } = await db.from("coaching_applications").select("id, status").eq("client_id", clientId).eq("is_test", false).order("created_at", { ascending: false }).limit(1);
+    if (app?.[0] && !["Rejected", "Approved", "Declined"].includes(String(app[0].status))) applicationId = app[0].id;
+  }
+  const source = requestId ? "reactivation" : applicationId ? "application" : "admin";
+  const { data: approval, error } = await db
+    .from("coaching_purchase_approvals")
+    .insert({
+      client_id: clientId,
+      source,
+      application_id: applicationId,
+      request_change_id: requestId,
+      package_id: pkg?.id ?? null,
+      approved_by: input.actorUserId,
+      expires_at: new Date(now.getTime() + APPROVAL_DAYS * 86_400_000).toISOString(),
+      note: input.note ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  if (requestId) {
+    await patchChange(db, requestId, { status: "applied", decided_by: input.actorUserId, decided_at: now.toISOString(), decision_note: input.note ?? null }, ["requested"]);
+  }
+  if (applicationId) await db.from("coaching_applications").update({ status: "Approved" }).eq("id", applicationId);
+  await notifyPlanChange(db, { id: approval.id, client_id: clientId, to_label: pkg?.name ?? null, source: "admin", requested_by: input.actorUserId, kind: "approve" }, "approved");
+  return { ok: true, approvalId: approval.id };
+}
+
+/** The coach says no (for now) to a request to come back or an application. */
+export async function declineCoaching(db: Db, clientId: string, input: { actorUserId: string; requestChangeId?: string | null; applicationId?: string | null; note?: string | null }) {
+  const now = new Date().toISOString();
+  let any = false;
+  if (input.requestChangeId) {
+    const r = await patchChange(db, input.requestChangeId, { status: "cancelled", decided_by: input.actorUserId, decided_at: now, decision_note: input.note ?? null }, ["requested"]);
+    any = any || !!r;
+  }
+  if (input.applicationId) {
+    const { data } = await db.from("coaching_applications").update({ status: "Rejected" }).eq("id", input.applicationId).eq("client_id", clientId).select("id");
+    any = any || !!data?.length;
+  }
+  if (!any) throw new PlanError("There's nothing waiting to decline.");
+  if (input.note) await notifyPlanChange(db, { id: input.requestChangeId ?? input.applicationId, client_id: clientId, source: "admin", requested_by: input.actorUserId, kind: "decline" }, "declined");
+  return { ok: true as const };
+}
+
+export async function revokeApproval(db: Db, clientId: string, approvalId: string) {
+  const { data } = await db.from("coaching_purchase_approvals").update({ revoked_at: new Date().toISOString() }).eq("id", approvalId).eq("client_id", clientId).is("used_at", null).is("revoked_at", null).select("id");
+  if (!data?.length) throw new PlanError("That approval isn't open any more.");
+  return { ok: true as const };
+}
+
+/** A custom request ("change my plan") the coach has dealt with, or declined. */
+export async function decideRequest(db: Db, changeId: string, input: { actorUserId: string; done: boolean; note?: string | null }) {
+  const r = await patchChange(
+    db,
+    changeId,
+    { status: input.done ? "applied" : "cancelled", decided_by: input.actorUserId, decided_at: new Date().toISOString(), decision_note: input.note ?? null },
+    ["requested"],
+  );
+  if (!r) throw new PlanError("That request isn't waiting any more.");
+  return { ok: true as const };
+}
+
+/* ───────────────────────── offers (with the client's consent) ───────────────────────── */
+
+/**
+ * The coach offers a client on their own (grandfathered or custom) price a
+ * switch. Nothing changes until they accept it in the app; it closes after
+ * OFFER_DAYS. Never for someone whose billing this could double (a second live
+ * subscription the app can't change).
+ */
+export async function createOffer(db: Db, state: PlanState, input: { targetSlug: string; timing: "now" | "period_end"; note?: string | null; actorUserId: string }) {
+  const target = state.catalog.find((o) => o.slug === input.targetSlug);
+  if (!target || target.family === "free") throw new PlanError("Pick a paid package to offer.");
+  if (target.problem) throw new PlanError(`${target.name} can't be sold yet: ${target.problem}.`, true);
+  if (state.current.managed === "free") throw new PlanError("They aren't paying for a plan. Approve them for coaching instead.");
+  if (state.open) throw new PlanError("A plan change is already going through for them.");
+  if (state.offer) throw new PlanError("They already have an offer open. Withdraw it first.");
+  if (target.id === state.current.option?.id && !state.current.specialPrice) throw new PlanError("They're already on it at that price.");
+  if (state.current.managed === "custom" && !state.current.cancelable && state.otherLiveSale) {
+    throw new PlanError("Their billing has a subscription the app can't change (a session package or more than one). Change it from their Billing instead.");
+  }
+  const up = state.current.priceCents == null || target.priceCents >= state.current.priceCents;
+  const row = await insertChange(db, {
+    ...baseRow(state, target, { kind: up ? "upgrade" : "downgrade", action: null, timing: null, available: true, blocked: null, configProblem: null }, input.actorUserId, "admin"),
+    status: "offered",
+    offer_timing: input.timing,
+    offer_expires_at: new Date(Date.now() + OFFER_DAYS * 86_400_000).toISOString(),
+    sale_id: state.sale?.id ?? null,
+    stripe_subscription_id: state.current.subscriptionId,
+    note: input.note ?? null,
+  }).catch((e) => {
+    if (e instanceof PlanError) throw new PlanError("They already have an offer open. Withdraw it first.");
+    throw e;
+  });
+  await notifyPlanChange(db, row, "offered");
+  return { ok: true as const, changeId: row.id };
+}
+
+export async function withdrawOffer(db: Db, clientId: string, changeId: string, actorUserId: string) {
+  const r = await db.from("plan_changes").update({ status: "cancelled", decided_by: actorUserId, decided_at: new Date().toISOString(), note: "Withdrawn by the coach" }).eq("id", changeId).eq("client_id", clientId).eq("status", "offered").select("id");
+  if (!r.data?.length) throw new PlanError("That offer isn't open any more.");
+  return { ok: true as const };
+}
+
+export async function declineOffer(db: Db, state: PlanState, changeId: string, actorUserId: string) {
+  if (!state.offer || state.offer.id !== changeId) throw new PlanError("That offer isn't open any more.");
+  const done = await patchChange(db, changeId, { status: "cancelled", decided_by: actorUserId, decided_at: new Date().toISOString(), decision_note: "Declined by the client" }, ["offered"]);
+  if (!done) throw new PlanError("That offer isn't open any more.");
+  await notifyPlanChange(db, done, "offer_declined");
+  return { ok: true as const };
+}
+
+/**
+ * The client accepts an offer: their consent (the exact words shown) is kept on
+ * the change, then their own subscription moves to the new price with nothing
+ * charged or credited today (now, or at the end of the paid month). With no
+ * live subscription, accepting opens a checkout instead.
+ */
+export async function acceptOffer(db: Db, state: PlanState, changeId: string, opts: { actorUserId: string; origin: string; consentText: string }): Promise<ConfirmResult> {
+  const row = state.offer;
+  if (!row || row.id !== changeId) throw new PlanError("This offer isn't open any more.");
+  if (state.client.archived || ["Deactivated", "Deleted"].includes(String(state.client.status ?? ""))) throw new PlanError("This account is paused, so its plan can't change.");
+  if (state.open) throw new PlanError("A plan change is already going through. Undo it first.");
+  const target = state.catalog.find((o) => o.id === row.to_package_id);
+  if (!target) throw new PlanError("That package isn't on sale any more.");
+  if (target.problem) throw new PlanError(`${target.name} isn't available yet.`, true);
+  const offer = offerFromRow(row, state.current);
+  const terms = offerTerms(offer, fmtDay);
+  if (opts.consentText.trim() !== terms.consentText) throw new PlanError("The offer changed since you opened it. Refresh and read it again.");
+  if (!offer.hasSubscription && state.otherLiveSale) throw new PlanError("Your billing can't be switched here. Message your coach.");
+  if (target.family === "coaching" && !state.agreement.exempt && (!state.agreement.version || compareVersion(state.agreement.version, PLAN_AGREEMENT_VERSION) < 0)) {
+    return { result: "agreement_required", version: PLAN_AGREEMENT_VERSION };
+  }
+  const consent = { consented_at: new Date().toISOString(), consent_text: terms.consentText, agreement_version: state.agreement.version };
+  const tr: Transition = { kind: row.kind, action: offer.hasSubscription ? "swap_later" : "checkout", timing: offer.timing === "now" ? "now" : "period_end", available: true, blocked: null, configProblem: null } as Transition;
+
+  if (!offer.hasSubscription) {
+    await patchChange(db, row.id, consent, ["offered"]);
+    return startCheckout(db, state, target, tr, { actorUserId: opts.actorUserId, source: "client", origin: opts.origin, existingChangeId: row.id });
+  }
+
+  const apiKey = stripeKeyFor(state.sale);
+  const sub = subState(await fetchSub(state.current.subscriptionId!, apiKey));
+  const problem = subProblem(sub);
+  if (problem) throw new PlanError(problem);
+  const priceId = await verifyTargetPrice(db, target, apiKey);
+  const now = offer.timing === "now";
+  const periodEndIso = sub.periodEnd ? new Date(sub.periodEnd * 1000).toISOString() : null;
+  const claimed = await patchChange(
+    db,
+    row.id,
+    {
+      ...consent,
+      status: "processing",
+      sale_id: state.sale?.id ?? row.sale_id ?? null,
+      stripe_subscription_id: sub.id,
+      stripe_from_price_id: sub.priceId,
+      stripe_to_price_id: priceId,
+      effective_at: now ? new Date().toISOString() : periodEndIso,
+      amount_due_now_cents: 0,
+    },
+    ["offered"],
+  ).catch((e) => {
+    if (String(e?.message ?? "").includes("plan_changes_one_open")) throw new PlanError("A plan change is already going through.");
+    throw e;
+  });
+  if (!claimed) throw new PlanError("This offer isn't open any more.");
+  try {
+    await stripeFetch(`/subscriptions/${sub.id}`, { method: "POST", apiKey, body: formEncode(swapLaterParams(sub, priceId)), idempotencyKey: `plan_offer_${row.id}` });
+  } catch (e: any) {
+    await patchChange(db, row.id, { status: "failed", error: String(e?.message ?? e).slice(0, 500) });
+    throw new PlanError("Stripe didn't accept the change. Nothing changed; please try again.");
+  }
+  if (now) {
+    await applyChange(db, row.id);
+    return { result: "applied", changeId: row.id };
+  }
+  const done = await patchChange(db, row.id, { status: "scheduled" }, ["processing"]);
+  await notifyPlanChange(db, done ?? claimed, "scheduled");
+  return { result: "scheduled", changeId: row.id, effectiveDate: unixToDay(sub.periodEnd, state.client.timezone ?? "America/Winnipeg") };
 }
 
 /* ───────────────────────── undo / keep ───────────────────────── */
@@ -668,7 +1128,8 @@ export async function undoChange(db: Db, state: PlanState, changeId: string, act
 /** A plan set to end in Stripe (not by a change here): keep it. */
 export async function keepPlan(db: Db, state: PlanState, actorUserId: string | null): Promise<{ ok: true }> {
   if (state.open?.status === "scheduled" && state.open.kind === "cancel") return undoChange(db, state, state.open.id, actorUserId);
-  if (state.current.managed !== "stripe" || state.current.status !== "ending" || !state.sale) throw new PlanError("Your plan isn't ending.");
+  const keepable = state.current.managed === "stripe" || (state.current.managed === "custom" && state.current.cancelable);
+  if (!keepable || state.current.status !== "ending" || !state.sale) throw new PlanError("Your plan isn't ending.");
   const apiKey = stripeKeyFor(state.sale);
   await stripeFetch(`/subscriptions/${state.current.subscriptionId}`, { method: "POST", apiKey, body: formEncode(KEEP_PARAMS), idempotencyKey: `plan_keep_${state.sale.id}_${Math.floor(Date.now() / 60_000)}` });
   await db.from("purchase_records").update({ cancel_at_period_end: false, last_payment_update_source: "plan_change", last_payment_update_at: new Date().toISOString() }).eq("id", state.sale.id);
@@ -728,7 +1189,7 @@ function todayDay(tz = "America/Winnipeg"): string {
 export async function applyChange(db: Db, changeId: string): Promise<{ applied: boolean }> {
   const { data: change } = await db.from("plan_changes").select(CHANGE_COLUMNS).eq("id", changeId).maybeSingle();
   if (!change) return { applied: false };
-  if (["applied", "cancelled", "failed", "requested"].includes(change.status)) return { applied: change.status === "applied" };
+  if (["applied", "cancelled", "failed", "requested", "offered"].includes(change.status)) return { applied: change.status === "applied" };
   const { data: client } = await db.from("clients").select("id, timezone, service_tier").eq("id", change.client_id).maybeSingle();
   const tz = client?.timezone ?? "America/Winnipeg";
   const day = todayDay(tz);
@@ -741,6 +1202,10 @@ export async function applyChange(db: Db, changeId: string): Promise<{ applied: 
     const endsOn = active.starts_on && active.starts_on > day ? active.starts_on : day;
     const { error } = await db.from("coaching_package_enrollments").update({ status: "ended", ends_on: endsOn, note: `Ended by a plan change (${change.kind})` }).eq("id", active.id).eq("status", "active");
     if (error) throw new Error(error.message);
+  }
+  // Same package, new price (an accepted offer moving a special price to the advertised one): they pay the advertised price now.
+  if (alreadyThere && (change.kind === "upgrade" || change.kind === "downgrade") && change.to_price_cents != null) {
+    await db.from("coaching_package_enrollments").update({ contracted_price_cents: null }).eq("id", active.id).eq("status", "active");
   }
   if (goingToPackage && !alreadyThere) {
     const { data: sale } = change.sale_id ? await db.from("purchase_records").select("next_billing_date, purchased_at").eq("id", change.sale_id).maybeSingle() : { data: null };
@@ -793,13 +1258,28 @@ export async function applyChange(db: Db, changeId: string): Promise<{ applied: 
     }
   }
 
-  // 4. Done: only the run that flips it sends the notices
+  // 4. The coach's yes is used up by the purchase it allowed
+  if (toFamily === "coaching" && (fromFamily === "free" || fromFamily === "membership")) {
+    await db
+      .from("coaching_purchase_approvals")
+      .update({ used_at: new Date().toISOString(), used_change_id: change.id })
+      .eq("client_id", change.client_id)
+      .is("used_at", null)
+      .is("revoked_at", null);
+  }
+
+  // 5. Done: only the run that flips it sends the notices
   const done = await patchChange(db, change.id, { status: "applied", error: null }, ["checkout", "processing", "awaiting_payment", "scheduled"]);
   if (done) {
     // an end Stripe did on its own didn't move their tier: the coach is told it ended, nothing more
     const notice: PlanNotice = done.source === "stripe" ? "ended_in_stripe" : done.kind === "start" || done.kind === "upgrade" ? "started" : "applied";
     await notifyPlanChange(db, done, notice);
     if (done.kind === "start") await checkDuplicatePlans(db, done);
+    // someone new to coaching: their account, their record as a client, their welcome (once, here)
+    if (done.to_family === "coaching" && done.from_family !== "coaching") {
+      const { afterCoachingStart } = await import("@/lib/coaching-sales/onboarding.server");
+      await afterCoachingStart(db, done).catch((e: unknown) => console.warn("[plans] onboarding after start failed", e));
+    }
   }
   return { applied: !!done };
 }
@@ -973,7 +1453,15 @@ export async function isPlanChangeInvoice(db: Db, invoice: any): Promise<boolean
 /* ───────────────────────── the tick ───────────────────────── */
 
 export async function runPlanChangesTick(db: Db): Promise<Record<string, number>> {
-  const out = { applied: 0, expired: 0, failed: 0, waiting: 0, errors: 0 };
+  const out = { applied: 0, expired: 0, failed: 0, waiting: 0, errors: 0, offersClosed: 0 };
+  // Offers nobody answered in time close; nothing about their plan changes.
+  const { data: stale } = await db
+    .from("plan_changes")
+    .update({ status: "cancelled", note: "The offer ran out before it was answered" })
+    .eq("status", "offered")
+    .lte("offer_expires_at", new Date().toISOString())
+    .select("id");
+  out.offersClosed = stale?.length ?? 0;
   const { data: rows } = await db
     .from("plan_changes")
     .select(CHANGE_COLUMNS)
@@ -1081,7 +1569,19 @@ export async function runPlanChangesTick(db: Db): Promise<Record<string, number>
 
 /* ───────────────────────── telling people ───────────────────────── */
 
-export type PlanNotice = "started" | "applied" | "scheduled" | "undone" | "failed" | "requested" | "ended_in_stripe";
+export type PlanNotice =
+  | "started"
+  | "applied"
+  | "scheduled"
+  | "undone"
+  | "failed"
+  | "requested"
+  | "ended_in_stripe"
+  | "comeback_requested"
+  | "offered"
+  | "offer_declined"
+  | "approved"
+  | "declined";
 
 function fmtDay(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -1114,6 +1614,12 @@ export function noticeCopy(row: Record<string, any>, notice: PlanNotice, firstNa
         return { title: `You're keeping ${from}`, body: "Nothing changes. Your plan carries on as it was." };
       case "failed":
         return { title: "Your plan didn't change", body: "The payment didn't go through, so nothing was charged. Tap to try again." };
+      case "offered":
+        return { title: `An offer from your coach: ${to}`, body: `Open your plan to see the price and when it would start. Nothing changes unless you accept.` };
+      case "approved":
+        return { title: "You're approved for coaching", body: `Pick ${row.to_label ?? "your package"} in the app to get started.` };
+      case "declined":
+        return { title: "About your coaching request", body: "Your coach replied. Open your plan to see it." };
       default:
         return null;
     }
@@ -1126,22 +1632,101 @@ export function noticeCopy(row: Record<string, any>, notice: PlanNotice, firstNa
     failed: `tried to change to ${to}, but the payment didn't go through`,
     requested: `asked to change from ${from} to ${to}`,
     ended_in_stripe: `'s ${from} subscription ended in Stripe`,
+    comeback_requested: `asked to come back to coaching${row.to_label ? ` (${row.to_label})` : ""}`,
+    offered: `was offered ${to}`,
+    offer_declined: `declined the offer of ${to}`,
+    approved: `was approved for coaching`,
+    declined: `was told no for now`,
   };
-  const admin = { title: `${firstName} ${verb[notice]}`.replace(" 's", "'s"), body: notice === "ended_in_stripe" ? "They're still set up as before. Open their plan to end coaching or set it up again." : "Tap to see their plan." };
+  const admin = {
+    title: `${firstName} ${verb[notice]}`.replace(" 's", "'s"),
+    body:
+      notice === "ended_in_stripe"
+        ? "They're still set up as before. Open their plan to end coaching or set it up again."
+        : notice === "comeback_requested"
+          ? "Approve or decline it in Sales → Plans."
+          : "Tap to see their plan.",
+  };
   return { client, admin };
+}
+
+/** The coach-chat confirmation a coaching client gets for a change (automated, from their coach). */
+export function chatConfirmation(row: Record<string, any>, notice: PlanNotice): string | null {
+  const to = row.to_label ?? "the free app";
+  const from = row.from_label ?? "your plan";
+  const when = fmtDay(row.effective_at);
+  const toFree = row.to_family === "free";
+  const price = row.to_price_cents != null && row.to_family !== "free" ? ` It's ${money(row.to_price_cents)} a month plus tax.` : "";
+  switch (notice) {
+    case "started":
+      return row.kind === "start" ? `You're on ${to} now.${price} Welcome in.` : `Your plan is now ${to}.${price}`;
+    case "applied":
+      return toFree ? `${from} has ended, as scheduled. Everything you logged is still in the app.` : `Your plan changed to ${to} today, as scheduled.${price}`;
+    case "scheduled":
+      return toFree
+        ? `Confirmed: ${from} ends ${when ?? "at the end of your paid month"}. Nothing changes until then, and you can keep it any time before in Account → Your plan.`
+        : `Confirmed: you're moving to ${to} on ${when ?? "your next billing date"}.${price} Nothing changes until then, and you can undo it in Account → Your plan.`;
+    case "undone":
+      return `Done: you're keeping ${from}. Nothing changes.`;
+    case "offered":
+      return `I've offered you ${to}.${price} Have a look in Account → Your plan. Nothing changes unless you accept it.`;
+    default:
+      return null;
+  }
+}
+
+async function postChatConfirmation(db: Db, row: Record<string, any>, notice: PlanNotice, client: Record<string, any>) {
+  const body = chatConfirmation(row, notice);
+  if (!body || !client.user_id) return;
+  // only people with a coach chat: a coaching client, or someone just leaving coaching (the message lands before access changes)
+  const coaching = client.service_tier === "coaching" || row.from_family === "coaching" || row.to_family === "coaching";
+  if (!coaching) return;
+  try {
+    const key = `${row.id}:${notice}`;
+    const { data: earlier } = await db.from("messages").select("id").eq("client_id", row.client_id).contains("attachments", JSON.stringify([{ kind: "plan_change", key }])).limit(1);
+    if (earlier?.length) return;
+    let sender: string | null = null;
+    if (client.assigned_coach_id) {
+      const { data: coach } = await db.from("coaches").select("user_id").eq("id", client.assigned_coach_id).maybeSingle();
+      sender = coach?.user_id ?? null;
+    }
+    if (!sender) {
+      const { data: owner } = await db.from("business_owners").select("user_id").limit(1).maybeSingle();
+      sender = owner?.user_id ?? null;
+    }
+    if (!sender) return;
+    const at = new Date().toISOString();
+    await db.from("messages").insert({
+      client_id: row.client_id,
+      sender_id: sender,
+      sender_role: "admin",
+      body,
+      attachments: [{ kind: "plan_change", key, change_id: row.id, notice }],
+      message_type: "Payment",
+      is_internal_note: false,
+      // automated: it never counts as the coach replying
+      is_automated: true,
+      delivery_status: "sent",
+      sent_at: at,
+      read_by_admin_at: at,
+    });
+  } catch (e) {
+    console.warn("[plans] chat confirmation failed", notice, e);
+  }
 }
 
 export async function notifyPlanChange(db: Db, row: Record<string, any>, notice: PlanNotice): Promise<void> {
   try {
-    const { data: c } = await db.from("clients").select("id, user_id, first_name, full_name, email").eq("id", row.client_id).maybeSingle();
+    const { data: c } = await db.from("clients").select("id, user_id, first_name, full_name, email, service_tier, assigned_coach_id").eq("id", row.client_id).maybeSingle();
     if (!c) return;
+    if (row.source !== "stripe") await postChatConfirmation(db, row, notice, c);
     const name = (c.full_name || c.first_name || "A client").trim();
     const copy = noticeCopy(row, notice, name);
     const { sendWebPushToUser } = await import("@/lib/push/push.server");
     const key = `plan:${row.id}:${notice}`;
 
     // the client (never for a request they sent, or an end Stripe did on its own)
-    if (copy.client && c.user_id && row.source !== "stripe") {
+    if (copy.client && c.user_id && (row.source !== "stripe" || notice === "approved")) {
       await sendWebPushToUser(db, c.user_id, { title: copy.client.title, body: copy.client.body, url: "/portal/plan", tag: `plan:${row.client_id}`, data: { kind: "plan_change", changeId: row.id } }, { category: "billing", eventKey: `${key}:${c.user_id}`, priority: "normal" });
       if (c.email) {
         const { sendTemplateEmail } = await import("@/lib/transactional-email.server");

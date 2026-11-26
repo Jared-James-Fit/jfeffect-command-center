@@ -158,7 +158,9 @@ export const reviseNutritionPlanFn = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await staffForClient(context.supabase, context.userId, await submissionClient(data.submissionId)))) throw new Error("Coach access required");
+    const clientId = await submissionClient(data.submissionId);
+    if (!(await staffForClient(context.supabase, context.userId, clientId))) throw new Error("Coach access required");
+    if (clientId) await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(clientId);
     return (await aiPlans()).queueNutritionRevision(await admin(), data.submissionId, data.instructions);
   });
 
@@ -282,6 +284,7 @@ export const askPlanEditFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     if (!(await canSeePlan(context.supabase, context.userId, data.targetId))) throw new Error("Coach access required");
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(data.clientId);
     return (await planEdits()).queuePlanEdit(await admin(), { ...data, userId: context.userId });
   });
 

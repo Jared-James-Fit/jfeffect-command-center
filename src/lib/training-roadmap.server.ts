@@ -242,7 +242,7 @@ async function writeNote(
   }
 }
 
-export type RoadmapResult = { blockId: string; outcome: "written" | "reused" | "unchanged" | "empty" | "gone" };
+export type RoadmapResult = { blockId: string; outcome: "written" | "reused" | "unchanged" | "empty" | "gone" | "no_consent" };
 
 /**
  * Bring one block's roadmap words up to date. `force` asks Cleo again even
@@ -276,6 +276,9 @@ export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: {
   }
 
   const twin = opts.force ? null : await reuse(admin, digest.hash, blockId, digest.weekIndexes);
+  // the client's program goes to OpenAI only with their permission (5.1.2(i), src/lib/ai-consent): without it
+  // (or when it can't be read) no model is asked and the block keeps whatever words it has
+  if (!twin && !(await (await import("@/lib/ai-consent/consent.server")).clientAllowsAi(block.client_id)).ok) return { blockId, outcome: "no_consent" };
   const reply = twin ?? (await askCleo(admin, digest, loaded.meet, opts.deadline));
 
   await writeNote(admin, key(null), { ai_label: reply.label || null, ai_summary: reply.purpose || null, ai_style: reply.style }, digest.hash);

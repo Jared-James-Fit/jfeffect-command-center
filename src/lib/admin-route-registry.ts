@@ -236,6 +236,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   { id: "money-reports", label: "Money reports", to: "/admin/sales?tab=reports", category: "Sales & Payments",
     parent: "Admin → Sales", roles: ADMIN, icon: Landmark,
     keywords: ["reports", "profit and loss", "p&l", "export", "csv", "pdf", "accountant", "year end package"] },
+  { id: "plans", label: "Plans", to: "/admin/plans", category: "Sales & Payments",
+    parent: "Admin → Sales", roles: ADMIN, icon: Layers,
+    keywords: ["subscriptions", "upgrade", "downgrade", "cancel", "grandfathered", "approve coaching", "reactivation", "failed payments"] },
   { id: "payments", label: "Payments", to: "/admin/payments", category: "Sales & Payments",
     parent: "Admin → Sales", roles: ADMIN, icon: CreditCard, keywords: ["billing", "charges"] },
   { id: "purchases", label: "Purchases", to: "/admin/purchases", category: "Sales & Payments",
@@ -265,9 +268,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     keywords: ["program gaps", "missing", "rpe", "rir", "prescription", "maxes", "incomplete program"] },
 
   // ── MEMBERSHIP ──────────────────────────────────────────────────────
-  { id: "app-insights", label: "App & website", to: "/admin/insights",
+  { id: "app-insights", label: "Analytics", to: "/admin/insights",
     category: "Admin Pages", parent: "Admin → Insights", roles: ADMIN, icon: BarChart3,
-    keywords: ["analytics", "active users", "live", "sessions", "retention", "feature adoption", "devices", "map", "website traffic", "funnel"] },
+    keywords: ["analytics", "app & website", "business intelligence", "active users", "live", "sessions", "retention", "cohorts", "feature adoption", "devices", "map", "geography", "website traffic", "funnel", "acquisition", "attribution", "campaigns", "mrr", "revenue", "web vitals", "errors", "cleo insights"] },
   { id: "usage-spend", label: "Usage & spend", to: "/admin/usage",
     category: "Admin Pages", parent: "Admin → Insights", roles: ADMIN, icon: BarChart3,
     keywords: ["ai cost", "openai", "sms cost", "twilio", "budget", "spend", "models", "credits"] },

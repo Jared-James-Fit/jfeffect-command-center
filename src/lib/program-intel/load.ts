@@ -183,13 +183,14 @@ export async function loadIntelRecords(
   const results = await fetchByIds<any>(rowIds, (ids, f, t) =>
     sb
       .from("pl_row_results")
-      .select("id, row_id, set_index, actual_load, actual_load_unit, normalized_kg, actual_load_kg, actual_reps, actual_rpe, actual_rpe_num, actual_rir, is_working_set, is_bodyweight, load_type, completed_at, completed_duration_seconds, notes, mean_concentric_velocity_mps")
+      .select("id, row_id, set_index, actual_load, actual_load_unit, normalized_kg, actual_load_kg, actual_reps, actual_rpe, actual_rpe_num, actual_rir, is_working_set, is_bodyweight, load_type, completed_at, completed_duration_seconds, notes, mean_concentric_velocity_mps,velocity_excluded")
       .in("row_id", ids)
       .eq("client_id", clientId)
       .order("set_index")
       .range(f, t),
   );
   // a set's velocity is its own field: typed from a device, or the average of every rep read from its
+  for (const r of results) if (r.velocity_excluded) r.mean_concentric_velocity_mps = null;
   // video once the server accepted the read (set_video_analysis_save puts it there)
   const completions = await fetchByIds<any>(dayIds, (ids, f, t) =>
     sb.from("pl_day_completions").select("id, day_id, completed_at, started_at, actual_duration_min, logging_percentage, session_rating, skipped_exercises_count, client_notes").in("day_id", ids).eq("client_id", clientId).range(f, t),

@@ -19,13 +19,16 @@ export type LaunchInput = {
 
 /** Pure (tested): what "/" is for this visitor. */
 export function launchMode(i: LaunchInput): "app" | "landing" {
+  // the iPhone app never shows the marketing page, `?landing` included (its prices
+  // and plans are a sales page: App Store 3.1.1, native-purchases.ts)
+  if (i.native) return "app";
   if (i.forceLanding) return "landing";
   return i.hasSession || i.standalone || i.native ? "app" : "landing";
 }
 
 /** Same rule, in the head before the first paint (keep in step with launchMode and hasPersistedAuthSession). */
 export const LAUNCH_BOOT_SCRIPT =
-  '(function(){try{if(location.pathname!=="/")return;var r=document.documentElement;if(/[?&]landing\\b/.test(location.search)){r.removeAttribute("data-launch");return}var app=false;try{var ls=window.localStorage;for(var i=0;i<ls.length;i++){var k=ls.key(i);if(k&&k.indexOf("sb-")===0&&k.slice(-11)==="-auth-token"&&ls.getItem(k)){app=true;break}}}catch(e){app=true}if(!app){var c=window.Capacitor;app=window.navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||!!(c&&(typeof c.isNativePlatform==="function"?c.isNativePlatform():c.isNative))}if(app)r.setAttribute("data-launch","app");else r.removeAttribute("data-launch")}catch(e){}})();';
+  '(function(){try{if(location.pathname!=="/")return;var r=document.documentElement;var c=window.Capacitor;if(c&&(typeof c.isNativePlatform==="function"?c.isNativePlatform():c.isNative)){r.setAttribute("data-launch","app");return}if(/[?&]landing\\b/.test(location.search)){r.removeAttribute("data-launch");return}var app=false;try{var ls=window.localStorage;for(var i=0;i<ls.length;i++){var k=ls.key(i);if(k&&k.indexOf("sb-")===0&&k.slice(-11)==="-auth-token"&&ls.getItem(k)){app=true;break}}}catch(e){app=true}if(!app){app=window.navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)}if(app)r.setAttribute("data-launch","app");else r.removeAttribute("data-launch")}catch(e){}})();';
 
 /** Inside the installed app (home-screen web app or the native shell). */
 export function installedApp(): boolean {
@@ -58,5 +61,7 @@ export function currentLaunchMode(): "app" | "landing" {
     hasSession = true;
   }
   const forceLanding = /[?&]landing\b/.test(window.location.search);
-  return launchMode({ hasSession, standalone: installedApp(), native: false, forceLanding });
+  const cap = (window as any).Capacitor;
+  const native = !!(cap && (typeof cap.isNativePlatform === "function" ? cap.isNativePlatform() : cap.isNative));
+  return launchMode({ hasSession, standalone: installedApp(), native, forceLanding });
 }

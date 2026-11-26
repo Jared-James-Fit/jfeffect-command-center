@@ -93,6 +93,7 @@ export const askCardioCleoFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }): Promise<CardioProposal> => {
     await assertReach(context.supabase, context.userId, data.clientId);
+    await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(data.clientId);
     const { askCardioCleo } = await import("@/lib/cardio/cleo.server");
     return askCardioCleo(await admin(), { ...data, userId: context.userId });
   });
@@ -154,7 +155,7 @@ export const applyRecommendationItemFn = createServerFn({ method: "POST" })
 export const getNutritionQualityFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ clientId: uuid }).parse(d))
-  .handler(async ({ data, context }): Promise<{ quality: QualityScore | null; planId: string | null }> => {
+  .handler(async ({ data, context }): Promise<{ quality: QualityScore | null; planId: string | null; pending?: { at: string; count: number } | null }> => {
     await assertReach(context.supabase, context.userId, data.clientId);
     const { nutritionQualityFor } = await import("@/lib/nutrition-targets/plan-quality.server");
     return nutritionQualityFor(await admin(), data.clientId);

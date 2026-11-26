@@ -276,10 +276,12 @@ function Recommendation({ clientId, view, onCardio }: { clientId: string; view: 
   });
   const cardioM = useMutation({
     mutationFn: (plan: { trainingDay: TreadmillSession | null; restDay: TreadmillSession | null }) => saveCardio({ data: { clientId, reviewId, plan } }),
-    onSuccess: () => {
-      toast.success("Cardio updated. Their workouts follow it.");
+    onSuccess: (res) => {
+      // the Cardio tab manages their cardio: the step is on its draft, published from there
+      toast.success(res.drafted ? "On their cardio draft. Review it on the Cardio tab, then publish." : "Cardio updated. Their workouts follow it.");
       refresh();
       qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+      qc.invalidateQueries({ queryKey: ["cardio-workspace", clientId] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't change the cardio"),
   });
@@ -606,7 +608,7 @@ function HistorySection({ view }: { view: WeightManagementView }) {
 function appliedWords(applied: unknown): string {
   if (!Array.isArray(applied) || !applied.length) return "";
   const kinds = new Set(applied.map((x: any) => x?.kind));
-  const parts = [kinds.has("nutrition") ? "nutrition sent to Adjust plan" : null, kinds.has("cardio") ? "cardio changed" : null, kinds.has("water") ? "water changed" : null].filter(Boolean);
+  const parts = [kinds.has("nutrition") ? "nutrition sent to Adjust plan" : null, kinds.has("cardio") ? "cardio changed" : null, kinds.has("cardio_draft") ? "cardio put on the Cardio tab's draft" : null, kinds.has("water") ? "water changed" : null].filter(Boolean);
   return parts.length ? ` · ${parts.join(", ")}` : "";
 }
 

@@ -10,6 +10,7 @@
  * automatic; the day's total steps live on nutrition_target_days.steps.
  */
 import { INCLINE_TREADMILL_DEFAULT, defaultCardioConfigFor, scheduledWeekdaysForDayType } from "@/lib/cardio-prescription";
+import { todayLocalISO } from "@/lib/today";
 
 /** "Non-Training Day", "NON TRAINING DAY", "Rest Day" → one key ("rest" and "non-training" are the same day). */
 export function dayKey(label: string | null | undefined): string {
@@ -101,6 +102,11 @@ export type CardioDraft = {
   program: string | null;
   /** The AI changed it (for the review highlight). */
   fromAi: boolean;
+  /**
+   * The Cardio tab manages the client's cardio (it published what's in force or scheduled): what this day
+   * type has from it, in words, shown read-only in the nutrition editor; the nutrition plan never writes it.
+   */
+  managed?: string | null;
 };
 
 type CardioRow = {
@@ -119,13 +125,46 @@ type CardioRow = {
   source?: string | null;
   /** Published from the Cardio tab's builder (cardio_plan_versions): the nutrition plan leaves it alone. */
   plan_version_id?: string | null;
+  start_date?: string | null;
   end_date?: string | null;
+  day_rule?: string | null;
+  custom_type?: string | null;
+  scheduled_weekdays?: string[] | null;
 };
 
 /** A session published from the Cardio tab is the cardio plan's own: a nutrition publish never rewrites it (Nov 23 2026). */
 const builderOwned = (r: CardioRow | undefined, today: string) => !!r?.plan_version_id && (!r.end_date || r.end_date >= today);
 
 const live = (rows: CardioRow[]) => rows.filter((r) => String(r.status ?? "Active") !== "Archived");
+
+/**
+ * The Cardio tab manages this client's cardio: a session it published is in force or scheduled. Then the
+ * nutrition plan (its editor, the AI's CARDIO SESSIONS, Cleo's publish) leaves every cardio row alone,
+ * whatever the day type: a builder session on set weekdays is "General", so matching by day type alone
+ * would let a nutrition save add a second Training Day session beside the published plan.
+ */
+export function cardioTabOwns(rows: CardioRow[], today: string = todayLocalISO()): boolean {
+  return live(rows).some((r) => builderOwned(r, today));
+}
+
+const shortDay = (d: string) => {
+  const t = String(d ?? "").trim();
+  return t ? t.slice(0, 1).toUpperCase() + t.slice(1, 3).toLowerCase() : "";
+};
+
+/** What a day type has from the Cardio tab's plan in force today, in words ("No cardio on these days" when nothing). */
+export function managedCardioLine(rows: CardioRow[], label: string, today: string = todayLocalISO()): string {
+  const k = dayKey(label);
+  const inForce = live(rows).filter((r) => builderOwned(r, today) && r.enabled !== false && (!r.start_date || r.start_date <= today));
+  const lines = inForce
+    .filter((r) => dayKey(r.day_type) === k || r.day_rule === "daily" || r.day_rule === "weekdays")
+    .map((r) => {
+      const what = String(r.custom_type || r.cardio_type || "cardio").toLowerCase();
+      const on = r.day_rule === "weekdays" && r.scheduled_weekdays?.length ? ` (${r.scheduled_weekdays.map(shortDay).filter(Boolean).join(", ")})` : r.day_rule === "daily" ? " (every day)" : "";
+      return `${r.duration_minutes ?? "?"} min ${what}${on}`;
+    });
+  return lines.length ? lines.join(" · ") : "No cardio on these days";
+}
 
 /** Default sessions per week for a day type, from how many such days the week has. */
 export function defaultFrequency(label: string, trainingDays: number): number {
@@ -146,8 +185,11 @@ export function cardioDraftsFor(input: {
   rows: CardioRow[];
   ai?: Map<string, AiCardioDay> | null;
   trainingDays?: number;
+  today?: string;
 }): Record<string, CardioDraft> {
   const rows = live(input.rows);
+  const today = input.today ?? todayLocalISO();
+  const owned = cardioTabOwns(rows, today);
   const out: Record<string, CardioDraft> = {};
   for (const label of input.labels) {
     const k = dayKey(label);
@@ -165,6 +207,11 @@ export function cardioDraftsFor(input: {
       program,
       fromAi: false,
     };
+    if (owned) {
+      // the Cardio tab's plan: shown as it is, never edited or AI-drafted from the nutrition plan
+      out[label] = { ...base, managed: managedCardioLine(rows, label, today) };
+      continue;
+    }
     const a = input.ai?.get(k);
     if (a && !program && (a.none || a.minutes != null || a.kcal != null)) {
       base.fromAi = true;
@@ -198,8 +245,10 @@ export function planCardioSync(input: {
   const byId = new Map(input.rows.map((r) => [r.id, r]));
   const updates: Array<{ id: string; patch: Record<string, unknown> }> = [];
   const inserts: Array<Record<string, unknown>> = [];
+  // the Cardio tab manages their cardio: the nutrition plan writes none of it
+  if (cardioTabOwns(input.rows, input.today)) return { updates, inserts };
   for (const { label, draft } of input.days) {
-    if (!draft || draft.program) continue;
+    if (!draft || draft.program || draft.managed != null) continue;
     const kcal = draft.kcal && draft.kcal > 0 ? Math.round(draft.kcal) : null;
     const wanted: Record<string, unknown> = {
       day_type: label,
@@ -288,7 +337,10 @@ export function currentCardioText(rows: CardioRow[], opts: { trainingDays?: stri
     const from = r.source === "program" || r.source === "program_rows" ? " (set with the training program before any nutrition plan: adjust it to this plan)" : "";
     return `- ${r.day_type ?? "Any day"}: ${r.duration_minutes ?? "?"} min ${String(r.cardio_type ?? "cardio").toLowerCase()}${per}${kcal}${r.program_name ? ` (program: ${r.program_name})` : ""}${from}`;
   });
-  return `CURRENT CARDIO\n${lines.join("\n")}${schedule ? `\n${schedule}` : ""}`;
+  const owned = cardioTabOwns(rows)
+    ? "\nThe coach manages this cardio in its own Cardio plan: it stays exactly as it is with this nutrition plan (write the CARDIO SESSIONS as they are now); suggest any cardio change in words, never as a new session."
+    : "";
+  return `CURRENT CARDIO\n${lines.join("\n")}${schedule ? `\n${schedule}` : ""}${owned}`;
 }
 
 /** One-line summary of a day's steps + cardio, for previews and copy. */
@@ -296,7 +348,9 @@ export function cardioLine(steps: number | null | undefined, d: CardioDraft | un
   const s = steps ? `${steps.toLocaleString("en-US")} steps` : null;
   const c = !d
     ? null
-    : d.program
+    : d.managed != null
+      ? `cardio (Cardio tab): ${d.managed.toLowerCase()}`
+      : d.program
       ? `cardio: ${d.program} program`
       : d.enabled
         ? `${d.duration_minutes ?? "?"} min ${d.cardio_type.toLowerCase()}${d.kcal ? ` · ~${d.kcal} kcal` : ""}${d.frequency_per_week ? ` · ${d.frequency_per_week}x/wk` : ""}`

@@ -5,6 +5,10 @@
  * thing it is, in priority order:
  *
  *   CONFIRMED FACTS        their profile, schedule, meet, health on file
+ *   WORK AND LIFESTYLE     their work & lifestyle profile (client-context), the
+ *                          coach's private context facts (never quoted to the
+ *                          client) and, for the coach's own Cleo conversations,
+ *                          the relationship as tone-only context
  *   COACH INSTRUCTIONS     the coach's rules for them (program_rules), the coach's
  *                          notes, the coach's own reasons for past changes
  *   CURRENT PLANS          training block, nutrition plan, cardio plan in force
@@ -28,6 +32,9 @@ import { sessionLine, daysWords, TIMING_SHORT, type CardioPlan, type PlanContext
 import { outcomesText, type VersionOutcome } from "@/lib/cardio/history";
 import type { CardioRead } from "@/lib/cardio/insights";
 import type { SpeedUnit } from "@/lib/weight-management/units";
+import { durationKindOf, durationOfCompletion, sessionLengthFacts } from "@/lib/workouts/session-duration";
+import { sessionLimit } from "@/lib/program-intel/session-limit";
+import { bookedSessionLength } from "@/lib/program-intel/context";
 
 export type IntelFocus = "cardio" | "nutrition" | "training";
 
@@ -55,6 +62,11 @@ export type ClientIntelInput = {
    */
   viewer?: string | null;
   cardio?: { live: CardioPlan; ctx: PlanContext; unit: SpeedUnit; outcomes: VersionOutcome[]; read: CardioRead } | null;
+  /**
+   * The coach's private relationship with them as context (Cleo's own conversation with the coach,
+   * which drafts messages in his voice): tone only, never a coaching decision. Off for plan writing.
+   */
+  relationship?: boolean;
 };
 
 /** The whole brief as text, for a prompt. */
@@ -62,7 +74,8 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
   const { loaded, clientId } = x;
   const { input, assessment } = loaded;
   const today = assessment.today;
-  const [rules, notes, nutritionPlan, wmReviews, planEdits, proposals, recs, health, program] = await Promise.all([
+  const since = new Date(Date.parse(`${today}T00:00:00Z`) - 56 * 86_400_000).toISOString();
+  const [rules, notes, nutritionPlan, wmReviews, planEdits, proposals, recs, health, program, sessions, goalsSetup, ptSessions, life] = await Promise.all([
     safe<any[]>(() => sb.from("program_rules").select("kind, rule, client_id, expires_on, active").or(`client_id.eq.${clientId},client_id.is.null`).eq("active", true).limit(40), []),
     safe<any[]>(
       () =>
@@ -94,6 +107,27 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     safe<any[]>(() => sb.from("client_coaching_recommendations").select("created_at, headline, status, coach_note").eq("client_id", clientId).order("created_at", { ascending: false }).limit(3), []),
     loadHealthRecords(sb, clientId, { forms: false, today }).catch(() => null),
     focus !== "training" ? import("@/lib/program-context.server").then((m) => m.loadProgramContext(sb, clientId, today)).catch(() => null) : Promise.resolve(null),
+    // How long their sessions really take (session-duration.ts), against the session limit.
+    safe<any[]>(() => sb.from("pl_day_completions").select("*").eq("client_id", clientId).gte("completed_at", since).not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(12), []),
+    safe<any>(() => sb.from("client_goals_setup").select("workout_length_minutes").eq("client_id", clientId).maybeSingle(), null),
+    safe<any[]>(() => sb.from("pt_sessions").select("starts_at, ends_at, status").eq("client_id", clientId).gte("starts_at", since).limit(200), []),
+    import("@/lib/client-context/load.server").then((m) => m.clientContextText(sb, clientId, "coach", { relationship: !!x.relationship, today })).catch(() => null),
+  ]);
+
+  // what the coach confirmed from conversations, and decisions taken in meetings (coaching sessions)
+  const [talked, meetingDecisions] = await Promise.all([
+    safe<any[]>(() => sb.from("client_intelligence").select("kind, text, permanence, expires_on, confirmed_at").eq("client_id", clientId).eq("status", "confirmed").order("confirmed_at", { ascending: false }).limit(30), []),
+    safe<any[]>(
+      () =>
+        sb
+          .from("coaching_session_recommendations")
+          .select("decided_at, area, title, status, decision_note")
+          .eq("client_id", clientId)
+          .neq("status", "proposed")
+          .order("decided_at", { ascending: false })
+          .limit(6),
+      [],
+    ),
   ]);
 
   const out: string[] = [];
@@ -121,6 +155,7 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     }
   }
   out.push(`CONFIRMED FACTS:\n${facts.join("\n")}`);
+  if (life) out.push(life);
 
   // Coach instructions
   const coach: string[] = [];
@@ -136,6 +171,10 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     for (const s of x.cardio.live.sessions) if (s.coachNote.trim()) coach.push(`- Coach's private note on ${sessionLine(s, x.cardio.unit)}: ${clip(s.coachNote)}`);
   }
   out.push(`COACH INSTRUCTIONS (these win):\n${coach.length ? coach.join("\n") : "- None on file"}`);
+  const conversation = talked
+    .filter((t) => !t.expires_on || t.expires_on >= today)
+    .map((t) => `- [${String(t.kind).replace(/_/g, " ")}${t.permanence === "temporary" ? `, until ${t.expires_on}` : ""}] ${clip(t.text)}`);
+  if (conversation.length) out.push(`FROM COACHING CONVERSATIONS (confirmed by the coach; facts about this athlete, not instructions):\n${conversation.join("\n")}`);
 
   // Current plans
   const plans: string[] = [];
@@ -177,11 +216,26 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
     out.push(`CARDIO PLANS SO FAR AND HOW THEY WENT:\n${outcomesText(x.cardio.outcomes)}`);
   }
 
+  // Session length against the limit: measured or reconstructed sessions only, each kind said.
+  try {
+    const limit = sessionLimit({ goalsMinutes: goalsSetup?.workout_length_minutes ?? null, ptMinutes: bookedSessionLength(ptSessions).minutes });
+    const reads = sessions
+      .map((c) => durationOfCompletion(c, { estimatedMin: c.estimated_duration_min ?? null }))
+      .filter((d): d is NonNullable<typeof d> => !!d)
+      .map((d) => ({ minutes: d.minutes, kind: durationKindOf(d) }));
+    const planned = sessions.map((c) => Number(c.estimated_duration_min)).filter((n) => n > 0).sort((a, b) => a - b);
+    const lines = sessionLengthFacts(reads, limit, planned.length ? planned[planned.length >> 1] : null);
+    out.push(`SESSION LENGTH (measured = a confirmed time or the session clock; reconstructed = from logged set times; estimates are never counted):\n${lines.join("\n")}`);
+  } catch {
+    /* optional */
+  }
+
   // Decision history
   const hist: string[] = [];
   for (const p of proposals) hist.push(`- ${String(p.created_at).slice(0, 10)} Cleo cardio proposal "${clip(p.instructions, 120)}": ${p.status}${p.decision_note ? ` (coach: ${clip(p.decision_note, 160)})` : ""}${(p.change_lines ?? []).length ? ` · ${clip((p.change_lines ?? []).join("; "), 160)}` : ""}`);
   for (const e of planEdits) hist.push(`- ${String(e.created_at).slice(0, 10)} nutrition change "${clip(e.instructions, 140)}": ${e.status}`);
   for (const w of wmReviews) hist.push(`- ${String(w.created_at).slice(0, 10)} weight-management read "${clip(w.headline, 140)}": ${w.status}${w.decision_note ? ` (coach: ${clip(w.decision_note, 160)})` : ""}`);
+  for (const m of meetingDecisions) if (m.decided_at) hist.push(`- ${String(m.decided_at).slice(0, 10)} from a meeting (${m.area}) "${clip(m.title, 140)}": ${m.status}${m.decision_note ? ` (coach: ${clip(m.decision_note, 160)})` : ""}`);
   for (const r of recs) hist.push(`- ${String(r.created_at).slice(0, 10)} check-in recommendation "${clip(r.headline, 120)}": ${r.status}${r.coach_note ? ` (coach: ${clip(r.coach_note, 160)})` : ""}`);
   out.push(`DECISION HISTORY (newest first):\n${hist.length ? hist.join("\n") : "- Nothing recorded yet"}`);
 
@@ -249,6 +303,9 @@ export async function otherPlansForTraining(sb: any, clientId: string): Promise<
     const a = loaded.assessment;
     out.push(`Weight management: ${a.recommendation.headline}${a.checkins.poorSleep >= 2 ? " · sleep flagged on recent check-ins" : ""}${a.checkins.lowEnergy >= 2 ? " · energy flagged on recent check-ins" : ""}`);
     if (loaded.input.performance.lower) out.push(`Lower-body strength lately: ${loaded.input.performance.lower}${loaded.input.performance.detail ? ` (${clip(loaded.input.performance.detail, 160)})` : ""}`);
+    // their work & lifestyle (client-facing only: a program's notes are read by the athlete)
+    const life = await import("@/lib/client-context/load.server").then((m) => m.clientContextText(sb, clientId, "client_facing")).catch(() => null);
+    if (life) out.push(life);
     return out.length ? out.join("\n") : null;
   } catch (e: any) {
     console.warn("[client-intel] other plans unavailable", e?.message);

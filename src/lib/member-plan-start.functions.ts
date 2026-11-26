@@ -53,11 +53,17 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
 
     const { data: plan } = await supabaseAdmin
       .from("member_plans")
-      .select("id, name, public_title, source_template_id, status, membership_status, imports_count, days_per_week")
+      .select("id, name, public_title, source_template_id, status, membership_status, imports_count, days_per_week, required_access_level, audience_mode")
       .eq("id", data.planId)
       .maybeSingle();
     const p = plan as any;
     if (!p || p.status !== "Published" || p.membership_status !== "live" || !p.source_template_id) {
+      throw new Error("This plan isn't available right now.");
+    }
+    // the iPhone app: a self-serve member starts only what a free account can (option B, native-purchases.ts)
+    const { planOpenToFree } = await import("@/lib/native-purchases");
+    const { digitalPaidAllowedFor } = await import("@/lib/native-purchases.server");
+    if (!planOpenToFree(p) && !(await digitalPaidAllowedFor(userId))) {
       throw new Error("This plan isn't available right now.");
     }
 

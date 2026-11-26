@@ -43,8 +43,12 @@ export class FakeDb {
   violates(table: string, row: Row, selfId?: string): string | null {
     const others = this.rows(table).filter((r) => r.id !== selfId);
     if (table === "plan_changes" && OPEN.has(row.status) && others.some((r) => r.client_id === row.client_id && OPEN.has(r.status))) return "plan_changes_one_open";
+    if (table === "plan_changes" && row.status === "offered" && others.some((r) => r.client_id === row.client_id && r.status === "offered")) return "plan_changes_one_offer";
+    if (table === "plan_changes" && row.status === "requested" && row.kind === "reactivate" && others.some((r) => r.client_id === row.client_id && r.status === "requested" && r.kind === "reactivate")) return "plan_changes_one_reactivation";
+    if (table === "coaching_purchase_approvals" && !row.used_at && !row.revoked_at && others.some((r) => r.client_id === row.client_id && !r.used_at && !r.revoked_at)) return "coaching_purchase_approvals_one_live";
     if (table === "coaching_package_enrollments" && row.status === "active" && others.some((r) => r.client_id === row.client_id && r.status === "active")) return "coaching_package_enrollments_one_active";
     if (table === "app_members" && row.user_id && others.some((r) => r.user_id === row.user_id)) return "app_members_user_id_key";
+    if (table === "client_crm_activities" && row.dedupe_key && others.some((r) => r.dedupe_key === row.dedupe_key)) return "uq_client_crm_activities_dedupe";
     return null;
   }
 
@@ -108,6 +112,8 @@ class FakeQuery implements PromiseLike<any> {
   not(c: string, op: string, v: any) { if (op === "is" && v === null) this.filters.push((r) => r[c] != null); return this; }
   gte(c: string, v: any) { this.filters.push((r) => r[c] != null && String(r[c]) >= String(v)); return this; }
   lte(c: string, v: any) { this.filters.push((r) => r[c] != null && String(r[c]) <= String(v)); return this; }
+  gt(c: string, v: any) { this.filters.push((r) => r[c] != null && String(r[c]) > String(v)); return this; }
+  lt(c: string, v: any) { this.filters.push((r) => r[c] != null && String(r[c]) < String(v)); return this; }
   ilike(c: string, v: any) { this.filters.push((r) => String(r[c] ?? "").toLowerCase() === String(v).toLowerCase()); return this; }
   contains(c: string, v: any) { const want = typeof v === "string" ? JSON.parse(v) : v; this.filters.push((r) => subset(r[c], want)); return this; }
   order(col: string, o: { ascending?: boolean } = {}) { this.orders.push({ col, asc: o.ascending !== false }); return this; }

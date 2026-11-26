@@ -87,6 +87,10 @@ export function useSetVideoAnalyses(setVideoIds: string[], opts: { enabled?: boo
         "lift-analyses-lv",
         "lift-analyses-by-result",
         "lift-analysis-set",
+        "lift-velocity-history",
+        "pl-results",
+        "exercise-history",
+        "program-intel",
       ])
         void qc.invalidateQueries({ queryKey: [key] });
     };
@@ -123,20 +127,24 @@ export function useSetForVideo(setVideoId: string | null | undefined, enabled = 
   });
 }
 
-export async function saveAnalysis(setVideoId: string, analysis: LiftAnalysis): Promise<void> {
-  const { error } = await db.rpc("set_video_analysis_save", {
-    _set_video_id: setVideoId,
+type CommitOptions = { lease?: string | null; computeMs?: number; expected?: string | null };
+export async function saveAnalysis(setVideoId: string, analysis: LiftAnalysis, opts: CommitOptions = {}): Promise<void> {
+  const { data, error } = await db.rpc("velocity_analysis_commit", {
+    _video: setVideoId,
     _result: analysis,
+    _lease: opts.lease ?? null, _expected: opts.expected ?? null, _compute_ms: opts.computeMs ?? null,
   });
   if (error) throw error;
+  if (!data) throw new Error("A newer read was kept. Open it again.");
   announceChanged(setVideoId);
 }
 
 /** Keep that this video was tried and how it went, so it isn't read again by itself. */
-export async function saveNotRead(setVideoId: string, notRead: NotRead): Promise<void> {
-  const { error } = await db.rpc("set_video_analysis_save", {
-    _set_video_id: setVideoId,
+export async function saveNotRead(setVideoId: string, notRead: NotRead, opts: CommitOptions = {}): Promise<void> {
+  const { error } = await db.rpc("velocity_analysis_commit", {
+    _video: setVideoId,
     _result: notRead,
+    _lease: opts.lease ?? null, _expected: opts.expected ?? null, _compute_ms: opts.computeMs ?? null,
   });
   if (error) throw error;
   announceChanged(setVideoId);
@@ -180,24 +188,26 @@ export function useLoadVelocityPoints(
       const { data, error } = await db
         .from("pl_set_video_analyses")
         .select(
-          "set_video_id, best_mcv, best_mcv_tier, best_u:result->set->bestMcv->>u, created_at, logged:result_id(actual_load_kg, actual_reps, actual_rpe_num, completed_at, is_bodyweight)",
+          "set_video_id, set_mcv, best_mcv_tier, best_u:result->velocity->>uncertainty, created_at, logged:result_id(actual_load_kg, actual_reps, actual_rpe_num, completed_at, is_bodyweight,velocity_set_video_id,velocity_excluded,mean_concentric_velocity_mps,velocity_quality)",
         )
         .eq("client_id", clientId)
         .eq("exercise_id", exerciseId)
-        .not("best_mcv", "is", null)
+        .eq("velocity_accepted", true).eq("excluded",false)
+        .not("set_mcv", "is", null)
         .order("created_at", { ascending: true })
         .limit(200);
       if (error) throw error;
       const out: LvPoint[] = [];
       for (const r of (data ?? []) as any[]) {
         const kg = Number(r.logged?.actual_load_kg);
+        if (r.logged?.velocity_excluded || r.logged?.velocity_set_video_id !== r.set_video_id) continue;
         if (!(kg > 0) || r.logged?.is_bodyweight) continue;
         out.push({
           id: r.set_video_id,
           kg,
-          v: Number(r.best_mcv),
+          v: Number(r.logged.mean_concentric_velocity_mps),
           u: r.best_u != null ? Number(r.best_u) : null,
-          tier: r.best_mcv_tier === "measured" ? "measured" : "estimated",
+          tier: r.logged.velocity_quality === "estimated" ? "estimated" : "measured",
           at: r.logged?.completed_at ?? r.created_at,
           reps: r.logged?.actual_reps ?? null,
           rpe: r.logged?.actual_rpe_num ?? null,
@@ -228,7 +238,7 @@ export function useVideoSpeedsByResult(
     queryFn: async (): Promise<Record<string, VideoSpeed>> => {
       const { data, error } = await db
         .from("pl_set_video_analyses")
-        .select("result_id, set_mcv, reps")
+        .select("set_video_id,result_id, set_mcv, reps,logged:result_id(velocity_set_video_id,velocity_excluded)")
         .eq("client_id", clientId)
         .in("exercise_id", ids)
         .eq("velocity_accepted", true)
@@ -237,8 +247,10 @@ export function useVideoSpeedsByResult(
         .limit(1000);
       if (error) throw error;
       const out: Record<string, VideoSpeed> = {};
-      for (const r of (data ?? []) as any[])
+      for (const r of (data ?? []) as any[]) {
+        if (r.logged?.velocity_excluded || r.logged?.velocity_set_video_id !== r.set_video_id) continue;
         out[r.result_id] = { v: Number(r.set_mcv), reps: Number(r.reps) };
+      }
       return out;
     },
   });
@@ -263,11 +275,12 @@ export function useVelocityHistory(
       const { data, error } = await db
         .from("pl_set_video_analyses")
         .select(
-          "set_video_id, set_mcv, reps, created_at, sv:set_video_id(day_id), logged:result_id(actual_load_kg, actual_reps, completed_at, is_bodyweight)",
+          "set_video_id, set_mcv, reps, created_at, sv:set_video_id(day_id), logged:result_id(actual_load_kg, actual_reps, completed_at, is_bodyweight,velocity_set_video_id,velocity_excluded,velocity_quality,mean_concentric_velocity_mps)",
         )
         .eq("client_id", clientId)
         .eq("exercise_id", exerciseId)
         .eq("velocity_accepted", true)
+        .eq("excluded", false)
         .not("set_mcv", "is", null)
         .order("created_at", { ascending: false })
         .limit(300);
@@ -275,6 +288,10 @@ export function useVelocityHistory(
       const out: { id: string; sample: VelocitySample }[] = [];
       for (const r of (data ?? []) as any[]) {
         const kg = Number(r.logged?.actual_load_kg);
+        // the speed that's on the set (a measurement or an estimate since Nov 25 2026: most reads are
+        // estimates now, and leaving them out would leave most athletes with no model); never one
+        // flagged inaccurate or left out of analytics
+        if (r.logged?.velocity_excluded || r.logged?.velocity_set_video_id !== r.set_video_id) continue;
         const reps = Number(r.logged?.actual_reps ?? r.reps);
         if (!(kg > 0) || r.logged?.is_bodyweight || !(reps >= 1)) continue;
         const at = r.logged?.completed_at ?? r.created_at;
@@ -283,7 +300,7 @@ export function useVelocityHistory(
           sample: {
             loadKg: kg,
             reps,
-            mcv: Number(r.set_mcv),
+            mcv: Number(r.logged?.mean_concentric_velocity_mps ?? r.set_mcv),
             at,
             session: r.sv?.day_id ?? at.slice(0, 10),
           },

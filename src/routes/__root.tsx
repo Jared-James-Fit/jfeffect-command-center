@@ -9,11 +9,12 @@ import {
   QUERY_PERSIST_MAX_AGE,
   shouldPersistQuery,
 } from "@/lib/query-persister";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { PortraitLock } from "@/components/portrait-only";
 import { AppPulse } from "@/components/app-pulse";
 import { PHONE_BOOT_SCRIPT } from "@/lib/portrait-only";
 import { LAUNCH_BOOT_SCRIPT } from "@/lib/landing-launch";
+import { NATIVE_SHELL_BOOT_SCRIPT, setShellStaff, shellRedirect } from "@/lib/native-purchases";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { saveLastRoute } from "@/lib/route-persistence";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
@@ -24,6 +25,7 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  redirect,
   useRouter,
   useLocation,
   HeadContent,
@@ -40,7 +42,6 @@ import "@/hooks/use-pwa-install";
 import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { initNativeShell, syncNativeChrome } from "@/platform/native-init";
 import { initChunkRecovery } from "@/lib/chunk-recovery";
-import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
 import { useAppFreshness } from "@/hooks/use-app-freshness";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // Side-effect import: registers durable-queue handlers for cross-feature
@@ -54,6 +55,10 @@ import { SITE_NAME, shareImageMeta, shareMeta } from "@/lib/share-meta";
 // wait on the main thread (Nov 23 2026).
 
 function NotFoundComponent() {
+  // counted for the admin's Analytics (Technical → pages not found); the path only, ids taken out
+  useEffect(() => {
+    void import("@/lib/app-pulse/telemetry").then((m) => m.recordNotFound()).catch(() => null);
+  }, []);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -236,6 +241,14 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // The iPhone app never opens a sales, pricing, checkout or billing page (native-purchases.ts);
+  // on the web and on the server this does nothing.
+  beforeLoad: ({ location }) => {
+    const to = shellRedirect(location.pathname);
+    if (to) throw redirect({ to: "/", replace: true });
+    // the root adds nothing to the route context
+    return undefined as never;
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -322,6 +335,25 @@ function RouteTracker() {
   return null;
 }
 
+/**
+ * The iPhone app's purchase guard, after hydration (native-purchases.ts): staff keep
+ * their payment tools, and a blocked page the server rendered (a cold open) goes to "/".
+ * Renders nothing.
+ */
+function ShellPurchaseGuard() {
+  const { accountRole, loading } = useAuth();
+  const location = useLocation();
+  const router = useRouter();
+  useEffect(() => {
+    if (!loading) setShellStaff(accountRole);
+  }, [accountRole, loading]);
+  useEffect(() => {
+    const to = shellRedirect(location.pathname);
+    if (to) void router.navigate({ to: "/", replace: true });
+  }, [location.pathname, router]);
+  return null;
+}
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -334,6 +366,8 @@ function RootShell({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: PHONE_BOOT_SCRIPT }} />
         {/* "/": the app launch for anyone signed in or in the installed app, the landing page for everyone else (landing-launch.ts). */}
         <script dangerouslySetInnerHTML={{ __html: LAUNCH_BOOT_SCRIPT }} />
+        {/* The iPhone app: <html data-native-shell> (hides data-web-only), and no blocked page opened cold (native-purchases.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: NATIVE_SHELL_BOOT_SCRIPT }} />
         <HeadContent />
         {/* The status bar takes the theme's colour from the first frame (the tags above exist now). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SCRIPT }} />
@@ -360,7 +394,7 @@ function RootComponent() {
   useEffect(() => {
     void syncNativeChrome(paintedTheme);
   }, [paintedTheme]);
-  // Reopening the app picks up a newly published version (the iPhone shell has no service worker to do it).
+  // Reopening the app picks up a newly published version quietly, never with a prompt (app-freshness.ts).
   useAppFreshness();
 
   useEffect(() => {
@@ -385,12 +419,12 @@ function RootComponent() {
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
             <RouteTracker />
+            <ShellPurchaseGuard />
             <AppPulse />
-            <Toaster position="top-right" theme={toastTheme} richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px", left: "16px" }} />
+            <Toaster theme={toastTheme} offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", left: "16px", right: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />
-            <PwaUpdateToast />
             {/* Single global media viewer — portalled above every overlay. */}
             <MediaViewerRoot />
             {/* Holds a phone upright where the platform allows; elsewhere it turns and keeps the phone layout (portrait-only.ts) */}

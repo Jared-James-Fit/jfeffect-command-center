@@ -324,6 +324,7 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
     if (status === "received" && !row.is_test) {
       await m.pushNewApplication(sb, { id, full_name: clean.full_name, goal: clean.goal });
     }
+    // the application is saved: a mail problem never turns that into an error (they'd send it again)
     await m.sendReceivedEmail(
       sb,
       {
@@ -334,7 +335,7 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
         coaching_interest: clean.coaching_interest,
       },
       bookingUrl,
-    );
+    ).catch((e: any) => console.warn("[member-apply] confirmation email failed", e?.message));
 
     return {
       ok: true,
@@ -600,7 +601,46 @@ export const activateMembership = createServerFn({ method: "POST" })
 /* Admin                                                               */
 /* ------------------------------------------------------------------ */
 
-export type MemberApplicationsList = { applications: MemberApplication[] };
+export type MemberApplicationsList = {
+  applications: MemberApplication[];
+  /** What each applicant's athlete record says (lifecycle.ts), by application id. */
+  facts: Record<string, import("@/lib/applications/lifecycle").ApplicantFacts>;
+};
+
+/** The athlete-side facts for each application that has a client record: setup, program, training. */
+async function applicantFacts(sb: any, apps: MemberApplication[]) {
+  const { setupMissing } = await import("@/lib/member-setup-steps");
+  const ids = [...new Set(apps.map((a) => a.client_id).filter(Boolean))] as string[];
+  const out: MemberApplicationsList["facts"] = {};
+  if (!ids.length) return out;
+  const [{ data: clients }, { data: done }, { data: blocks }] = await Promise.all([
+    sb.from("clients").select("id, user_id, archived").in("id", ids),
+    sb.from("pl_day_completions").select("client_id, completed_at").in("client_id", ids).order("completed_at", { ascending: false }).limit(2000),
+    sb.from("pl_blocks").select("client_id").in("client_id", ids).limit(2000),
+  ]);
+  const userIds = ((clients ?? []) as any[]).map((c) => c.user_id).filter(Boolean);
+  const { data: members } = userIds.length
+    ? await sb.from("app_members").select("*").in("user_id", userIds)
+    : { data: [] };
+  const memberByUser = new Map(((members ?? []) as any[]).map((m) => [m.user_id, m]));
+  const lastDone = new Map<string, string>();
+  for (const d of (done ?? []) as any[]) if (!lastDone.has(d.client_id)) lastDone.set(d.client_id, d.completed_at);
+  const withProgram = new Set(((blocks ?? []) as any[]).map((b) => b.client_id));
+  const clientById = new Map(((clients ?? []) as any[]).map((c) => [c.id, c]));
+  for (const a of apps) {
+    const c = a.client_id ? clientById.get(a.client_id) : null;
+    if (!c) continue;
+    const m = c.user_id ? memberByUser.get(c.user_id) : null;
+    out[a.id] = {
+      clientId: c.id,
+      setupComplete: m ? setupMissing(m).length === 0 : null,
+      programStarted: withProgram.has(c.id),
+      lastTrainedAt: lastDone.get(c.id) ?? null,
+      clientArchived: !!c.archived,
+    };
+  }
+  return out;
+}
 
 export const listMemberApplications = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -608,14 +648,36 @@ export const listMemberApplications = createServerFn({ method: "GET" })
     await assertAdminView(context as any);
     const { admin, APPLICATION_COLUMNS } = await import("@/lib/membership-applications.server");
     const sb = await admin();
-    const { data, error } = await sb
+    const read = (cols: string) => sb
       .from("membership_applications")
-      .select(APPLICATION_COLUMNS)
+      .select(cols)
       .eq("is_test", false)
       .order("created_at", { ascending: false })
       .limit(300);
+    let { data, error } = await read(APPLICATION_COLUMNS);
+    // before 20270527106200 is applied: the list still loads, without Archive
+    if (error && /archived_at/.test(error.message)) ({ data, error } = await read(APPLICATION_COLUMNS.replace(", archived_at", "")));
     if (error) throw new Error(error.message);
-    return { applications: (data ?? []) as MemberApplication[] };
+    const applications = (data ?? []) as MemberApplication[];
+    const facts = await applicantFacts(sb, applications).catch((e) => {
+      console.warn("[applications] facts failed", e?.message);
+      return {} as MemberApplicationsList["facts"];
+    });
+    return { applications, facts };
+  });
+
+/** Archive an applicant (kept, out of the lists) or bring them back. */
+export const archiveMemberApplication = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ id: z.string().uuid(), archived: z.boolean() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { admin } = await import("@/lib/membership-applications.server");
+    const sb = await admin();
+    const { error } = await sb.from("membership_applications")
+      .update({ archived_at: data.archived ? new Date().toISOString() : null }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const updateMemberApplication = createServerFn({ method: "POST" })

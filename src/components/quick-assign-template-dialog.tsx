@@ -205,7 +205,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
           successToast: "Template assigned",
           successAction: {
             label: "Open client",
-            onClick: () => navigate({ to: "/admin/client-programs/$clientId", params: { clientId } }),
+            onClick: () => navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any }),
           },
         },
         async (job) => {
@@ -229,7 +229,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
       onOpenChange(false);
       setTemplateId("");
       setEndDate("");
-      navigate({ to: "/admin/client-programs/$clientId", params: { clientId } });
+      navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any });
     } catch (e: any) {
       // runJob already surfaced the error toast + drawer entry with Retry.
     } finally {

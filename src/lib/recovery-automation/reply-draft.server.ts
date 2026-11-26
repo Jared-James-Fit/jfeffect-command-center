@@ -74,6 +74,9 @@ const parse = (text: string) => {
 };
 
 export async function writeCoachReply(sb: any, input: ReplyInput): Promise<ReplyDraft> {
+  // the client's report and records go to OpenAI only with their permission (5.1.2(i)): refused,
+  // the item fails with words for the coach, who writes this one by hand
+  await (await import("@/lib/ai-consent/consent.server")).requireClientAiConsent(input.clientId);
   const { data: client } = await sb.from("clients").select("id, full_name, preferred_name").eq("id", input.clientId).maybeSingle();
   if (!client) throw new Error("Client not found.");
   const first = (client.preferred_name || client.full_name || "").trim().split(/\s+/)[0] || "them";

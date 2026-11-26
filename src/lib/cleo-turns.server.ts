@@ -322,7 +322,8 @@ async function clientBrief(own: Db, userId: string, clientId: string, section: C
   const work = (async () => {
     const [{ loadWeightManagement }, { clientIntelText }] = await Promise.all([import("@/lib/weight-management/load.server"), import("@/lib/client-intel/brief.server")]);
     const loaded = await loadWeightManagement(sb, clientId);
-    return clientIntelText(sb, { clientId, loaded }, focus);
+    // the coach's own conversation (Cleo drafts in his voice here): the relationship as tone-only context
+    return clientIntelText(sb, { clientId, loaded, relationship: true }, focus);
   })();
   const text = await Promise.race([work, new Promise<null>((r) => setTimeout(() => r(null), 8_000))]).catch(() => null);
   if (text) {
@@ -536,6 +537,16 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
   if (!chat) {
     await fail("That conversation is gone.");
     return { ok: false, status: "failed", reason: "no chat" };
+  }
+  // A client's conversation sends their records to OpenAI: only with their permission (5.1.2(i),
+  // src/lib/ai-consent). Refused, the answer says why and nothing reaches the model.
+  if (chat.client_id) {
+    const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
+    const consent = await clientAllowsAi(chat.client_id);
+    if (!consent.ok) {
+      await fail(coachConsentMessage(consent.name));
+      return { ok: false, status: "failed", reason: "no AI consent" };
+    }
   }
   let questionRow: ChatMessage | null = null;
   if (row.reply_to) {

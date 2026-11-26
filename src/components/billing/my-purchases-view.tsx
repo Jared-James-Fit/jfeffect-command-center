@@ -22,6 +22,7 @@ import type { Installment } from "@/lib/payment-schedule";
 import type { MyAction, MyOpen, MyPackage, MyPast, MyPayment, MyPlan, MySessionEntry, MySummary, Tone } from "@/lib/my-purchases";
 import { cn } from "@/lib/utils";
 import type { MyBillingView } from "@/components/billing/use-my-billing";
+import { goToPayment } from "@/lib/native-purchases";
 
 type Money = (cents: number) => string;
 
@@ -160,7 +161,16 @@ function ActionCard({ a, money, primary }: { a: MyAction; money: Money; primary:
 }
 
 /** Stripe's own page for their card and invoices (never in a coach's preview: it would open the coach's). */
-export function UpdateCardButton({ label = "Update card", variant = "default" }: { label?: string; variant?: "default" | "outline" }) {
+export function UpdateCardButton({
+  label = "Update card",
+  variant = "default",
+  returnPath = "/portal/purchases",
+}: {
+  label?: string;
+  variant?: "default" | "outline";
+  /** Where Stripe's page sends them back. */
+  returnPath?: string;
+}) {
   const portalFn = useServerFn(createCustomerPortalSession);
   const { client } = useClientImpersonation();
   const [busy, setBusy] = useState(false);
@@ -171,8 +181,8 @@ export function UpdateCardButton({ label = "Update card", variant = "default" }:
     }
     setBusy(true);
     try {
-      const { url } = await portalFn({ data: { origin: window.location.origin } });
-      window.location.assign(url);
+      const { url } = await portalFn({ data: { origin: window.location.origin, returnPath } });
+      goToPayment(url);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open your card details");
     } finally {

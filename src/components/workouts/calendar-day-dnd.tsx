@@ -176,7 +176,9 @@ export function CalendarDayCell({
 
   const props: Record<string, unknown> = {
     ...(canDrag ? drag.listeners : {}),
-    ...drag.attributes,
+    // Only a draggable day carries the drag's attributes: a done or past day's button
+    // must not read as aria-disabled ("dimmed" to a screen reader) when a tap still picks it.
+    ...(canDrag ? drag.attributes : {}),
     // A completed drag must never also click/open the card.
     onClickCapture: (e: React.MouseEvent) => {
       const last = ctx?.suppressClickRef.current ?? 0;

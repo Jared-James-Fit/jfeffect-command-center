@@ -64,7 +64,7 @@ import {
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import { DEFAULT_PLATE, STANDARD_PLATE_MM } from "@/lib/lift-analysis/calibrate";
-import { guideLift, repDirection } from "@/lib/lift-analysis/exercise";
+import { guideLift, movementOf, repDirection } from "@/lib/lift-analysis/exercise";
 import { FOOTAGE_WORDS, type FootageIssue } from "@/lib/lift-analysis/footage";
 import {
   cm,
@@ -113,6 +113,7 @@ import { queueLiftReread } from "@/lib/lift-analysis/auto";
 import { ENGINE_VERSION } from "@/lib/lift-analysis/analyze";
 import { canEditReps, toggleRep } from "@/lib/lift-analysis/reps-edit";
 import { cn } from "@/lib/utils";
+import { VelocityControls } from "./velocity-controls";
 
 type Props = {
   open: boolean;
@@ -331,6 +332,7 @@ function Body({
       corrections: extra,
       plate: plateFor(knownPlate),
       dirHint,
+      movement: movementOf(exerciseName),
       // read again from the same keys: what the athlete took out of the reps stays out
       exclude: seed.kind === "keys" ? analysis?.exclude : undefined,
       signal: c.signal,
@@ -343,7 +345,7 @@ function Body({
       setCorrections([]);
       setStep("results");
       try {
-        await saveAnalysis(setVideoId, res.analysis);
+        await saveAnalysis(setVideoId, res.analysis, { expected: stored?.updated_at ?? null });
       } catch (e) {
         toast.error(e instanceof Error && e.message ? e.message : "Couldn't save the analysis.");
       }
@@ -486,7 +488,7 @@ function Body({
     setFresh(next);
     setSelected(null);
     try {
-      await saveAnalysis(setVideoId, next);
+      await saveAnalysis(setVideoId, next, { expected: stored?.updated_at ?? null });
       toast.success(out ? "Taken out of the reps" : "Put back");
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : "Couldn't save that.");
@@ -649,6 +651,7 @@ function Body({
         ref={panel}
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3"
       >
+        {watching && !guide && <VelocityControls videoId={setVideoId} analysis={analysis} exerciseName={exerciseName} onCalibrate={()=>void detect()} />}
         {showModes && (
           <div
             className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-secondary p-1"
@@ -1386,11 +1389,14 @@ function SetAverage({
   return (
     <div data-set-average>
       <div className="text-[12px] text-muted-foreground">
-        {reps > 1 ? `Average velocity · all ${reps} reps` : "Mean velocity up"}
+        {a.velocity.metric === "peak"
+          ? reps > 1 ? `Average peak bar speed · all ${reps} reps` : "Peak bar speed"
+          : reps > 1 ? `Average velocity · all ${reps} reps` : "Mean velocity up"}
       </div>
       <div className="text-[32px] font-semibold leading-tight tabular-nums" data-headline-speed>
-        {a.velocity.value!.toFixed(2)} m/s
+        {a.velocity.tier === "estimated" ? "≈" : ""}{a.velocity.value?.toFixed(2)} m/s
       </div>
+      {a.velocity.uncertainty != null && <p className="text-xs text-muted-foreground">±{a.velocity.uncertainty.toFixed(2)} m/s · {a.velocity.tier === "estimated" ? "estimate" : "measurement"}</p>}
       <p
         className="text-xs text-muted-foreground"
         data-logged-state={state.logged ? "logged" : state.why}

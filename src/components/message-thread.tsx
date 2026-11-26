@@ -7,7 +7,7 @@ import React, { createContext, Fragment, useCallback, useContext, useEffect, use
 import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { SessionChangeCard } from "@/components/schedule/session-change-card";
 import { SessionBookedCard } from "@/components/schedule/session-booked-card";
-import { getMicStream } from "@/lib/audio-session";
+import { SessionConfirmCard } from "@/components/schedule/session-confirm-card";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -37,6 +37,8 @@ import { PaymentRequestCard } from "@/components/payment-request-card";
 import { AutoPaySetupCard } from "@/components/billing/auto-pay-setup-card";
 import { NutritionPlanChatCard } from "@/components/messages/nutrition-plan-chat-card";
 import { CardioPlanChatCard } from "@/components/messages/cardio-plan-chat-card";
+import { AutopilotUpdateChatCard } from "@/components/messages/autopilot-update-chat-card";
+import { CompetitionUpdateChatCard, type CompetitionUpdateAttachment } from "@/components/messages/competition-update-chat-card";
 import type { CardioMessageAttachment } from "@/lib/cardio/plan-message";
 import type { PlanMessageAttachment } from "@/lib/nutrition-targets/plan-message";
 import {
@@ -61,7 +63,9 @@ import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
-import { prepareChatFiles, renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
+import { prepareChatFiles, renderBodyWithMeet, uploadChatAttachment, useVoiceRecorder, type RecordedVoiceTake } from "@/components/chat-shared";
+import { VoiceRecordingBar } from "@/components/voice/voice-recorder";
+import { micErrorMessage } from "@/lib/voice/voice-meter";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import { CommunityPostChatCard, PostReplyText, postReplyCard, type PostCardAttachment } from "@/components/community/post-chat-card";
 import { WorkoutNoteCard } from "@/components/messages/workout-note-card";
@@ -575,6 +579,9 @@ function AttachmentView({
   if (att.kind === "session_booked" && att.session_ids?.length) {
     return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} bookedByClient={att.booked_by === "client"} />;
   }
+  if (att.kind === "session_confirm" && att.pt_session_id) {
+    return <SessionConfirmCard ptSessionId={att.pt_session_id} staff={role !== "client"} clientId={clientId} askConfirm={att.ask_confirm !== false} />;
+  }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;
   }
@@ -626,6 +633,12 @@ function AttachmentView({
       </p>
     );
   }
+  if ((att as any).kind === "competition_update") {
+    return <CompetitionUpdateChatCard att={att as unknown as CompetitionUpdateAttachment} staff={role !== "client"} clientId={clientId} />;
+  }
+  if ((att as any).kind === "autopilot_update") {
+    return <AutopilotUpdateChatCard att={att as any} staff={role !== "client"} clientId={clientId} />;
+  }
   if ((att as any).kind === "cardio_plan") {
     return <CardioPlanChatCard att={att as unknown as CardioMessageAttachment} staff={role !== "client"} clientId={clientId} />;
   }
@@ -666,190 +679,6 @@ function AttachmentView({
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
   return <LinkAttachment att={att} mine={mine} />;
-}
-
-/* ------------------------------- Voice Recorder ------------------------------- */
-
-function useVoiceRecorder() {
-  const mediaRef = useRef<MediaRecorder | null>(null);
-  const restoreSessionRef = useRef<(() => void) | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const startedAtRef = useRef<number>(0);
-  const tickRef = useRef<number | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const liveLevelsRef = useRef<number[]>([]);
-  const accumulatedPeaksRef = useRef<number[]>([]);
-  const sinceLastPeakRef = useRef<number>(0);
-
-  const [recording, setRecording] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [liveLevels, setLiveLevels] = useState<number[]>([]);
-
-  const LIVE_BAR_COUNT = 40;
-
-  const teardownAudioGraph = () => {
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    analyserRef.current?.disconnect();
-    analyserRef.current = null;
-    audioCtxRef.current?.close().catch(() => {});
-    audioCtxRef.current = null;
-  };
-
-  const start = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
-    // iOS: app sounds leave the audio session unable to record; switch it for
-    // the capture and put it back afterwards.
-    const { stream, restore } = await getMicStream(true);
-    restoreSessionRef.current = restore;
-    const isiOSWebKit = /iP(?:hone|ad|od)/.test(navigator.userAgent)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const mimeCandidates = isiOSWebKit
-      ? ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"]
-      : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4"];
-    const mime = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
-    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    chunksRef.current = [];
-    mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    mr.start();
-    mediaRef.current = mr;
-    startedAtRef.current = Date.now();
-    setRecording(true);
-    setElapsed(0);
-    liveLevelsRef.current = [];
-    accumulatedPeaksRef.current = [];
-    sinceLastPeakRef.current = Date.now();
-    setLiveLevels([]);
-
-    // Web Audio analyser for live levels
-    try {
-      const ACtx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new ACtx();
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyser;
-      const buf = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteTimeDomainData(buf);
-        // RMS
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) {
-          const v = (buf[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / buf.length);
-        const level = Math.min(1, Math.max(0.05, rms * 2.8));
-        const next = [...liveLevelsRef.current, level].slice(-LIVE_BAR_COUNT);
-        liveLevelsRef.current = next;
-        // Accumulate peaks for saved waveform every ~80ms
-        if (Date.now() - sinceLastPeakRef.current > 80) {
-          accumulatedPeaksRef.current.push(level);
-          sinceLastPeakRef.current = Date.now();
-        }
-        setLiveLevels(next);
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    } catch (e) {
-      // analyser optional; recording still works
-      console.warn("analyser unavailable", e);
-    }
-
-    tickRef.current = window.setInterval(
-      () => setElapsed((Date.now() - startedAtRef.current) / 1000),
-      200,
-    );
-  };
-
-  const stop = async (): Promise<{ blob: Blob; duration: number; peaks: number[] } | null> => {
-    const mr = mediaRef.current;
-    if (!mr) return null;
-    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-    const duration = (Date.now() - startedAtRef.current) / 1000;
-    const done = new Promise<Blob>((resolve) => {
-      mr.onstop = () => resolve(new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" }));
-    });
-    mr.stop();
-    mr.stream.getTracks().forEach((t) => t.stop());
-    restoreSessionRef.current?.();
-    restoreSessionRef.current = null;
-    mediaRef.current = null;
-    setRecording(false);
-    const blob = await done;
-    // downsample accumulated peaks to ~48 bars
-    const raw = accumulatedPeaksRef.current;
-    const targetCount = 48;
-    const peaks: number[] = [];
-    if (raw.length > 0) {
-      const step = raw.length / targetCount;
-      for (let i = 0; i < targetCount; i++) {
-        const a = Math.floor(i * step);
-        const b = Math.min(raw.length, Math.floor((i + 1) * step));
-        let max = 0;
-        for (let j = a; j < b; j++) if (raw[j] > max) max = raw[j];
-        peaks.push(Number(max.toFixed(3)));
-      }
-    }
-    teardownAudioGraph();
-    // Restore normal media playback routing after microphone capture on iOS.
-    try {
-      const audioSession = (navigator as any).audioSession;
-      if (audioSession && "type" in audioSession) audioSession.type = "playback";
-    } catch {}
-    return { blob, duration, peaks };
-  };
-
-  const cancel = () => {
-    const mr = mediaRef.current;
-    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-    if (mr) {
-      try { mr.stop(); } catch {}
-      mr.stream.getTracks().forEach((t) => t.stop());
-    }
-    restoreSessionRef.current?.();
-    restoreSessionRef.current = null;
-    mediaRef.current = null;
-    chunksRef.current = [];
-    accumulatedPeaksRef.current = [];
-    liveLevelsRef.current = [];
-    setLiveLevels([]);
-    teardownAudioGraph();
-    try {
-      const audioSession = (navigator as any).audioSession;
-      if (audioSession && "type" in audioSession) audioSession.type = "playback";
-    } catch {}
-    setRecording(false);
-    setElapsed(0);
-  };
-
-  return { recording, elapsed, liveLevels, start, stop, cancel };
-}
-
-function LiveWaveform({ levels }: { levels: number[] }) {
-  const BAR_COUNT = 48;
-  const padded = Array.from(
-    { length: BAR_COUNT },
-    (_, i) => levels[levels.length - BAR_COUNT + i] ?? 0,
-  );
-  return (
-    <div className="flex h-10 flex-1 items-center justify-center gap-[2px] overflow-hidden">
-      {padded.map((v, i) => {
-        const h = Math.max(10, Math.min(100, v * 130));
-        return (
-          <span
-            key={i}
-            className="w-[3px] flex-1 rounded-full bg-destructive shadow-[0_0_6px_rgba(239,68,68,0.45)] transition-[height,opacity] duration-100"
-            style={{ height: `${h}%`, opacity: v > 0.05 ? 1 : 0.35 }}
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 /** A message the chat was opened on (or a reply's source): highlighted for a moment. */
@@ -955,6 +784,13 @@ export function MessageThread({
     onClip: (f) => void onPickFiles([f]),
     onLibrary: () => photoInputRef.current?.click(),
   });
+  // the + menu's Camera: the app's own camera (a tap for a photo, a hold for a video), the shared capture layer's chat defaults
+  const chatCamera = useFilmCamera({
+    purpose: "chat",
+    maxSeconds: videoLimit("coach"),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   // Messages already sent from the composer but still waiting on their media.
   const [queuedUploadSends, setQueuedUploadSends] = useState(0);
   const [sending, setSending] = useState(false);
@@ -975,7 +811,9 @@ export function MessageThread({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const recorder = useVoiceRecorder();
+  // a take that ended by itself (the 5-minute cap, the app backgrounded, a call) still opens its preview
+  const showPreviewRef = useRef<(take: RecordedVoiceTake) => void>(() => {});
+  const recorder = useVoiceRecorder({ onAutoStop: (take) => showPreviewRef.current(take) });
   const transcribeFn = useServerFn(transcribeVoiceMessage);
   const ensureCheckinsFn = useServerFn(ensureDueMessengerCheckins);
   // Defer PWA updates while there's an in-flight composer draft. No unload prompt
@@ -1995,12 +1833,16 @@ export function MessageThread({
     );
   };
 
-  const stopForPreview = async () => {
-    const result = await recorder.stop();
-    if (!result) return;
+  const showPreview = (result: RecordedVoiceTake) => {
     if (result.duration < 0.5) { toast.message("Voice message too short"); return; }
     const url = URL.createObjectURL(result.blob);
     setPreview({ blob: result.blob, url, duration: result.duration, peaks: result.peaks });
+  };
+  showPreviewRef.current = showPreview;
+
+  const stopForPreview = async () => {
+    const result = await recorder.stop();
+    if (result) showPreview(result);
   };
 
   const discardPreview = () => {
@@ -2654,7 +2496,7 @@ export function MessageThread({
                   </>
                 ) : (
                   // A session request's (or workout note's) card says it all; its text is for inbox previews.
-                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || a?.kind === "workout_note" || formCardSaysIt(m.body, a)) && renderBodyWithMeet(m.body, mine)
+                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || (a?.kind === "session_confirm" && !m.attachments?.some((x: any) => x?.kind === "form_request")) || a?.kind === "workout_note" || formCardSaysIt(m.body, a)) && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.some((a) => a !== replyCard) && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
@@ -3057,6 +2899,7 @@ export function MessageThread({
         <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
         {trimmer.element}
         {filmCamera.element}
+        {chatCamera.element}
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" multiple className="hidden"
@@ -3067,17 +2910,14 @@ export function MessageThread({
           onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
         {recorder.recording ? (
-          <div className="flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 py-2">
-            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
-            <span className="shrink-0 text-xs font-medium tabular-nums">{fmtDuration(recorder.elapsed)}</span>
-            <LiveWaveform levels={recorder.liveLevels} />
-            <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-muted-foreground" onClick={() => recorder.cancel()} title="Discard">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-            <Button type="button" size="sm" className="h-8 shrink-0 bg-primary" onClick={stopForPreview} title="Stop">
-              <Square className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+          <VoiceRecordingBar
+            meter={recorder.meter}
+            onCancel={recorder.cancel}
+            onDone={() => void stopForPreview()}
+            done="stop"
+            doneLabel="Stop and listen back"
+            className="rounded-full border border-border bg-muted/40 px-1"
+          />
         ) : preview ? (
           <div className="flex items-center gap-2 rounded-full border border-border bg-secondary/40 px-3 py-2">
             <Button
@@ -3126,7 +2966,10 @@ export function MessageThread({
               disabled={sending}
               canSendGifs={canSendGifs}
               canSendSounds={canSendSounds}
-              onPickCamera={() => cameraInputRef.current?.click()}
+              onPickCamera={() => {
+                // where a web page can't use the camera, the phone's own, as before
+                if (!chatCamera.start()) cameraInputRef.current?.click();
+              }}
               onPickVideo={() => {
                 // where a web page can't film, the phone's own camera, as before
                 if (!filmCamera.start()) cameraInputRef.current?.click();
@@ -3282,7 +3125,7 @@ export function MessageThread({
               <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full"
                 onClick={async () => {
                   try { await recorder.start(); }
-                  catch (e: any) { toast.error(e?.message ?? "Mic permission needed"); }
+                  catch (e: any) { toast.error(micErrorMessage(e)); }
                 }}>
                 <Mic className="h-5 w-5" />
               </Button>

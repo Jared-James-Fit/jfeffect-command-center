@@ -22,7 +22,11 @@
  *            never makes a second message
  *
  * One clip goes at a time (each one gets the whole connection, so the first
- * reaches the coach soonest). A failure from the connection retries by itself
+ * reaches the coach soonest), and the next one in line is prepared while it
+ * uploads. Preparing runs in a Web Worker (render-off-thread.ts), and the
+ * set rows hear progress at most every PROGRESS_EMIT_MS, each only its own
+ * (jobs.ts useSetVideoJobsSelect), so filming and trimming the next set never
+ * waits on the last one (Nov 25 2026). A failure from the connection retries by itself
  * (with back-off, and again the moment the app is back on screen or online);
  * a real "no" (too long, not allowed) waits for a tap.
  *
@@ -39,7 +43,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { pickVideo, type PickedVideo, type TrimFn, type TrimOffer } from "@/lib/video-edit/pick";
 import { isWhole, planVideo, selectionOf } from "@/lib/video-edit/plan";
-import { renderVideo, VideoRenderError } from "@/lib/video-edit/render";
+import { VideoRenderError, type RenderOutcome } from "@/lib/video-edit/render";
+import { renderVideoOffThread as renderVideo } from "@/lib/video-edit/render-off-thread";
 import { videoBudget, videoLimit } from "@/lib/video-edit/limits";
 import { videoErrorMessage } from "@/lib/video-edit/pipeline";
 import { measuredUplink, uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
@@ -155,6 +160,31 @@ const posterSends = new Map<string, Promise<void>>();
 const attempts = new Map<string, number>();
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let wired = false;
+
+/**
+ * Each clip's preparing (cut / re-encode, off the page's thread), started once:
+ * by its own turn, or ahead of it while the clip before it uploads (Nov 25
+ * 2026, T14), so five sets filmed back to back go up one after another with
+ * no gap, and the next clip is ready the moment the connection is free.
+ */
+type Prepared = { file: File; clip: Partial<OutboxRecord>; kept: Promise<unknown> };
+const prepares = new Map<string, Promise<Prepared | null>>();
+/** What preparing made, for the copy for Photos (a cut is that copy already: never made twice). */
+const outcomes = new Map<string, { promise: Promise<RenderOutcome | null>; resolve: (o: RenderOutcome | null) => void }>();
+function outcomeOf(id: string) {
+  let o = outcomes.get(id);
+  if (!o) {
+    let resolve!: (v: RenderOutcome | null) => void;
+    const promise = new Promise<RenderOutcome | null>((r) => (resolve = r));
+    o = { promise, resolve };
+    outcomes.set(id, o);
+  }
+  return o;
+}
+function settleOutcome(id: string, out: RenderOutcome | null) {
+  outcomes.get(id)?.resolve(out);
+  outcomes.delete(id);
+}
 
 /** A clip that went as it was, held for its Crew copy until the coach has it (this session only). */
 type FeedSource = { video: PickedVideo; plan: FeedCopyPlan; sentBytes: number };
@@ -358,14 +388,24 @@ export async function startSetVideo(
     savedAt: Date.now(),
   });
   pickedVideos.set(id, picked.video);
-  // the trimmed copy for Photos starts alongside (a remux: cheap, and nothing waits on it)
-  const phoneCopy = input.phoneCopy ? phoneCopyFor(picked.video) : undefined;
+  // the trimmed copy for Photos, once the clip for the coach is prepared (never competing with it):
+  // a cut with its sound is that copy already; else the selection is cut from the recording
+  const video = picked.video;
+  const phoneCopy = input.phoneCopy
+    ? outcomeOf(id).promise.then((out) =>
+        out && (out.mode === "copy" || out.mode === "original") && isWhole(video.info, video.trim) === (out.mode === "original")
+          ? out.file
+          : phoneCopyFor(video),
+      )
+    : undefined;
   enqueue(id);
   return { ok: true, id, phoneCopy };
 }
 
 function enqueue(id: string) {
   if (!queue.includes(id) && running !== id) queue.push(id);
+  // the clip going now is already prepared (uploading): this one can be prepared meanwhile
+  if (running && running !== id && preparedFiles.has(running)) prepareNext();
   void pump();
 }
 
@@ -389,7 +429,7 @@ async function pump() {
 async function runJob(id: string) {
   const job = getSetVideoJobs().find((j) => j.id === id);
   if (!job) return;
-  const ctl = new AbortController();
+  const ctl = controllers.get(id) ?? new AbortController();
   controllers.set(id, ctl);
   const signal = ctl.signal;
   const set = (patch: Partial<SetVideoJob>) => patchSetVideoJob(id, patch);
@@ -400,8 +440,16 @@ async function runJob(id: string) {
     /** The prepared clip being kept for a closed app: written while it uploads, never waited on before. */
     let keptClip: Promise<unknown> = Promise.resolve();
 
-    // 1. prepare (only this session: after a reload the outbox has the prepared clip, or nothing)
+    // 1. prepare (only this session: after a reload the outbox has the prepared clip, or nothing);
+    // prepared ahead of its turn: its record too (the outbox may still be writing it)
+    const ahead = prepares.get(id);
+    const early = ahead ? await ahead.catch(() => null) : null;
+    if (early) {
+      rec = { ...rec, ...early.clip };
+      keptClip = early.kept;
+    }
     let prepared: File | null =
+      early?.file ??
       preparedFiles.get(id) ??
       (rec.file
         ? new File(
@@ -411,78 +459,14 @@ async function runJob(id: string) {
           )
         : null);
     if (!prepared) {
-      const picked = pickedVideos.get(id);
-      if (!picked) {
-        set({ state: "failed", needsFile: true, autoRetry: false, error: null });
-        return;
-      }
-      set({ state: "preparing", progress: 1, error: null, autoRetry: false, needsFile: false });
-      const plan = planVideo(picked.info, picked.trim, CONTEXT, { canEncode: picked.canEncode });
-      if (plan.mode === "reject") throw new SetVideoRefused(plan.reason);
-      const weight = plan.mode === "transcode" ? 0.45 : plan.mode === "copy" ? 0.08 : 0.02;
-      // the poster (the first moment of what goes) is made and sent alongside, never waited on long
-      const posterPath = `${setVideoStem(job.clientId, id)}-poster.jpg`;
-      posterSends.set(
-        id,
-        captureVideoPoster(picked.file, { at: picked.trim?.start ?? null }).then(
-          async (poster) => {
-            if (!poster) return;
-            chatUrlCache.seed(posterPath, URL.createObjectURL(poster.blob));
-            await outboxPatch(id, {
-              poster: poster.blob,
-              posterPath,
-              width: poster.width,
-              height: poster.height,
-            });
-            await sendPoster(id, job.clientId, poster.blob, posterPath, signal);
-          },
-          () => {},
-        ),
-      );
-      const out = await renderVideo(picked.file, picked.info, plan, {
-        onProgress: (f) => set({ progress: Math.max(1, Math.round(f * weight * 100)) }),
-        signal,
-        uplinkBytesPerSec: () => measuredUplink() ?? 1_250_000,
-        limitSeconds: videoLimit(CONTEXT),
-        maxBytes: videoBudget(CONTEXT).max,
-      });
-      prepared = out.file;
-      // went as it was (a 4K original): a 720p copy for Crew follows once the coach has it
-      const feedPlan = feedCopyPlan(out.mode, picked.info, picked.trim, picked.canEncode);
-      // a warm-up's clip is never in the film, so it needs no copy for Crew
-      if (feedPlan && job.setIndex > 0) feedSources.set(id, { video: picked, plan: feedPlan, sentBytes: prepared.size });
-      const path = `${setVideoStem(job.clientId, id)}.${videoExt(prepared)}`;
-      const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
-      const transfer = {
-        v: 2,
-        mode: out.mode,
-        why: out.reason.slice(0, 80),
-        prep_ms: out.ms,
-        src_s: Math.round(picked.info.duration * 10) / 10,
-        sel_s: Math.round((rec.source?.selSec ?? picked.info.duration) * 10) / 10,
-        orig_mb: mb(picked.file.size),
-        sent_mb: mb(prepared.size),
-        ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
-        // filmed in the app: what its sound came from ("raw 2ch 48k own"), so a real phone's recording can be checked
-        mic: clipMicNote(picked.file.name),
-        // what the lift finder did with it (how it read the clip, how long, what it suggested or why not, and whether that's what went)
-        lift: liftTransferNote(picked.file, picked.trim, picked.info.duration),
-      };
-      const clip = {
-        file: prepared,
-        fileType: prepared.type,
-        path,
-        render: { mode: out.mode, reason: out.reason, ms: out.ms },
-        transfer,
-      };
-      rec = { ...rec, ...clip };
-      // keep the clip so a closed app carries on (a full phone or private mode just can't: it still sends now);
-      // merged in, so the poster saved alongside stays, and written while the upload starts
-      const whole = rec;
-      keptClip = outboxPatch(id, clip).then((ok) => ok || outboxPut(whole));
-      preparedFiles.set(id, prepared);
-      pickedVideos.delete(id);
+      const done = await ensurePrepared(id);
+      if (!done) return;
+      prepared = done.file;
+      rec = { ...rec, ...done.clip };
+      keptClip = done.kept;
     }
+    // the next clip in line is prepared while this one uploads
+    prepareNext();
     const path = rec.path ?? `${setVideoStem(job.clientId, id)}.${videoExt(prepared)}`;
     // the bar: preparing took its share already (a re-encode is most of the wait)
     const base =
@@ -572,6 +556,7 @@ async function runJob(id: string) {
     attempts.delete(id);
     posterSends.delete(id);
     preparedFiles.delete(id);
+    prepares.delete(id);
     const feed = feedSources.get(id);
     feedSources.delete(id);
     if (feed && res.id) {
@@ -616,6 +601,126 @@ async function runJob(id: string) {
     }
   } finally {
     controllers.delete(id);
+  }
+}
+
+/** A clip's preparing, started at most once (its own turn, or ahead of it). */
+function ensurePrepared(id: string): Promise<Prepared | null> {
+  let p = prepares.get(id);
+  if (!p) {
+    p = prepareClip(id);
+    prepares.set(id, p);
+    // a failure is tried again on the job's next turn
+    p.then(
+      (v) => { if (!v) prepares.delete(id); },
+      () => prepares.delete(id),
+    );
+  }
+  return p;
+}
+
+/** Prepare the next clip in line now (never more than one ahead, never one that was refused). */
+function prepareNext() {
+  const next = queue[0];
+  if (!next || prepares.has(next) || preparedFiles.has(next) || !pickedVideos.has(next)) return;
+  ensurePrepared(next).catch(() => {});
+}
+
+/**
+ * Cut or shrink the picked clip (off the page's thread), start its poster,
+ * and keep it in the outbox for a closed app. Null when the pick is gone
+ * (after a reload): it has to be picked again.
+ */
+async function prepareClip(id: string): Promise<Prepared | null> {
+  const job = getSetVideoJobs().find((j) => j.id === id);
+  if (!job) return null;
+  const ctl = controllers.get(id) ?? new AbortController();
+  controllers.set(id, ctl);
+  const signal = ctl.signal;
+  const set = (patch: Partial<SetVideoJob>) => patchSetVideoJob(id, patch);
+  const picked = pickedVideos.get(id);
+  if (!picked) {
+    set({ state: "failed", needsFile: true, autoRetry: false, error: null });
+    settleOutcome(id, null);
+    return null;
+  }
+  const rec =
+    (await outboxGet(id)) ??
+    ({ id, userId: job.userId, meta: metaOf(job), savedAt: Date.now() } as OutboxRecord);
+  set({ state: "preparing", progress: 1, error: null, autoRetry: false, needsFile: false });
+  try {
+    const plan = planVideo(picked.info, picked.trim, CONTEXT, { canEncode: picked.canEncode });
+    if (plan.mode === "reject") throw new SetVideoRefused(plan.reason);
+    const weight = plan.mode === "transcode" ? 0.45 : plan.mode === "copy" ? 0.08 : 0.02;
+    // the poster (the first moment of what goes) is made and sent alongside, never waited on long
+    const posterPath = `${setVideoStem(job.clientId, id)}-poster.jpg`;
+    posterSends.set(
+      id,
+      captureVideoPoster(picked.file, { at: picked.trim?.start ?? null }).then(
+        async (poster) => {
+          if (!poster) return;
+          chatUrlCache.seed(posterPath, URL.createObjectURL(poster.blob));
+          await outboxPatch(id, {
+            poster: poster.blob,
+            posterPath,
+            width: poster.width,
+            height: poster.height,
+          });
+          await sendPoster(id, job.clientId, poster.blob, posterPath, signal);
+        },
+        () => {},
+      ),
+    );
+    const out = await renderVideo(picked.file, picked.info, plan, {
+      onProgress: (f) => set({ progress: Math.max(1, Math.round(f * weight * 100)) }),
+      signal,
+      uplinkBytesPerSec: () => measuredUplink() ?? 1_250_000,
+      limitSeconds: videoLimit(CONTEXT),
+      maxBytes: videoBudget(CONTEXT).max,
+    });
+    const prepared = out.file;
+    // went as it was (a 4K original): a 720p copy for Crew follows once the coach has it
+    const feedPlan = feedCopyPlan(out.mode, picked.info, picked.trim, picked.canEncode);
+    // a warm-up's clip is never in the film, so it needs no copy for Crew
+    if (feedPlan && job.setIndex > 0) feedSources.set(id, { video: picked, plan: feedPlan, sentBytes: prepared.size });
+    const path = `${setVideoStem(job.clientId, id)}.${videoExt(prepared)}`;
+    const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
+    const transfer = {
+      v: 2,
+      mode: out.mode,
+      why: out.reason.slice(0, 80),
+      prep_ms: out.ms,
+      src_s: Math.round(picked.info.duration * 10) / 10,
+      sel_s: Math.round((rec.source?.selSec ?? picked.info.duration) * 10) / 10,
+      orig_mb: mb(picked.file.size),
+      sent_mb: mb(prepared.size),
+      ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
+      // filmed in the app: what its sound came from ("raw 2ch 48k own"), so a real phone's recording can be checked
+      mic: clipMicNote(picked.file.name),
+      // what the lift finder did with it (how it read the clip, how long, what it suggested or why not, and whether that's what went)
+      lift: liftTransferNote(picked.file, picked.trim, picked.info.duration),
+      // prepared off the page's thread (render-off-thread.ts), and ahead of its turn while another clip uploaded
+      ahead: running !== id ? 1 : 0,
+    };
+    const clip = {
+      file: prepared,
+      fileType: prepared.type,
+      path,
+      render: { mode: out.mode, reason: out.reason, ms: out.ms },
+      transfer,
+    };
+    // keep the clip so a closed app carries on (a full phone or private mode just can't: it still sends now);
+    // merged in, so the poster saved alongside stays, and written while the upload starts
+    const whole = { ...rec, ...clip };
+    const kept = outboxPatch(id, clip).then((ok) => ok || outboxPut(whole));
+    preparedFiles.set(id, prepared);
+    pickedVideos.delete(id);
+    settleOutcome(id, plan.mode === "copy" && plan.muted ? null : out);
+    return { file: prepared, clip, kept };
+  } catch (e) {
+    // refused or failed: the job's own turn reports it (a prepare ahead of its turn says nothing yet)
+    if (e instanceof SetVideoRefused) settleOutcome(id, null);
+    throw e;
   }
 }
 
@@ -757,6 +862,8 @@ export async function cancelSetVideo(id: string) {
   if (i >= 0) queue.splice(i, 1);
   preparedFiles.delete(id);
   pickedVideos.delete(id);
+  prepares.delete(id);
+  settleOutcome(id, null);
   posterSends.delete(id);
   attempts.delete(id);
   feedSources.delete(id);

@@ -178,6 +178,11 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "sales"] },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Sales",
     visibleTo: ["admin", "sales"] },
+  // Plans and subscriptions: prices, decisions (members applying, requests to
+  // come back), grandfathered prices, scheduled changes, failed payments.
+  { to: "/admin/plans", label: "Plans", icon: Layers, group: "Sales",
+    visibleTo: ["admin"],
+    keywords: ["plans", "subscriptions", "upgrade", "downgrade", "cancel", "grandfathered", "legacy price", "approve coaching", "reactivation", "failed payments", "billing changes", "switch plan"] },
   { to: "/admin/payments", label: "Overview", icon: BarChart3, group: "Sales", searchOnly: true,
     visibleTo: ["admin", "sales"],
     keywords: ["overview", "dashboard", "revenue", "mrr", "gross", "net", "sales"] },
@@ -209,9 +214,9 @@ const REGISTRY: Entry[] = [
   // ── INSIGHTS ─────────────────────────────────────────────────────────
   // How the business is doing beyond the books (Nov 23 2026): who uses the app and the site, and
   // what AI and texts cost. Admin only; the server checks again.
-  { to: "/admin/insights", label: "App & website", icon: BarChart3, group: "Insights",
+  { to: "/admin/insights", label: "Analytics", icon: BarChart3, group: "Insights",
     visibleTo: ["admin"],
-    keywords: ["analytics", "insights", "active users", "dau", "wau", "mau", "live users", "sessions", "retention", "churn", "feature adoption", "devices", "map", "locations", "website", "landing page", "funnel", "sources", "traffic", "conversions", "onboarding"] },
+    keywords: ["analytics", "insights", "business intelligence", "app & website", "active users", "dau", "wau", "mau", "live users", "sessions", "bounce", "engagement", "retention", "cohorts", "churn", "feature adoption", "devices", "browsers", "map", "geography", "locations", "website", "landing page", "funnel", "sources", "traffic", "acquisition", "instagram", "utm", "campaigns", "attribution", "conversions", "onboarding", "mrr", "revenue", "ltv", "web vitals", "errors", "performance", "cleo insights", "weekly summary"] },
   { to: "/admin/usage", label: "Usage & spend", icon: Gauge, group: "Insights",
     visibleTo: ["admin"],
     keywords: ["ai cost", "ai spend", "openai", "sms cost", "texts", "twilio", "budget", "spending", "credits", "models", "failures", "provider health", "usage"] },

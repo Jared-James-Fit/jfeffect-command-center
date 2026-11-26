@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { readServiceTierHint, writeServiceTierHint } from "@/lib/service-tier-hint";
+import { SHELL_STAFF_ROLES, digitalPaidAllowed, useNativeShell } from "@/lib/native-purchases";
 
 /**
  * One athlete record, two service layers. Everyone in the portal has a
@@ -42,8 +43,8 @@ export function tierAllows(tier: ServiceTier, key: EntitlementKey): boolean {
 }
 
 /** Portal paths that belong to the coaching service; a member is sent home from them. */
+// Messages isn't one: everyone's inbox has JF Effect Support; the coach chat in it is coaching-only.
 export const COACHING_ONLY_PATHS = [
-  "/portal/messages",
   "/portal/check-ins",
   "/portal/check-in",
   "/portal/agreements",
@@ -163,4 +164,18 @@ export function useEntitlement(key: EntitlementKey): boolean {
   const { tier } = useServiceTier();
   if (!tier) return !(MEMBER_ONLY as readonly string[]).includes(key);
   return tierAllows(tier, key);
+}
+
+/**
+ * Paid digital features (Premium, paid-membership access, bought AI credits)
+ * on this screen (native-purchases.ts, option B): always on the web; in the
+ * iPhone app only for staff and coaching clients (the viewed client's tier in
+ * "View as client" counts only when the viewer isn't staff). False in the app
+ * while the tier is still loading, so a paid row never flashes for a member.
+ */
+export function useDigitalPaidAllowed(): boolean {
+  const native = useNativeShell();
+  const { accountRole } = useAuth();
+  const { tier } = useServiceTier();
+  return digitalPaidAllowed({ native, staff: !!accountRole && SHELL_STAFF_ROLES.includes(accountRole), tier });
 }

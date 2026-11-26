@@ -27,6 +27,7 @@ export const DEFAULT_ACCESS_LABELS: Record<string, string> = {
   resource_library: "Resource Library",
   nutrition_tools:  "Nutrition tools & education",
   community:        "Community & group chats",
+  jf_premium:       "JF Effect Premium (complimentary)",
 };
 
 export const INACTIVE_STATUSES = ["Past Due", "Cancelled", "Expired", "Deactivated"];

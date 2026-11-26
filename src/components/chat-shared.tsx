@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { getMicStream } from "@/lib/audio-session";
+import { useVoiceCapture } from "@/hooks/use-voice-capture";
+import type { VoiceMeter } from "@/lib/voice/voice-capture";
+import { VoiceWaveform } from "@/components/voice/voice-waveform";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -435,170 +437,63 @@ export function WaveformBars({
   );
 }
 
-export function LiveWaveform({ levels }: { levels: number[] }) {
-  const BAR_COUNT = 48;
-  const padded = Array.from(
-    { length: BAR_COUNT },
-    (_, i) => levels[levels.length - BAR_COUNT + i] ?? 0,
-  );
-  return (
-    <div className="flex h-10 flex-1 items-center justify-center gap-[2px] overflow-hidden">
-      {padded.map((v, i) => {
-        const h = Math.max(10, Math.min(100, v * 130));
-        return (
-          <span
-            key={i}
-            className="w-[3px] flex-1 rounded-full bg-destructive shadow-[0_0_6px_rgba(239,68,68,0.45)] transition-[height,opacity] duration-100"
-            style={{ height: `${h}%`, opacity: v > 0.05 ? 1 : 0.35 }}
-          />
-        );
-      })}
-    </div>
-  );
+/** A recording's live waveform: the app's one (components/voice), from the mic's real loudness. */
+export function LiveWaveform({ meter, className }: { meter: VoiceMeter; className?: string }) {
+  return <VoiceWaveform meter={meter} height={32} className={cn("flex-1 text-foreground", className)} />;
 }
 
 /* ------------------------------- Voice Recorder Hook ------------------------------- */
 
-export function useVoiceRecorder() {
-  const mediaRef = useRef<MediaRecorder | null>(null);
-  const restoreSessionRef = useRef<(() => void) | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const startedAtRef = useRef<number>(0);
-  const tickRef = useRef<number | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const liveLevelsRef = useRef<number[]>([]);
-  const accumulatedPeaksRef = useRef<number[]>([]);
-  const sinceLastPeakRef = useRef<number>(0);
+export type RecordedVoiceTake = { blob: Blob; duration: number; peaks: number[] };
 
-  const [recording, setRecording] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [liveLevels, setLiveLevels] = useState<number[]>([]);
-
-  const LIVE_BAR_COUNT = 40;
-
-  const teardownAudioGraph = () => {
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    analyserRef.current?.disconnect();
-    analyserRef.current = null;
-    audioCtxRef.current?.close().catch(() => {});
-    audioCtxRef.current = null;
-  };
+/**
+ * A voice message (coach chat, group / 1:1 chats, Crew voice memos): the
+ * app's one recorder (useVoiceCapture: the mic held by one recorder at a
+ * time, let go on stop, unmount or the app backgrounded) with the plain mic
+ * (`getMicStream(true)`, the call processing on: speech into a mic). Unlike
+ * dictation the recording is kept: it's what gets sent. `stop()` hands over
+ * the take; a take that ended by itself (the cap, backgrounding, a call)
+ * arrives through `onAutoStop`, never lost.
+ */
+export function useVoiceRecorder(opts: { maxSeconds?: number; onAutoStop?: (take: RecordedVoiceTake) => void } = {}) {
+  const autoRef = useRef(opts.onAutoStop);
+  autoRef.current = opts.onAutoStop;
+  const doneRef = useRef<Promise<RecordedVoiceTake | null> | null>(null);
+  const userEnded = useRef(false);
+  const capture = useVoiceCapture({ maxMs: (opts.maxSeconds ?? 300) * 1000, constraints: true });
 
   const start = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
-    // iOS: app sounds leave the audio session unable to record; switch it for
-    // the capture and put it back afterwards.
-    const { stream, restore } = await getMicStream(true);
-    restoreSessionRef.current = restore;
-    const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
-      : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
-    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    chunksRef.current = [];
-    mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    mr.start();
-    mediaRef.current = mr;
-    startedAtRef.current = Date.now();
-    setRecording(true);
-    setElapsed(0);
-    liveLevelsRef.current = [];
-    accumulatedPeaksRef.current = [];
-    sinceLastPeakRef.current = Date.now();
-    setLiveLevels([]);
-
-    try {
-      const ACtx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new ACtx();
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyser;
-      const buf = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteTimeDomainData(buf);
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) {
-          const v = (buf[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / buf.length);
-        const level = Math.min(1, Math.max(0.05, rms * 2.8));
-        const next = [...liveLevelsRef.current, level].slice(-LIVE_BAR_COUNT);
-        liveLevelsRef.current = next;
-        if (Date.now() - sinceLastPeakRef.current > 80) {
-          accumulatedPeaksRef.current.push(level);
-          sinceLastPeakRef.current = Date.now();
-        }
-        setLiveLevels(next);
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    } catch (e) {
-      console.warn("analyser unavailable", e);
-    }
-
-    tickRef.current = window.setInterval(
-      () => setElapsed((Date.now() - startedAtRef.current) / 1000),
-      200,
-    );
+    userEnded.current = false;
+    const { done } = await capture.begin();
+    const take = done.then((t) => (t ? { blob: t.blob, duration: t.durationMs / 1000, peaks: t.peaks } : null));
+    doneRef.current = take;
+    void take.then((t) => {
+      if (doneRef.current === take) doneRef.current = null;
+      if (t && !userEnded.current) autoRef.current?.(t);
+    });
   };
 
-  const stop = async (): Promise<{ blob: Blob; duration: number; peaks: number[] } | null> => {
-    const mr = mediaRef.current;
-    if (!mr) return null;
-    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-    const duration = (Date.now() - startedAtRef.current) / 1000;
-    const done = new Promise<Blob>((resolve) => {
-      mr.onstop = () => resolve(new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" }));
-    });
-    mr.stop();
-    mr.stream.getTracks().forEach((t) => t.stop());
-    restoreSessionRef.current?.();
-    restoreSessionRef.current = null;
-    mediaRef.current = null;
-    setRecording(false);
-    const blob = await done;
-    const raw = accumulatedPeaksRef.current;
-    const targetCount = 48;
-    const peaks: number[] = [];
-    if (raw.length > 0) {
-      const step = raw.length / targetCount;
-      for (let i = 0; i < targetCount; i++) {
-        const a = Math.floor(i * step);
-        const b = Math.min(raw.length, Math.floor((i + 1) * step));
-        let max = 0;
-        for (let j = a; j < b; j++) if (raw[j] > max) max = raw[j];
-        peaks.push(Number(max.toFixed(3)));
-      }
-    }
-    teardownAudioGraph();
-    return { blob, duration, peaks };
+  const stop = async (): Promise<RecordedVoiceTake | null> => {
+    const take = doneRef.current;
+    if (!take) return null;
+    userEnded.current = true;
+    capture.stop();
+    return await take;
   };
 
   const cancel = () => {
-    const mr = mediaRef.current;
-    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-    if (mr) {
-      try { mr.stop(); } catch {}
-      mr.stream.getTracks().forEach((t) => t.stop());
-    }
-    restoreSessionRef.current?.();
-    restoreSessionRef.current = null;
-    mediaRef.current = null;
-    chunksRef.current = [];
-    accumulatedPeaksRef.current = [];
-    liveLevelsRef.current = [];
-    setLiveLevels([]);
-    teardownAudioGraph();
-    setRecording(false);
-    setElapsed(0);
+    userEnded.current = true;
+    capture.cancel();
   };
 
-  return { recording, elapsed, liveLevels, start, stop, cancel };
+  return {
+    recording: capture.state === "recording" || capture.state === "requesting",
+    state: capture.state,
+    meter: capture.meter,
+    start,
+    stop,
+    cancel,
+  };
 }
 
 /* ------------------------------- Attachment renderers ------------------------------- */

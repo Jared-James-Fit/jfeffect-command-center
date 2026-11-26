@@ -168,12 +168,19 @@ export function defaultTimelineView(width: number | null = typeof window === "un
 
 const FAMILY_RANK: Record<string, number> = { people: 0, coach: 1, training: 2, google: 3 };
 
+const STRUCK_STATUS = new Set(["cancelled", "canceled", "missed", "no_show", "no-show", "rescheduled"]);
+const struck = (x: { status?: string | null }) => STRUCK_STATUS.has(String(x.status ?? "").toLowerCase());
+
 /**
- * A month day with more than fits: who's booked first (sessions, then the
- * coach's own events, training, then Google), each in time order, so a busy
- * Google day never pushes a session into "+2".
+ * A month day with more than fits: what's still on first, then what was
+ * cancelled or missed (shown crossed out, never pushing a live booking into
+ * "+2"); within each, who's booked first (sessions, then the coach's own
+ * events, training, then Google), each in time order, so a busy Google day
+ * never pushes a session into "+2".
  */
-export function monthChipOrder<T extends { family: string; startsAt?: string | null }>(a: T, b: T): number {
+export function monthChipOrder<T extends { family: string; startsAt?: string | null; status?: string | null }>(a: T, b: T): number {
+  const s = Number(struck(a)) - Number(struck(b));
+  if (s) return s;
   const r = (FAMILY_RANK[a.family] ?? 9) - (FAMILY_RANK[b.family] ?? 9);
   if (r) return r;
   const t = (x: T) => (x.startsAt ? Date.parse(x.startsAt) : -Infinity);

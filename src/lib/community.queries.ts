@@ -9,6 +9,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import type { MyCommunitySettings } from "@/lib/community-discover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { withCrewRules } from "@/lib/crew-safety";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import {
   FEED_PAGE_SIZE,
@@ -49,7 +50,7 @@ import {
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
-import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
+import { computeTodayState, dayDisplayTitle } from "@/lib/workout-today";
 import { cachedCommunityUrls, communityAvatarFiles, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 import { feedAnchor } from "@/lib/feed-anchor";
@@ -280,6 +281,10 @@ function myCachedAuthor(qc: ReturnType<typeof useQueryClient>): CommunityAuthor 
 export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
   const qc = useQueryClient();
   return useMutation({
+    // One post's likes go to the server one at a time, in the order tapped: a quick
+    // like · unlike · like can never land out of order and leave the server on the
+    // wrong answer (each call sets a state, never a toggle, so a retry is the same answer).
+    scope: { id: `community-react:${post.id}` },
     // `next` = the reaction to end up with (null removes it).
     mutationFn: async (next: ReactionKey | null) => {
       const { error } = await db.rpc("community_react", { _post_id: post.id, _emoji: next });
@@ -320,6 +325,8 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       // loaded page of every feed after each tap cost a page's worth of posts per like.
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
       qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
+      // your own post's Activity lists your own like too
+      qc.invalidateQueries({ queryKey: ["community-post-activity", post.id] });
     },
   });
 }
@@ -613,7 +620,7 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
         const path = await uploadVoiceMemo(c.voice.blob, c.userId, c.onProgress);
         media = { path, thumb: null, type: "audio", width: null, height: null, duration: Math.round(c.voice.duration * 10) / 10 };
       }
-      const { data, error } = await db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media });
+      const { data, error } = await withCrewRules(() => db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media }));
       if (error) {
         if (media) await removeCommunityFiles([media.path, media.thumb]);
         throw error;
@@ -672,6 +679,8 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
 export function useLikeComment(postId: string) {
   const qc = useQueryClient();
   return useMutation({
+    // in tap order, like useReact
+    scope: { id: `community-like-comment:${postId}` },
     mutationFn: async ({ id, liked }: { id: string; liked: boolean }) => {
       const { error } = await db.rpc("community_like_comment", { _comment_id: id, _liked: liked });
       if (error) throw error;
@@ -745,7 +754,7 @@ export function useShareComment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ commentId, caption }: { commentId: string; caption: string }): Promise<string> => {
-      const { data, error } = await db.rpc("community_share_comment", { _comment_id: commentId, _caption: caption.trim() || null });
+      const { data, error } = await withCrewRules(() => db.rpc("community_share_comment", { _comment_id: commentId, _caption: caption.trim() || null }));
       if (error) throw error;
       return data as string;
     },
@@ -890,20 +899,22 @@ export type SavePostInput = {
 
 export async function saveCommunityPost(input: SavePostInput): Promise<string> {
   const m = input.media;
-  const { data, error } = await db.rpc("community_save_post", {
-    _completion_id: input.completionId,
-    _caption: input.caption,
-    _visibility: input.visibility,
-    _media_action: m.action,
-    _media_path: m.action === "set" ? m.media_path : null,
-    _media_thumb_path: m.action === "set" ? m.media_thumb_path : null,
-    _media_type: m.action === "set" ? m.media_type : null,
-    _media_width: m.action === "set" ? m.media_width : null,
-    _media_height: m.action === "set" ? m.media_height : null,
-    _hide_loads: input.hideLoads ?? null,
-    _extra_media: input.extras === undefined ? null : input.extras,
-    _lock_in: input.lockIn ?? null,
-  });
+  const { data, error } = await withCrewRules(() =>
+    db.rpc("community_save_post", {
+      _completion_id: input.completionId,
+      _caption: input.caption,
+      _visibility: input.visibility,
+      _media_action: m.action,
+      _media_path: m.action === "set" ? m.media_path : null,
+      _media_thumb_path: m.action === "set" ? m.media_thumb_path : null,
+      _media_type: m.action === "set" ? m.media_type : null,
+      _media_width: m.action === "set" ? m.media_width : null,
+      _media_height: m.action === "set" ? m.media_height : null,
+      _hide_loads: input.hideLoads ?? null,
+      _extra_media: input.extras === undefined ? null : input.extras,
+      _lock_in: input.lockIn ?? null,
+    }),
+  );
   if (error) {
     // A "set" photo was uploaded just for this save; if the database refused it, it belongs to
     // nothing. Not on a network failure (no code): the save may have landed with it.
@@ -1018,13 +1029,15 @@ export async function createCommunityPost(
   }
   media.push(...(i.extras ?? []));
   // (_story is only sent for a story, so a post never depends on it)
-  const { data, error } = await db.rpc("community_create_post", {
-    _caption: i.caption,
-    _media: media,
-    _visibility: i.visibility,
-    ...(i.story ? { _story: true } : {}),
-    ...(i.story && i.sharedPostId ? { _shared_post_id: i.sharedPostId } : {}),
-  });
+  const { data, error } = await withCrewRules(() =>
+    db.rpc("community_create_post", {
+      _caption: i.caption,
+      _media: media,
+      _visibility: i.visibility,
+      ...(i.story ? { _story: true } : {}),
+      ...(i.story && i.sharedPostId ? { _shared_post_id: i.sharedPostId } : {}),
+    }),
+  );
   if (error) {
     if (up && error.code) await removeCommunityFiles([up.media_path, up.media_thumb_path]);
     throw error;
@@ -1048,7 +1061,7 @@ export function useCreateCommunityPost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (a: { caption: string; media?: PostSlide[]; visibility?: CommunityVisibility }) => {
-      const { data, error } = await db.rpc("community_create_post", { _caption: a.caption, _media: a.media ?? [], _visibility: a.visibility ?? "community" });
+      const { data, error } = await withCrewRules(() => db.rpc("community_create_post", { _caption: a.caption, _media: a.media ?? [], _visibility: a.visibility ?? "community" }));
       if (error) throw error;
       return (data as { id: string }).id;
     },
@@ -1456,7 +1469,7 @@ export function useTodaySession(enabled: boolean) {
       if (computeTodayState(items, client as any).kind === "rest_day") return null;
       const it = pickLockInSession(items);
       if (!it) return null;
-      return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: cleanDayTitle(it.day.title, it.day.day_index), completionId: it.completion?.id ?? null, started: !!(it.completion?.started_at || it.completion?.in_progress_at), athleteName: (client as any).full_name ?? null };
+      return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: dayDisplayTitle(it), completionId: it.completion?.id ?? null, started: !!(it.completion?.started_at || it.completion?.in_progress_at), athleteName: (client as any).full_name ?? null };
     },
   });
 }

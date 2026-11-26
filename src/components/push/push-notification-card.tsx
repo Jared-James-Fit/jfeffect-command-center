@@ -40,9 +40,17 @@ type Prefs = {
   quiet_start: number;
   quiet_end: number;
   timezone: string | null;
+  /** Call and session reminders (session-reminders.ts): missing = on. */
+  session_reminders: { day?: boolean; hour?: boolean; soon?: boolean } | null;
 };
 
 type BoolPref = { [K in keyof Prefs]: Prefs[K] extends boolean ? K : never }[keyof Prefs];
+
+const SESSION_REMINDERS: Array<{ key: "day" | "hour" | "soon"; label: string; help: string }> = [
+  { key: "day", label: "A day before", help: "Calls and sessions tomorrow (coaches: one summary at 6pm)" },
+  { key: "hour", label: "An hour before", help: "Calls and training sessions" },
+  { key: "soon", label: "Just before", help: "10 minutes before a call, with Join (coaches: 15 before a session)" },
+];
 
 const CATEGORY_LABELS: Array<{ key: BoolPref; label: string; help: string }> = [
   { key: "messages", label: "Messages", help: "New coach or client messages" },
@@ -164,7 +172,7 @@ function PushNotificationControls({ showCoachingApps = false, bare = false }: { 
   const prefs: Prefs = useMemo(() => ({
     master_enabled: true, messages: true, check_ins: true, lift_reviews: true,
     workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true, community: true,
-    quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null,
+    quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null, session_reminders: null,
     ...(prefsQ.data ?? {}),
   }), [prefsQ.data]);
 
@@ -334,6 +342,23 @@ function PushNotificationControls({ showCoachingApps = false, bare = false }: { 
                 />
               </div>
             ))}
+        </div>
+
+        <div className="rounded-md border border-border p-3 space-y-2" data-session-reminders>
+          <div className="text-sm font-medium">Call &amp; session reminders</div>
+          {SESSION_REMINDERS.map((r) => (
+            <div key={r.key} className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm">{r.label}</div>
+                <div className="text-xs text-muted-foreground">{r.help}</div>
+              </div>
+              <Switch
+                checked={prefs.session_reminders?.[r.key] !== false}
+                onCheckedChange={(v) => setPref("session_reminders", { ...(prefs.session_reminders ?? {}), [r.key]: v })}
+                disabled={!prefs.master_enabled}
+              />
+            </div>
+          ))}
         </div>
 
         <div className="rounded-md border border-border p-3 space-y-2">

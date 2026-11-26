@@ -26,6 +26,8 @@ export type LeagueWeek = {
   month_start: string;
   week_of_month: number;
   athletes: number;
+  /** Whose board it's about (set by the app from the audience it asked for; Community when absent). */
+  audience?: "coaching" | "community";
   me: {
     client_id: string;
     qualified: boolean;

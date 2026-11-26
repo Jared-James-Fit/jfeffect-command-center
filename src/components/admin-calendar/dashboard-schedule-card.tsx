@@ -358,11 +358,10 @@ export function DashboardScheduleCard() {
     [rows],
   );
   const rowByKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
-  // Month: who's booked each day, sessions first then in time order (cancelled ones left out).
+  // Month: who's booked each day, sessions first then in time order; cancelled ones crossed out after them.
   const namesByDay = useMemo(() => {
     const m = new Map<string, HomeEntry[]>();
     for (const r of homeEntries) {
-      if (r.status === "Cancelled") continue;
       m.set(r.date, [...(m.get(r.date) ?? []), r]);
     }
     for (const list of m.values()) list.sort(monthChipOrder);

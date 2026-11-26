@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { supabase } from "@/integrations/supabase/client";
 import { clientWorkoutsQuery, primaryWorkouts } from "@/lib/client-workouts-query";
 import { resolveWeekDayDates } from "@/lib/workout-today";
+import { itemDisplayTitle } from "@/lib/workouts/workout-title";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 import { getMyGoogleEvents } from "@/lib/schedule.functions";
 import { resolveClientWeekDays, type ResolvedWorkoutDate } from "@/lib/resolved-client-days";
@@ -219,6 +220,25 @@ export function useClientSessionItems(clientId: string | null | undefined) {
   return { items, isLoading: apptsQ.isLoading || ptQ.isLoading };
 }
 
+/**
+ * The client's own Google events (read-only, opt-in, never stored): one query,
+ * the calendar's and the Workouts page's suggested times alike, so the default
+ * window is one request for both. The server answers only for the signed-in
+ * person's own account, so a coach previewing a client never sees them.
+ */
+export function clientGoogleQuery(clientId: string | null | undefined, range?: { from: string; to: string } | null) {
+  const googleWindow = googleFetchWindow(range);
+  return {
+    queryKey: ["cal-client-google", clientId, googleWindow.timeMin, googleWindow.timeMax] as const,
+    enabled: !!clientId,
+    queryFn: () => getMyGoogleEvents({ data: { clientId: clientId!, ...googleWindow } }),
+    staleTime: 2 * 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  };
+}
+
 export function useClientCalendarSources(
   clientId: string | null | undefined,
   opts: {
@@ -232,17 +252,7 @@ export function useClientCalendarSources(
   // server answers only for the signed-in person's own account, so a coach
   // previewing a client never sees them. Refreshed on focus and every 5
   // minutes so added, moved and cancelled events show up on their own.
-  const googleWindow = googleFetchWindow(opts.googleRange);
-  const googleQ = useQuery({
-    queryKey: ["cal-client-google", clientId, googleWindow.timeMin, googleWindow.timeMax],
-    enabled,
-    queryFn: () => getMyGoogleEvents({ data: { clientId: clientId!, ...googleWindow } }),
-    staleTime: 2 * 60_000,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: true,
-    placeholderData: keepPreviousData,
-    retry: false,
-  });
+  const googleQ = useQuery({ ...clientGoogleQuery(clientId, opts.googleRange), placeholderData: keepPreviousData });
 
   const eventsQ = useQuery({
     queryKey: ["cal-client-events", clientId],
@@ -441,7 +451,7 @@ export function useClientCalendarSources(
             id: `workout:${it.scheduledWorkoutId ?? it.day.id}`,
             kind: "workout",
             date: it.scheduledDate ?? date,
-            title: it.day?.title || `Day ${it.day?.day_index ?? ""}`.trim(),
+            title: itemDisplayTitle(it),
             subtitle: [it.block?.name, it.day?.focus].filter(Boolean).join(" · "),
             status: completed ? "Completed" : "Scheduled",
             href: {

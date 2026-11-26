@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AiConsentCheckbox, recordAiConsentChoice, useMyAiConsent } from "@/components/ai-consent/ai-consent";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useOnlineStatus } from "@/hooks/use-online-status";
@@ -221,6 +222,11 @@ export function AgreementSignFlow({
   const [payorOn, setPayorOn] = useState(false);
   const [payorConfirmed, setPayorConfirmed] = useState(false);
   const [consents, setConsents] = useState<Record<string, boolean>>({});
+  // AI processing: optional, unticked, never part of signing (src/lib/ai-consent); offered only
+  // while this person hasn't allowed it, and saved with their own session once they've signed
+  const aiConsent = useMyAiConsent();
+  const offerAi = aiConsent.askable && aiConsent.loaded && aiConsent.state !== "granted";
+  const [aiAllowed, setAiAllowed] = useState(false);
   const [acked, setAcked] = useState<string[]>([]);
   const [typedName, setTypedName] = useState("");
   const [method, setMethod] = useState<Method>("drawn");
@@ -504,6 +510,11 @@ export function AgreementSignFlow({
       idempotencyKey.current = crypto.randomUUID();
       setSigned({ signatureId: result.signatureId });
       toast.success("Agreement signed");
+      if (offerAi) {
+        void recordAiConsentChoice(aiAllowed, aiConsent.row).then(() =>
+          queryClient.invalidateQueries({ queryKey: ["ai-consent"] }),
+        );
+      }
       // Everything that shows signing status refreshes now.
       queryClient.invalidateQueries({ queryKey: [AGREEMENT_QUERY_ROOT] });
       queryClient.invalidateQueries({ queryKey: ["setup-banner-client"] });
@@ -705,6 +716,7 @@ export function AgreementSignFlow({
           content={content}
           consents={consents}
           setConsents={setConsents}
+          ai={offerAi ? { checked: aiAllowed, onChange: setAiAllowed } : null}
           acked={acked}
           setAcked={setAcked}
           payorOn={payorOn}
@@ -1521,6 +1533,8 @@ function SignStep(props: {
   content: AgreementContent;
   consents: Record<string, boolean>;
   setConsents: (c: Record<string, boolean>) => void;
+  /** The optional AI-processing box, when this person hasn't allowed it. */
+  ai: { checked: boolean; onChange: (v: boolean) => void } | null;
   acked: string[];
   setAcked: (a: string[]) => void;
   payorOn: boolean;
@@ -1599,6 +1613,14 @@ function SignStep(props: {
             />
           </label>
         ))}
+        {props.ai && (
+          <AiConsentCheckbox
+            id="ag-ai-consent"
+            checked={props.ai.checked}
+            onChange={props.ai.onChange}
+            className="rounded-xl border border-border p-3.5"
+          />
+        )}
       </section>
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">

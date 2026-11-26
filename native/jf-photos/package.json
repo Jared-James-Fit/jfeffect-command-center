@@ -1,0 +1,13 @@
+{
+  "name": "jf-photos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The iPhone app's camera roll for JF Effect's New post screen (thumbnails, then the picked photo or video in chunks).",
+  "license": "UNLICENSED",
+  "author": "JF Effect",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

@@ -1,4 +1,3 @@
-import { reactionEmoji } from "@/lib/community";
 import type { CommunityNotice } from "@/lib/community-notifications";
 
 /**
@@ -75,10 +74,8 @@ export function activityLine(n: CommunityNotice): { names: string[]; others: num
   const said = n.snippet?.trim() ? n.snippet.trim() : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type ? "📷 Photo" : null;
   switch (n.kind) {
     case "reaction": {
-      const onlyHearts = n.emojis.every((e) => e === "heart");
-      const faces = onlyHearts ? "" : n.emojis.map((e) => reactionEmoji(e)).filter(Boolean).slice(0, 3).join("");
-      if (n.win) return { names, others, action: `celebrated your ${n.win}${faces ? ` ${faces}` : ""}`, quote: null };
-      return { names, others, action: onlyHearts ? `liked your ${thing}` : `reacted ${faces} to your ${thing}`, quote: null };
+      // every reaction is a like, whatever the emoji (history included: worded here, never stored)
+      return { names, others, action: `liked your ${n.win ?? thing}`, quote: null };
     }
     case "comment":
       return { names, others, action: said ? "commented:" : `commented on your ${thing}`, quote: said };

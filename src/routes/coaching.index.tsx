@@ -6,8 +6,24 @@ import { CoachingHero, PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
 import { TRANSFORMATION_PHOTOS } from "@/components/sales/transformations-strip";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Block, Group, Heading, IconTile, PrimaryCta, Rail, SocialLinks, Stat, Surface, TextLink } from "@/components/sales/apple";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Block,
+  Group,
+  Heading,
+  IconTile,
+  PrimaryCta,
+  Rail,
+  SocialLinks,
+  Stat,
+  Surface,
+  TextLink,
+} from "@/components/sales/apple";
 import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
 import { COACH_NAME, INQUIRY_DM_URL } from "@/lib/social-links";
 import { APPLY_GOALS } from "@/lib/apply-form";
@@ -16,12 +32,19 @@ import shotOverview from "@/assets/coaching/app-overview.webp";
 import shotProgram from "@/assets/coaching/app-program.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotNutrition from "@/assets/coaching/app-nutrition.webp";
+import shotMeet from "@/assets/coaching/app-competition-athlete.webp";
 import { trackSite } from "@/lib/site-funnel";
 import { shareMeta } from "@/lib/share-meta";
 import { hostedImageProps } from "@/lib/hosted-image";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
 import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
-import { callsPolicy, costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
+import {
+  callsPolicy,
+  costAnswer,
+  listedPackages,
+  paidPackages,
+  type PublicPackage,
+} from "@/lib/coaching-packages/packages";
 
 /** The packages on the site, waited on for at most 2 s (the page never hangs on them). */
 async function packagesForPage(): Promise<PublicPackage[]> {
@@ -42,7 +65,15 @@ function offersLd(packages: readonly PublicPackage[]) {
       priceCurrency: p.currency || "CAD",
       url: `https://jfeffect.com/coaching/apply?package=${p.slug}`,
       ...(p.interval === "month"
-        ? { priceSpecification: { "@type": "UnitPriceSpecification", price: ((p.priceCents ?? 0) / 100).toFixed(2), priceCurrency: p.currency || "CAD", unitCode: "MON", valueAddedTaxIncluded: false } }
+        ? {
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: ((p.priceCents ?? 0) / 100).toFixed(2),
+              priceCurrency: p.currency || "CAD",
+              unitCode: "MON",
+              valueAddedTaxIncluded: false,
+            },
+          }
         : {}),
     }));
 }
@@ -56,11 +87,15 @@ export const Route = createFileRoute("/coaching/")({
   staleTime: 5 * 60_000,
   head: ({ loaderData }) => ({
     meta: [
-      { title: "Online Coaching with Jared McIntyre | Strength, Muscle, Fat Loss, Powerlifting | JF Effect" },
+      {
+        title:
+          "Online Coaching with Jared McIntyre | Strength, Muscle, Fat Loss, Powerlifting | JF Effect",
+      },
       { name: "description", content: DESCRIPTION },
       ...shareMeta({
         title: "JF Effect Coaching",
-        description: "1:1 online coaching with Jared McIntyre: your program, nutrition and a weekly check-in, all in the JF Effect app.",
+        description:
+          "1:1 online coaching with Jared McIntyre: your program, nutrition and a weekly check-in, all in the JF Effect app.",
         path: "/coaching",
       }),
     ],
@@ -72,11 +107,26 @@ export const Route = createFileRoute("/coaching/")({
           "@context": "https://schema.org",
           "@type": "Service",
           name: "JF Effect Online Coaching",
-          serviceType: ["Online Fitness Coaching", "Online Strength Coaching", "Powerlifting Coaching", "Nutrition Coaching"],
-          provider: { "@type": "Organization", "@id": "https://jfeffect.com/#organization", name: "JF Effect", url: "https://jfeffect.com" },
+          serviceType: [
+            "Online Fitness Coaching",
+            "Online Strength Coaching",
+            "Powerlifting Coaching",
+            "Nutrition Coaching",
+          ],
+          provider: {
+            "@type": "Organization",
+            "@id": "https://jfeffect.com/#organization",
+            name: "JF Effect",
+            url: "https://jfeffect.com",
+          },
           areaServed: "Worldwide",
-          availableChannel: { "@type": "ServiceChannel", serviceUrl: "https://jfeffect.com/coaching/apply" },
-          ...(offersLd(loaderData?.packages ?? []).length ? { offers: offersLd(loaderData?.packages ?? []) } : {}),
+          availableChannel: {
+            "@type": "ServiceChannel",
+            serviceUrl: "https://jfeffect.com/coaching/apply",
+          },
+          ...(offersLd(loaderData?.packages ?? []).length
+            ? { offers: offersLd(loaderData?.packages ?? []) }
+            : {}),
           url: "https://jfeffect.com/coaching",
           description: DESCRIPTION,
         }),
@@ -88,7 +138,12 @@ export const Route = createFileRoute("/coaching/")({
           "@type": "BreadcrumbList",
           itemListElement: [
             { "@type": "ListItem", position: 1, name: "Home", item: "https://jfeffect.com/" },
-            { "@type": "ListItem", position: 2, name: "Coaching", item: "https://jfeffect.com/coaching" },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Coaching",
+              item: "https://jfeffect.com/coaching",
+            },
           ],
         }),
       },
@@ -131,6 +186,12 @@ const OFFER: Array<{ title: string; body: string; src: string; alt: string }> = 
     src: shotNutrition,
     alt: "The Nutrition screen: a training-day meal plan with each meal's foods and macros",
   },
+  {
+    title: "Meet prep",
+    body: "If you compete, we plan the meet together: your weight class, what you're likely to total, who's in your class and your peak. Two weeks out you get your game plan in the app, with every attempt, every warm-up and what changes if a lift moves fast or slow.",
+    src: shotMeet,
+    alt: "A meet game plan in the app, from the coach: the squat opener at 237.5 kg, the second and third as ranges that depend on how the opener moves",
+  },
 ];
 
 /** The application's goals, most asked-for first ("Other" is the "Something else" link). */
@@ -139,14 +200,19 @@ const GOAL_ORDER = ["fat_loss", "build_muscle", "powerlifting", "general_fitness
 const ALSO_INCLUDED = [
   "Video feedback on your lifts in our chat",
   "Message me in the app. I usually reply within a day",
-  "Meet prep and weight class planning if you compete",
   "Your PRs, bodyweight and progress photos in one place",
 ];
 
 const STEPS: Array<{ title: string; body: string }> = [
   { title: "Apply", body: "Seven questions about you and your goal. Free, no card." },
-  { title: "Book a call", body: "Pick a time right after you apply. We talk about your goal and how I'd coach you, before you commit to anything." },
-  { title: "Start training", body: "If we're a fit, you're set up in the app with your program, your nutrition and your first check-in." },
+  {
+    title: "Book a call",
+    body: "Pick a time right after you apply. We talk about your goal and how I'd coach you, before you commit to anything.",
+  },
+  {
+    title: "Start training",
+    body: "If we're a fit, you're set up in the app with your program, your nutrition and your first check-in.",
+  },
 ];
 
 const FOR_YOU = [
@@ -185,6 +251,10 @@ const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "What does it cost?",
     a: "Applying is free and there's no card. Coaching is a paid service, and we talk on your call before you commit to anything.",
+  },
+  {
+    q: "Can I cancel or change my package?",
+    a: "Yes, in the app. Packages renew monthly. Moving up starts right away and you pay the difference for the rest of the month. Moving down or cancelling takes effect when your paid month ends. The app shows exactly what you'll pay and when before you confirm.",
   },
   {
     q: "Is there a free option?",
@@ -249,12 +319,20 @@ function CoachingPage() {
         headline="I'll coach you, wherever you train."
         sub="I write your training and nutrition, read your check-in every week, and change the plan when it needs changing. It all runs through the JF Effect app."
         primary={
-          <div data-inline-cta className="flex flex-col items-stretch sm:items-center lg:items-start">
-            <PrimaryCta to={APPLY_TO} onClick={() => trackSite("cta_coaching", "coaching_hero")}>{CTA}</PrimaryCta>
+          <div
+            data-inline-cta
+            className="flex flex-col items-stretch sm:items-center lg:items-start"
+          >
+            <PrimaryCta to={APPLY_TO} onClick={() => trackSite("cta_coaching", "coaching_hero")}>
+              {CTA}
+            </PrimaryCta>
           </div>
         }
         note="Free to apply. Seven questions, then pick a time for a call."
-        image={{ src: shotOverview, alt: "Training analytics in the JF Effect app: squat, bench and deadlift estimated maxes up 44, 25 and 49 lb, 27 of 27 planned workouts done, 55 sets a week" }}
+        image={{
+          src: shotOverview,
+          alt: "Training analytics in the JF Effect app: squat, bench and deadlift estimated maxes up 44, 25 and 49 lb, 27 of 27 planned workouts done, 55 sets a week",
+        }}
       />
 
       {/* 2. Why listen */}
@@ -276,12 +354,22 @@ function CoachingPage() {
       {/* 3. Proof first */}
       <Reveal>
         <Block>
-          <Heading eyebrow="Client results" title="Some of the people I've coached." sub="Fat loss, muscle and strength. Swipe for more." />
+          <Heading
+            eyebrow="Client results"
+            title="Some of the people I've coached."
+            sub="Fat loss, muscle and strength. Swipe for more."
+          />
           <Rail label="Client results">
             {TRANSFORMATION_PHOTOS.slice(0, 12).map((photo, i) => (
-              <div key={i} className="w-[68vw] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70">
+              <div
+                key={i}
+                className="w-[68vw] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70"
+              >
                 <img
-                  {...hostedImageProps(photo.url, { sizes: "(min-width: 412px) 280px, 68vw", fallback: 480 })}
+                  {...hostedImageProps(photo.url, {
+                    sizes: "(min-width: 412px) 280px, 68vw",
+                    fallback: 480,
+                  })}
                   alt="Client before and after"
                   loading="lazy"
                   decoding="async"
@@ -294,12 +382,17 @@ function CoachingPage() {
           </Rail>
           <div className="-mx-5 mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {CLIENT_QUOTES.map((c) => (
-              <Surface key={c.name} className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col p-5 md:w-auto md:max-w-none">
+              <Surface
+                key={c.name}
+                className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col p-5 md:w-auto md:max-w-none"
+              >
                 <Quote className="h-5 w-5 text-muted-foreground" aria-hidden />
                 <p className="mt-3 flex-1 text-[15px] leading-relaxed">“{c.quote}”</p>
                 <div className="mt-4 border-t border-border/70 pt-3">
                   <div className="text-[15px] font-semibold">{c.name}</div>
-                  <div className="text-[13px] text-muted-foreground">{c.result} · {c.role}</div>
+                  <div className="text-[13px] text-muted-foreground">
+                    {c.result} · {c.role}
+                  </div>
                 </div>
               </Surface>
             ))}
@@ -328,12 +421,21 @@ function CoachingPage() {
       {/* 5. What's included, shown on the real screens */}
       <Reveal>
         <Block id="what-you-get">
-          <Heading eyebrow="What's included" title="Everything runs through the app." sub="Your plan, your check-ins and our chat, in one place on your phone." />
-          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+          <Heading
+            eyebrow="What's included"
+            title="Everything runs through the app."
+            sub="Your plan, your check-ins and our chat, in one place on your phone."
+          />
+          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-10 lg:grid-cols-4 lg:gap-x-5 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {OFFER.map((o) => (
-              <div key={o.title} className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none">
+              <div
+                key={o.title}
+                className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none"
+              >
                 <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" sizes="230px" />
-                <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">{o.title}</h3>
+                <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">
+                  {o.title}
+                </h3>
                 <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{o.body}</p>
               </div>
             ))}
@@ -347,7 +449,9 @@ function CoachingPage() {
           </Surface>
           {!pricing && (
             <div className="mt-8 flex justify-center" data-inline-cta>
-              <PrimaryCta to={APPLY_TO} className="w-full sm:w-auto sm:min-w-[280px]">{CTA}</PrimaryCta>
+              <PrimaryCta to={APPLY_TO} className="w-full sm:w-auto sm:min-w-[280px]">
+                {CTA}
+              </PrimaryCta>
             </div>
           )}
         </Block>
@@ -355,29 +459,34 @@ function CoachingPage() {
 
       {/* 5b. What it costs: the packages on the site (coaching_packages), never typed here */}
       <div ref={pricingRef}>
-      {pricing && (
-        <Reveal>
-          <Block id="pricing" className="!pt-0">
-            <Heading
-              eyebrow="What it costs"
-              title="What coaching costs."
-              sub="Every package includes the full app. In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
-            />
-            <div data-inline-cta>
-              <CoachingPackagesGrid packages={packages} from="coaching" />
-            </div>
-            <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
-              Applying doesn't charge you. We talk on a short call first, and you only pay once we've agreed to start.
-            </p>
-          </Block>
-        </Reveal>
-      )}
+        {pricing && (
+          <Reveal>
+            <Block id="pricing" className="!pt-0">
+              <Heading
+                eyebrow="What it costs"
+                title="What coaching costs."
+                sub="Every package includes the full app. In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
+              />
+              <div data-inline-cta>
+                <CoachingPackagesGrid packages={packages} from="coaching" />
+              </div>
+              <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
+                Applying doesn't charge you. We talk on a short call first, and you only pay once
+                we've agreed to start.
+              </p>
+            </Block>
+          </Reveal>
+        )}
       </div>
 
       {/* 6. How it starts */}
       <Reveal>
         <Block id="how" tint narrow>
-          <Heading eyebrow="How it starts" title="Three steps." sub="Applying takes about a minute." />
+          <Heading
+            eyebrow="How it starts"
+            title="Three steps."
+            sub="Applying takes about a minute."
+          />
           <Group>
             {STEPS.map((st, i) => (
               <div key={st.title} className="flex items-start gap-4 px-5 py-4">
@@ -386,7 +495,9 @@ function CoachingPage() {
                 </span>
                 <div className="min-w-0">
                   <div className="text-[17px] font-semibold leading-snug">{st.title}</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{st.body}</p>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
+                    {st.body}
+                  </p>
                 </div>
               </div>
             ))}
@@ -404,7 +515,10 @@ function CoachingPage() {
           <Surface className="mx-auto max-w-4xl overflow-hidden md:grid md:grid-cols-2">
             <div className="relative md:min-h-[420px]">
               <img
-                {...hostedImageProps(jaredAsset.url, { sizes: "(min-width: 768px) 448px, 100vw", fallback: 960 })}
+                {...hostedImageProps(jaredAsset.url, {
+                  sizes: "(min-width: 768px) 448px, 100vw",
+                  fallback: 960,
+                })}
                 alt={`${COACH_NAME} deadlifting for Team Canada at an IPF competition`}
                 loading="lazy"
                 decoding="async"
@@ -415,8 +529,12 @@ function CoachingPage() {
             </div>
             <div className="p-6 md:self-center md:p-8">
               <div className="text-[13px] font-semibold text-muted-foreground">Your coach</div>
-              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
-              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× international champion</p>
+              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">
+                {COACH_NAME}
+              </h2>
+              <p className="mt-1 text-[15px] text-muted-foreground">
+                Team Canada powerlifter · 2× international champion
+              </p>
               <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
                 I've coached since 2017 and full-time since 2021, from people's first workouts to
                 IPF Worlds. I still compete, so I hold myself to the standard I ask of my clients.
@@ -448,11 +566,19 @@ function CoachingPage() {
               <CheckList items={FOR_YOU} />
             </Surface>
             <Surface className="p-5">
-              <div className="mb-3 text-[15px] font-semibold text-muted-foreground">This is not for you if</div>
+              <div className="mb-3 text-[15px] font-semibold text-muted-foreground">
+                This is not for you if
+              </div>
               <ul className="space-y-2.5">
                 {NOT_FOR_YOU.map((line) => (
-                  <li key={line} className="flex items-start gap-3 text-[15px] text-muted-foreground">
-                    <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground/60" aria-hidden />
+                  <li
+                    key={line}
+                    className="flex items-start gap-3 text-[15px] text-muted-foreground"
+                  >
+                    <XCircle
+                      className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground/60"
+                      aria-hidden
+                    />
                     <span>{line}</span>
                   </li>
                 ))}
@@ -469,8 +595,14 @@ function CoachingPage() {
           <Group>
             <Accordion type="single" collapsible>
               {faq.map((it, i) => (
-                <AccordionItem key={it.q} value={`faq-${i}`} className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70">
-                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
+                <AccordionItem
+                  key={it.q}
+                  value={`faq-${i}`}
+                  className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70"
+                >
+                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">
+                    {it.q}
+                  </AccordionTrigger>
                   <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">
                     {it.q === "What does it cost?" && cost ? cost : it.a}
                   </AccordionContent>
@@ -505,7 +637,10 @@ function CoachingPage() {
             ))}
           </div>
           <div className="mt-4 text-center">
-            <Link to={APPLY_TO} className="text-[15px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            <Link
+              to={APPLY_TO}
+              className="text-[15px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
               Something else
             </Link>
           </div>
@@ -518,18 +653,28 @@ function CoachingPage() {
               ]}
             />
           </div>
-          <p className="mt-6 text-center text-[13px] text-muted-foreground">By application. I keep my client list small.</p>
+          <p className="mt-6 text-center text-[13px] text-muted-foreground">
+            By application. I keep my client list small.
+          </p>
 
           <Surface className="mt-10 p-5">
             <div className="flex items-start gap-4">
-              <IconTile><MessageSquare className="h-5 w-5" aria-hidden /></IconTile>
+              <IconTile>
+                <MessageSquare className="h-5 w-5" aria-hidden />
+              </IconTile>
               <div className="min-w-0">
-                <div className="text-[17px] font-semibold leading-snug">Want to ask something first?</div>
+                <div className="text-[17px] font-semibold leading-snug">
+                  Want to ask something first?
+                </div>
                 <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
                   Message me on Instagram, or see how I train and coach on YouTube.
                 </p>
-                <div className="mt-3"><TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink></div>
-                <div className="mt-3"><SocialLinks /></div>
+                <div className="mt-3">
+                  <TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink>
+                </div>
+                <div className="mt-3">
+                  <SocialLinks />
+                </div>
               </div>
             </div>
           </Surface>

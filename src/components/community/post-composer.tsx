@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   AtSign, BarChart3, Camera, Check, ChevronLeft, ChevronRight, Dumbbell, Film, Images, Loader2, Lock, Maximize2, PenLine, Play,
-  Blend, Scissors, SlidersHorizontal, Smile, Star, Type, UserRound, Users, Volume2, VolumeX, X,
+  Blend, RotateCw, Scissors, SlidersHorizontal, Smile, Star, Type, UserRound, Users, Volume2, VolumeX, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, pickerAudience, ty
 import { MAX_SLIDES } from "@/lib/community";
 import type { ComposerPickHow } from "@/components/community/composer-pick";
 import { pickMedia, releasePicked, uploadPicked } from "@/lib/community-media";
-import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, startAspect, nextAspect, placement, clampFraming, type PostAspect } from "@/lib/photo-frame";
+import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, startAspect, nextAspect, clampFraming, framedStyle, straightenOf, turnQuarter, withStraighten, type PostAspect } from "@/lib/photo-frame";
 import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
 import { canvasToBlob, cardLogo, ensureDisplayFont } from "@/lib/workout-share-card";
 import { releaseCanvas, context2d } from "@/lib/canvas-memory";
@@ -21,6 +21,10 @@ import { clearDraft, loadDraft, saveDraft } from "@/lib/post-draft";
 import { feedback } from "@/lib/feedback";
 import { tagSummary, uniqueTags, withTags } from "@/lib/crew-tags";
 import { useSlideTray, type TrayItem } from "@/components/community/slide-tray";
+import { CameraRoll } from "@/components/community/camera-roll";
+import { hasNativePhotos } from "@/lib/native-photos";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { framingForCrop } from "@/lib/media/capture";
 import { PhotoFramer } from "@/components/community/photo-framer";
 import { StickerLayer, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach } from "@/components/community/post-attach";
@@ -89,7 +93,7 @@ export type ComposerWorkout = {
   onChange?: () => void;
 };
 
-type ComposerTool = "filters" | "enhance" | null;
+type ComposerTool = "filters" | "enhance" | "rotate" | null;
 type Step = "select" | "edit" | "details";
 const STEPS: Step[] = ["select", "edit", "details"];
 const EASE = "cubic-bezier(0.32,0.72,0,1)";
@@ -162,6 +166,9 @@ export function PostComposer({
   const tray = useSlideTray({ open, initial: null, resetKey: draftKey, coverCount: 0, videoContext });
   const att = usePostAttach({ initial: null, key: draftKey, open });
   const [focus, setFocus] = useState<string | null>(null);
+  // the iPhone app shows the camera roll itself (native-photos.ts): one at a time, or several with Select
+  const [roll] = useState(() => hasNativePhotos());
+  const [multi, setMulti] = useState(false);
   // a post starts at 9:16, filling its screen in the Crew feed (startAspect)
   const [aspect, setAspect] = useState<PostAspect>("full");
   const aspectPicked = useRef(false);
@@ -176,6 +183,28 @@ export function PostComposer({
   const [items, setItems] = useState<StickerItem[]>([]);
   const [request, setRequest] = useState<StickerRequest>(null);
   const [tool, setTool] = useState<ComposerTool>("filters");
+  // Camera: the app's own (media/capture.ts, purpose "post": full screen, a tap for a photo, a hold to film); the
+  // photo stays whole and starts framed as its guide showed it, so it can still be moved, zoomed and turned
+  const fromCamera = (file: File, place?: { framing: ReturnType<typeof framingForCrop>; whole: false }) => {
+    if (tray.items.length >= MAX_SLIDES) return void toast.message(`A post holds ${MAX_SLIDES}`, { description: "Remove one to add another." });
+    if (!tray.items.length) setCoverLive(true);
+    // the camera roll's one at a time: the shot takes the place of the one showing
+    if (roll && !multi) for (const it of tray.items) tray.remove(it.id);
+    void tray.add([file], place);
+    setWriting(false);
+    if (step === "details" && writing) setStep("select");
+  };
+  const camera = useFilmCamera({
+    purpose: "post",
+    onClip: (f) => fromCamera(f),
+    onShot: (s) => fromCamera(s.file, { framing: framingForCrop(s.picture, s.crop, POST_ASPECTS[aspect]), whole: false }),
+    onLibrary: () => onPick("library"),
+  });
+  /** Camera opens the app's own camera where it can, the phone's otherwise; Library the phone's picker. */
+  const pick = (how: ComposerPickHow) => {
+    if (how === "camera" && camera.start()) return;
+    onPick(how);
+  };
   // the person's default filter for posts: on every new photo or clip (never one already on the post)
   const filterPrefs = useFilterDefaults(open);
   const { defaults: filterDefaults, setDefault: setFilterDefault } = filterPrefs;
@@ -198,6 +227,7 @@ export function PostComposer({
     setClosing(false);
     setConfirm(null);
     setFocus(null);
+    setMulti(false);
     setAspect("full");
     aspectPicked.current = false;
     setCaption("");
@@ -242,6 +272,12 @@ export function PostComposer({
     if (!tray.items.length && incoming.live) setCoverLive(true);
     const room = MAX_SLIDES - tray.items.length;
     if (room <= 0) return void toast.message(`A post holds ${MAX_SLIDES}`, { description: "Remove one to add another." });
+    if (roll) {
+      // the camera roll's one-at-a-time: a shot from the camera (or one pick from Apple's picker) takes the
+      // place of the one showing; several at once switch Select on
+      if (multi || incoming.files.length > 1) setMulti(true);
+      else for (const it of tray.items) tray.remove(it.id);
+    }
     void tray.add(incoming.files);
     setWriting(false);
     if (step === "details" && writing) setStep("select");
@@ -525,7 +561,10 @@ export function PostComposer({
                 aspect={aspect}
                 onAspect={cycleAspect}
                 gridFlash={gridFlash}
-                onPick={onPick}
+                onPick={pick}
+                roll={roll}
+                multi={multi}
+                onMulti={setMulti}
                 onWrite={
                   allowWrite
                     ? () => {
@@ -574,7 +613,12 @@ export function PostComposer({
                   design={design}
                   onAspect={cycleAspect}
                   onCover={(id) => setCoverFor(id)}
-                  onAdd={() => onPick("library")}
+                  // the app's camera roll: back to the grid with Select on; else Apple's picker
+                  onAdd={() => {
+                    if (!roll) return onPick("library");
+                    setMulti(true);
+                    go("select");
+                  }}
                   onTag={() => setTagging(true)}
                   tags={tags.length}
                   hideLoadsOn={!!post?.showHideLoads && hideLoads && !!card && !card.paint}
@@ -720,6 +764,7 @@ export function PostComposer({
               );
             })()}
           {tray.trimmer}
+          {camera.element}
           <TagPeopleSheet
             open={tagging}
             onClose={() => setTagging(false)}
@@ -797,6 +842,9 @@ function SelectStep({
   gridFlash,
   onPick,
   onWrite,
+  roll = false,
+  multi = false,
+  onMulti,
 }: {
   tray: ReturnType<typeof useSlideTray>;
   list: TrayItem[];
@@ -807,31 +855,82 @@ function SelectStep({
   gridFlash: number;
   onPick: (how: ComposerPickHow) => void;
   onWrite?: () => void;
+  /** The iPhone app's camera roll under the preview (native-photos.ts) instead of the picks and Apple's picker. */
+  roll?: boolean;
+  multi?: boolean;
+  onMulti?: (on: boolean) => void;
 }) {
   const shape = POST_ASPECTS[aspect];
   const [vh, setVh] = useState(800);
   useEffect(() => setVh(window.innerHeight), []);
   // the gallery swipes up over the preview (more picks in view) and back down, Instagram's way
   const [expanded, setExpanded] = useState(false);
-  const stageH = Math.round(vh * (expanded && list.length ? 0.3 : 0.5));
+  // a camera-roll tile tapped and still loading: its thumbnail holds the preview
+  const [staged, setStaged] = useState<string | null>(null);
+  const [rollSeeing, setRollSeeing] = useState(true);
+  // with no photos to show yet (access to ask for), the preview steps back so the ask fits above Post · Story
+  const small = (expanded && (list.length || roll)) || (roll && !rollSeeing && !list.length);
+  const stageH = Math.round(vh * (small ? 0.3 : 0.5));
   const stage = useStage(shape, stageH);
   const swipeY = useRef<number | null>(null);
   const framable = focused && focused.w && focused.h && (focused.kind === "image" ? focused.preview : focused.video);
+  // the gallery head's swipe: a tap or a swipe up / down (never on its buttons)
+  const grip: React.HTMLAttributes<HTMLDivElement> = {
+    onPointerDown: (e) => {
+      if ((e.target as Element).closest("[data-composer-source]")) return;
+      swipeY.current = e.clientY;
+      // the finger's lift lands here wherever it went (a swipe up ends over the preview)
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* fine */
+      }
+    },
+    onPointerUp: (e) => {
+      const y0 = swipeY.current;
+      swipeY.current = null;
+      if (y0 == null || (!list.length && !roll)) return;
+      const dy = e.clientY - y0;
+      if (Math.abs(dy) < 8) setExpanded((x) => !x);
+      else if (dy < -24) setExpanded(true);
+      else if (dy > 24) setExpanded(false);
+    },
+    onPointerCancel: () => {
+      swipeY.current = null;
+    },
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={stage.ref} className="relative flex shrink-0 items-center justify-center bg-zinc-950 transition-[height] duration-300 ease-out motion-reduce:transition-none" style={{ height: stageH }} data-composer-stage>
-        {!focused ? (
-          <div className="flex flex-col items-center gap-4 px-8 text-center animate-in fade-in-0 duration-300">
-            <div className="grid h-20 w-20 place-items-center rounded-full border-2 border-white/80">
-              <Images className="h-9 w-9" />
+        {staged ? (
+          <div className="relative overflow-hidden bg-black" style={{ width: stage.box.w, height: stage.box.h }} data-composer-staged>
+            <img src={staged} alt="" className="h-full w-full object-cover" />
+            <span className="absolute inset-0 grid place-items-center">
+              <Loader2 className="h-7 w-7 animate-spin text-white/80 drop-shadow" />
+            </span>
+          </div>
+        ) : !focused && roll ? (
+          <div className="flex flex-col items-center gap-3 px-8 text-center animate-in fade-in-0 duration-300" data-composer-roll-empty>
+            <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-white/80">
+              <Images className="h-7 w-7" />
+            </div>
+            <div className="text-[17px] font-semibold">{rollSeeing ? "Tap a photo or video below" : "Share a photo or video"}</div>
+            {onWrite && (
+              <button type="button" onClick={onWrite} className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-white/80 active:opacity-60" data-composer-write>
+                <PenLine className="h-4 w-4" /> Write a post instead
+              </button>
+            )}
+          </div>
+        ) : !focused ? (
+          // nothing picked yet (the library was closed): no landing button, the grid's Camera and Library are the way in
+          <div className="flex flex-col items-center gap-3 px-8 text-center animate-in fade-in-0 duration-300" data-composer-empty>
+            <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-white/80">
+              <Images className="h-7 w-7" />
             </div>
             <div>
-              <div className="text-[19px] font-semibold">Share a photo or video</div>
-              <p className="mt-1 text-[13px] text-white/60">Up to {MAX_SLIDES} in one post.</p>
+              <div className="text-[17px] font-semibold">Share a photo or video</div>
+              <p className="mt-1 text-[13px] text-white/60">Up to {MAX_SLIDES} in one post, from Library or Camera below.</p>
             </div>
-            <button type="button" onClick={() => onPick("library")} className="h-11 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground active:scale-[0.97]" data-composer-open-library>
-              Choose from library
-            </button>
             {onWrite && (
               <button type="button" onClick={onWrite} className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-white/80 active:opacity-60" data-composer-write>
                 <PenLine className="h-4 w-4" /> Write a post instead
@@ -869,31 +968,23 @@ function SelectStep({
           </div>
         )}
       </div>
-      {/* the gallery's head: a grip (tap, or swipe up / down), what's picked, and the phone's picker by kind */}
-      <div
-        className="touch-none select-none"
-        onPointerDown={(e) => {
-          if ((e.target as Element).closest("[data-composer-source]")) return;
-          swipeY.current = e.clientY;
-          // the finger's lift lands here wherever it went (a swipe up ends over the preview)
-          try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-          } catch {
-            /* fine */
-          }
-        }}
-        onPointerUp={(e) => {
-          const y0 = swipeY.current;
-          swipeY.current = null;
-          if (y0 == null || !list.length) return;
-          const dy = e.clientY - y0;
-          if (Math.abs(dy) < 8) setExpanded((x) => !x);
-          else if (dy < -24) setExpanded(true);
-          else if (dy > 24) setExpanded(false);
-        }}
-        onPointerCancel={() => (swipeY.current = null)}
-        data-composer-gallery-head={expanded ? "expanded" : "collapsed"}
-      >
+      {roll ? (
+        <CameraRoll
+          tray={tray}
+          list={list}
+          showing={focused?.id ?? null}
+          onShow={onFocus}
+          multi={multi}
+          onMulti={(on) => onMulti?.(on)}
+          onPick={onPick}
+          onStage={setStaged}
+          onSeeing={setRollSeeing}
+          head={{ ...grip, expanded }}
+        />
+      ) : (
+        <>
+      {/* the gallery's head: a grip (tap, or swipe up / down) and what's picked; the grid's Library tile is the one way to the phone's picker */}
+      <div className="touch-none select-none" {...grip} data-composer-gallery-head={expanded ? "expanded" : "collapsed"}>
         {list.length > 0 && <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-white/30" aria-hidden />}
         <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2">
           <span className="min-w-0 text-[17px] font-semibold">
@@ -901,26 +992,11 @@ function SelectStep({
             {list.length > 0 && <span className="ml-1.5 text-[14px] font-medium text-white/50">{list.length}/{MAX_SLIDES}</span>}
             {list.length > 1 && <span className="ml-2 hidden whitespace-nowrap text-[12px] font-normal text-white/45 min-[430px]:inline">hold to reorder</span>}
           </span>
-          {/* the phone's own picker, straight to one kind (its Albums and Favorites are in it) */}
-          <span className="flex shrink-0 gap-1.5" data-composer-source>
-            {(["photos", "videos"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                disabled={list.length >= MAX_SLIDES}
-                onClick={() => onPick(k)}
-                className="inline-flex h-8 items-center gap-1 rounded-full bg-white/10 px-3 text-[13px] font-semibold active:bg-white/20 disabled:opacity-30"
-                aria-label={k === "photos" ? "Add photos" : "Add videos"}
-                data-composer-pick={k}
-              >
-                {k === "photos" ? <Images className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
-                {k === "photos" ? "Photos" : "Videos"}
-              </button>
-            ))}
-          </span>
         </div>
       </div>
       <PickGrid tray={tray} list={list} focused={focused?.id ?? null} onFocus={onFocus} onPick={onPick} />
+        </>
+      )}
     </div>
   );
 }
@@ -1028,7 +1104,7 @@ function PickGrid({ tray, list, focused, onFocus, onPick }: { tray: ReturnType<t
                 aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : `${it.kind === "video" ? "Clip" : "Photo"} ${i + 1}${on ? ", showing" : ""}`}
                 aria-pressed={on}
               >
-                {it.preview ? <img src={it.preview} alt="" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full jf-skeleton bg-zinc-800" />}
+                {it.preview ? <img src={it.tile ?? it.preview} alt="" draggable={false} decoding="async" className="h-full w-full object-cover" /> : <div className="h-full w-full jf-skeleton bg-zinc-800" />}
               </button>
               {on && <span className="pointer-events-none absolute inset-0 bg-white/25" />}
               <span key={`${i}-${list.length}`} className="pointer-events-none absolute right-1.5 top-1.5 grid h-[22px] min-w-[22px] place-items-center rounded-full border-[1.5px] border-white bg-primary px-1 text-[12px] font-bold text-white shadow animate-in zoom-in-50 duration-200">
@@ -1186,6 +1262,7 @@ function EditStep({
           </div>
         )}
         {tool === "enhance" && enhanceable(cur) && <EnhanceTool key={cur.id} tray={tray} it={cur} list={list} defaults={filterDefaults} setDefault={setFilterDefault} prefs={filterPrefs} onCompare={onCompare} onDone={() => setTool(null)} />}
+        {tool === "rotate" && cur?.kind === "image" && !cur.existing && <RotateTool key={cur.id} tray={tray} it={cur} shape={shape} />}
         {cur?.kind === "video" && tool !== "enhance" && <ClipTools tray={tray} it={cur} onCover={() => onCover(cur.id)} />}
       </div>
       <div className="shrink-0 px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
@@ -1195,6 +1272,7 @@ function EditStep({
           {onCoverSlide && filters.items.length > 1 && <Tool icon={<Blend className="h-5 w-5" />} label="Templates" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
           {onCoverSlide && <Tool icon={<Type className="h-5 w-5" />} label="Text" onClick={() => setRequest({ kind: "text", n: Date.now() })} />}
           {onCoverSlide && <Tool icon={<Smile className="h-5 w-5" />} label="Stickers" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} />}
+          {cur?.kind === "image" && !cur.existing && <Tool icon={<RotateCw className="h-5 w-5" />} label="Rotate" on={tool === "rotate"} onClick={() => setTool(tool === "rotate" ? null : "rotate")} />}
           <Tool icon={<AtSign className="h-5 w-5" />} label={tags ? `Tagged ${tags}` : "Tag"} on={tags > 0} onClick={onTag} />
           <Tool icon={<Maximize2 className="h-5 w-5" />} label={design ? `${POST_ASPECT_LABEL[aspect]}` : "Ratio"} onClick={onAspect} />
         </div>
@@ -1209,7 +1287,7 @@ function EditStep({
               aria-label={`Slide ${i + 1}`}
               aria-pressed={i === slide}
             >
-              {it.preview && <img src={it.preview} alt="" className="h-full w-full object-cover" />}
+              {it.preview && <img src={it.tile ?? it.preview} alt="" decoding="async" className="h-full w-full object-cover" />}
               {it.kind === "video" && <Play className="absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 fill-white text-white" />}
             </button>
           ))}
@@ -1228,10 +1306,58 @@ function EditStep({
 function SlideView({ it, box, shape, playing, compare = false }: { it: TrayItem; box: { w: number; h: number }; shape: number; playing: boolean; compare?: boolean }) {
   if (!it.w || !it.h) return <div className="grid h-full w-full place-items-center"><Loader2 className="h-6 w-6 animate-spin text-white/60" /></div>;
   const size = { w: it.w, h: it.h };
+  // the frame's own numbers at this size: placed (and, a photo, turned) exactly as it'll be drawn
   const f = clampFraming(it.framing ?? CENTRED, size, { w: shape, h: 1 });
-  const p = placement(f, size, box);
-  const style = { position: "absolute" as const, width: p.w, height: p.h, left: p.x, top: p.y, maxWidth: "none" };
+  const style = { position: "absolute" as const, left: 0, top: 0, maxWidth: "none", ...framedStyle(it.kind === "image" ? f : { ...f, r: undefined }, size, box) };
   return <SlideMedia it={it} style={style} playing={playing} compare={compare} />;
+}
+
+/**
+ * Rotate (a photo): a quarter turn at a time and a straighten of up to ±45°, Instagram's. The photo
+ * stays whole; the turn is part of its framing and is drawn only when the post is made (the zoom
+ * never lets a corner of the frame go empty).
+ */
+function RotateTool({ tray, it, shape }: { tray: ReturnType<typeof useSlideTray>; it: TrayItem; shape: number }) {
+  const f = it.framing ?? CENTRED;
+  const tilt = Math.round(straightenOf(f.r) * 10) / 10;
+  const size = it.w && it.h ? { w: it.w, h: it.h } : null;
+  const set = (next: typeof f) => tray.setFraming(it.id, size ? clampFraming(next, size, { w: shape, h: 1 }) : next);
+  return (
+    <div className="flex items-center gap-3 px-4 pt-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-composer-rotate>
+      <button
+        type="button"
+        onClick={() => {
+          feedback("tap");
+          set(turnQuarter(f));
+        }}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 active:scale-95"
+        aria-label="Turn a quarter"
+        data-composer-turn
+      >
+        <RotateCw className="h-5 w-5" />
+      </button>
+      <input
+        type="range"
+        min={-45}
+        max={45}
+        step={0.5}
+        value={tilt}
+        onChange={(e) => set(withStraighten(f, Number(e.target.value)))}
+        className="min-w-0 flex-1 accent-white"
+        aria-label="Straighten"
+        data-composer-straighten
+      />
+      <button
+        type="button"
+        onClick={() => set(withStraighten(f, 0))}
+        className="w-12 shrink-0 text-right text-[13px] font-semibold tabular-nums text-white/80 active:opacity-60"
+        aria-label="Straighten: reset"
+      >
+        {tilt > 0 ? "+" : ""}
+        {tilt}°
+      </button>
+    </div>
+  );
 }
 
 /** A slide's photo or clip, its filter graded live over it (the same program the post bakes in). */

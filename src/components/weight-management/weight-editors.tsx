@@ -283,7 +283,8 @@ export function TreadmillSheet({ open, onOpenChange, clientId, view, start, revi
   const m = useMutation({
     mutationFn: () => save({ data: { clientId, reviewId: reviewId ?? null, plan: { trainingDay: tr.session, restDay: rr.session }, switchToTreadmill: switchType } }),
     onSuccess: (res) => {
-      toast.success(res.changed ? "Cardio plan updated. Their workouts follow it." : "Nothing changed");
+      toast.success(res.drafted ? "On their cardio draft. Review it on the Cardio tab, then publish." : res.changed ? "Cardio plan updated. Their workouts follow it." : "Nothing changed");
+      qc.invalidateQueries({ queryKey: ["cardio-workspace", clientId] });
       qc.invalidateQueries({ queryKey: weightKey(clientId) });
       qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
       qc.invalidateQueries({ queryKey: ["cardio_targets", clientId] });

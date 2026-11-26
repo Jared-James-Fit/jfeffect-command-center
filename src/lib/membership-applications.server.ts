@@ -7,7 +7,7 @@ import { firstNameFrom, goalLabelOf } from "@/lib/membership-apply";
 import { maskEmail } from "@/lib/setup-invite";
 
 export const APPLICATION_COLUMNS =
-  "id, created_at, updated_at, full_name, email, instagram, phone, goal, experience, coaching_interest, contact_method, status, flagged, contact_status, contacted_at, admin_notes, decided_at, invite_sent_at, invite_count, activated_at, client_id, existing_account, source_page, referrer, utm_source, utm_campaign, is_test";
+  "id, created_at, updated_at, full_name, email, instagram, phone, goal, experience, coaching_interest, contact_method, status, flagged, contact_status, contacted_at, admin_notes, decided_at, invite_sent_at, invite_count, activated_at, client_id, existing_account, source_page, referrer, utm_source, utm_campaign, is_test, archived_at";
 
 export async function admin(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

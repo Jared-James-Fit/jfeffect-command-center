@@ -1,6 +1,7 @@
 import { addDays, format } from "date-fns";
 import { weekDisplayRange } from "@/lib/block-dates";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
+import { itemDisplayTitle } from "@/lib/workouts/workout-title";
 
 export type WorkoutItem = {
   day: any;
@@ -25,6 +26,8 @@ export type WorkoutItem = {
    * this over re-resolving, since rows aren't part of the list payload.
    */
   estimated_minutes?: number;
+  /** What the workout is called everywhere it shows (workout-title.ts): a meaningful coach name, else its focus. */
+  display_title?: string;
   /**
    * Instance-level scheduling fields (Phase 2a canonical merge).
    *
@@ -339,10 +342,9 @@ export function computeTodayState(
   return { kind: "upcoming", item: next, whenLabel };
 }
 
+/** The workout's one title (itemDisplayTitle): the same on Workouts, the calendars and analytics. */
 export function dayDisplayTitle(item: WorkoutItem | undefined | null): string {
-  if (!item) return "Workout";
-  const d = item.day;
-  return cleanDayTitle(d?.title, d?.day_index);
+  return itemDisplayTitle(item);
 }
 
 /**

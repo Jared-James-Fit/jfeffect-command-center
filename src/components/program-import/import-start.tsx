@@ -17,6 +17,7 @@ import { importKeys } from "@/lib/program-import/queries";
 import { OpenImports } from "./open-imports";
 import { ImportSteps } from "./import-steps";
 import type { SourceDoc } from "@/lib/program-import/types";
+import { isAiConsentDismissed, useAiConsentInline } from "@/components/ai-consent/ai-consent";
 
 const COST = FEATURE_COSTS.program_import;
 const MAX_LOCAL_BYTES = 15 * 1024 * 1024;
@@ -76,7 +77,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const start = useServerFn(startProgramImport);
+  const [start, consentAsk] = useAiConsentInline(useServerFn(startProgramImport), "reads your program");
   const credits = useAiCredits();
   const setCredits = useSetCreditState();
 
@@ -240,7 +241,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
       }
       setError(r.message);
     } catch (e: any) {
-      setError(String(e?.message ?? "Something went wrong. Try again."));
+      if (!isAiConsentDismissed(e)) setError(String(e?.message ?? "Something went wrong. Try again."));
     } finally {
       // a file that went up for an import that didn't start isn't kept
       if (uploaded.length) void supabase.storage.from("program-imports").remove(uploaded);
@@ -416,6 +417,8 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
         <summary className="cursor-pointer py-1 font-medium">How your file is handled</summary>
         <p className="mt-1 leading-relaxed">{IMPORT_PRIVACY_TEXT}</p>
       </details>
+
+      {consentAsk}
 
       {error && (
         <p className="mt-4 rounded-xl bg-destructive/10 px-4 py-3 text-[14px] text-destructive" role="alert" data-import-error>

@@ -24,6 +24,15 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { TrainingTimeSheet } from "@/components/workout-day/TrainingTimeSheet";
 import { getClientResults } from "@/lib/pl-programs";
+import { clientWorkoutsQuery } from "@/lib/client-workouts-query";
+import { itemDisplayTitle } from "@/lib/workouts/workout-title";
+import {
+  durationKindOf,
+  durationOfCompletion,
+  durationStats,
+  formatHm,
+  type DurationKind,
+} from "@/lib/workouts/session-duration";
 import { ANALYTICS_COLORS } from "@/lib/analytics-format";
 import { cn } from "@/lib/utils";
 import {
@@ -53,7 +62,13 @@ type Props = {
   header?: ReactNode;
 };
 
-type SessionRow = TrainingSession & { completionId: string; scheduledWorkoutId: string | null };
+type SessionRow = TrainingSession & {
+  completionId: string;
+  scheduledWorkoutId: string | null;
+  /** measured (a confirmed time or the clock), reconstructed from the sets, or estimated */
+  durationKind: DurationKind;
+  estimatedMin: number | null;
+};
 
 const LOG_PREVIEW = 8;
 const DAY_MS = 86_400_000;
@@ -96,9 +111,8 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
       // Pad the window: a confirmed start can sit days before completed_at.
       const { data: comps, error } = await (supabase as any)
         .from("pl_day_completions")
-        .select(
-          "id, day_id, scheduled_workout_id, started_at, training_started_at, completed_at, actual_duration_min, active_duration_seconds, logged_sets_count, logging_percentage, session_rating, client_notes",
-        )
+        // every column: the duration read (performed_duration_seconds, duration_source, …) when it's there
+        .select("*")
         .eq("client_id", clientId)
         .not("completed_at", "is", null)
         .gte("completed_at", new Date(startMs - 31 * DAY_MS).toISOString())
@@ -122,6 +136,16 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
     },
   });
 
+  // The workout's one title (workout-title.ts) and its plan estimate, from the program read the Workouts page shares.
+  const { data: programItems } = useQuery({ ...clientWorkoutsQuery(clientId), enabled: !!clientId });
+  const planByDay = useMemo(() => {
+    const m = new Map<string, { title: string; estimate: number | null }>();
+    for (const it of (programItems ?? []) as any[]) {
+      if (it?.day?.id && !m.has(it.day.id)) m.set(it.day.id, { title: itemDisplayTitle(it), estimate: it.estimated_minutes ?? null });
+    }
+    return m;
+  }, [programItems]);
+
   const sessions = useMemo<SessionRow[]>(() => {
     if (!raw) return [];
     const titles = new Map(raw.days.map((d: any) => [d.id, d.title as string | null]));
@@ -136,6 +160,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
       byDay.set(r.day_id, list);
     }
     const strengthSets: StrengthSet[] = [];
+    const setTimes = new Map<string, number[]>();
     for (const s of results as any[]) {
       if (!s.counts_load || !s.date) continue;
       const at = new Date(s.date).getTime();
@@ -146,6 +171,10 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
           Math.abs(new Date(a.completed_at).getTime() - at) <= Math.abs(new Date(b.completed_at).getTime() - at) ? a : b,
         );
         if (Math.abs(new Date(nearest.completed_at).getTime() - at) <= 3 * DAY_MS) sessionKey = nearest.id;
+        // the set's own time, for when the workout was performed (never the time it was typed)
+        if (Math.abs(new Date(nearest.completed_at).getTime() - at) <= DAY_MS) {
+          setTimes.set(nearest.id, [...(setTimes.get(nearest.id) ?? []), at]);
+        }
       }
       strengthSets.push({
         sessionKey,
@@ -169,6 +198,23 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
         loggedSets: r.logged_sets_count,
       });
       if (!timing) continue;
+      // How long it actually took (session-duration.ts): the clock when the sets agree, else the
+      // sets' own span, else the plan's estimate for sets typed in afterwards; only a confirmed
+      // time or the clock is ever said as measured.
+      const plan = planByDay.get(r.day_id);
+      const read = durationOfCompletion(r, { setTimes: setTimes.get(r.id), estimatedMin: r.estimated_duration_min ?? plan?.estimate ?? null });
+      const kind = read ? durationKindOf(read) : "estimated";
+      if (read && kind === "reconstructed" && read.minutes != null) {
+        timing.durationMin = read.minutes;
+        if (read.performedStart && timing.source !== "confirmed") timing.start = read.performedStart;
+        timing.source = "tracked";
+      } else if (read && kind === "measured" && read.minutes != null) {
+        timing.durationMin = read.minutes;
+        if (timing.source === "suspect") timing.source = "tracked";
+      } else if (read?.lateEntry && timing.source !== "confirmed") {
+        // typed in afterwards: kept out of the time stats until someone sets the time
+        timing.source = "suspect";
+      }
       const t = timing.start.getTime();
       if (t < startMs || t > endMs) continue;
       const p = zonedParts(timing.start, timezone);
@@ -180,7 +226,9 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
         completionId: r.id,
         scheduledWorkoutId: r.scheduled_workout_id ?? null,
         dayId: r.day_id,
-        title: titles.get(r.day_id) ?? null,
+        title: plan?.title ?? titles.get(r.day_id) ?? null,
+        durationKind: timing.source === "suspect" ? "estimated" : kind,
+        estimatedMin: r.estimated_duration_min ?? plan?.estimate ?? null,
         start: timing.start,
         end: dur != null ? new Date(timing.start.getTime() + dur * 60_000) : null,
         durationMin: dur,
@@ -203,11 +251,20 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
       });
     }
     return out.sort((a, b) => b.start.getTime() - a.start.getTime());
-  }, [raw, results, timezone, startMs, endMs]);
+  }, [raw, results, timezone, startMs, endMs, planByDay]);
 
   const summary = useMemo(
     () => summarizeTrainingTime(sessions, { nextMeetDate: nextMeetDate ?? null }),
     [sessions, nextMeetDate],
+  );
+  // Average length, estimate vs actual and weekly training time, in one line.
+  const durations = useMemo(
+    () =>
+      durationStats(
+        sessions.map((s) => ({ start: s.start, minutes: s.durationMin, kind: s.durationKind, estimatedMin: s.estimatedMin })),
+        { start: new Date(startMs), end: new Date(Math.min(endMs, Date.now())) },
+      ),
+    [sessions, startMs, endMs],
   );
 
   const viewerTz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : timezone;
@@ -289,6 +346,30 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
             }
           />
         </div>
+
+        {/* Duration: average, against the plan's estimate, and time a week; reconstructed ones counted, never called measured. */}
+        {durations.sessions > 0 && (
+          <p className="text-xs text-muted-foreground tabular-nums" data-duration-stats>
+            Avg <b className="text-foreground">{formatHm(durations.avgMin)}</b>
+            {durations.overEstimateMin != null && (
+              <>
+                {" · "}
+                {Math.abs(durations.overEstimateMin) < 5
+                  ? "on the estimate"
+                  : `${formatHm(Math.abs(durations.overEstimateMin))} ${durations.overEstimateMin > 0 ? "over" : "under"} the estimate`}
+              </>
+            )}
+            {durations.weeklyMin != null && (
+              <>
+                {" · "}
+                <b className="text-foreground">{formatHm(durations.weeklyMin)}</b> a week
+              </>
+            )}
+            {durations.measured < durations.sessions && (
+              <span> · {durations.sessions - durations.measured} from set times</span>
+            )}
+          </p>
+        )}
 
         {/* Windows */}
         <div>
@@ -403,7 +484,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                     <div className="truncate text-xs text-muted-foreground tabular-nums">
                       {s.source === "suspect"
                         ? `Logged ${formatClockAt(s.start, timezone)}`
-                        : `${formatClockAt(s.start, timezone)} · ${formatMinutes(s.durationMin)}${s.loggedSets ? ` · ${s.loggedSets} sets` : ""}`}
+                        : `${formatClockAt(s.start, timezone)} · ${s.durationKind === "reconstructed" ? "~" : ""}${formatMinutes(s.durationMin)}${s.loggedSets ? ` · ${s.loggedSets} sets` : ""}`}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -704,7 +785,7 @@ function SessionDetailSheet({
             </Button>
             {canOpenLog ? (
               <Button asChild size="lg" className="w-full">
-                <Link to="/admin/client-programs/$clientId" params={{ clientId }}>
+                <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "training" } as any}>
                   <ExternalLink className="mr-2 h-4 w-4" /> Open in program
                 </Link>
               </Button>

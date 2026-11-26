@@ -366,15 +366,19 @@ describe("birthday posts say whose birthday it is", () => {
   });
 });
 
-describe("the cards are clean paper, never the feed's near-black", () => {
-  it("paints on paper with dark ink and the brand red, no dark glow", () => {
+describe("the cards are one design system (post-design.ts): black, off-white, graphite and red", () => {
+  it("paints every card from the design system's surfaces, no serif, no italics, no glow", () => {
     const cards = read("src/lib/instagram-cards.ts");
-    expect(cards).toContain('const PAPER = "#f6f3ee";');
-    expect(cards).not.toMatch(/#09090b|#0a0a0d|#07070a|rgba\(255,255,255|darkGlow/);
-    // while one paints, and if it can't, the box is the same paper
+    const deck = read("src/lib/deck-cards.ts");
+    for (const src of [cards, deck]) {
+      expect(src).toContain('from "@/lib/post-design"');
+      expect(src.replace(/^\s*(\*|\/\/).*$/gm, "")).not.toMatch(/Instrument Serif|serifItalic|italic|createLinearGradient|darkGlow|shadowBlur/);
+    }
+    // while one paints, and if it can't, the box is the off-white surface
     const art = read("src/components/community/post-art.tsx");
     expect(art).not.toContain("bg-[#09090b]");
-    expect(POST_ART_VERSION).toBeGreaterThanOrEqual(2);
+    expect(art).toContain("bg-[#f3f1ec]");
+    expect(POST_ART_VERSION).toBeGreaterThanOrEqual(6);
   });
 });
 
@@ -390,9 +394,9 @@ describe("charts on a card read on its paper", () => {
     expect(visuals).toContain('"--lv-gap": "#ece9e4"');
   });
   it("chart marks that aren't the highlight are a solid grey, not a faint wash", () => {
-    const cards = read("src/lib/instagram-cards.ts");
-    expect(cards).toContain("c.fillStyle = b.hot ? RED : ink(0.42);");
-    expect(cards).toContain("c.fillStyle = r.lead ? RED : ink(0.55);");
+    const paint = read("src/lib/post-design-paint.ts");
+    expect(paint).toContain("c.fillStyle = b.hot ? s.accent : s.bar;");
+    expect(paint).toContain("c.fillStyle = lead ? s.accent : s.bar;");
   });
 });
 

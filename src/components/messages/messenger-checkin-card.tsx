@@ -1,3 +1,4 @@
+import { AiConsentOnce } from "@/components/ai-consent/ai-consent";
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CheckinFootageLine } from "@/components/clients/filming-accountability-card";
 import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { feedback } from "@/lib/feedback";
@@ -48,6 +50,7 @@ import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/d
 import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
 import { addPlanSteps } from "@/lib/checkin-coordination/steps";
 import { CleoRecommendationCard } from "@/components/messages/cleo-recommendation-card";
+import { ReplyRecreate } from "@/components/autopilot/reply-recreate";
 import { CHANGE_FOLLOW_UPS, NU } from "@/lib/checkin-coordination/nutrition-fold";
 import { MEAL_CHOICE } from "@/lib/nutrition-history";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -251,6 +254,7 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     nu_supplements: "Supplements",
     nu_activity: "Training / activity",
     nu_free_meal: "Free meal",
+    profile_ask: "Profile",
     win: "Biggest win",
     help: "Help / changes",
     next_week_goal: "Next-week goal",
@@ -711,6 +715,9 @@ function CheckinWizard({
               )}
             </div>
 
+            {/* someone who has never answered about AI processing is asked once, here, in place; Send never waits on it */}
+            {isLast && <AiConsentOnce use="helps your coach prepare their reply from your check-in" className="mt-4" />}
+
             {isLast && nutritionWaiting && (
               <button
                 type="button"
@@ -790,6 +797,7 @@ const EXTRA_LABEL: Record<CheckinExtra, string> = {
   measurements: "Measurements",
   nutrition_update: "Nutrition Update",
   roadmap: "Nutrition roadmap",
+  profile: "Profile question",
 };
 
 /** What this week's check-in added and what it left out, and why (the plan kept on the check-in). */
@@ -968,6 +976,8 @@ export function MessengerCheckinSubmissionCard({
         );
       })()}
 
+      {role === "admin" && (data as any)?.client_id ? <CheckinFootageLine clientId={(data as any).client_id} /> : null}
+
       {analysis ? (
         <div className="mt-3 space-y-2">
           <RecapRow icon={Trophy} label="Win" items={analysis.wins} empty="No clear win flagged" />
@@ -1030,17 +1040,8 @@ export function MessengerCheckinSubmissionCard({
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
               <MessageSquareText className="h-3.5 w-3.5" /> Suggested response
-              {role === "admin" && (
-                <button
-                  type="button"
-                  onClick={() => void redoSuggestion()}
-                  disabled={redoing}
-                  className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-primary hover:bg-primary/10 disabled:opacity-60"
-                  title="Write a new suggestion"
-                >
-                  <RotateCcw className={cn("h-3 w-3", redoing && "animate-spin")} /> {redoing ? "Writing…" : "Redo"}
-                </button>
-              )}
+              {/* Re-create: new wording from the stored assessment (never a new recap), with a style menu and every version kept */}
+              {role === "admin" && <ReplyRecreate checkinId={submissionId} current={String(analysis.suggested_response ?? "")} />}
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
               {analysis.suggested_response}

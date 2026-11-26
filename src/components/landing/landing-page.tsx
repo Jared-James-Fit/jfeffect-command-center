@@ -237,7 +237,7 @@ const COACHING: Array<{ title: string; body: string }> = [
   },
   {
     title: "Meet prep",
-    body: "If you compete, we plan your season, your peak and your weight class together.",
+    body: "If you compete, we plan your season, your peak and your weight class together, and before each meet you get a game plan with every attempt and warm-up.",
   },
 ];
 

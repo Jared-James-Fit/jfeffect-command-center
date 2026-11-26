@@ -14,7 +14,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeVideo } from "@/lib/lift-analysis/run";
-import { guideLift, repDirection } from "@/lib/lift-analysis/exercise";
+import { guideLift, movementOf, repDirection } from "@/lib/lift-analysis/exercise";
 import {
   captionNamesLift,
   chatRunKey,
@@ -206,6 +206,7 @@ export async function liftChatVideo(
       source,
       dirHint: repDirection(exercise) ?? undefined,
       lift: guideLift(exercise),
+      movement: movementOf(exercise),
       onProgress: (p) => setRunning(key, p),
     });
     const video = res.ok ? { dir: res.analysis.dir, reps: res.analysis.reps.length } : null;

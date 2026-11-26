@@ -68,7 +68,7 @@ function answerText(v: unknown): string {
  * `money`: clients' sales and payments (the admin, the owner, the finance login; never a coach). Defaults to `books`.
  * `caller`: the signed-in login, so nothing one person's lookups learned is handed to another.
  */
-type ToolCtx = { db: any; tz: string; today: string; books?: boolean; money?: boolean; caller: string };
+type ToolCtx = { db: any; tz: string; today: string; books?: boolean; money?: boolean; caller: string; analytics?: boolean };
 
 // Kept per login: the database decides who may see the list of tables (cleo_data_catalog answers
 // coaches with nothing), so one person's answer is never reused for anyone else's question.
@@ -166,6 +166,21 @@ export function cleoReadTools(ctx: ToolCtx) {
   const moneyAccess = ctx.money ?? books;
 
   const tools = {
+    business_analytics: tool({
+      description:
+        "JF Effect's own business analytics (the admin's Analytics section): website visitors, sessions, engagement and bounce, active users (daily, weekly, monthly), sign-ups, applications, new paying clients and free-to-paid, revenue and MRR, retention (day 1/7/30/90, cohorts, people at risk), acquisition channels and campaigns with first- and last-touch attribution, approximate geography, the conversion funnel and onboarding, feature adoption, web vitals and errors, plus rule-based insights and last week's summary. Use for any question about how the business, the website or the app is doing. Pass `section` (or 'all') and optionally `from` / `to` (YYYY-MM-DD; defaults to the last 30 days).",
+      inputSchema: z.object({
+        section: z.enum(["all", "overview", "acquisition", "geography", "conversions", "engagement", "retention", "revenue", "technical", "insights"]),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      }),
+      execute: safe("the analytics", async ({ section, from, to }: { section: string; from?: string; to?: string }) => {
+        // the admin's own Analytics, re-checked through the caller's login (and its two-step)
+        const { analyticsForCleo } = await import("@/lib/bi/bi.server");
+        return analyticsForCleo(db, ctx.caller, section, from, to, today);
+      }),
+    }),
+
     business_documents: tool({
       description:
         "The business's own documents, word for word: the Coaching Agreement every coaching client signs (billing, cancelling, ending coaching, refunds, fixed terms, freezes, sessions, conduct...), the Terms of Service, Privacy Policy, Cancellation & Refund Policy, JF Membership Agreement, Recurring Billing Disclosure, and the coach FAQs. Use for any question about what a policy, agreement or FAQ says. Pass `search` with the topic (e.g. 'ending coaching cancel notice') to get the sections that answer it; `document` to read one (e.g. 'coaching-agreement'); nothing to list them.",
@@ -304,7 +319,7 @@ export function cleoReadTools(ctx: ToolCtx) {
 
     training_log: tool({
       description:
-        "What a client actually lifted: logged sets (load as entered, reps, RPE/RIR, warm-ups marked) grouped by training day, with the top set's estimated 1RM. Pass `exercise` (e.g. 'high bar squat') to see only that lift, over a longer range for progress questions.",
+        "What a client actually lifted: logged sets (load as entered, reps, RPE/RIR, bar speed in m/s when a device or the set's video measured it (≈ = estimate), warm-ups marked) grouped by training day, with the top set's estimated 1RM. Pass `exercise` (e.g. 'high bar squat') to see only that lift, over a longer range for progress questions.",
       inputSchema: z.object({
         client_id: clientId,
         days: z.number().int().min(1).max(365).default(21).describe("How far back. Use 60-180 for progress on one lift."),
@@ -352,6 +367,8 @@ export function cleoReadTools(ctx: ToolCtx) {
           load_type: r.load_type ?? null,
           is_bodyweight: r.is_bodyweight ?? null,
           notes: r.notes ?? null,
+          velocity_mps: !r.velocity_excluded && r.mean_concentric_velocity_mps != null ? Number(r.mean_concentric_velocity_mps) : null,
+          velocity_quality: r.velocity_quality ?? null,
         }));
         if (!sets.length) {
           const what = exercise ? `no logged sets matching "${exercise}"` : "no logged sets";
@@ -393,6 +410,62 @@ export function cleoReadTools(ctx: ToolCtx) {
         for (const r of (data?.load_records ?? []) as any[]) lines.push(`- ${dayIn(r.at, tz)} ${r.exercise_name}: heaviest ${kg(r.load_kg)} x ${r.reps} (${kind(r)} by load)`);
         for (const t of (data?.tonnage ?? []) as any[]) lines.push(`- ${dayIn(t.at, tz)} session tonnage ${kg(t.tonnage_kg)} (${kind(t)})`);
         return lines.length > 2 ? lines.join("\n") : `${clientName(c)} has no PRs in the last ${days} days (finished workouts only; training_log has every logged set).`;
+      }),
+    }),
+
+    openipf: tool({
+      description:
+        "A coaching client's OpenIPF: whether a profile is linked and its meets, any matches or new meets waiting for the coach, and with search: true it looks them up on OpenIPF / OpenPowerlifting by name right now (takes up to 25 seconds). To link a profile, propose link_openipf with its link; never link a lifter the lookup didn't find or the person didn't give you. Free members are never looked up.",
+      inputSchema: z.object({
+        client_id: clientId,
+        search: z.boolean().optional().describe("Look them up now (only when no profile is linked)."),
+      }),
+      execute: safe("OpenIPF", async ({ client_id, search }) => {
+        const c = await clientRow(db, client_id);
+        if (c.service_tier !== "coaching") return `${clientName(c)} isn't a coaching client; OpenIPF is only for coaching clients.`;
+        const status = async () => {
+          const { data, error } = await db.rpc("openipf_status", { _client: client_id, _athlete: null });
+          if (error) throw new Error(error.message);
+          return data as any;
+        };
+        let st = await status();
+        let note = "";
+        if (search && !st.linked) {
+          const { data: scan, error } = await db.rpc("openipf_scan_start", { _client: client_id, _athlete: null });
+          if (error) throw new Error(error.message);
+          const until = Date.now() + 25_000;
+          let done = false;
+          while (!done && Date.now() < until) {
+            await new Promise((r) => setTimeout(r, 1500));
+            const { data: step, error: e2 } = await db.rpc("openipf_scan_step", { _scan: scan });
+            if (e2) throw new Error(e2.message);
+            done = !!(step as any)?.done;
+          }
+          note = done ? "Looked up just now." : "Still looking (it finishes in the background; anything found goes to Messages → OpenIPF).";
+          st = await status();
+        }
+        const { liftsLine, matchLine, meetDay, plainLifterName, prLine, profileUrl, siteName } = await import("@/lib/openipf");
+        const lines = [`OpenIPF for ${clientName(c)}${note ? ` (${note})` : ""}:`];
+        if (st.linked) lines.push(`Linked: ${st.url} · ${st.meet_count} meets on file${st.last_meet ? ` · last ${meetDay(st.last_meet)}` : ""}. Synced every day.`);
+        else lines.push(`Not linked.${st.history?.length ? ` Removed before: ${st.history.map((h: any) => h.url).join(", ")} (Add back from their profile).` : ""}`);
+        const { data: waiting } = await db
+          .from("openipf_suggestions")
+          .select("*")
+          .eq("client_id", client_id)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(10);
+        for (const sg of (waiting ?? []) as any[]) {
+          if (sg.kind === "new_meet") {
+            lines.push(`- New meet waiting: ${[sg.meet_name, meetDay(sg.meet_date)].filter(Boolean).join(", ")}${liftsLine(sg) ? ` · ${liftsLine(sg)}` : ""}${prLine(sg.prs) ? ` · ${prLine(sg.prs)}` : ""}`);
+          } else {
+            lines.push(
+              `- Possible match (${sg.confidence ?? "possible"}): ${plainLifterName(sg.lifter_name) || sg.slug} on ${siteName(sg.host)}, ${profileUrl(sg.host, sg.slug)}${matchLine(sg) ? ` · ${matchLine(sg)}` : ""}${liftsLine(sg) ? ` · best ${liftsLine(sg)}` : ""}${sg.reasons?.length ? ` · ${sg.reasons.join(", ")}` : ""}`,
+            );
+          }
+        }
+        if (!st.linked && !(waiting ?? []).length) lines.push(search ? "Nobody by their name was found." : "Nothing waiting. Pass search: true to look them up now.");
+        return lines.join("\n");
       }),
     }),
 
@@ -655,5 +728,7 @@ export function cleoReadTools(ctx: ToolCtx) {
   };
   // A client's sales and payments are the admin's and the finance login's, never a coach's (record_payment / send_payment_link aren't offered to a coach either).
   if (!moneyAccess) delete (tools as Partial<typeof tools>).purchases;
+  // the business's analytics are the admin's (their revenue too), never a coach's or finance's
+  if (!ctx.analytics) delete (tools as Partial<typeof tools>).business_analytics;
   return tools;
 }

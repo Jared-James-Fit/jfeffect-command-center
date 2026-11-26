@@ -3,6 +3,7 @@ import { useVideoTrimmer } from "@/components/video-trimmer";
 import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { askedQuestions } from "@/lib/coaching-sessions/questionnaire";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
@@ -12,7 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw } from "lucide-react";
+import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw, Camera } from "lucide-react";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { canFilmInApp } from "@/lib/camera/film-settings";
 import { ActionButton } from "@/components/action-button";
 import { QuestionReferenceImage, getQuestionReferenceImage } from "@/components/forms/question-reference-image";
 import {
@@ -103,11 +106,30 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   });
   const form = useMemo<NfForm | undefined>(() => accessibleForms.find((item) => item.id === formId), [accessibleForms, formId]);
 
-  const { data: questions = [] } = useQuery({
+  const { data: allQuestions = [] } = useQuery({
     queryKey: ["nf-questions", formId],
     queryFn: () => listQuestions(formId),
     enabled: !!form && form.kind !== "external",
   });
+  // A send can ask only some of a form's questions (a coaching session's pre-call
+  // questions: the assignment's settings.ask_keys, coaching-sessions/questionnaire.ts).
+  const keyed = useMemo(() => allQuestions.some((q) => typeof (q.validation as any)?.session_key === "string"), [allQuestions]);
+  const { data: askKeys, isFetched: askKeysFetched } = useQuery({
+    queryKey: ["nf-assignment-ask-keys-v2", formId, client?.id],
+    enabled: !!client?.id && keyed,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("nf_assignments")
+        .select("settings")
+        .eq("form_id", formId)
+        .eq("client_id", client!.id)
+        .maybeSingle();
+      const st = (data?.settings ?? {}) as any;
+      return st.ask_keys ? { keys: st.ask_keys as string[], labels: (st.ask_labels ?? null) as Record<string, string> | null } : null;
+    },
+  });
+  const questions = useMemo(() => askedQuestions(allQuestions, askKeys?.keys ?? null, askKeys?.labels ?? null), [allQuestions, askKeys]);
+  const waitingOnAsk = keyed && !askKeysFetched;
 
   // Questions that start from what the app already knows (form-prefill.ts): sex, height, their
   // schedule, birth year, weigh-ins, when they train. Each source is read only when a question asks.
@@ -476,7 +498,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     );
   }
 
-  if (!form || !submission) {
+  if (!form || !submission || waitingOnAsk) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1273,6 +1295,8 @@ function QuestionInput({
           </ul>
         )}
         {!readOnly && (
+          <div className="flex flex-wrap items-center gap-2">
+          <CheckinCamera video={q.question_type === "video"} disabled={!!busy} onFile={onUpload} />
           <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-sm hover:bg-muted/40 ${busy ? "pointer-events-none opacity-60" : ""}`}>
             {busy === "uploading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             <span>
@@ -1292,11 +1316,38 @@ function QuestionInput({
               }}
             />
           </label>
+          </div>
         )}
       </div>
     );
   }
   return null;
+}
+
+/**
+ * A check-in's photo or video question: the app's shared capture camera (media/capture.ts, purpose
+ * "checkin": 3:4 with the grid; a video question films only), beside Upload. Hidden where a page
+ * can't use the camera (Upload's picker has the phone's camera there).
+ */
+function CheckinCamera({ video, disabled, onFile }: { video: boolean; disabled: boolean; onFile: (f: File) => void }) {
+  const cam = useFilmCamera({ purpose: video ? undefined : "checkin", maxSeconds: video ? 120 : undefined, title: video ? "Check-in video" : "Check-in", onClip: onFile });
+  const [ok, setOk] = useState(false);
+  useEffect(() => setOk(canFilmInApp()), []);
+  if (!ok) return null;
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => void cam.start()}
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted/40 disabled:opacity-60"
+        data-checkin-camera
+      >
+        <Camera className="h-4 w-4" /> {video ? "Film" : "Take photo"}
+      </button>
+      {cam.element}
+    </>
+  );
 }
 
 /** One-tap answers above a box: tap to add (or take out), then type anything else. */

@@ -4,9 +4,11 @@
  * on the phone in a second or two and the handles glide to it (the walk to
  * the bar, the wait and the walk back to the phone cut; Whole clip one tap
  * away), then Send, and it goes up in the background. A clip filmed in the
- * app is remembered until it's saved to the phone, and offered the moment its
- * copy for Photos is cut: the trimmed part, as filmed (set-videos/phone-copy.ts,
- * uploader.ts phoneCopyFor), never the whole recording.
+ * app is remembered until it's saved to the phone, with its copy for the phone
+ * cut and held: the trimmed part, as filmed (set-videos/phone-copy.ts,
+ * uploader.ts phoneCopyFor), never the whole recording. Nothing pops up after
+ * filming (Nov 25 2026): saving is the finished workout's one small "Save N
+ * videos to device" and each clip's own Save in its sheet.
  */
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -15,7 +17,6 @@ import type { StartSetVideo } from "@/lib/set-videos/uploader";
 import { getSetVideoJobs } from "@/lib/set-videos/jobs";
 import { setTitle } from "@/lib/set-videos/label";
 import { holdFilmedFile, linkFilmed, noteFilmed } from "@/lib/set-videos/phone-copy";
-import { offerPhoneCopy } from "@/components/workout-day/set-video-phone-copy";
 import { isTouchDevice } from "@/lib/file-share";
 
 export default function SetVideoFlow({
@@ -50,8 +51,8 @@ export default function SetVideoFlow({
         const landed = getSetVideoJobs().find((j) => j.id === jobId)?.setVideoId;
         if (landed) linkFilmed(start.userId, jobId, landed);
         void res.phoneCopy?.then((copy) => {
-          // saved or removed meanwhile: nothing to offer
-          if (copy && holdFilmedFile(start.userId, jobId, copy)) offerPhoneCopy(start.userId, jobId, copy);
+          // held for the finished workout's save (saved or removed meanwhile: nothing to hold)
+          if (copy) holdFilmedFile(start.userId, jobId, copy);
         });
       })
       .catch(() => {

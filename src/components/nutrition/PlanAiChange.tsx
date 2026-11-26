@@ -376,6 +376,11 @@ export function PlanAiChange({
               {review.error || review.nothing || review.stale ? "Clear" : "Discard"}
             </Button>
           </div>
+          {!review.error && !review.nothing && !review.stale && (
+            <p className="text-[12px] text-muted-foreground" data-plan-ai-next>
+              Updating the plan puts it live and tells {firstName ?? "them"} in their chat. Not ready? Leave it here: it stays a draft, and Nutrition quality reminds you until you update or discard it.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-2" data-plan-ai-state="ask">

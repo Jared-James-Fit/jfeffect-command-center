@@ -1,8 +1,11 @@
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { previousLeagueMonth } from "@/lib/league-recap";
 import type { LeagueRow } from "@/lib/league-boost";
+import type { RankingsAudience } from "@/lib/rankings-audience";
+import { useBlockedClientIds, withoutBlocked } from "@/lib/crew-safety";
 
 export type PerformanceLeagueRow = LeagueRow & {
   is_coach?: boolean;
@@ -50,14 +53,19 @@ export function normalizeLeagueRow(r: any): PerformanceLeagueRow {
  * One cache for Home's Rankings card, the Monthly board and its sheets, and
  * the key every bodyweight / workout / post save already refreshes.
  */
-export function usePerformanceLeague(view: "current" | "previous" = "current") {
+export function usePerformanceLeague(view: "current" | "previous" = "current", audience: RankingsAudience = "community") {
   const viewerId = usePortalUserId() ?? null;
+  // never someone blocked either way (their row leaves; everyone keeps the rank the database gave)
+  const blocked = useBlockedClientIds().data;
+  const hideBlocked = useCallback((rows: PerformanceLeagueRow[]) => withoutBlocked(rows, blocked), [blocked]);
   return useQuery({
-    queryKey: ["athlete-rankings-monthly-view", view, viewerId],
+    select: blocked?.length ? hideBlocked : undefined,
+    queryKey: ["athlete-rankings-monthly-view", view, viewerId, audience],
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_performance_league", {
         _month: view === "previous" ? previousLeagueMonth() : null,
+        _audience: audience,
         ...(viewerId ? { _as_user: viewerId } : {}),
       });
       if (error) throw error;

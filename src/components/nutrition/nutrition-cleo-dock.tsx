@@ -14,6 +14,7 @@
  * (NutritionCleoEntry) is only for where no dock is mounted: a quick sheet from
  * the Clients list, which takes the coach to the tab.
  */
+import { useCleoHandoff } from "@/lib/cleo-handoff";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -86,6 +87,8 @@ export function NutritionCleoEntry({ clientId }: { clientId: string }) {
 
 export function NutritionCleoDock({ clientId }: { clientId: string }) {
   const dock = useCleoDock();
+  // a meeting's approved change lands in this dock's box (cleo-handoff.ts)
+  useCleoHandoff(clientId, "nutrition", dock.ask);
   const cleo = useCleoAccess();
   const { data: targets = [] } = useQuery(clientPlansQuery(clientId));
   const plan = splitPlans(targets).current[0] ?? null;

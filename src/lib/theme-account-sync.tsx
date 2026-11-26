@@ -48,6 +48,8 @@ export async function saveThemeToAccount(userId: string, theme: ThemePreference,
       lsSet(DIRTY_KEY, null);
       return true;
     }
+    // A check the database refuses (an older schema without 'system') won't pass on a retry: keep it on the device, pushed next launch.
+    if ((error as { code?: string }).code === "23514") return false;
     await new Promise((r) => setTimeout(r, 800 * 2 ** i));
   }
   return false; // stays dirty → pushed on next launch

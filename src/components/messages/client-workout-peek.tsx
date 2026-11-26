@@ -26,7 +26,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { isAtHomeBackupClient } from "@/lib/at-home-backup";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
-import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
+import { cleanDayTitle, dayDisplayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, parseLocalDate, toLocalISO } from "@/lib/today";
 import { WeekStrip } from "@/components/workouts/week-strip";
@@ -75,7 +75,7 @@ function dayLabel(iso: string): string {
 }
 
 function titleOf(item: WorkoutItem): string {
-  return cleanDayTitle(item.day?.title, item.day?.day_index);
+  return dayDisplayTitle(item);
 }
 
 /* ------------------------------ the bar ------------------------------ */
@@ -351,8 +351,9 @@ function WorkoutPeekBody({
           ))
         )}
         <Link
-          to="/admin/client-programs/$clientId"
-          params={{ clientId }}
+          to="/admin/clients/$id"
+          params={{ id: clientId }}
+          search={{ tab: "training" } as any}
           className="flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
         >
           <ExternalLink className="h-3.5 w-3.5" /> Open full program

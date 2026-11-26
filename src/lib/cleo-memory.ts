@@ -193,6 +193,7 @@ const TOOL_PROGRESS: Array<[RegExp, string]> = [
   [/purchases/, "Checking purchases"],
   [/calendar/, "Checking the calendar"],
   [/client_file/, "Reading the client file"],
+  [/openipf/, "Looking them up on OpenIPF"],
   [/business_documents/, "Reading the policies"],
   [/find_data|read_data/, "Looking through the records"],
   [/past_conversations/, "Looking back at earlier conversations"],

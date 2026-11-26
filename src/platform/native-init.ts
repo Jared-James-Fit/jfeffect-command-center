@@ -33,6 +33,12 @@ export async function initNativeShell() {
   initialized = true;
   if (!isNative()) return;
 
+  // No tap or window.open reaches a purchase or sales page in the app (App Store 3.1.1).
+  try {
+    const { installShellPurchaseGuard } = await import("@/lib/native-purchases");
+    installShellPurchaseGuard(window as any);
+  } catch { /* never blocks the rest of the shell */ }
+
   // Whatever the boot script painted; the root keeps it in step afterwards.
   await syncNativeChrome(document.documentElement.classList.contains("dark") ? "dark" : "light");
 

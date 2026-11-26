@@ -67,6 +67,7 @@ import { ClientWorkspaceTabs, type WorkspaceTab } from "@/components/clients/cli
 import { LEGACY_WORKSPACE_TABS } from "@/components/clients/client-workspace-tab-model";
 import { TAB_VALUES, type TabValue } from "@/components/clients/client-tab-values";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 const Route = __getRouteApi("/_authenticated/admin/clients/$id");
 
 
@@ -84,6 +85,9 @@ const NutritionProgressCard = lazyDefault(() => import("@/components/nutrition/N
 const WeightManagementCard = lazyDefault(() => import("@/components/weight-management/WeightManagementCard"), "WeightManagementCard");
 const RoadmapCoachCard = lazyDefault(() => import("@/components/nutrition-roadmap/roadmap-coach"), "RoadmapCoachCard");
 const CardioWorkspace = lazyDefault(() => import("@/components/cardio/cardio-workspace"), "CardioWorkspace");
+const CompetitionWorkspace = lazyDefault(() => import("@/components/competition/competition-tab"), "CompetitionWorkspace");
+const MeetingsWorkspace = lazyDefault(() => import("@/components/coaching-sessions/meetings-tab"), "MeetingsWorkspace");
+const MeetingStrip = lazyDefault(() => import("@/components/coaching-sessions/meeting-strip"), "MeetingStrip");
 const NutritionCleoDock = lazyDefault(() => import("@/components/nutrition/nutrition-cleo-dock"), "NutritionCleoDock");
 const NutritionQualityCard = lazyDefault(() => import("@/components/nutrition/NutritionQualityCard"), "NutritionQualityCard");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
@@ -101,6 +105,7 @@ const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const ClientPackageSnapshot = lazyDefault(() => import("@/components/billing/package-snapshot"), "ClientPackageSnapshot");
 const ClientPackageCard = lazyDefault(() => import("@/components/admin/coaching-sales/enrollments-sheet"), "ClientPackageCard");
+const PersonalContextCard = lazyDefault(() => import("@/components/client-context/personal-context"), "PersonalContextCard");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const ClientTrainingTab = lazyDefault(() => import("@/components/clients/client-training-tab"), "ClientTrainingTab");
 
@@ -561,7 +566,7 @@ export function ClientProfileWorkspace({
             <Dumbbell className="mr-2 h-4 w-4" />Today's workout
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId", params: { clientId: id } })}>
+        <DropdownMenuItem onSelect={() => navigate({ to: "/admin/clients/$id", params: { id: id }, search: { tab: "training" } as any })}>
           <Dumbbell className="mr-2 h-4 w-4" />Training program
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId/history", params: { clientId: id } })}>
@@ -673,6 +678,12 @@ export function ClientProfileWorkspace({
         source={form.deactivation_source}
         onReactivate={() => setReactivateOpen(true)}
       />
+      {/* the next meeting (Prepare · Join · Manage), only when there is one */}
+      {form.service_tier !== "self_serve" ? (
+        <Suspense fallback={null}>
+          <MeetingStrip clientId={id} className="mb-3" />
+        </Suspense>
+      ) : null}
       {/*
         The workspace nav MUST stay directly under the client header.
         Previously this Tabs root was `flex flex-col` with the nav at `order-1`
@@ -841,6 +852,24 @@ export function ClientProfileWorkspace({
           </Suspense>
         </TabsContent>
 
+        {/*
+          Competition (Nov 24 2026): every meet's preparation on its own schedule (the
+          research, projections, field, attempts and game plan already done), the meet-day
+          command centre one tap away.
+        */}
+        <TabsContent value="competition" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <CompetitionWorkspace clientId={id} />
+          </Suspense>
+        </TabsContent>
+
+        {/* Meetings (Nov 25 2026): every coaching conversation, prepared, presented and remembered. */}
+        <TabsContent value="meetings" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <MeetingsWorkspace clientId={id} onOpenTab={(t: string) => setTab(t as TabValue)} />
+          </Suspense>
+        </TabsContent>
+
         <TabsContent value="metrics" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <ProgressMetricsPanel
@@ -983,6 +1012,12 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
+          {/* Personal context: coach-only (relationship, work & lifestyle with sources, private notes, history) */}
+          <Suspense fallback={<TabFallback />}>
+            <SectionErrorBoundary label="Personal context">
+              <PersonalContextCard clientId={id} className="md:col-span-3" />
+            </SectionErrorBoundary>
+          </Suspense>
           <Suspense fallback={<TabFallback />}>
             <ClientFileNotes clientId={id} className="md:col-span-3" />
           </Suspense>

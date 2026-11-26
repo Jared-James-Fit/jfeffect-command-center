@@ -1,7 +1,7 @@
 /**
  * Load–velocity, across sessions (pure). For one athlete and one exercise,
- * each analysed set gives a point: the load on the bar and the set's fastest
- * rep's mean concentric velocity. Bar speed falls in a near-straight line as
+ * each analysed set gives a point: the load on the bar and the arithmetic
+ * mean of its full reps' concentric velocities. Bar speed falls in a near-straight line as
  * the load goes up, and that line is the athlete's own: where today's set
  * sits against it says whether the bar moved as usual for that load.
  *
@@ -16,7 +16,7 @@
 export type LvPoint = {
   /** Load on the bar (kg). */
   kg: number;
-  /** The set's fastest rep's mean concentric velocity (m/s). */
+  /** The arithmetic mean of the full set's rep MCVs (m/s). */
   v: number;
   /** Its 95 % margin (m/s), when known. */
   u?: number | null;

@@ -5,6 +5,7 @@
  * same figures as Billing), and the server acts on its own reading of the
  * same review (lifecycle.functions.ts).
  */
+import { isNative } from "@/platform";
 import { useState, type ReactNode } from "react";
 import { useNavigate, useRouterState, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -563,7 +564,8 @@ export function AccountLifecycleGate() {
         </div>
         <div className="space-y-2">
           {primary}
-          {!deletion && deact!.tier === "coaching" ? (
+          {/* the iPhone app opens no billing page (native-purchases.ts) */}
+          {!deletion && deact!.tier === "coaching" && !isNative() ? (
             <Button asChild variant="outline" className="h-11 w-full">
               <Link to="/portal/purchases">Purchases & payments</Link>
             </Button>

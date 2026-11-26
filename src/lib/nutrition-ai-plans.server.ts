@@ -244,7 +244,8 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
 export async function loadCardioRows(sb: any, clientId: string): Promise<any[]> {
   const { data } = await sb
     .from("cardio_targets")
-    .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at, source")
+    // every column: a session the Cardio tab published (plan_version_id) tells the AI the cardio is the coach's to change
+    .select("*")
     .eq("client_id", clientId);
   return (data ?? []) as any[];
 }
@@ -874,6 +875,18 @@ export async function queueNutritionPlan(
   const { data: subRow } = await sb.from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
   if (!subRow) throw new Error("Submission not found");
   const now = new Date().toISOString();
+  // The client's form, targets and food history go to OpenAI only with their permission
+  // (5.1.2(i), src/lib/ai-consent): without it the plan isn't drafted and the coach reads why.
+  const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
+  const consent = await clientAllowsAi(subRow.client_id);
+  if (!consent.ok) {
+    const { error } = await sb.from("nutrition_ai_plans").upsert(
+      { submission_id: submissionId, client_id: subRow.client_id, status: "error", error: coachConsentMessage(consent.name), progress: null, updated_at: now },
+      { onConflict: "submission_id" },
+    );
+    if (error) throw new Error(error.message);
+    return { status: "error" as const };
+  }
   // A coach update that's waiting (or was cut off) is put back in line as the
   // same update, never turned into a whole new plan. Only Regenerate
   // (`fresh`) replaces it.

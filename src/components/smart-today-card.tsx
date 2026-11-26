@@ -170,7 +170,7 @@ function render(state: TodayState): View {
       const dur = dayDurationLabel(it);
       return {
         eyebrow: "Today's Workout",
-        title: dayDisplayTitle(it) + (it.day?.focus ? ` — ${it.day.focus}` : ""),
+        title: dayDisplayTitle(it),
         subtitle: dur ? `Estimated ${dur}` : undefined,
         meta,
         icon: <Play className="h-5 w-5 text-primary-foreground" />,
@@ -187,7 +187,7 @@ function render(state: TodayState): View {
       if (it.week?.week_index != null) meta.push(`Week ${it.week.week_index}`);
       return {
         eyebrow: "Workout In Progress",
-        title: dayDisplayTitle(it) + (it.day?.focus ? ` — ${it.day.focus}` : ""),
+        title: dayDisplayTitle(it),
         subtitle: "Pick up where you left off.",
         meta,
         icon: <RotateCcw className="h-5 w-5 text-primary-foreground" />,
@@ -225,7 +225,7 @@ function render(state: TodayState): View {
       if (it.week?.week_index != null) meta.push(`Week ${it.week.week_index}`);
       return {
         eyebrow: "Next Workout",
-        title: dayDisplayTitle(it) + (it.day?.focus ? ` — ${it.day.focus}` : ""),
+        title: dayDisplayTitle(it),
         subtitle: state.whenLabel,
         meta,
         icon: <Crosshair className="h-5 w-5 text-primary-foreground" />,
@@ -248,7 +248,7 @@ function render(state: TodayState): View {
       if (it.week?.week_index != null) meta.push(`Week ${it.week.week_index}`);
       return {
         eyebrow: "Workout Missed",
-        title: dayDisplayTitle(it) + (it.day?.focus ? ` — ${it.day.focus}` : ""),
+        title: dayDisplayTitle(it),
         subtitle: `You had a scheduled workout ${state.whenLabel}.`,
         meta,
         icon: <AlertCircle className="h-5 w-5 text-primary-foreground" />,

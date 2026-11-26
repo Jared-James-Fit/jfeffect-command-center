@@ -16,8 +16,12 @@ import {
   configIssues,
   featureDiff,
   historyLine,
+  offerFromRow,
+  offerTerms,
   visibleOptions,
   transitionFor,
+  type CoachingAccess,
+  type PlanOffer,
   type CurrentPlan,
   type PlanOption,
   type Transition,
@@ -53,6 +57,14 @@ export type PlanView = {
   /** Their plan's subscription ended in Stripe with nothing scheduled here (staff only: End coaching). */
   endedInStripe: boolean;
   tier: "coaching" | "self_serve";
+  /** May they buy coaching (approved, applied, asked to come back)? */
+  access: CoachingAccess;
+  /** A switch their coach offered: what it means, and the words they agree to. */
+  offer: (PlanOffer & { lines: string[]; consentText: string }) | null;
+  /** The Coaching Agreement version they last signed (null = none). */
+  agreementVersion: string | null;
+  /** Staff: the open approval to buy coaching. */
+  approval: { id: string; packageName: string | null; expiresAt: string; source: string } | null;
 };
 
 const fmtDay = (iso: string | null) => {
@@ -91,7 +103,7 @@ async function buildView(clientId: string, opts: { native?: boolean; staff?: boo
       recommended: o.recommended,
       gain: diff.gain,
       lose: state.current.managed === "custom" ? [] : diff.lose,
-      transition: transitionFor(state.current, o, { native: opts.native, open }),
+      transition: transitionFor(state.current, o, { native: opts.native, open, coaching: state.access }),
     };
   });
   let payUrl: string | null = null;
@@ -125,11 +137,35 @@ async function buildView(clientId: string, opts: { native?: boolean; staff?: boo
       state.history[0]?.source === "stripe" && state.history[0]?.status === "applied" &&
       ["end", "cancel"].includes(String(state.history[0]?.kind)),
     tier: state.client.service_tier,
+    access: state.access,
+    offer: state.offer
+      ? (() => {
+          const o = offerFromRow(state.offer, state.current);
+          return { ...o, ...offerTerms(o, fmtLongDay) };
+        })()
+      : null,
+    agreementVersion: state.agreement.version,
+    approval:
+      opts.staff && state.approval
+        ? {
+            id: state.approval.id,
+            packageName: state.packages.find((p) => p.id === state.approval!.package_id)?.name ?? null,
+            expiresAt: state.approval.expires_at,
+            source: state.approval.source,
+          }
+        : null,
   };
 }
 
+/** The same day words the server stores consent in (offerTerms is built the same on both sides). */
+const fmtLongDay = (iso: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Winnipeg" });
+};
+
 /** Only our own sites get a checkout's way back (never someone else's page). */
-function safeOrigin(raw: string | undefined | null): string {
+export function safeOrigin(raw: string | undefined | null): string {
   try {
     const u = new URL(String(raw ?? ""));
     const host = u.hostname.toLowerCase();
@@ -197,6 +233,7 @@ export const confirmMyPlanChange = createServerFn({ method: "POST" })
       origin: z.string().max(200).optional(),
       prorationDate: z.number().int().positive().nullable().optional(),
       note: z.string().trim().max(500).nullable().optional(),
+      acknowledgeForfeit: z.boolean().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -208,7 +245,7 @@ export const confirmMyPlanChange = createServerFn({ method: "POST" })
     // the phone app never charges (App Store / Play rules); a downgrade, a cancel or a request is fine
     if (data.native) {
       const target = state.catalog.find((o) => o.slug === data.toSlug);
-      const tr = target ? transitionFor(state.current, target, { native: true }) : null;
+      const tr = target ? transitionFor(state.current, target, { native: true, coaching: state.access }) : null;
       if (tr && !tr.available) throw new Error(tr.blocked ?? "That change isn't available here.");
     }
     try {
@@ -218,7 +255,63 @@ export const confirmMyPlanChange = createServerFn({ method: "POST" })
         origin: safeOrigin(data.origin),
         prorationDate: data.prorationDate ?? null,
         note: data.note ?? null,
+        acknowledgeForfeit: !!data.acknowledgeForfeit,
       });
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+/** A member who's never been coached applies for coaching from Manage plan. */
+export const applyForCoaching = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    PovInput.extend({
+      goal: z.string().trim().min(2).max(500),
+      outcome: z.string().trim().min(2).max(1000),
+      timeline: z.string().trim().min(1).max(120),
+      phone: z.string().trim().max(40).nullable().optional(),
+      packageSlug: z.string().trim().max(48).nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await ownClientId(supabase, userId, data);
+    const { loadPlanState, applyInApp } = await import("@/lib/plans/plans.server");
+    try {
+      const db = await admin();
+      return await applyInApp(db, await loadPlanState(db, clientId), data, userId);
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+/** Accept the coach's offer: the exact words shown are passed back and kept as their consent. */
+export const acceptMyOffer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => PovInput.extend({ changeId: z.string().uuid(), consentText: z.string().trim().min(10).max(2000), origin: z.string().max(200).optional() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await ownClientId(supabase, userId, data);
+    const { loadPlanState, acceptOffer } = await import("@/lib/plans/plans.server");
+    try {
+      const db = await admin();
+      return await acceptOffer(db, await loadPlanState(db, clientId), data.changeId, { actorUserId: userId, origin: safeOrigin(data.origin), consentText: data.consentText });
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+export const declineMyOffer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => PovInput.extend({ changeId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await ownClientId(supabase, userId, data);
+    const { loadPlanState, declineOffer } = await import("@/lib/plans/plans.server");
+    try {
+      const db = await admin();
+      return await declineOffer(db, await loadPlanState(db, clientId), data.changeId, userId);
     } catch (e) {
       throw friendly(e);
     }
@@ -389,4 +482,123 @@ export const adminEndCoaching = createServerFn({ method: "POST" })
       .single();
     if (row) await notifyPlanChange(db, row, "applied");
     return { ok: true };
+  });
+
+/* ───────────────────────── approvals, offers, requests (the admin) ───────────────────────── */
+
+async function adminOnly(supabase: any, userId: string) {
+  if (!(await isAdmin(supabase, userId))) throw new Error("Only the admin changes a client's plan.");
+}
+
+export const adminApproveCoaching = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        packageSlug: z.string().trim().max(48).nullable().optional(),
+        note: z.string().trim().max(1000).nullable().optional(),
+        applicationId: z.string().uuid().nullable().optional(),
+        requestChangeId: z.string().uuid().nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await adminOnly(supabase, userId);
+    const { approveCoaching } = await import("@/lib/plans/plans.server");
+    try {
+      return await approveCoaching(await admin(), data.clientId, { actorUserId: userId, packageSlug: data.packageSlug ?? null, note: data.note ?? null, applicationId: data.applicationId ?? null, requestChangeId: data.requestChangeId ?? null });
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+export const adminDeclineCoaching = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        note: z.string().trim().max(1000).nullable().optional(),
+        applicationId: z.string().uuid().nullable().optional(),
+        requestChangeId: z.string().uuid().nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await adminOnly(supabase, userId);
+    const { declineCoaching } = await import("@/lib/plans/plans.server");
+    try {
+      return await declineCoaching(await admin(), data.clientId, { actorUserId: userId, note: data.note ?? null, applicationId: data.applicationId ?? null, requestChangeId: data.requestChangeId ?? null });
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+export const adminRevokeApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid(), approvalId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await adminOnly(supabase, userId);
+    const { revokeApproval } = await import("@/lib/plans/plans.server");
+    try {
+      return await revokeApproval(await admin(), data.clientId, data.approvalId);
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+export const adminCreateOffer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        toSlug: z.string().trim().min(1).max(48),
+        timing: z.enum(["now", "period_end"]),
+        note: z.string().trim().max(1000).nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await adminOnly(supabase, userId);
+    const { loadPlanState, createOffer } = await import("@/lib/plans/plans.server");
+    try {
+      const db = await admin();
+      return await createOffer(db, await loadPlanState(db, data.clientId), { targetSlug: data.toSlug, timing: data.timing, note: data.note ?? null, actorUserId: userId });
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+export const adminWithdrawOffer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid(), changeId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await adminOnly(supabase, userId);
+    const { withdrawOffer } = await import("@/lib/plans/plans.server");
+    try {
+      return await withdrawOffer(await admin(), data.clientId, data.changeId, userId);
+    } catch (e) {
+      throw friendly(e);
+    }
+  });
+
+export const adminDecideRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ changeId: z.string().uuid(), done: z.boolean(), note: z.string().trim().max(1000).nullable().optional() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await adminOnly(supabase, userId);
+    const { decideRequest } = await import("@/lib/plans/plans.server");
+    try {
+      return await decideRequest(await admin(), data.changeId, { actorUserId: userId, done: data.done, note: data.note ?? null });
+    } catch (e) {
+      throw friendly(e);
+    }
   });

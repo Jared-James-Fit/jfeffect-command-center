@@ -34,6 +34,13 @@ export type PrepCheckins = {
 export type PrepPain = { label: string; status: string; trend: string | null; reasons: string[] };
 export type PrepNutrition = { phase: string | null; kcalLow: number | null; kcalHigh: number | null; since: string | null };
 export type PrepReview = { date: string; actionItems: string[]; nextPriorities: string | null; shared: boolean };
+/** All-time records set in finished workouts in the last 4 weeks (client_recent_records). */
+export type PrepRecords = {
+  /** the ones worth naming: all-time rep records at 10 reps or fewer, barbell squat / bench / deadlift first */
+  top: Array<{ exercise: string; reps: number; loadKg: number; date: string }>;
+  /** every all-time record in the window, rep and load records alike */
+  total: number;
+};
 
 export type PrepInput = {
   today: string;
@@ -46,6 +53,9 @@ export type PrepInput = {
   pain: PrepPain[];
   /** The weight-management engine's headline (an interpretation). */
   weightRead: string | null;
+  /** its verdict ("maintain" is a hold: nothing to change) */
+  weightVerdict?: string | null;
+  records?: PrepRecords | null;
   previous: PrepReview | null;
   calls: { used: number; included: number; periodEnd: string } | null;
 };
@@ -170,6 +180,8 @@ export function buildCallPrep(x: PrepInput): CallPrep {
     if (p.reasons.length) reads.push(`${p.label} may need a look: ${p.reasons.join(", ")}. Not a diagnosis; ask how it's been.`);
   }
 
+  if (x.records?.top.length)
+    facts.push(`All-time PRs in the last 4 weeks: ${x.records.top.map((r) => `${r.exercise} ${r.reps} reps`).join(", ")}${x.records.total > x.records.top.length ? ` (${x.records.total} records in all)` : ""}.`);
   if (x.weightRead) reads.push(`Bodyweight engine: ${x.weightRead}`);
 
   return { theirWords, facts, reads, followUp: x.previous, missing };

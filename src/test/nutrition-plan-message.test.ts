@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { kcalChange, planMessageBody, planMessageCard } from "@/lib/nutrition-targets/plan-message";
+import { kcalChange, planContentKey, planMessageBody, planMessageCard } from "@/lib/nutrition-targets/plan-message";
 import { postPlanMessage } from "@/lib/nutrition-targets/plan-message.server";
 import { messagePreviewText } from "@/lib/message-preview";
 
@@ -75,9 +75,25 @@ describe("the plan-updated message", () => {
     expect((await postPlanMessage(db, { clientId: "c1", actorUserId: "coach", now })).reason).toBe("already_sent");
     plan.last_updated_at = "2026-11-02T03:30:00+00:00";
     expect((await postPlanMessage(db, { clientId: "c1", actorUserId: "coach", now: now + 30 * 60_000 })).reason).toBe("recent");
+    // a later save that changes nothing the client sees (a re-save, a private note) posts nothing
+    plan.last_updated_at = "2026-11-02T06:30:00+00:00";
+    (plan as any).admin_notes = "private";
+    expect((await postPlanMessage(db, { clientId: "c1", actorUserId: "coach", now: now + 3 * 3_600_000 })).reason).toBe("no_change");
+    // a real change does
+    plan.nutrition_target_days[0].calories = 1800;
     const later = await postPlanMessage(db, { clientId: "c1", actorUserId: "coach", now: now + 3 * 3_600_000 });
     expect(later.posted).toBe(true);
     expect(db.inserted[1].attachments[0].update).toBe("changed");
+  });
+
+  it("the content key is what the client sees: numbers, meals, notes for them; never dates, status or private notes", () => {
+    const base = { ...plan, nutrition_target_days: plan.nutrition_target_days.map((d) => ({ ...d })) } as any;
+    const k = planContentKey(base);
+    expect(planContentKey({ ...base, start_date: "2027-01-01", end_date: null, status: "Draft", admin_notes: "x", last_updated_at: "z" })).toBe(k);
+    expect(planContentKey({ ...base, nutrition_target_days: base.nutrition_target_days.slice().reverse() })).toBe(k);
+    expect(planContentKey({ ...base, client_notes: "Drink more water" })).not.toBe(k);
+    expect(planContentKey({ ...base, nutrition_target_days: [{ ...base.nutrition_target_days[0], notes: "Breakfast: oats" }, base.nutrition_target_days[1]] })).not.toBe(k);
+    expect(planContentKey({ ...base, nutrition_target_days: [{ ...base.nutrition_target_days[0], protein: 170 }, base.nutrition_target_days[1]] })).not.toBe(k);
   });
 
   it("every publish path posts it: the app event (Update plan, the editor, Use again) and Cleo", () => {

@@ -24,7 +24,10 @@
  * Nothing changes a live prescription from here.
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, CircleDashed, Clock, Dumbbell, Footprints, Gauge, Link2, MessageCircle, Salad, TrendingUp } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, CircleDashed, Clock, Dumbbell, FilePen, Footprints, Gauge, History, Link2, MessageCircle, Salad, Send, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
+import { queueComposerInsert } from "@/lib/composer-insert";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,6 +38,7 @@ import {
   CONFIDENCE_LABEL,
   optimizeAskFrom,
   reviewAskFrom,
+  type QualityChange,
   type QualityConcern,
   type QualityDomain,
   type QualityOpportunity,
@@ -119,7 +123,61 @@ function useScoreDelta(score: number | null, key: string): number | null {
   return delta;
 }
 
-const changedWords = (days: number) => (days === 0 ? "Changed today" : days === 1 ? "Changed yesterday" : `Changed ${days} days ago`);
+const changedWords = (days: number, minor?: boolean) => {
+  const verb = minor ? "Adjusted" : "Changed";
+  return days === 0 ? `${verb} today` : days === 1 ? `${verb} yesterday` : `${verb} ${days} days ago`;
+};
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Dec 14" from a YYYY-MM-DD date. */
+export function shortDate(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? ""));
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : "";
+}
+
+/** A draft or proposal waiting on the coach (a friendly reminder on the strip, never a popup). */
+export type PendingDraft = { text: string; action: string; onOpen: () => void };
+
+/** "from Nov 22" / "from earlier today": how long a draft has waited, in a friendly word. */
+export function waitedWords(at: string, now = Date.now()): string {
+  const days = Math.floor((now - Date.parse(at)) / 86_400_000);
+  if (!Number.isFinite(days) || days <= 0) return "from earlier today";
+  if (days === 1) return "from yesterday";
+  return `from ${shortDate(new Date(Date.parse(at)).toISOString().slice(0, 10))}`;
+}
+
+/** The reminder for a finished draft nobody has acted on yet: friendly, one line, one tap to it. */
+export function pendingReminder(kind: "program" | "nutrition" | "cardio_draft" | "cardio_proposal", at: string, o: { count?: number; cleo?: boolean; onOpen: () => void }): PendingDraft {
+  const when = waitedWords(at);
+  const n = o.count ?? 1;
+  const who = o.cleo ? "Cleo's " : "";
+  if (kind === "program") return { text: `${who}${n} proposed change${n === 1 ? "" : "s"} ${when} ${n === 1 ? "is" : "are"} still waiting. Apply what you want, or discard it.`, action: "Review", onOpen: o.onOpen };
+  if (kind === "nutrition") return { text: `A plan change ${when} is written and waiting. Update the plan when you're happy, or discard it.`, action: "Review", onOpen: o.onOpen };
+  if (kind === "cardio_draft") return { text: `Your cardio draft ${when} isn't published yet. Publish it now, schedule it, or keep working on it.`, action: "Open draft", onOpen: o.onOpen };
+  return { text: `${who}cardio proposal ${when} is waiting. Put it on your draft, or turn it down.`, action: "Review", onOpen: o.onOpen };
+}
+
+/** One recent change, its size and when its effect can be judged. */
+function ChangeLine({ c }: { c: QualityChange }) {
+  const future = c.settling && !c.holds && c.size === "substantial";
+  return (
+    <li className="flex gap-2 text-[13px] leading-snug" data-quality-change={c.size}>
+      <span className="w-12 shrink-0 tabular-nums text-muted-foreground">{shortDate(c.on)}</span>
+      <span className="min-w-0">
+        {c.summary}
+        <span className="block text-[11px] text-muted-foreground">
+          {c.size === "substantial" ? "Substantial" : "Minor"}
+          {c.holds
+            ? ` · judge it from ${shortDate(c.ready)}${c.why ? ` (${c.why})` : ""}`
+            : future
+              ? ` · starts ${shortDate(c.on)}`
+              : c.settling
+                ? " · judged on its own, doesn't restart the read"
+                : " · had its time"}
+        </span>
+      </span>
+    </li>
+  );
+}
 
 export function PlanIntelligence({
   domain,
@@ -133,6 +191,8 @@ export function PlanIntelligence({
   onAskCleo,
   cleo,
   draft,
+  pending,
+  messageClientId,
   className,
 }: {
   domain: QualityDomain;
@@ -151,9 +211,14 @@ export function PlanIntelligence({
   cleo: boolean;
   /** A draft on screen with its own score (cardio's builder): shown beside the live one. */
   draft?: { score: number | null; label: string } | null;
+  /** A finished draft or proposal nobody has published yet: a quiet reminder with one tap to it. */
+  pending?: PendingDraft | null;
+  /** The client, for "Message them" when the next step is a conversation (never in a preview). */
+  messageClientId?: string | null;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const panelId = useId();
   const delta = useScoreDelta(quality?.score ?? null, `${domain}:${clientKey}`);
   const Icon = DOMAIN_ICON[domain];
@@ -194,8 +259,10 @@ export function PlanIntelligence({
   const main = q.opportunities.filter((o) => !o.optional);
   const optional = q.opportunities.filter((o) => o.optional);
   const urgent = q.concerns.some((c) => c.severity === "urgent");
-  const hasBreakdown = q.categories.length > 0 || q.connections.length > 0 || q.missing.length > 0 || q.concerns.length > 0;
+  const hasBreakdown = q.categories.length > 0 || q.connections.length > 0 || q.missing.length > 0 || q.concerns.length > 0 || q.changes.length > 0;
   const canOptimize = !!onOptimize && !!q.optimize;
+  // a conversation first: they're struggling to follow it (the plan isn't the reason, or isn't only it)
+  const canMessage = !!messageClientId && !!q.verdict.ask;
   const thin = q.confidence === "low" || q.confidence === "insufficient";
   const extra = main.filter((o) => !q.concerns.some((c) => c.category === o.key)).length;
   const toggleLabel = open
@@ -209,8 +276,9 @@ export function PlanIntelligence({
           : "See the breakdown";
 
   return (
-    <section className={cn("rounded-2xl border border-border bg-card", className)} data-plan-intelligence={domain} data-verdict={q.verdict.kind} data-provisional={q.provisional || undefined}>
-      <div className="flex flex-col gap-3 p-3 sm:p-4 md:flex-row md:items-center">
+    // laid out by its own width (a docked Cleo narrows the page), never the window's
+    <section className={cn("@container rounded-2xl border border-border bg-card", className)} data-plan-intelligence={domain} data-verdict={q.verdict.kind} data-provisional={q.provisional || undefined}>
+      <div className="flex flex-col gap-3 p-3 @lg:p-4 @3xl:flex-row @3xl:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <ScoreDial quality={q} label={q.score == null ? "Not scored" : `${heading}: ${q.score} out of 100, ${q.provisional ? "provisional" : q.band ? BAND_LABEL[q.band] : ""}`} />
           <div className="min-w-0 flex-1">
@@ -231,7 +299,7 @@ export function PlanIntelligence({
                 </span>
               )}
             </div>
-            <p className="mt-1 line-clamp-3 text-[13px] leading-snug sm:line-clamp-2" data-plan-verdict>
+            <p className="mt-1 line-clamp-3 text-[13px] leading-snug @3xl:line-clamp-2" data-plan-verdict>
               {q.verdict.headline}
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -267,9 +335,12 @@ export function PlanIntelligence({
                 </Pill>
               )}
               {q.settling && (
-                <Pill title={`Results take about ${Math.round(q.settling.window / 7)} weeks to show a change`}>
+                <Pill title={`${q.settling.what ? `${q.settling.what}. ` : ""}Its effect can be judged from ${shortDate(q.settling.ready) || `about ${Math.round(q.settling.window / 7)} weeks on`}${q.settling.why ? ` (${q.settling.why})` : ""}`} data-quality-settling>
                   <Clock className="h-3 w-3 shrink-0" aria-hidden />
-                  {changedWords(q.settling.days)}
+                  <span className="truncate">
+                    {changedWords(q.settling.days, q.settling.minor)}
+                    {q.settling.ready && <span className="hidden @lg:inline"> · judge from {shortDate(q.settling.ready)}</span>}
+                  </span>
                 </Pill>
               )}
               {draft && draft.score != null && draft.score !== q.score && (
@@ -286,18 +357,45 @@ export function PlanIntelligence({
                 {q.missing.slice(0, 3).join(", ").toLowerCase()}.
               </p>
             )}
+            {pending && (
+              <button
+                type="button"
+                onClick={pending.onOpen}
+                className="mt-2 flex w-full cursor-pointer items-start gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5 text-left text-[12px] leading-snug transition-colors hover:bg-muted"
+                data-quality-pending
+              >
+                <FilePen className="mt-px h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 text-muted-foreground">{pending.text}</span>
+                <span className="shrink-0 font-medium text-foreground">{pending.action}</span>
+              </button>
+            )}
           </div>
         </div>
-        {(canOptimize || onAskCleo) && (
-          <div className="flex shrink-0 gap-2 md:flex-col lg:flex-row" data-quality-actions>
+        {(canOptimize || onAskCleo || canMessage) && (
+          <div className="flex shrink-0 flex-wrap gap-2 @3xl:flex-col @5xl:flex-row" data-quality-actions>
+            {canMessage && (
+              <Button
+                className="h-10 flex-1 gap-1.5 @3xl:flex-none"
+                variant={q.verdict.action === "act" ? "default" : "outline"}
+                onClick={() => {
+                  queueComposerInsert(messageClientId!, q.verdict.ask!);
+                  void navigate({ to: "/admin/messages", search: { client: messageClientId! } as any });
+                  toast.success("In your message box. Edit it and send when you're happy.");
+                }}
+                data-quality-message
+              >
+                <Send className="h-4 w-4" aria-hidden />
+                Message them
+              </Button>
+            )}
             {canOptimize && (
-              <Button className="h-10 flex-1 gap-1.5 md:flex-none" variant={q.verdict.action === "act" ? "default" : "outline"} onClick={() => onOptimize!(q)} data-quality-optimize>
+              <Button className="h-10 flex-1 gap-1.5 @3xl:flex-none" variant={q.verdict.action === "act" && !canMessage ? "default" : "outline"} onClick={() => onOptimize!(q)} data-quality-optimize>
                 {cleo ? <CleoMark size={16} /> : null}
                 {cleo ? "Optimize with Cleo" : "Optimize"}
               </Button>
             )}
             {onAskCleo && (
-              <Button className="h-10 flex-1 gap-1.5 md:flex-none" variant="ghost" onClick={onAskCleo} data-quality-ask>
+              <Button className="h-10 flex-1 gap-1.5 @3xl:flex-none" variant="ghost" onClick={onAskCleo} data-quality-ask>
                 <MessageCircle className="h-4 w-4" aria-hidden />
                 {cleo ? "Ask Cleo" : "Ask"}
               </Button>
@@ -320,7 +418,7 @@ export function PlanIntelligence({
             <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
           </button>
           {open && (
-            <div id={panelId} className="grid gap-4 border-t border-border p-3 sm:p-4 lg:grid-cols-2" data-quality-breakdown>
+            <div id={panelId} className="grid gap-4 border-t border-border p-3 @lg:p-4 @4xl:grid-cols-2" data-quality-breakdown>
               <div className="min-w-0 space-y-4">
                 {q.concerns.length > 0 && (
                   <div>
@@ -407,11 +505,26 @@ export function PlanIntelligence({
                     <ul className="mt-1.5 space-y-1 text-[13px] leading-snug">
                       {adh && <li>{adh.label}</li>}
                       {out && <li>{out.label}</li>}
+                      {q.execution.expected && <li>{q.execution.expected}</li>}
                       {q.settling && (
                         <li>
-                          {changedWords(q.settling.days)}: results take about {Math.round(q.settling.window / 7)} weeks to show it
+                          {changedWords(q.settling.days, q.settling.minor)}: judge it from {shortDate(q.settling.ready) || `about ${Math.round(q.settling.window / 7)} weeks on`}
+                          {q.settling.why ? ` (${q.settling.why})` : ""}. A significant trend the wrong way is said before then.
                         </li>
                       )}
+                    </ul>
+                  </div>
+                )}
+                {q.changes.length > 0 && (
+                  <div>
+                    <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground">
+                      <History className="h-3.5 w-3.5" aria-hidden />
+                      Recent changes
+                    </p>
+                    <ul className="mt-1.5 space-y-1.5" data-quality-changes>
+                      {q.changes.slice(0, 5).map((c) => (
+                        <ChangeLine key={`${c.on}:${c.summary}`} c={c} />
+                      ))}
                     </ul>
                   </div>
                 )}

@@ -41,10 +41,12 @@ import { markRecent } from "@/lib/chat-gifs";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 import {
-  AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder,
+  AttachmentView, WaveformBars, useVoiceRecorder, type RecordedVoiceTake,
   attachIcon, fakePeaks, fmtDuration, fmtTime,
   uploadChatAttachment, prepareChatFiles, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
+import { VoiceRecordingBar } from "@/components/voice/voice-recorder";
+import { micErrorMessage } from "@/lib/voice/voice-meter";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { usePovSendGuard } from "@/components/pov/pov-send-guard";
@@ -125,12 +127,21 @@ export function GroupMessageThread({
     onClip: (f) => void onPickFiles([f]),
     onLibrary: () => photoInputRef.current?.click(),
   });
+  // the + menu's Camera: the app's own camera (a tap for a photo, a hold for a video), the shared capture layer's chat defaults
+  const chatCamera = useFilmCamera({
+    purpose: "chat",
+    maxSeconds: videoLimit(videoContext),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
-  const recorder = useVoiceRecorder();
+  // a take that ended by itself (the 5-minute cap, the app backgrounded, a call) still opens its preview
+  const showPreviewRef = useRef<(take: RecordedVoiceTake) => void>(() => {});
+  const recorder = useVoiceRecorder({ onAutoStop: (take) => showPreviewRef.current(take) });
   const [preview, setPreview] = useState<{ blob: Blob; url: string; duration: number; peaks: number[] } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
@@ -564,12 +575,16 @@ export function GroupMessageThread({
     );
   };
 
-  const stopForPreview = async () => {
-    const result = await recorder.stop();
-    if (!result) return;
+  const showPreview = (result: RecordedVoiceTake) => {
     if (result.duration < 0.5) { toast.message("Voice message too short"); return; }
     const url = URL.createObjectURL(result.blob);
     setPreview({ blob: result.blob, url, duration: result.duration, peaks: result.peaks });
+  };
+  showPreviewRef.current = showPreview;
+
+  const stopForPreview = async () => {
+    const result = await recorder.stop();
+    if (result) showPreview(result);
   };
 
   const discardPreview = () => {
@@ -1049,6 +1064,7 @@ export function GroupMessageThread({
           <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
           {trimmer.element}
           {filmCamera.element}
+        {chatCamera.element}
 
           <input ref={fileInputRef} type="file" multiple className="hidden"
             onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
@@ -1058,17 +1074,14 @@ export function GroupMessageThread({
             onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
           {recorder.recording ? (
-            <div className="flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 py-2">
-              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
-              <span className="shrink-0 text-xs font-medium tabular-nums">{fmtDuration(recorder.elapsed)}</span>
-              <LiveWaveform levels={recorder.liveLevels} />
-              <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-muted-foreground" onClick={() => recorder.cancel()} title="Discard">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              <Button type="button" size="sm" className="h-8 shrink-0 bg-primary" onClick={stopForPreview} title="Stop">
-                <Square className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+            <VoiceRecordingBar
+              meter={recorder.meter}
+              onCancel={recorder.cancel}
+              onDone={() => void stopForPreview()}
+              done="stop"
+              doneLabel="Stop and listen back"
+              className="rounded-full border border-border bg-muted/40 px-1"
+            />
           ) : preview ? (
             <div className="flex items-center gap-2 rounded-full border border-border bg-secondary/40 px-3 py-2">
               <Button
@@ -1107,7 +1120,10 @@ export function GroupMessageThread({
                 disabled={sending}
                 canSendGifs={canSendGifs}
                 canSendSounds={canSendSounds}
-                onPickCamera={() => cameraInputRef.current?.click()}
+                onPickCamera={() => {
+                // where a web page can't use the camera, the phone's own, as before
+                if (!chatCamera.start()) cameraInputRef.current?.click();
+              }}
                 onPickVideo={() => {
                   // where a web page can't film, the phone's own camera, as before
                   if (!filmCamera.start()) cameraInputRef.current?.click();
@@ -1246,7 +1262,7 @@ export function GroupMessageThread({
                 <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
                   onClick={async () => {
                     try { await recorder.start(); }
-                    catch (e: any) { toast.error(e?.message ?? "Mic permission needed"); }
+                    catch (e: any) { toast.error(micErrorMessage(e)); }
                   }}>
                   <Mic className="h-5 w-5" />
                 </Button>

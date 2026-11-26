@@ -29,10 +29,13 @@ describe("JF members sign their own Membership Agreement, never the Coaching Agr
     expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("{!isImpersonating && <MemberAgreementCard />}");
   });
 
-  it("the Coaching Agreement refuses a member wherever it can be reached (/setup, signing, a coach's request)", () => {
+  it("the Coaching Agreement refuses a member wherever it can be reached (/setup, signing, a coach's request), unless the coach approved them for coaching", () => {
     const fn = read("src/lib/coaching-agreement.functions.ts");
-    expect(fn).toContain('if (client.service_tier === "self_serve") throw new Error("JF Membership accounts don\'t sign the Coaching Agreement.");');
-    expect(fn).toContain('if ((client as any).service_tier === "self_serve") throw new Error("JF Membership accounts don\'t sign the Coaching Agreement.");');
+    // a member signs it only once approved for coaching, right before paying (Manage plan, Nov 24 2026)
+    expect(fn).toContain('if (client.service_tier === "self_serve" && !(await memberApprovedForCoaching(supabase, client.id)))');
+    expect(fn).toContain('if ((client as any).service_tier === "self_serve" && !(await memberApprovedForCoaching(supabase, client.id)))');
+    expect(fn).toContain('throw new Error("JF Membership accounts don\'t sign the Coaching Agreement.");');
+    expect(fn).toContain('.from("coaching_purchase_approvals")');
     expect(fn).toContain("they accept the Membership Agreement in the app, not the Coaching Agreement.");
   });
 

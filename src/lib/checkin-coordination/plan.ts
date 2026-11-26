@@ -31,7 +31,7 @@ const daysBetween = (a: string, b: string) => dayNum(b) - dayNum(a);
 
 export const PLAN_VERSION = 1;
 /** Weekly check-in extras, in the order they're asked. */
-export type CheckinExtra = "bodyweight" | "weight_making" | "photos" | "measurements" | "nutrition_update" | "roadmap";
+export type CheckinExtra = "bodyweight" | "weight_making" | "photos" | "measurements" | "nutrition_update" | "roadmap" | "profile";
 
 export type ScheduleFrequency = "weekly" | "biweekly" | "monthly" | "per_block" | "custom" | "none";
 export type ProgressSchedule = { kind: "photos" | "measurements" | "videos" | "bodyweight"; enabled: boolean; frequency: ScheduleFrequency; customDays: number | null };
@@ -85,6 +85,8 @@ export type PlanInput = {
   nutritionPendingSince: string | null;
   /** What the nutrition roadmap needs told apart this week (nutrition-roadmap/checkins.ts), and why. */
   roadmap?: { asks: string[]; reason: string | null; sex?: "M" | "F" | null } | null;
+  /** One missing work & lifestyle answer worth one optional tap this week (client-context checkinProfileAsk), or none. */
+  profileAsk?: { field: string; prompt: string; options: string[] } | null;
 };
 
 export type PlanExtra = {
@@ -100,6 +102,10 @@ export type PlanExtra = {
   /** roadmap: the follow-ups the nutrition roadmap asked for (tracking, barriers, confounders, cycle, training). */
   asks?: string[];
   sex?: "M" | "F" | null;
+  /** profile: the field asked, its question and its one-tap answers. */
+  field?: string;
+  prompt?: string;
+  choices?: string[];
 };
 
 export type CheckinPlan = {
@@ -189,6 +195,9 @@ export function planCheckin(x: PlanInput): CheckinPlan {
   // the nutrition roadmap's follow-ups: only what it needs told apart, never a second form
   const asks = (x.roadmap?.asks ?? []).filter((a) => ["tracking", "barriers", "confounders", "cycle", "training"].includes(a));
   if (asks.length) extras.push({ key: "roadmap", reason: x.roadmap?.reason ? `Nutrition roadmap: ${x.roadmap.reason}` : "Nutrition roadmap follow-ups", asks, sex: x.roadmap?.sex ?? null });
+  // at most one optional work & lifestyle question, only when it's missing and not asked or skipped lately
+  if (x.profileAsk?.field && x.profileAsk.options?.length)
+    extras.push({ key: "profile", reason: `Missing from their profile, one optional tap: "${x.profileAsk.prompt}"`, field: x.profileAsk.field, prompt: x.profileAsk.prompt, choices: x.profileAsk.options });
   return { version: PLAN_VERSION, extras, skipped };
 }
 
