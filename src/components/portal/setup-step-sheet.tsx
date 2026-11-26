@@ -81,8 +81,10 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const hydratedRef = useRef(false);
+  const originalRef = useRef<any>(null);
   useEffect(() => {
     if (hydratedRef.current || !client || prefill.isPending) return;
+    originalRef.current = client;
     setForm(fillMissing(client, prefill.data?.basic ?? {}));
     hydratedRef.current = true;
   }, [client, prefill.isPending, prefill.data]);
@@ -93,12 +95,12 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
     if (!targetId) return toast.error("Couldn't identify your account — please close and reopen this step.");
     setSaving(true);
     const patch: any = {};
-    for (const f of BASIC_FIELDS) if (f in form && form[f] !== client?.[f]) patch[f] = form[f] ?? null;
+    for (const f of BASIC_FIELDS) if (f in form && form[f] !== originalRef.current?.[f]) patch[f] = form[f] ?? null;
     // Only write sex when it has an answer, so a stale form can't erase one
     // given elsewhere (e.g. the Home prompt).
-    if (form?.sex) patch.sex = form.sex;
-    if (patch.preferred_height_unit == null) patch.preferred_height_unit = "imperial";
-    patch.full_name = [form?.first_name, form?.last_name].filter(Boolean).join(" ").trim() || form?.full_name || null;
+    if (form?.sex && form.sex !== originalRef.current?.sex) patch.sex = form.sex;
+    if (!form?.preferred_height_unit && !originalRef.current?.preferred_height_unit) patch.preferred_height_unit = "imperial";
+    if ("first_name" in patch || "last_name" in patch) patch.full_name = [form?.first_name, form?.last_name].filter(Boolean).join(" ").trim() || form?.full_name || null;
     patch.info_last_updated_at = new Date().toISOString();
     patch.info_last_updated_by = "client";
     patch.info_update_requested = false;

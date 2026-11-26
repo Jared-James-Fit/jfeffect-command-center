@@ -9,6 +9,9 @@ on:
       - 'src/lib/clients-directory*'
       - 'src/lib/client-setup-requests.ts'
       - 'src/lib/client-goals/**'
+      - 'src/lib/account-setup-*.ts'
+      - 'src/components/portal/setup-*.tsx'
+      - 'src/test/account-setup-scope.test.ts'
       - 'src/lib/coaching-agreement*'
       - 'src/lib/coaching-packages/**'
       - 'src/routes/coaching.index.tsx'
@@ -34,4 +37,4 @@ jobs:
           sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
           bun install --frozen-lockfile --ignore-scripts
       - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
-      - run: bun run test src/test/client-setup-requests.test.ts src/test/client-directory-services.test.ts src/test/coaching-packages.test.ts src/test/clients-list-wiring.test.ts src/test/clients-row-status.test.ts src/test/client-account-setup.test.ts src/test/client-profile-account-access.test.ts
+      - run: bun run test src/test/client-setup-requests.test.ts src/test/client-directory-services.test.ts src/test/coaching-packages.test.ts src/test/clients-list-wiring.test.ts src/test/clients-row-status.test.ts src/test/client-account-setup.test.ts src/test/client-profile-account-access.test.ts src/test/account-setup-scope.test.ts

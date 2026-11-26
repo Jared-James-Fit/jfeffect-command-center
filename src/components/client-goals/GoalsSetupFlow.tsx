@@ -123,7 +123,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
       }
     } catch { /* ignore parse / quota errors */ }
     const merged: Partial<ClientGoalsSetupRow> = { ...(row ?? {}), ...(draft ?? {}) };
-    if (!nutritionOnly && !merged.main_goal && !draft?.main_goal && prefill.data?.goals.main_goal) merged.main_goal = prefill.data.goals.main_goal;
+    if (!nutritionOnly && !merged.main_goal && !(draft && Object.prototype.hasOwnProperty.call(draft, "main_goal")) && prefill.data?.goals.main_goal) merged.main_goal = prefill.data.goals.main_goal;
     const live = committedDays ?? [];
     if (live.length) {
       // The schedule wins over this device's draft: it may have changed since.

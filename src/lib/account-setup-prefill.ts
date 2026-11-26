@@ -4,7 +4,7 @@ const goalMap: Record<string, string> = {
   "Get stronger": "Get stronger", "Lose fat": "Lose body fat", "Build muscle": "Build muscle",
   "General fitness": "Improve general fitness", "Powerlifting meet": "Prepare for a competition",
 };
-export function memberIntakePrefill(member: { goals_tags?: string[] | null; goals?: string | null } | null) {
+export function memberIntakePrefill(member: { goals_tags?: string[] | null; goals?: string | null } | null): { main_goal?: string } {
   const tags = (member?.goals_tags ?? []).filter(Boolean);
   const goal = tags.length === 1 ? tags[0] : tags.length === 0 ? member?.goals?.trim() : undefined;
   const match = goal && Object.prototype.hasOwnProperty.call(goalMap, goal) ? goalMap[goal] : undefined;

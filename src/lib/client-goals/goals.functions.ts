@@ -297,7 +297,7 @@ export const getAccountSetupPrefillFn = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: c, error } = await supabaseAdmin.from("clients").select("user_id").eq("id", data.clientId).maybeSingle();
     if (error) throw new Error("Could not read account information");
-    if (!c?.user_id) return { basic: {}, goals: {} };
+    if (!c?.user_id) return { basic: {} as Record<string, string>, goals: {} as { main_goal?: string } };
     const member = await supabaseAdmin.from("app_members").select("phone, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals_tags, goals").eq("user_id", c.user_id).maybeSingle();
     if (member.error) throw new Error("Could not read previous setup");
     const { memberBasicPrefill, memberIntakePrefill } = await import("@/lib/account-setup-prefill");
