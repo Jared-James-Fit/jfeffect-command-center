@@ -1,3 +1,4 @@
+import { LegalDocumentBody } from "@/components/legal/legal-document-body";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -334,7 +335,7 @@ function DocumentDetail({ documentId }: { documentId: string }) {
               <SheetHeader><SheetTitle>{current.title}</SheetTitle></SheetHeader>
               <div className="mt-4 space-y-3">
                 {current.summary && <p className="text-sm text-muted-foreground">{current.summary}</p>}
-                <div className="rounded-md border border-border bg-muted/20 p-4 text-sm whitespace-pre-wrap">{current.body}</div>
+                <LegalDocumentBody body={current.body} className="rounded-xl border border-border/60 p-4" />
               </div>
             </SheetContent>
           </Sheet>
