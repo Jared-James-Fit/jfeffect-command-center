@@ -37,7 +37,10 @@ Answer with JSON only, no other text:
 
 export async function readDescription(text: string, exercises: WorkoutExercise[], sb?: unknown): Promise<{ result: DescribeResult; model: string }> {
   const clean = text.replace(/"""/g, "'").slice(0, 600);
-  const reply = await askRoute("pain_describe", { system: SYSTEM, prompt: `Description: """${clean}"""`, timeoutMs: 15_000 }, { sb, openaiOnly: true });
+  // their lifts, so "my bench" reads as theirs (names only, never anything about them)
+  const lifts = exercises.slice(0, 40).map((x) => x.name.replace(/"/g, "'")).join("; ");
+  const prompt = `${lifts ? `Exercises they train: ${lifts}\n` : ""}Description: """${clean}"""`;
+  const reply = await askRoute("pain_describe", { system: SYSTEM, prompt, timeoutMs: 15_000 }, { sb, openaiOnly: true });
   const stripped = (reply.text ?? "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
   let raw: unknown = null;
   try {
@@ -57,7 +60,7 @@ export async function readDescription(text: string, exercises: WorkoutExercise[]
 const VOICE_MAX_BYTES = 4 * 1024 * 1024;
 
 const VOICE_HINT =
-  "An athlete describing pain or symptoms after a workout: body parts (knee, kneecap, shoulder, low back, hip flexor, patellar tendon, biceps, rotator cuff, thumb, palm, ring finger, pinky, big toe, ball of the foot, arch, heel, temples, jaw, ribs), left or right, a number out of 10, symptoms (headache, dizzy, nauseous, numb, tingling, cramping), and lifts (squat, bench, deadlift, RDL, overhead press).";
+  "An athlete describing pain or symptoms after a workout: body parts (knee, kneecap, shoulder, low back, hip flexor, patellar tendon, biceps, rotator cuff, adductor, SI joint, QL, rear delt, pec, lat, trap, glute med, thumb, palm, ring finger, pinky, big toe, ball of the foot, arch, heel, temples, jaw, ribs), left or right, a number out of 10, how it feels (sharp, tight, achy, pinching, tingling, numb, cramping), symptoms (headache, dizzy, nauseous), and lifts (squat, bench, deadlift, RDL, sumo, low bar, SSB, Larsen press, overhead press, hip thrust).";
 
 /** One way to turn speech into words ("" when nothing was said). */
 export type Transcriber = { name: string; run: (bytes: Buffer, mime: string, signal: AbortSignal) => Promise<string> };
@@ -105,16 +108,15 @@ export function openAiTranscriber(key: string, model: string, hint: string = VOI
 
 /**
  * Who turns a spoken description into words, in order: OpenAI's transcriber,
- * then Whisper (its own limits and access), so a refused model (Nov 23 2026: a
- * 429 on gpt-4o-mini-transcribe left a pain report with nothing) never loses
- * what they said. OpenAI only (Nov 26 2026): never the Lovable gateway, so no
- * report ever spends Lovable credits; with both refusing, the take is kept
- * for Try again and typing always works. Never metered with AI credits.
+ * then Whisper (its own limits and access), so a refused model (Nov 23 2026:
+ * a 429 on gpt-4o-mini-transcribe left a pain report with nothing) never loses
+ * what they said. The OpenAI key only (Nov 26 2026): never the Lovable
+ * gateway or its credits; a take neither answers is kept on the phone for Try
+ * again. Never metered with AI credits.
  */
 export function painTranscribers(env: { OPENAI_API_KEY?: string }): Transcriber[] {
-  const out: Transcriber[] = [];
-  if (env.OPENAI_API_KEY) out.push(openAiTranscriber(env.OPENAI_API_KEY, "gpt-4o-mini-transcribe"), openAiTranscriber(env.OPENAI_API_KEY, "whisper-1"));
-  return out;
+  if (!env.OPENAI_API_KEY) return [];
+  return [openAiTranscriber(env.OPENAI_API_KEY, "gpt-4o-mini-transcribe"), openAiTranscriber(env.OPENAI_API_KEY, "whisper-1")];
 }
 
 /**

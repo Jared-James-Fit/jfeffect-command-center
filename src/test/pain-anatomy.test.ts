@@ -399,20 +399,20 @@ describe("the review keeps what's being typed", () => {
     // cancelled every touchmove on the map (Nov 21 2026: the details wouldn't scroll)
     const map = readFileSync("src/components/pain/pain-map.tsx", "utf8");
     expect(map).toContain("<DialogPrimitive.Overlay");
-    // the details sheet is the height the map frames around, so no label sits under it
-    expect(map).toContain("height: `${DETAILS_SHARE * 100}%`");
-    expect(map.match(/size\.h \* DETAILS_SHARE/g)?.length).toBe(2);
+    // the "In view" list is the share of the stage the map frames around, so no label sits under it
+    expect(map).toContain("Math.round(size.h * PANEL_SHARE)");
     expect(map).not.toMatch(/size\.h \* 0\.\d+/);
-    // a swipe up or down that starts on the 0–10 row scrolls the sheet
-    expect(map).toContain("touch-pan-y grid-cols-11");
   });
-  it("typing keeps the box in view above the keyboard, and a pinch never zooms the page", () => {
+  it("is a picker: a spot hands back and closes; how bad is asked on the review's own list", () => {
     const map = readFileSync("src/components/pain/pain-map.tsx", "utf8");
-    // the details pin to the visible part of the screen, the Setup sheet's way
+    expect(map).toContain("onPick(place);");
+    expect(map).not.toContain("function PlaceDetails");
+    expect(map).not.toContain("function DescribePanel");
+    expect(map).not.toContain("useVoiceDictation");
+  });
+  it("typing keeps the list in view above the keyboard, and a pinch never zooms the page", () => {
+    const map = readFileSync("src/components/pain/pain-map.tsx", "utf8");
     expect(map).toContain("useVisualViewportBox(open)");
-    expect(map).toContain("top: vv.top + 8, height: vv.height - 8");
-    expect(map).toContain("useSwipeDownToClose(panel, !kb, onDone)");
-    expect(map).toContain("revealDelta(");
     // two fingers anywhere on the map are the map's
     expect(map).toContain("e.touches.length > 1 && e.cancelable");
     expect(map).toContain('addEventListener("gesturestart", stop)');

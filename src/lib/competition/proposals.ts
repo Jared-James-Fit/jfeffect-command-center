@@ -100,9 +100,9 @@ const TYPES: ProposalType[] = [
 ];
 const NUMBER_KINDS: Partial<Record<ProposalType, EvidenceKind[]>> = {
   forecast: ["training", "meet", "conversion", "line", "pain", "recovery", "bodyweight", "program"],
-  attempt: ["training", "meet", "attempt_history", "line", "conversion", "pain", "warmup"],
-  last_warmup: ["warmup", "training", "meet", "attempt_history"],
-  warmup_sets: ["warmup", "training", "meet", "attempt_history"],
+  attempt: ["training", "meet", "attempt_history", "line", "conversion", "pain", "warmup", "intel"],
+  last_warmup: ["warmup", "training", "meet", "attempt_history", "intel"],
+  warmup_sets: ["warmup", "training", "meet", "attempt_history", "intel"],
 };
 
 const clip = (s: unknown, n: number) =>

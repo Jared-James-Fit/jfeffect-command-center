@@ -11,7 +11,9 @@ import { OpenWorkout } from "@/components/messages/open-client-workout";
 import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 import type { NoteDates } from "@/lib/exercise-note-versions";
 import { PainReviewSheet } from "@/components/pain/pain-review-sheet";
-import { FEELS, TIMINGS, placeLabel, severityLabel, type Severity } from "@/lib/pain/report";
+import { FEELS, TIMINGS, placeLabel, severityLabel, type Feel, type Severity, type Timing } from "@/lib/pain/report";
+import { classShort, symptomClass, type GeneralSymptom } from "@/lib/pain/symptoms";
+import { needsRating } from "@/lib/pain/picks";
 import { siteAnatomy } from "@/lib/pain/sites";
 import { PlaceThumb } from "@/components/pain/place-thumb";
 import type { PainSide } from "@/lib/pain/regions";
@@ -215,13 +217,15 @@ function placeOf(r: any): Place {
     r.region !== "other" && r.note ? `“${r.note}”` : null,
   ].filter(Boolean).join(" · ");
   const score = typeof r.score === "number" ? r.score : null;
-  const level = score ?? (r.severity === "severe" ? 8 : r.severity === "moderate" ? 5 : 3);
+  const kindOf = { region: r.region, site: r.site ?? null, feel: (r.feel ?? []) as Feel[], timing: (r.timing ?? []) as Timing[], symptom: (r.symptom ?? null) as GeneralSymptom | null };
+  const level = score ?? (r.severity === "severe" ? 8 : r.severity === "moderate" ? 5 : r.severity === "mild" ? 3 : 0);
   return {
     region: r.region,
     side,
     site: r.site ?? null,
     name: placeLabel({ region: r.region, side, site: r.site ?? null, note: r.note, symptom: r.symptom ?? null }),
-    score: score != null ? `${score}/10` : severityLabel((r.severity as Severity) ?? null),
+    // no number and no band: they weren't sure (Nov 26 2026), or it's a kind that needs none (soreness, tightness, a headache)
+    score: score != null ? `${score}/10` : severityLabel((r.severity as Severity) ?? null) ?? (r.severity == null ? (needsRating(kindOf) ? "Unsure" : classShort(symptomClass(kindOf))) : null),
     level,
     extra: extra || null,
     impact: r.impact === "stopped" || r.impact === "modified" ? r.impact : null,

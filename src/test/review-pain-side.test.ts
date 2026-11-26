@@ -70,7 +70,7 @@ describe("where it hurts in the review", () => {
   it("an older free-text area still saves; only a missing area blocks", () => {
     const base = { isEdit: true, effort: 7, pain: true, sleepBucket: null, recoveryToday: null };
     expect(checkoutCta({ ...base, painArea: "General" }).enabled).toBe(true);
-    expect(checkoutCta({ ...base, painArea: null }).label).toBe("Pick where it hurts");
+    expect(checkoutCta({ ...base, painArea: null }).label).toBe("Say where it hurts");
   });
 
   it("the editor takes any number of places from the body map, each with its own severity, and sends them structured", () => {
@@ -78,11 +78,13 @@ describe("where it hurts in the review", () => {
     expect(ed).toContain("<PainReporter picks={painPicks} onChange={setPainPicks} ctx={painContext} />");
     expect(ed).toContain("painReports: pain ? painReports : [],");
     expect(ed).toContain("painArea: pain ? painCols.painArea : null,");
-    // a place with no "how bad" holds the button
-    expect(ed).toContain("painUnrated: painPicks.some((p) => unrated(p)),");
+    // a place with no "how bad" (a number or Unsure) or no side holds the button
+    expect(ed).toContain("painUnrated: painPicks.some((p) => needsScore(p)),");
+    expect(ed).toContain('painNoSide: painPicks.some((p) => pickGaps(p).includes("side")),');
     expect(ed).toContain('painUnnamed: painPicks.some((p) => p.region === "other" && !p.note?.trim())');
     const rep = readFileSync("src/components/pain/pain-reporter.tsx", "utf8");
     expect(rep).toContain("<PainMap");
-    expect(rep).toContain("data-pain-place");
+    expect(rep).toContain("<PainEntryRow");
+    expect(readFileSync("src/components/pain/pain-entries.tsx", "utf8")).toContain("data-pain-place");
   });
 });

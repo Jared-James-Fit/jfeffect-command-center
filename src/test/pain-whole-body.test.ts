@@ -12,7 +12,7 @@ import { buildPainHistory, entriesFromCheckinText, followUpFor, type PainEntry }
 import { painHistoryForAi } from "@/lib/pain/ai";
 import { PAIN_RULES } from "@/lib/pain/rules";
 import { needsSafetyNotice, redFlags } from "@/lib/pain/safety";
-import { needsRating, newPick, picksToReports, unrated } from "@/lib/pain/picks";
+import { needsRating, needsScore, newPick, picksToReports } from "@/lib/pain/picks";
 import { checkinPainReports } from "@/lib/pain/checkin-pain";
 import { atlasView, sitesOnView } from "@/lib/pain/anatomy/atlas";
 import { partForPlace, viewForPlace } from "@/lib/pain/anatomy/place-view";
@@ -127,7 +127,7 @@ describe("reports: only the questions that matter, and nothing made up", () => {
     expect(needsRating({ ...newPick("hamstring", "L"), feel: ["tight"] })).toBe(false);
     expect(needsRating({ ...newPick("general", null, null, "dizziness") })).toBe(false);
     expect(needsRating({ ...newPick("knee", "L", "patellar_tendon") })).toBe(true);
-    expect(unrated({ ...newPick("hamstring", "L"), feel: ["tight"] })).toBe(false);
+    expect(needsScore({ ...newPick("hamstring", "L"), feel: ["tight"] })).toBe(false);
     // a tight hamstring with no rating is still kept, with no made-up band
     const sent = picksToReports([{ ...newPick("hamstring", "L"), feel: ["tight"] }, { ...newPick("general", null, null, "nausea") }]);
     expect(sent.map((r) => r.severity)).toEqual([null, null]);

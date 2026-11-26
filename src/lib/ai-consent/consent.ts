@@ -16,11 +16,11 @@ export const AI_CONSENT_VERSION = 1;
 export const AI_PROVIDERS = [
   {
     name: "OpenAI",
-    uses: "meal estimates, reading programs and meal plans you import, reading a pain description you type or say, and the drafts your coach (and Cleo, the coach's assistant) prepare from your training, check-ins and nutrition before anything reaches you",
+    uses: "meal estimates, reading programs and meal plans you import, turning a pain report you say into text and reading one you type, and the drafts your coach (and Cleo, the coach's assistant) prepare from your training, check-ins and nutrition before anything reaches you",
   },
   {
     name: "Google (Gemini)",
-    uses: "turning voice memos in your coach chat into text, and a spoken pain description when OpenAI can't",
+    uses: "turning voice memos in your coach chat into text",
   },
 ] as const;
 

@@ -55,6 +55,8 @@ export type PainEntry = {
   inferred: boolean;
   /** A general symptom (symptoms.ts): a headache, dizziness, nausea… null for a place that hurts. */
   symptom?: string | null;
+  /** They answered "how bad?" with Unsure (Nov 26 2026): no number, and none stands in. */
+  unsure?: boolean;
 };
 
 /** What kind of symptom an entry is (symptoms.ts: the one reader). */
@@ -81,7 +83,7 @@ export type PainReportRow = {
   region: string;
   side: string | null;
   site?: string | null;
-  severity: string;
+  severity: string | null;
   score?: number | null;
   timing?: string[] | null;
   trigger: string | null;
@@ -111,6 +113,7 @@ export function entriesFromReports(rows: PainReportRow[]): PainEntry[] {
     site: siteOf(r.site) ? r.site! : null,
     severity: (["mild", "moderate", "severe"] as const).includes(r.severity as Severity) ? (r.severity as Severity) : null,
     score: typeof r.score === "number" ? r.score : null,
+    unsure: r.severity == null && typeof r.score !== "number",
     timing: ((r.timing ?? []) as Timing[]).filter((t) => ["during", "after", "rest", "movement"].includes(t)),
     trigger: (r.trigger as Trigger) ?? null,
     exerciseName: r.exercise_name ?? null,
@@ -308,6 +311,8 @@ export type PainArea = {
   sites: { site: string; count: number }[];
   /** The latest 0–10 (when the latest report had one). */
   latestScore: number | null;
+  /** The latest report said "not sure how bad". */
+  latestUnsure: boolean;
   /** When it hurts, across the recent reports. */
   timing: Timing[];
   /** Reasons the coach should look, most pressing first (empty = nothing to act on). */
@@ -490,6 +495,7 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
       feel,
       sites,
       latestScore: latest.score,
+      latestUnsure: !!latest.unsure,
       timing,
       reasons: REASON_ORDER.filter((r) => reasons.has(r)),
       minor,
@@ -569,6 +575,7 @@ export type FollowUp = {
   date: string;
   /** The spot it was about, when they picked one. */
   site: string | null;
+  side: PainSide | null;
   score: number | null;
   severity: Severity | null;
   trigger: Trigger | null;
@@ -595,7 +602,7 @@ export function followUpFor(
       .filter((e) => e.symptom && e.symptom === opts.symptom && e.date >= from && e.date <= opts.today && !(opts.feedbackId && e.feedbackId === opts.feedbackId))
       .sort((a, b) => b.at.localeCompare(a.at))[0];
     if (!prior) return null;
-    return { id: prior.id, stored: prior.stored, date: prior.date, site: prior.site, score: prior.score, severity: prior.severity, trigger: prior.trigger, exerciseName: prior.exerciseName, feel: prior.feel };
+    return { id: prior.id, stored: prior.stored, date: prior.date, site: prior.site, side: prior.side, score: prior.score, severity: prior.severity, trigger: prior.trigger, exerciseName: prior.exerciseName, feel: prior.feel };
   }
   const from = addDays(opts.today, -RECENT_DAYS);
   let best: PainEntry | null = null;
@@ -613,5 +620,5 @@ export function followUpFor(
     }
   }
   if (!best) return null;
-  return { id: best.id, stored: best.stored, date: best.date, site: best.site, score: best.score, severity: best.severity, trigger: best.trigger, exerciseName: best.exerciseName, feel: best.feel };
+  return { id: best.id, stored: best.stored, date: best.date, site: best.site, side: best.side ?? null, score: best.score, severity: best.severity, trigger: best.trigger, exerciseName: best.exerciseName, feel: best.feel };
 }

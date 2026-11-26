@@ -15,6 +15,8 @@ import type { SleepBucket } from "@/lib/analytics/recovery-score";
 export type PainSession = {
   date: string;
   dayId?: string | null;
+  /** The training block the workout was in (for "changes across blocks"). */
+  block?: { id: string; name: string } | null;
   exercises: string[];
   sessionRpe: number | null;
   sleep: SleepBucket | string | null;
@@ -144,6 +146,58 @@ export function associations(area: Pick<PainArea, "entries"> & { region?: string
 export function associationLine(a: Association): string {
   const what = a.kind === "exercise" ? a.name : `${patternWords(a.pattern)} (${a.name})`;
   return `came up on ${a.with} of ${a.of} days with ${what}, which is in ${Math.round(a.base * 100)}% of their sessions`;
+}
+
+export type BlockShift = {
+  current: { name: string; pain: number; sessions: number };
+  previous: { name: string; pain: number; sessions: number };
+  direction: "more" | "less";
+};
+
+/**
+ * How often a place came up in this training block against the one before
+ * (Nov 26 2026): only a clear change (one block with none and the other with
+ * two or more, or twice as often across at least three sessions), counted
+ * per session so a longer block never reads as worse. Facts, never a cause.
+ */
+export function blockShift(area: Pick<PainArea, "entries">, sessions: PainSession[]): BlockShift | null {
+  const withBlock = sessions.filter((s) => s.block?.id);
+  if (withBlock.length < 4) return null;
+  const order: string[] = [];
+  const names = new Map<string, string>();
+  for (const s of [...withBlock].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (!order.includes(s.block!.id)) order.push(s.block!.id);
+    names.set(s.block!.id, s.block!.name);
+  }
+  if (order.length < 2) return null;
+  const latest = [...withBlock].sort((a, b) => b.date.localeCompare(a.date))[0].block!.id;
+  const i = order.indexOf(latest);
+  if (i < 1) return null;
+  const prev = order[i - 1];
+  const painDates = new Set(area.entries.filter((e) => e.source !== "checkin").map((e) => e.date));
+  const count = (id: string) => {
+    const list = withBlock.filter((s) => s.block!.id === id);
+    return { sessions: list.length, pain: list.filter((s) => painDates.has(s.date)).length };
+  };
+  const cur = count(latest);
+  const before = count(prev);
+  if (cur.sessions < 2 || before.sessions < 2) return null;
+  const rc = cur.pain / cur.sessions;
+  const rp = before.pain / before.sessions;
+  const clear =
+    (before.pain === 0 && cur.pain >= 2) ||
+    (cur.pain === 0 && before.pain >= 2 && cur.sessions >= 3) ||
+    (cur.pain + before.pain >= 3 && (rc >= rp * 2 || rp >= rc * 2) && Math.abs(cur.pain - before.pain) >= 2);
+  if (!clear) return null;
+  return {
+    current: { name: names.get(latest) ?? "This block", ...cur },
+    previous: { name: names.get(prev) ?? "The block before", ...before },
+    direction: rc > rp ? "more" : "less",
+  };
+}
+
+export function blockShiftLine(b: BlockShift): string {
+  return `came up in ${b.current.pain} of ${b.current.sessions} sessions this block (${b.current.name}), against ${b.previous.pain} of ${b.previous.sessions} in the block before (${b.previous.name})`;
 }
 
 /** How the sessions it came up in went: short sleep and very hard sessions, counted. */

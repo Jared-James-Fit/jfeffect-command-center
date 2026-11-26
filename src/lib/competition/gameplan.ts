@@ -26,6 +26,7 @@ import type { AthleteInfo } from "./athlete-info";
 import { floorTo, type FederationRules } from "./rules";
 import type { Lift, Objective, Range } from "./types";
 import { planWarmups, type WarmupHistory } from "./warmups";
+import type { GameplanIntel } from "@/lib/athlete-intel/engine-input";
 
 export const LIFTS: Lift[] = ["squat", "bench", "deadlift"];
 export type PlanStatus = "confirmed" | "estimated" | "recommended" | "unconfirmed";
@@ -63,6 +64,10 @@ export type GameplanDoc = {
   };
   day: { afterWeighIn: string[]; during: string[]; caffeine: string | null; notes: string[] };
   contacts: Contact[];
+  /** technical cues per lift, from the athlete's own coach or their notes (Athlete Intelligence) */
+  cues: Partial<Record<Lift, string[]>>;
+  /** their own coach's instructions for the meet, attributed ("Coach Sarah: …") */
+  instructions: string[];
   /** why the numbers are what they are (shown folded) */
   why: string[];
 };
@@ -75,6 +80,8 @@ export function emptyGameplan(): GameplanDoc {
     equipment: { racks: {}, gear: [], status: "unconfirmed" },
     day: { afterWeighIn: [], during: [], caffeine: null, notes: [] },
     contacts: [],
+    cues: {},
+    instructions: [],
     why: [],
   };
 }
@@ -148,6 +155,11 @@ export function readGameplan(raw: unknown): GameplanDoc {
         responsibility: typeof c.responsibility === "string" && c.responsibility.trim() ? c.responsibility.trim().slice(0, 200) : null,
       }))
       .slice(0, 8);
+  for (const l of LIFTS) {
+    const c = lines(r.cues?.[l]).map((x) => x.slice(0, 160)).slice(0, 4);
+    if (c.length) g.cues[l] = c;
+  }
+  g.instructions = lines(r.instructions).slice(0, 8);
   g.why = lines(r.why);
   return g;
 }
@@ -172,7 +184,11 @@ export type DraftInput = {
   existingCoach?: { name: string; contact?: string | null } | null;
   /** caffeine they use in training (mg), when known */
   caffeineMg?: number | null;
+  /** what uploaded athlete information says (Athlete Intelligence): their coach's attempts and warm-ups, racks, cues */
+  intel?: (GameplanIntel & { conflicts?: Lift[] }) | null;
 };
+
+const BY_SOURCE: Record<string, PlanSource> = { primary_coach: "existing_coach", athlete: "athlete", handler: "coach", other_coach: "coach", other: "coach", unknown: "coach" };
 
 /** A narrow range around what they told us: the target if they gave one, else their recent or best single. */
 function statedRange(info: AthleteInfo, lift: Lift): Range | null {
@@ -187,7 +203,26 @@ export function draftGameplan(input: DraftInput): GameplanDoc {
   const step = input.rules.incrementKg;
   const why: string[] = [];
   const info = input.info;
+  const intel = input.intel ?? null;
+  const conflicts = new Set(intel?.conflicts ?? []);
+  const intelAttempt = (lift: Lift) => {
+    const c = intel?.attempts?.[lift];
+    if (!c || c.opener == null || conflicts.has(lift)) return false;
+    const by = c.by;
+    const confirmed = by === "primary_coach" || by === "athlete";
+    g.attempts[lift] = {
+      opener: c.opener,
+      second: c.second,
+      third: c.third,
+      status: confirmed ? "confirmed" : "recommended",
+      source: BY_SOURCE[by] ?? "coach",
+      note: by === "primary_coach" ? `Set by their coach (${c.label})` : by === "athlete" ? "Their own plan" : `From ${c.label}`,
+    };
+    return true;
+  };
   for (const lift of LIFTS) {
+    // an answer that settled whose plan is current comes first
+    if (intel?.attempts?.[lift]?.basis === "answer" && intelAttempt(lift)) continue;
     const own = info.attempts?.[lift];
     if (own && own.some((x) => x != null) && (info.attemptsBy === "me" || info.attemptsBy === "my_coach")) {
       g.attempts[lift] = {
@@ -200,6 +235,7 @@ export function draftGameplan(input: DraftInput): GameplanDoc {
       };
       continue;
     }
+    if (intelAttempt(lift)) continue;
     const rec = input.recordsAttempts?.lifts?.[lift] ?? null;
     if (rec) {
       g.attempts[lift] = {
@@ -210,7 +246,7 @@ export function draftGameplan(input: DraftInput): GameplanDoc {
         thirdRange: [rec.third.low, rec.third.high],
         status: "estimated",
         source: "records",
-        note: null,
+        note: conflicts.has(lift) ? "Two attempt plans on file disagree: estimated from records until it's settled" : null,
       };
       continue;
     }
@@ -232,6 +268,7 @@ export function draftGameplan(input: DraftInput): GameplanDoc {
     g.attempts[lift] = { opener: null, second: null, third: null, status: "unconfirmed", source: "cleo", note: "No lifts on file yet" };
   }
   if (input.recordsAttempts) why.push("Attempts from their training and meet records where they have no plan of their own");
+  if (intel && LIFTS.some((l) => g.attempts[l]?.source === "existing_coach")) why.push("Attempts their own coach set (uploaded information) are kept as they are");
 
   for (const lift of LIFTS) {
     const opener = g.attempts[lift]?.opener ?? null;
@@ -243,6 +280,21 @@ export function draftGameplan(input: DraftInput): GameplanDoc {
         source: "athlete",
       };
       continue;
+    }
+    const iw = intel?.warmups?.[lift];
+    if (iw && iw.rows.length >= 2) {
+      const rows = iw.rows
+        .map((r) => ({ kg: r.kg ?? (r.pct != null && opener != null ? floorTo((opener * r.pct) / 100, step) : null), reps: r.reps }))
+        .filter((r): r is { kg: number; reps: number } => r.kg != null && r.kg > 0);
+      if (rows.length >= 2 && (opener == null || rows[rows.length - 1].kg < opener)) {
+        g.warmups[lift] = {
+          rows: rows.map((r, i) => ({ kg: r.kg, reps: r.reps, minutesBefore: null, note: i === rows.length - 1 ? "Last warm-up" : null })),
+          status: iw.by === "primary_coach" || iw.by === "athlete" ? "confirmed" : "recommended",
+          source: BY_SOURCE[iw.by] ?? "coach",
+        };
+        why.push(`${lift[0].toUpperCase()}${lift.slice(1)} warm-ups as ${iw.label} wrote them`);
+        continue;
+      }
     }
     if (opener == null) continue;
     const hist = input.warmupHistory?.[lift] ?? null;
@@ -263,11 +315,18 @@ export function draftGameplan(input: DraftInput): GameplanDoc {
   }
 
   const racks = info.racks;
+  const ir = intel?.racks ?? {};
   if (racks?.squat?.height || racks?.squat?.safety) g.equipment.racks.squat = { height: racks.squat.height ?? null, safety: racks.squat.safety ?? null };
+  else if (ir.squat?.height || ir.squat?.safety) g.equipment.racks.squat = { height: ir.squat.height ?? null, safety: ir.squat.safety ?? null };
   if (racks?.bench?.height || racks?.bench?.safety || racks?.bench?.footBlocks)
     g.equipment.racks.bench = { height: racks.bench.height ?? null, safety: racks.bench.safety ?? null, footBlocks: racks.bench.footBlocks ?? null };
+  else if (ir.bench?.height || ir.bench?.safety || ir.bench?.footBlocks)
+    g.equipment.racks.bench = { height: ir.bench.height ?? null, safety: ir.bench.safety ?? null, footBlocks: ir.bench.footBlocks ?? null };
   g.equipment.gear = [...(info.gear ?? [])];
-  g.equipment.status = racks?.squat?.height && racks?.bench?.height ? "confirmed" : "unconfirmed";
+  for (const x of intel?.gear ?? []) if (!g.equipment.gear.some((y) => y.toLowerCase() === x.toLowerCase())) g.equipment.gear.push(x);
+  g.equipment.status = g.equipment.racks.squat?.height && g.equipment.racks.bench?.height ? "confirmed" : "unconfirmed";
+  for (const l of LIFTS) if (intel?.cues?.[l]?.length) g.cues[l] = intel.cues[l]!.slice(0, 4);
+  g.instructions = [...(intel?.instructions ?? []), ...(intel?.generalCues ?? []).map((c) => `Cue: ${c}`)].slice(0, 8);
 
   g.day.afterWeighIn = [
     info.nutrition?.afterWeighIn
@@ -364,6 +423,8 @@ export function diffGameplans(a: GameplanDoc, b: GameplanDoc): PlanChange[] {
   if (a.equipment.gear.join("|") !== b.equipment.gear.join("|")) out.push({ area: "equipment", text: "Gear list changed" });
   if (JSON.stringify(a.day) !== JSON.stringify(b.day)) out.push({ area: "day", text: "Meet-day food and fluids changed" });
   if (JSON.stringify(a.contacts) !== JSON.stringify(b.contacts)) out.push({ area: "contacts", text: "Contacts changed" });
+  if (JSON.stringify(a.cues ?? {}) !== JSON.stringify(b.cues ?? {})) out.push({ area: "day", text: "Technical cues changed" });
+  if ((a.instructions ?? []).join("|") !== (b.instructions ?? []).join("|")) out.push({ area: "day", text: "Their coach's notes changed" });
   return out;
 }
 

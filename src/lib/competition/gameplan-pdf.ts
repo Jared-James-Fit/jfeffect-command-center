@@ -187,6 +187,16 @@ export function buildGameplanPdf(x: GameplanPdfInput): File {
     { widths: [70, W - M * 2 - 70], bold: [0] },
   );
 
+  // ── cues and their coach's notes (uploaded athlete information) ──
+  const cueRows = (["squat", "bench", "deadlift"] as const)
+    .filter((l) => x.plan.cues?.[l]?.length)
+    .map((l) => [l[0].toUpperCase() + l.slice(1), x.plan.cues![l]!.join(" · ")]);
+  if (cueRows.length || x.plan.instructions?.length) {
+    heading("Cues and their coach's notes", 80);
+    if (cueRows.length) table(null, cueRows, { widths: [70, W - M * 2 - 70], size: 13, bold: [0] });
+    for (const s of x.plan.instructions ?? []) line(s, 12);
+  }
+
   // ── final checklist ──
   const last = x.checklist.filter((i) => (i.stage === "day_before" || i.stage === "meet_day" || i.stage === "travel") && i.state !== "na");
   if (last.length) {
