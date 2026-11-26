@@ -9,7 +9,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import type { MyCommunitySettings } from "@/lib/community-discover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import {
   FEED_PAGE_SIZE,
   FIRST_FEED_PAGE,
@@ -45,7 +46,6 @@ import {
   postSlides,
   planDetail,
   pickLockInSession,
-  seenAs,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
@@ -71,26 +71,21 @@ export const communityKeys = {
 /* ---- feed ----------------------------------------------------------- */
 
 /**
- * The client a coach is previewing ("View as client"), or null: the crew
- * loads as the coach, so posts are shown as this person sees them (seenAs).
- * "" = a client with no account yet (nothing is theirs).
+ * The target user in an explicit account view, or null for normal sessions.
+ * "" means the target has no linked login; never fall back to staff data.
  */
 export function usePovViewer(): string | null {
   const { user } = useAuth();
   const { client } = useClientImpersonation();
-  if (!client || !user || client.user_id === user.id) return null;
+  if (!client || !user) return null;
   return client.user_id ?? "";
 }
 
 export function useCommunityFeed(authorUserId: string | null = null) {
-  const pov = usePovViewer();
-  const asClient = useCallback(
-    (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
-    [pov],
-  );
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    select: pov === null ? undefined : asClient,
-    queryKey: communityKeys.feed(authorUserId),
+    queryKey: pov.key(communityKeys.feed(authorUserId)),
+    enabled: pov.ready,
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -98,7 +93,7 @@ export function useCommunityFeed(authorUserId: string | null = null) {
       // Unused arguments are left out (they default to null), so the call is
       // all plain values and a view-only login can make it as a read.
       // A profile's grid loads whole rows of three; the feed, a few posts at a time.
-      const { data, error } = await db.rpc("community_feed", {
+      const { data, error } = await pov.read("feed", "community_feed", {
         _limit: authorUserId ? (pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE) : pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
         ...(authorUserId ? { _author_user_id: authorUserId } : {}),
@@ -121,27 +116,22 @@ export function useCommunityFeed(authorUserId: string | null = null) {
  * order (useCommunityFeed).
  */
 export function useRankedFeed(enabled = true, following: { follows: string } | null = null) {
-  const pov = usePovViewer();
-  const asClient = useCallback(
-    (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
-    [pov],
-  );
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    select: pov === null ? undefined : asClient,
     // Following (the Crew bar's tab) is the same feed narrowed on the server (`_following`), its own
     // pages under the crew feed's key, read again when who you follow changes (`follows`)
-    queryKey: following
+    queryKey: pov.key(following
       ? ([...communityKeys.feed(null), "ranked", "following", following.follows] as const)
-      : ([...communityKeys.feed(null), "ranked"] as const),
-    enabled,
+      : ([...communityKeys.feed(null), "ranked"] as const)),
+    enabled: enabled && pov.ready,
     initialPageParam: null as FeedCursor | null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       // the crew feed sends no `_following`, so it reads exactly as it always has
       const only = following ? { _following: true } : {};
-      const { data, error } = await db.rpc(
-        "community_feed_ranked",
+      const { data, error } = await pov.read(
+        "ranked", "community_feed_ranked",
         pageParam ? { _limit: FEED_PAGE_SIZE, _cursor: pageParam, ...only } : { _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor(), ...only },
       );
       if (error) throw error;
@@ -1125,17 +1115,16 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
  * opened from Activity or a link paints at once.
  */
 export function usePostDetail(postId: string | null, opts: { placeholder?: CommunityPost | null } = {}) {
-  const pov = usePovViewer();
-  const asClient = useCallback((d: CommunityPostDetail | null) => (d ? seenAs(d, pov) : d), [pov]);
-  const placeholder = opts.placeholder && opts.placeholder.id === postId ? (opts.placeholder as CommunityPostDetail) : undefined;
+  const pov = usePovCrewRead();
+  // Staff feed placeholders must not appear in a client view.
+  const placeholder = !pov.isPov && opts.placeholder && opts.placeholder.id === postId ? (opts.placeholder as CommunityPostDetail) : undefined;
   return useQuery({
-    select: pov === null ? undefined : asClient,
-    queryKey: communityKeys.post(postId),
-    enabled: !!postId,
+    queryKey: pov.key(communityKeys.post(postId)),
+    enabled: !!postId && pov.ready,
     staleTime: 30_000,
     placeholderData: placeholder,
     queryFn: async (): Promise<CommunityPostDetail | null> => {
-      const { data, error } = await db.rpc("community_post", { _post_id: postId });
+      const { data, error } = await pov.read("post", "community_post", { _post_id: postId });
       if (error) throw error;
       return (data ?? null) as CommunityPostDetail | null;
     },
@@ -1143,12 +1132,13 @@ export function usePostDetail(postId: string | null, opts: { placeholder?: Commu
 }
 
 export function useCommunityProfile(userId: string | null) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: communityKeys.profile(userId),
-    enabled: !!userId,
+    queryKey: pov.key(communityKeys.profile(userId)),
+    enabled: !!userId && pov.ready,
     staleTime: 60_000,
     queryFn: async (): Promise<CommunityProfile | null> => {
-      const { data, error } = await db.rpc("community_profile", { _user_id: userId });
+      const { data, error } = await pov.read("profile", "community_profile", { _user_id: userId });
       if (error) throw error;
       return (data ?? null) as CommunityProfile | null;
     },
@@ -1157,9 +1147,9 @@ export function useCommunityProfile(userId: string | null) {
 
 /** Your id in the community (a coach's admin login maps to their community account). */
 export function useMyCommunityId(): string | null {
-  const { user } = useAuth();
-  const { data } = useCommunityProfile(user?.id ?? null);
-  return data?.author.user_id ?? user?.id ?? null;
+  const userId = usePortalUserId();
+  const { data } = useCommunityProfile(userId ?? null);
+  return data?.author.user_id ?? userId ?? null;
 }
 
 /** Take yourself off a post someone named you in (no longer a collaborator, name no longer a link). */
@@ -1565,13 +1555,14 @@ export function useSetCommunityAvatar(userId: string | null) {
 /* ---- "new posts" badge (server-side seen state) --------------------- */
 
 export function useCommunityActivity(enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: communityKeys.activity,
-    enabled,
+    queryKey: pov.key(communityKeys.activity),
+    enabled: enabled && pov.ready,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     queryFn: async (): Promise<CommunityActivity> => {
-      const { data, error } = await db.rpc("community_activity");
+      const { data, error } = await pov.read("activity", "community_activity");
       if (error) throw error;
       return (data ?? { enabled: false, unseen: 0, seen_at: null }) as CommunityActivity;
     },
