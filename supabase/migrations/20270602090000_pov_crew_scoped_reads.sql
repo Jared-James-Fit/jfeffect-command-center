@@ -34,7 +34,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Client account preview unavailable' USING ERRCODE = '42501';
   END IF;
-  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts', 'direct_threads', 'crew_threads', 'chat_prefs', 'nav_data', 'comments', 'reactors', 'post_activity', 'hints')
+  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts', 'direct_threads', 'crew_threads', 'chat_prefs', 'nav_data', 'comments', 'reactors', 'post_activity', 'hints', 'suggestions', 'people_search', 'follow_back', 'my_settings')
      OR jsonb_typeof(_args) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Unknown account view read' USING ERRCODE = '22023';
   END IF;
@@ -59,6 +59,10 @@ BEGIN
     WHEN 'reactors' THEN v_result := public.community_post_reactors((_args->>'_post_id')::uuid);
     WHEN 'post_activity' THEN v_result := public.community_post_activity((_args->>'_post_id')::uuid);
     WHEN 'hints' THEN SELECT coalesce(jsonb_agg(hint), '[]'::jsonb) INTO v_result FROM public.community_hints_seen WHERE user_id=v_target;
+    WHEN 'suggestions' THEN v_result := public.community_suggestions((_args->>'_context')::uuid, coalesce((_args->>'_limit')::integer,12));
+    WHEN 'people_search' THEN v_result := public.community_people_search(left(coalesce(_args->>'_q',''),40),20);
+    WHEN 'follow_back' THEN v_result := public.community_follow_back(30);
+    WHEN 'my_settings' THEN v_result := public.community_my_settings();
     WHEN 'follows' THEN v_result := public.community_follow_state();
     WHEN 'activity' THEN v_result := public.community_activity();
     WHEN 'follow_list' THEN v_result := public.community_follow_list((_args->>'_user_id')::uuid, _args->>'_kind');
