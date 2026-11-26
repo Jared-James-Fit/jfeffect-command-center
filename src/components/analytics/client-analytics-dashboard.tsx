@@ -343,7 +343,7 @@ export function ClientAnalyticsDashboard({
   );
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
   const [muscleExercise, setMuscleExercise] = useState<string | null>(null);
-  const [strengthMode, setStrengthMode] = useState<"competition" | "exercise">("competition");
+
 
   const startDay = isoDay(filter.start);
   const endDay = isoDay(filter.end);
@@ -358,6 +358,7 @@ export function ClientAnalyticsDashboard({
     [results, startMs, endMs],
   );
   const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);
+  const comparisonHistory=useMemo(()=>view==="strength"||muscleExercise?buildExerciseHistory(allResults as any):[],[allResults,view,muscleExercise]);
 
   const trainingLoad = useTrainingLoad({
     clientId,
@@ -1044,9 +1045,9 @@ export function ClientAnalyticsDashboard({
 
             {view === "strength" && (
               <div className="space-y-6" data-analytics-view="strength">
-                {hasPowerlifting && <Segmented<"competition" | "exercise"> value={strengthMode} onChange={setStrengthMode} options={[{ key: "competition", label: "Competition lifts" }, { key: "exercise", label: "Exercises" }]} label="Strength explorer" />}
-                {hasPowerlifting && strengthMode === "competition" && (
-                  <Card className="p-4" data-strength-section>
+
+                {hasPowerlifting && (
+                  <MoreDetail label="Competition lift trends">
                     <SectionTitle
                       title="Squat, bench and deadlift strength"
                       sub="Your estimated max for each lift over time"
@@ -1079,7 +1080,7 @@ export function ClientAnalyticsDashboard({
                         onWiden={filter.preset === "lifetime" ? undefined : widen}
                       />
                     </SectionErrorBoundary>
-                  </Card>
+                  </MoreDetail>
                 )}
                 {profile !== "powerlifting" && (
                   <MoreDetail label="Strength summary">
@@ -1099,7 +1100,7 @@ export function ClientAnalyticsDashboard({
                   </section>
                   </MoreDetail>
                 )}
-                {(!hasPowerlifting || strengthMode === "exercise") && <Card className="p-4">
+                {<Card className="p-4">
                   <SectionTitle
                     title="Exercise progress"
                     sub="Pick an exercise to see its progress. Each dot is your best set that day."
@@ -1107,6 +1108,8 @@ export function ClientAnalyticsDashboard({
                   <SectionErrorBoundary label="Exercise progress">
                     <LiftProgressCard
                       history={history}
+                      comparisonHistory={comparisonHistory}
+                      periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end<today?b.end:today}))}
                       displayUnit={displayUnit}
                       conv={conv}
                       onOpenSet={setSelectedDot}
@@ -1355,7 +1358,7 @@ export function ClientAnalyticsDashboard({
         <SheetContent side="bottom" swipeToClose className="max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4">
           <SheetTitle>{muscleExercise ?? "Exercise"}</SheetTitle>
           <SheetDescription>{filter.label} · Exercise performance</SheetDescription>
-          {muscleExercise && <LiftProgressCard key={muscleExercise} history={history.filter((h) => h.name === muscleExercise)} displayUnit={displayUnit} conv={conv} onOpenSet={setSelectedDot} compact single />}
+          {muscleExercise && <LiftProgressCard key={muscleExercise} history={history.filter((h) => h.name === muscleExercise)} comparisonHistory={comparisonHistory} periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end<today?b.end:today}))} displayUnit={displayUnit} conv={conv} onOpenSet={setSelectedDot} compact single />}
         </SheetContent>
       </Sheet>
       <GraphDotDetail
