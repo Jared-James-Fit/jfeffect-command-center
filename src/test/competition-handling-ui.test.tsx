@@ -199,3 +199,20 @@ describe("competition review clarity", () => {
     expect(get).toContain('.eq("id", row.competition_id)');
   });
 });
+
+
+describe("internal competition isolation", () => {
+  it("excludes explicitly marked test meets from normal coach and athlete lists", () => {
+    const workspace = readFileSync("src/lib/competition/workspace.server.ts", "utf8");
+    const coach = workspace.slice(workspace.indexOf("export async function loadWorkspace"), workspace.indexOf("export async function loadOverview"));
+    const overview = workspace.slice(workspace.indexOf("export async function loadOverview"));
+    const fn = readFileSync("src/lib/competition/competition.functions.ts", "utf8");
+    const athlete = fn.slice(fn.indexOf("export const getMyCompetitionsFn"));
+    for (const source of [coach, overview, athlete]) expect(source).toContain('.eq("internal_test", false)');
+    expect(coach).toContain('String(c.meet_end_date ?? c.meet_date) >= today');
+  });
+  it("does not use test results for real forecast calibration", () => {
+    const loader = readFileSync("src/lib/competition/load.server.ts", "utf8");
+    expect(loader).toContain('.eq("competitions.internal_test", false)');
+  });
+});
