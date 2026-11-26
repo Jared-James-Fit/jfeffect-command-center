@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { GlobalStoryHost } from "@/components/community/global-story-host";
 import { Link, useRouterState, useNavigate, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal, Menu,
@@ -327,7 +328,10 @@ export function AppShell({
   useExerciseAliasIndex();
   useSalesRealtime();
   const { signOut, user, role } = useAuth();
-  const isStaffRole = !!role && role !== "client" && role !== "member" && role !== "finance";
+  const { isImpersonating, client: povClient } = useClientImpersonation();
+  const targetUserId = usePortalUserId();
+  const viewerNameFallback = isImpersonating ? povClient?.full_name ?? "" : user?.email ?? "";
+  const isStaffRole = !isImpersonating && !!role && role !== "client" && role !== "member" && role !== "finance";
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
@@ -475,15 +479,15 @@ export function AppShell({
   }, []);
 
   const { data: me } = useQuery({
-    queryKey: ["app-shell-me", user?.id],
-    enabled: !!user?.id,
+    queryKey: ["app-shell-me", targetUserId, isImpersonating ? povClient?.id : null],
+    enabled: !!targetUserId,
     queryFn: async () => {
       const [{ data: profile }, { data: coach }, { data: client }] = await Promise.all([
-        supabase.from("profiles").select("full_name, avatar_url").eq("id", user!.id).maybeSingle(),
-        supabase.from("coaches").select("full_name, profile_picture_url").eq("user_id", user!.id).maybeSingle(),
-        supabase.from("clients").select("full_name, profile_picture_url").eq("user_id", user!.id).maybeSingle(),
+        supabase.from("profiles").select("full_name, avatar_url").eq("id", targetUserId!).maybeSingle(),
+        isImpersonating ? Promise.resolve({ data: null }) : supabase.from("coaches").select("full_name, profile_picture_url").eq("user_id", targetUserId!).maybeSingle(),
+        supabase.from("clients").select("full_name, profile_picture_url").eq("user_id", targetUserId!).maybeSingle(),
       ]);
-      const name = coach?.full_name || client?.full_name || profile?.full_name || user!.email || "";
+      const name = coach?.full_name || client?.full_name || profile?.full_name || viewerNameFallback;
       const pic =
         coach?.profile_picture_url ||
         client?.profile_picture_url ||
@@ -509,6 +513,7 @@ export function AppShell({
   }, [items, pathname]);
 
   const handleSignOut = async () => {
+    if (isImpersonating) { toast.message("Exit POV to sign out."); return; }
     await signOut();
     navigate({ to: "/auth", replace: true });
   };
@@ -683,13 +688,13 @@ export function AppShell({
             <div className="flex flex-col items-center gap-1">
               <SettingsMenu
                 items={items}
-                meName={me?.name ?? user?.email ?? ""}
+                meName={me?.name ?? viewerNameFallback}
                 mePic={me?.pic ?? null}
                 onSignOut={handleSignOut}
                 align="start"
                 trigger={
                   <button type="button" className="rounded-full" aria-label="Account menu">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? viewerNameFallback} size={28} expandable={false} />
                   </button>
                 }
               />
@@ -713,19 +718,19 @@ export function AppShell({
             <div className="flex items-center gap-2">
               <SettingsMenu
                 items={items}
-                meName={me?.name ?? user?.email ?? ""}
+                meName={me?.name ?? viewerNameFallback}
                 mePic={me?.pic ?? null}
                 onSignOut={handleSignOut}
                 align="start"
                 trigger={
                   <button type="button" className="shrink-0 rounded-full" aria-label="Account menu">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? viewerNameFallback} size={28} expandable={false} />
                   </button>
                 }
               />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[11px] font-semibold leading-tight">{me?.name || user?.email}</div>
-                {!isCompact && (
+                <div className="truncate text-[11px] font-semibold leading-tight">{me?.name || viewerNameFallback}</div>
+                {!isCompact && !isImpersonating && (
                   <div className="truncate text-[9px] text-muted-foreground leading-tight">{user?.email}</div>
                 )}
               </div>
@@ -1020,7 +1025,7 @@ export function AppShell({
             ) : (
               <SettingsMenu
                 items={items}
-                meName={me?.name ?? user?.email ?? ""}
+                meName={me?.name ?? viewerNameFallback}
                 mePic={me?.pic ?? null}
                 onSignOut={handleSignOut}
                 trigger={
@@ -1033,12 +1038,12 @@ export function AppShell({
             {!simpleHeader && (
               <SettingsMenu
                 items={items}
-                meName={me?.name ?? user?.email ?? ""}
+                meName={me?.name ?? viewerNameFallback}
                 mePic={me?.pic ?? null}
                 onSignOut={handleSignOut}
                 trigger={
                   <button type="button" aria-label="Account menu" className="shrink-0 rounded-full">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? viewerNameFallback} size={28} expandable={false} />
                   </button>
                 }
               />
@@ -1056,7 +1061,7 @@ export function AppShell({
             top="calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem + 5px)"
           />
           {/* a page with its own bar puts the switch under it */}
-          {!pageBar && <DualAccountSwitcher />}
+          {!pageBar && !isImpersonating && <DualAccountSwitcher />}
           {/* story rings on photos outside Crew (Messages, chat lists): the crew's stories already on the phone */}
           <ShellPageContext.Provider value><GlobalStoryHost>{children}</GlobalStoryHost></ShellPageContext.Provider>
         </main>
@@ -1072,7 +1077,7 @@ export function AppShell({
           navBadges={navBadges}
           onNavigate={(to) => {
             tabTap(to);
-            markNavSeen(user?.id, to);
+            if (!isImpersonating) markNavSeen(user?.id, to);
           }}
           onRetap={retapTab}
           moreOpen={moreOpen}
@@ -1104,14 +1109,14 @@ export function AppShell({
               <SettingsMenu
                 items={[]}
                 align="start"
-                meName={me?.name ?? user?.email ?? ""}
+                meName={me?.name ?? viewerNameFallback}
                 mePic={me?.pic ?? null}
                 onSignOut={handleSignOut}
                 trigger={
                   <button type="button" aria-label="Account" className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 py-2 text-left active:bg-sidebar-accent/70">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={36} expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? viewerNameFallback} size={36} expandable={false} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-semibold">{me?.name || user?.email}</span>
+                      <span className="block truncate text-[15px] font-semibold">{me?.name || viewerNameFallback}</span>
                       <span className="block truncate text-[12px] text-muted-foreground">Photo, email, sign out</span>
                     </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -1128,7 +1133,7 @@ export function AppShell({
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        role={(role as AdminRole | null) ?? null}
+        role={isImpersonating ? null : (role as AdminRole | null) ?? null}
       />
       <ClientPovQuickPicker />
       <AccessRevocationWatch />
