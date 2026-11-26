@@ -462,6 +462,25 @@ export async function dailyRead(
       console.warn("[competition] research failed", competitionId, (e as Error)?.message);
     }
   }
+  await refreshLive(sb, comp, today);
+}
+
+/**
+ * The live read worked out again from what's on file (the forecast, the
+ * watch list), saved on the competition, and an interim update queued only
+ * when something meaningful moved (a 3%+ projection shift or a new serious
+ * concern). The daily read runs it; so does new athlete information
+ * (athlete-intel), so an upload changes the preparation the same way a week
+ * of training does. Returns the expected total before and after.
+ */
+export async function refreshLive(
+  sb: Db,
+  comp: any,
+  today = todayWinnipeg(),
+): Promise<{ before: number | null; after: number | null; queued: boolean }> {
+  const competitionId = comp.id as string;
+  const daysOut = daysBetween(today, String(comp.meet_date));
+  const before = Number(comp.live?.total?.expected) || null;
   const { ctx } = await loadCompetitionContext(sb, competitionId, { today });
   const brief = buildBrief(ctx);
   const live = liveSummary(brief);
@@ -486,7 +505,8 @@ export async function dailyRead(
 
   // an interim update only when something meaningful moved
   const shift = brief.projectionShift ?? 0;
-  if (Math.abs(shift) < 0.03 && !newSerious.length) return;
+  const after = Number(live.total?.expected) || null;
+  if (Math.abs(shift) < 0.03 && !newSerious.length) return { before, after, queued: false };
   const { data: recent } = await sb
     .from("competition_milestones")
     .select("kind, due_on, status, seq")
@@ -497,7 +517,7 @@ export async function dailyRead(
       Math.abs(daysBetween(today, String(m.due_on))) <= (m.kind === "update" ? 10 : 5) &&
       (m.kind === "update" || String(m.due_on) >= today),
   );
-  if (near || daysOut <= 1) return;
+  if (near || daysOut <= 1) return { before, after, queued: false };
   const seq =
     Math.max(0, ...(recent ?? []).filter((m: any) => m.kind === "update").map((m: any) => m.seq)) +
     1;
@@ -522,6 +542,7 @@ export async function dailyRead(
     action: "update_queued",
     detail: { why },
   });
+  return { before, after, queued: true };
 }
 
 export type TickReport = {

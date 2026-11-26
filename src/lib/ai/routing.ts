@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract" | "session_brief" | "session_analysis" | "support_answer";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write" | "cardio_plan" | "competition" | "competition_extract" | "athlete_intel" | "session_brief" | "session_analysis" | "support_answer";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -173,6 +173,14 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * (a name or a number that isn't in it is dropped). Answered while the coach waits. OpenAI only.
    */
   competition_extract: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
+  /**
+   * Athlete Intelligence (athlete-intel/, Nov 26 2026): copying what a deterministic reader couldn't
+   * place out of uploaded athlete information (a PDF, photos, a coach's notes in paragraphs) into
+   * facts. Copying, never deciding: every number and every note is checked against the source
+   * (ai-read.ts) and dropped when it isn't there; the reasoning is the competition engines' and the
+   * milestone write-ups'. In the background (staged calls); OpenAI key only, never Lovable credits.
+   */
+  athlete_intel: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 40_000, strongOnly: false },
   /**
    * Coaching sessions (docs/COACHING_SESSIONS.md, Nov 25 2026). The pre-call brief only organizes
    * the sourced prep (coaching-sessions/brief.ts checks every ref and number), so GPT-5.5 at low

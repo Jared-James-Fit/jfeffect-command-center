@@ -132,6 +132,29 @@ export function GameplanView({ plan, compact = false }: { plan: GameplanDoc; com
         </dl>
       </section>
 
+      {(["squat", "bench", "deadlift"] as const).some((l) => plan.cues?.[l]?.length) || plan.instructions?.length ? (
+        <section className="rounded-2xl border border-border bg-card p-4" data-gameplan-cues>
+          <h3 className="text-[15px] font-semibold">Cues and their coach's notes</h3>
+          <dl className="mt-1 grid grid-cols-[5.5rem_1fr] gap-y-1 text-[14.5px]">
+            {(["squat", "bench", "deadlift"] as const)
+              .filter((l) => plan.cues?.[l]?.length)
+              .map((l) => (
+                <div key={l} className="contents">
+                  <dt className="capitalize text-muted-foreground">{l}</dt>
+                  <dd>{plan.cues![l]!.join(" · ")}</dd>
+                </div>
+              ))}
+          </dl>
+          {plan.instructions?.length ? (
+            <ul className="mt-2 space-y-1 text-[14px]">
+              {plan.instructions.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-border bg-card p-4" data-gameplan-day>
         <h3 className="text-[15px] font-semibold">Food, fluids and the day</h3>
         <ul className="mt-1 space-y-1 text-[14.5px]">

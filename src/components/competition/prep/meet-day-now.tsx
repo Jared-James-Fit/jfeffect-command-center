@@ -23,6 +23,12 @@ export const myMeetKey = (competitionId: string, clientId: string | null) => ["m
 
 const LIFT_WORD = { squat: "Squat", bench: "Bench", deadlift: "Deadlift" } as const;
 
+/** The approved plan's cues for the lift that's on (their coach's, from uploaded information). */
+function cuesFor(data: any, lift: "squat" | "bench" | "deadlift"): string[] {
+  const plan = data?.plan?.doc ? readGameplan(data.plan.doc) : null;
+  return plan?.cues?.[lift] ?? [];
+}
+
 export function MeetDayNow({
   competitionId,
   clientId,
@@ -145,6 +151,12 @@ export function MeetDayNow({
         <p className="text-[14px]" data-meet-rack>
           <span className="text-muted-foreground">Rack: </span>
           {view.rack}
+        </p>
+      ) : null}
+      {view.lift && cuesFor(data, view.lift).length ? (
+        <p className="text-[14px]" data-meet-cues>
+          <span className="text-muted-foreground">Cues: </span>
+          {cuesFor(data, view.lift).join(" · ")}
         </p>
       ) : null}
       {view.changes.length ? (

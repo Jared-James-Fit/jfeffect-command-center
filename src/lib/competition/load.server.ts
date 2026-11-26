@@ -481,10 +481,28 @@ export async function loadCompetitionContext(
     ),
   ]);
 
+  // uploaded athlete information (athlete-intel): completed competition-standard sets,
+  // meets, a recent bodyweight, current pain, cues; never a prescribed or unknown set
+  const intel = await safe(async () => {
+    const { loadFacts } = await import("@/lib/athlete-intel/fact-store.server");
+    const { resolveFacts } = await import("@/lib/athlete-intel/facts");
+    const facts = (await loadFacts(sb, clientId)).filter((f) => f.competition_id == null || f.competition_id === competitionId);
+    const { count } = await sb
+      .from("athlete_intel_sources")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .in("status", ["ready", "stored", "waiting_consent"]);
+    return { facts, ready: Number(count) || 0, conflicts: resolveFacts(facts).conflicts };
+  }, null as null | { facts: import("@/lib/athlete-intel/types").Fact[]; ready: number; conflicts: any[] });
+  const E = await import("@/lib/athlete-intel/engine-input");
+  const intelFacts = intel?.facts ?? [];
+  const allSets = [...sets, ...E.strengthRows(intelFacts, sets)];
+  const allMeetRows = [...meetRows, ...E.meetRows(intelFacts, meetRows)];
+
   // the strength line per lift (the analytics' own read), meets as lifted
-  const meets = meetRows.map(meetFromRow);
-  // the one strength read: raw meets only, an opener with two misses saying less
-  const strengths = liftStrengths(sets, meetsWithDetail(meetRows), today);
+  const meets = allMeetRows.map(meetFromRow);
+  // the one strength read: raw meets only, an opener with two misses saying less (uploaded meets included)
+  const strengths = liftStrengths(allSets, meetsWithDetail(allMeetRows), today);
   const lifts = {} as Record<Lift, LiftEvidence>;
   const conversion: ConversionPoint[] = [];
   const topSingles: Partial<Record<Lift, number | null>> = {};
@@ -504,7 +522,7 @@ export async function loadCompetitionContext(
       .sort((a, b) => b.day.localeCompare(a.day))
       .slice(0, 14)
       .map((s) => {
-        const v = sets.find(
+        const v = allSets.find(
           (x: any) =>
             String(x.date).slice(0, 10) === s.day &&
             liftOf(x.competition_lift_type) === lift &&
@@ -584,9 +602,12 @@ export async function loadCompetitionContext(
     }))
     .filter((r: any) => r.kg > 25);
   const last7 = bw.filter((r: any) => r.day >= addDays(today, -7));
-  const bodyweightAvg = last7.length
+  let bodyweightAvg = last7.length
     ? Math.round((last7.reduce((s: number, r: any) => s + r.kg, 0) / last7.length) * 10) / 10
     : null;
+  // no weigh-ins in the app: a recent bodyweight from uploaded information stands in
+  const uploadedBw = bodyweightAvg == null ? E.recentBodyweight(intelFacts, today) : null;
+  if (uploadedBw) bodyweightAvg = uploadedBw.kg;
   const recent = bw.filter((r: any) => r.day >= addDays(today, -21));
   let bodyweightTrendPerWeek: number | null = null;
   if (recent.length >= 4) {
@@ -637,6 +658,10 @@ export async function loadCompetitionContext(
     worse: a.trend === "worse",
     score: a.latest?.score ?? null,
   }));
+  // current pain in uploaded notes (the latest word on each place), when the app's own reports don't already have it
+  for (const r of E.currentRisks(intelFacts, today))
+    if (!pain.some((p) => p.place.toLowerCase() === r.place.toLowerCase()))
+      pain.push({ place: r.place, lift: r.lift, worse: r.worse, score: null });
   const recoveryFlags = checkins.filter((c: any) => {
     const f = c.answers?.recovery_flags;
     return Array.isArray(f) && f.some((x: string) => /sleep|stress|energy/i.test(x));
@@ -763,7 +788,7 @@ export async function loadCompetitionContext(
       ? { expectedTotal: previous.internal?.engine?.forecast?.total?.expected ?? null }
       : null,
     checks: forecastChecks,
-    cues: {},
+    cues: E.gameplanIntel(intelFacts, competitionId).cues,
     sessions,
     classOptions: Array.isArray(comp.research?.alternatives) ? comp.research.alternatives : [],
     // the goal ledger's targets at this meet (approved, the athlete's own, how they want to approach it)
@@ -783,6 +808,16 @@ export async function loadCompetitionContext(
           preference: g.kind === "preference" ? (g.approved_text ?? g.client_text ?? null) : null,
         }));
     }, []),
+    intel: intel
+      ? {
+          retrieved: [
+            ...E.retrievedLines(intelFacts, intel.ready),
+            ...(uploadedBw ? [`Bodyweight ${uploadedBw.kg} kg on ${uploadedBw.date} (uploaded)`] : []),
+          ],
+          evidence: E.intelEvidence(intelFacts, today),
+          conflicts: [...new Set(intel.conflicts.filter((c) => c.kind === "attempt_plan" && c.lift).map((c) => c.lift as Lift))],
+        }
+      : null,
   };
   return { ctx, competition: comp, client };
 }

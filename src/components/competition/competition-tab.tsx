@@ -60,6 +60,7 @@ import { HandlingInviteSheet } from "./prep/handling-sheets";
 import { RecapCard } from "./prep/recap-card";
 import { reviewChangesFn, saveScheduleFn, tickChecklistFn } from "@/lib/competition/handling.functions";
 import { GoalSummary } from "@/components/goals/goal-summary";
+import { AthleteIntelCard } from "@/components/athlete-intel/athlete-intel-card";
 
 export const competitionWorkspaceKey = (clientId: string, competitionId: string | null) =>
   ["competition-workspace", clientId, competitionId] as const;
@@ -386,6 +387,15 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
               }
               extra={<OverviewAssessments clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} />}
             />
+            {/* uploaded athlete information (athlete-intel): logs, programs, their coach's notes */}
+            <AthleteIntelCard
+              clientId={clientId}
+              competitionId={comp.id}
+              athleteFirst={sel.prep.client?.first ?? "the athlete"}
+              coachName={sel.prep.handling?.existingCoach?.name ?? null}
+              coachContactOk={sel.prep.handling?.shareWithCoach === "yes"}
+              onChanged={invalidate}
+            />
             {/* the targets at this meet (the goal ledger): theirs, the projection, the approved one */}
             <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
             <RecapCard prep={sel.prep} onChanged={invalidate} />
@@ -410,6 +420,7 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
         ) : (
           <>
             <Overview clientId={clientId} sel={sel} rewrite={rewrite} onOpen={setAssessmentId} onSection={setSection} />
+            <AthleteIntelCard clientId={clientId} competitionId={comp.id} athleteFirst="the athlete" coachName={null} coachContactOk={false} onChanged={invalidate} />
             <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
           </>
         )

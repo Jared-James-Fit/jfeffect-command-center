@@ -47,6 +47,7 @@ const TASK_LABEL: Record<string, string> = {
   cardio_plan: "Cleo in the Cardio tab: builds and edits a client's cardio draft for you to review and publish",
   competition: "Competition assessments: the strategic read at each preparation milestone, written in the background for you to review (the numbers are the engines')",
   competition_extract: "Competition rosters and captions: copying a meet roster or a competitor's posted training into rows you confirm",
+  athlete_intel: "Athlete information: reading uploaded logs, programs, PDFs, photos and coach notes into checked facts for meet preparation",
   session_brief: "Meeting prep: Cleo's short brief before a client call, organized from what's on file (never a new fact)",
   session_analysis: "Meeting notes and transcripts: what was agreed, floated and committed to, with recommendations you decide on in your own editors",
   support_answer: "JF Effect Support: Cleo's first answer to an app or account question from the help answers, or a hand-off to you (members and clients)",
