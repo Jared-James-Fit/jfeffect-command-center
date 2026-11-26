@@ -747,13 +747,13 @@ export async function startUploads(
       continue;
     }
     if (f.hash && !o.replacesId) {
-      const { data: dup } = await sb
+      const dupQuery = sb
         .from("athlete_intel_sources")
         .select("id, file_name")
         .eq("client_id", o.clientId)
         .eq("content_hash", f.hash)
-        .not("status", "in", "(deleted,replaced)")
-        .limit(1);
+        .not("status", "in", "(deleted,replaced)");
+      const { data: dup } = await (o.competitionId ? dupQuery.eq("competition_id", o.competitionId) : dupQuery.is("competition_id", null)).limit(1);
       if (dup?.[0]) {
         out.push({ name: f.name, sourceId: null, path: null, token: null, duplicateOf: dup[0].file_name ?? "a file already added", problem: null, kind });
         continue;
