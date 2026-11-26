@@ -15,10 +15,12 @@ import { GoalsSummaryCard } from "@/components/client-goals/GoalsSummaryCard";
 import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
 import { markGoalsReviewedFn, requestGoalsUpdateFn } from "@/lib/client-goals/goals.functions";
 import { useAuth } from "@/lib/auth";
+import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { FIELD_LABELS } from "@/lib/client-goals/schema";
 
 export function GoalsSetupPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
+  const scope = useGoalsServiceScope(clientId);
   const { user } = useAuth();
   const [editing, setEditing] = useState(false);
   const [reqOpen, setReqOpen] = useState(false);
@@ -197,7 +199,7 @@ export function GoalsSetupPanel({ clientId }: { clientId: string }) {
             <SheetDescription>Update the client's answers on their behalf.</SheetDescription>
           </SheetHeader>
           <div className="mt-4">
-            <GoalsSetupFlow clientId={clientId} onComplete={() => setEditing(false)} />
+            {scope.ready ? <GoalsSetupFlow key={`${clientId}:${scope.nutritionOnly}`} clientId={clientId} nutritionOnly={scope.nutritionOnly} onComplete={() => setEditing(false)} /> : <p className="p-4 text-sm text-muted-foreground">{scope.error ? "Could not load service scope. Refresh to try again." : "Loading setup…"}</p>}
           </div>
         </SheetContent>
       </Sheet>

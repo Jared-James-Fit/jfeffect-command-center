@@ -187,7 +187,7 @@ export const requestGoalsUpdateFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCoachOrAdmin(context, data.clientId);
     // Make sure a row exists so the banner condition works in the portal.
-    await context.supabase
+    const { error } = await context.supabase
       .from("client_goals_setup")
       .upsert(
         {
@@ -198,6 +198,7 @@ export const requestGoalsUpdateFn = createServerFn({ method: "POST" })
         } as any,
         { onConflict: "client_id" },
       );
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 

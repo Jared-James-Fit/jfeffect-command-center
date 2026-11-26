@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, Phone, Calendar, ChevronDown } from "lucide-react";
 import { adminClientAgreementDetail } from "@/lib/coaching-agreement.functions";
-import { ADMIN_AGREEMENT_QUERY_ROOT } from "@/components/coaching-agreement/admin-agreement-parts";
+import { ADMIN_AGREEMENT_QUERY_ROOT, SendAgreementDialog } from "@/components/coaching-agreement/admin-agreement-parts";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ClientScheduleSheet } from "@/components/messages/booking-invite";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
@@ -59,7 +59,8 @@ import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dial
 import { describeAccountAccess } from "@/lib/client-account-access";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete } from "@/lib/client-goals/schema";
-import { adminGetClientPlan } from "@/lib/plans/plans.functions";
+import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
+import { requestGoalsUpdateFn } from "@/lib/client-goals/goals.functions";
 import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { WorkspaceIdentityHeader } from "@/components/workspace";
 import {
@@ -690,7 +691,7 @@ export function ClientProfileWorkspace({
         />
 
         <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
-          <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} onSendSetup={sendSetup} onCopySetup={copySetupLink} />
+          <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} onSendSetup={sendSetup} onCopySetup={copySetupLink} onTextSetup={smsLink("setup")} />
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
@@ -1862,19 +1863,27 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 
 /** Coach-facing progress from the same saved account, agreement, and intake records
  * used by the athlete's Home setup checklist. Unknown reads never count as complete. */
-function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup }: { form: any; clientId: string; onGoToTab: (tab: TabValue) => void; onSendSetup: () => Promise<void>; onCopySetup: () => Promise<void> }) {
+function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup, onTextSetup }: { form: any; clientId: string; onGoToTab: (tab: TabValue) => void; onSendSetup: () => Promise<void>; onCopySetup: () => Promise<void>; onTextSetup: () => Promise<void> }) {
   const coaching = form.service_tier !== "self_serve";
   const agreementFn = useServerFn(adminClientAgreementDetail);
-  const planFn = useServerFn(adminGetClientPlan);
+  const scope = useGoalsServiceScope(coaching ? clientId : null);
+  const [agreementOpen, setAgreementOpen] = useState(false);
+  const requestGoals = useServerFn(requestGoalsUpdateFn);
+  const qc = useQueryClient();
+  const sendGoals = async () => {
+    try {
+      await requestGoals({ data: { clientId, message: "Please complete your setup details in the app." } });
+      await qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] });
+      toast.success("Setup requested in the client’s app");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not request setup");
+      throw e;
+    }
+  };
   const agreement = useQuery({
     queryKey: [ADMIN_AGREEMENT_QUERY_ROOT, "detail", clientId],
     queryFn: () => agreementFn({ data: { clientId } }),
     enabled: coaching, staleTime: 15_000,
-  });
-  const plan = useQuery({
-    queryKey: ["client-plan", clientId],
-    queryFn: () => planFn({ data: { clientId } }),
-    enabled: coaching, staleTime: 30_000,
   });
   const goals = useQuery({
     queryKey: ["client-goals-setup", clientId],
@@ -1890,20 +1899,20 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   const signedIn = !!form.last_signed_in_at;
   type Step = { label: string; state: "Completed" | "Not sent" | "Awaiting client" | "Needs review" | "Check status"; tab: TabValue };
   const steps: Step[] = [
-    { label: "Account access", state: signedIn && !form.portal_access_disabled ? "Completed" : form.portal_access_disabled ? "Needs review" : access.stage === "setup_expired" || (!invite && !form.user_id) ? "Not sent" : "Awaiting client", tab: "account" },
+    { label: "Account access", state: form.portal_access_disabled || form.needs_admin_help ? "Needs review" : signedIn ? "Completed" : access.stage === "setup_expired" || (!invite && !form.user_id) ? "Not sent" : "Awaiting client", tab: "account" },
   ];
   if (coaching) {
     const a = agreement.data;
     steps.push({ label: "Coaching agreement", state: !a ? "Check status" : a.state.state !== "needs_signature" ? "Completed" : !form.user_id ? "Not sent" : a.resignRequestedAt ? "Awaiting client" : "Not sent", tab: "documents" });
     steps.push({ label: "Basic information", state: isBasicInfoComplete(form) ? "Completed" : "Awaiting client", tab: "info" });
-    // Only known training packages get training-specific requirements in this coach summary.
-    // Custom and unresolved plans are not silently treated as full coaching.
-    const slug = plan.data?.current.slug;
-    if (slug === "complete" || slug === "plus") {
+    steps.push({ label: "Account photo", state: form.profile_picture_url ? "Completed" : "Awaiting client", tab: "info" });
+    if (!scope.ready) {
+      steps.push({ label: "Service setup", state: "Check status", tab: "goals-setup" });
+    } else if (!scope.nutritionOnly) {
       steps.push({ label: "Training schedule", state: form.training_schedule_completed ? "Completed" : "Awaiting client", tab: "training" });
       steps.push({ label: "Goals & setup", state: !goals.isSuccess ? "Check status" : isGoalsSetupComplete(goals.data) ? "Completed" : "Awaiting client", tab: "goals-setup" });
-    } else if (slug === "nutrition") {
-      steps.push({ label: "Nutrition goal", state: !goals.isSuccess ? "Check status" : goals.data?.nutrition_goal ? "Completed" : "Awaiting client", tab: "goals-setup" });
+    } else {
+      steps.push({ label: "Nutrition setup", state: !goals.isSuccess ? "Check status" : isGoalsSetupComplete(goals.data, true) ? "Completed" : "Awaiting client", tab: "goals-setup" });
     }
   }
   const incomplete = steps.filter((step) => step.state !== "Completed");
@@ -1923,9 +1932,25 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
           {form.email && <ActionButton variant="outline" size="sm" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
             {invite ? "Resend setup email" : "Send setup email"}
           </ActionButton>}
+          {form.phone && <ActionButton variant="outline" size="sm" onAction={onTextSetup} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>Text setup link</ActionButton>}
           <ActionButton variant="outline" size="sm" onAction={onCopySetup} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
         </div>
       )}
+      {coaching && form.user_id && (
+        <div className="flex flex-wrap items-center gap-2">
+          {agreement.data?.canSend && agreement.data.state.state === "needs_signature" && (
+            <Button variant="outline" size="sm" onClick={() => setAgreementOpen(true)}>
+              {agreement.data.resignRequestedAt ? "Resend agreement" : "Send agreement"}
+            </Button>
+          )}
+          {scope.ready && goals.isSuccess && !isGoalsSetupComplete(goals.data, scope.nutritionOnly) && (
+            <ActionButton variant="outline" size="sm" onAction={sendGoals} loadingLabel="Requesting…" successLabel="Requested" successToast={false} errorToast={false}>
+              {goals.data?.update_requested_at ? "Request setup again" : "Request setup details"}
+            </ActionButton>
+          )}
+        </div>
+      )}
+      {agreementOpen && <SendAgreementDialog clientId={clientId} clientName={form.full_name || "the client"} alreadySigned={!!agreement.data?.signatures?.length} open={agreementOpen} onOpenChange={setAgreementOpen} />}
       <ul className="divide-y divide-border">
         {incomplete.map((step) => (
           <li key={step.label}>
