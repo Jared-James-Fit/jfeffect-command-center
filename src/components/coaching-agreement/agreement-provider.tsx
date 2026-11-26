@@ -27,9 +27,10 @@ export function CoachingAgreementProvider({ children }: { children: ReactNode })
   const [everOpened, setEverOpened] = useState(false);
 
   // This provider sits above every signed-in page, so skip the lookup for accounts that are
-  // never asked to sign: admins and coaches (unless viewing as a client) and members.
+  // never asked to sign: admins and coaches (unless viewing as a client).
+  // Service tier, not a cached member role, decides which agreement applies.
   const neverAsked =
-    !isImpersonating && (role === "admin" || role === "coach" || role === "member");
+    !isImpersonating && (role === "admin" || role === "coach");
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [AGREEMENT_QUERY_ROOT, "state", user?.id ?? "anon", povClient?.id ?? "self"],
