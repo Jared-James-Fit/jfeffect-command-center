@@ -169,12 +169,19 @@ function PushNotificationControls({ showCoachingApps = false, bare = false }: { 
     enabled: hasLocalSub || (permission === "granted"),
   });
 
-  const prefs: Prefs = useMemo(() => ({
-    master_enabled: true, messages: true, check_ins: true, lift_reviews: true,
-    workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true, community: true,
-    quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null, session_reminders: null,
-    ...(prefsQ.data ?? {}),
-  }), [prefsQ.data]);
+  const prefs: Prefs = useMemo(() => {
+    const saved = prefsQ.data ?? null;
+    // stored as jsonb: only an object of its three switches counts, anything else reads as all on
+    const sr = saved?.session_reminders;
+    const session_reminders = sr && typeof sr === "object" && !Array.isArray(sr) ? (sr as Prefs["session_reminders"]) : null;
+    return {
+      master_enabled: true, messages: true, check_ins: true, lift_reviews: true,
+      workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true, community: true,
+      quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null,
+      ...(saved ?? {}),
+      session_reminders,
+    };
+  }, [prefsQ.data]);
 
   async function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
     await updatePrefs({ data: { [key]: value } as any });

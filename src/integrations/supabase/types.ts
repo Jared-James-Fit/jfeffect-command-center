@@ -29210,6 +29210,7 @@ export type Database = {
           quiet_hours_enabled: boolean
           quiet_start: number
           reminders: boolean
+          session_reminders: Json
           timezone: string | null
           updated_at: string
           user_id: string
@@ -29229,6 +29230,7 @@ export type Database = {
           quiet_hours_enabled?: boolean
           quiet_start?: number
           reminders?: boolean
+          session_reminders?: Json
           timezone?: string | null
           updated_at?: string
           user_id: string
@@ -29248,6 +29250,7 @@ export type Database = {
           quiet_hours_enabled?: boolean
           quiet_start?: number
           reminders?: boolean
+          session_reminders?: Json
           timezone?: string | null
           updated_at?: string
           user_id?: string

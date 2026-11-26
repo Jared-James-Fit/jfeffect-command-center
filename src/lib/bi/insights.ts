@@ -514,3 +514,28 @@ export function weeklySummary(week: BiRange, cur: Kpis, prev: Kpis, mrrCents: nu
       : "A steady week: nothing moved more than 15%.";
   return { week, label: rangeLabel(week), lines, headline };
 }
+
+/** Where the weekly push opens: Cleo Insights on the last 30 days. */
+export const WEEKLY_PUSH_URL = "/admin/insights?tab=insights";
+
+/**
+ * The Monday push (weekly-push.server.ts): last week's headline and the top recommendation, said in
+ * words and percentages only, never a dollar amount, since a push shows on a lock screen. The page it
+ * opens has the numbers. Null when there's no summary to send.
+ */
+export function weeklyPushPayload(weekly: WeeklySummary | null, insights: BiInsight[]): { title: string; body: string; url: string } | null {
+  if (!weekly) return null;
+  // "Revenue up 32% ($1,200 → $1,580)." → "Revenue up 32%."
+  const headline = weekly.headline.replace(/\s*\([^)]*\)/g, "").replace(/\s+\./g, ".").trim();
+  const ranked = [...insights].sort((a, b) => b.score - a.score);
+  // a title that names an amount ("$420 of monthly revenue is set to end") stays on the page
+  const sayable = ranked.filter((i) => !/[$€£]|\d+(\.\d+)?\s?(CAD|USD)\b/i.test(i.title));
+  const top = sayable.find((i) => i.recommendation) ?? sayable[0] ?? null;
+  const more = ranked.length > 1 ? ` (+${ranked.length - 1} more)` : "";
+  const body = top
+    ? `${headline} Top: ${top.title.replace(/[.\s]+$/, "")}${more}.`
+    : ranked.length
+      ? `${headline} ${ranked.length} recommendation${ranked.length === 1 ? "" : "s"} to look at.`
+      : headline;
+  return { title: `Your week at JF Effect · ${weekly.label}`, body: body.length > 220 ? `${body.slice(0, 217).trimEnd()}…` : body, url: WEEKLY_PUSH_URL };
+}

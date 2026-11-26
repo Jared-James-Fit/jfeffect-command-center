@@ -12,6 +12,7 @@ import {
   addDays,
   checkedRange,
   daysBetween,
+  isWeeklySummaryTime,
   lastFullWeek,
   pct,
   pctChange,
@@ -37,7 +38,7 @@ import {
   kpiDelta,
   visitsCover,
 } from "@/lib/bi/model";
-import { buildInsights, confidenceFor, weeklySummary } from "@/lib/bi/insights";
+import { buildInsights, confidenceFor, weeklyPushPayload, weeklySummary, WEEKLY_PUSH_URL, type BiInsight } from "@/lib/bi/insights";
 import { csvCell, tablesFor, toCsv } from "@/lib/bi/csv";
 import { analyticsText, ANALYTICS_RULES } from "@/lib/bi/cleo-text";
 import { browserOf, featureOf } from "@/lib/app-pulse/pulse-rules";
@@ -364,5 +365,46 @@ describe("data from before tracking started", () => {
     expect(MIGRATION).toContain("e.event = 'moved_to_coaching'");
     expect(MIGRATION).toContain("AND av.first_seen_at <= u.created_at + interval '1 day'");
     expect(MIGRATION).toContain("AND public.bi_channel(NULL, c.source, NULL) NOT IN ('other', 'direct')");
+  });
+});
+
+describe("the weekly summary push", () => {
+  const week = { from: "2026-11-16", to: "2026-11-22" };
+  const insight = (id: string, title: string, score: number, recommendation: string | null = "Do the thing."): BiInsight => ({
+    id, tab: "overview", title, fact: "f", hypothesis: null, recommendation, evidence: ["e"], impact: 2, urgency: 2, confidence: "medium", score,
+  });
+  it("goes out Mondays at 9 on Winnipeg's clock, once", () => {
+    // Mon Nov 30 2026 09:30 in Winnipeg (UTC-5 from Nov 1 2026) = 14:30 UTC
+    expect(isWeeklySummaryTime(new Date("2026-11-30T14:30:00Z"), 9)).toBe(true);
+    expect(isWeeklySummaryTime(new Date("2026-11-30T13:30:00Z"), 9)).toBe(false); // 8:30
+    expect(isWeeklySummaryTime(new Date("2026-12-01T14:30:00Z"), 9)).toBe(false); // Tuesday
+  });
+  it("says the headline and the top recommendation, never a dollar amount", () => {
+    const w = weeklySummary(week, shapeKpis({ revenue_coaching_cents: 158000 }), shapeKpis({ revenue_coaching_cents: 120000 }), 75000);
+    expect(w.headline).toContain("$");
+    const p = weeklyPushPayload(w, [
+      insight("ending", "$420 of monthly revenue is set to end", 9),
+      insight("vital-LCP", "Pages are slow to show their main content", 6),
+      insight("quiet", "3 active people have gone quiet", 4, null),
+    ])!;
+    expect(p.url).toBe(WEEKLY_PUSH_URL);
+    expect(p.title).toContain(w.label);
+    expect(p.body).toBe("Revenue up 32%. Top: Pages are slow to show their main content (+2 more).");
+    expect(p.body).not.toMatch(/\$/);
+  });
+  it("counts the recommendations when every title names an amount, and sends nothing without a summary", () => {
+    const w = weeklySummary(week, shapeKpis({ visitors: 3 }), shapeKpis({ visitors: 1 }), null);
+    expect(weeklyPushPayload(w, [insight("ending", "$420 of monthly revenue is set to end", 9)])!.body).toBe(
+      "A steady week: nothing moved more than 15%. 1 recommendation to look at.",
+    );
+    expect(weeklyPushPayload(w, [])!.body).toBe("A steady week: nothing moved more than 15%.");
+    expect(weeklyPushPayload(null, [])).toBeNull();
+  });
+  it("runs from the hourly push tick, isolated from the other jobs", () => {
+    const tick = readFileSync("src/lib/push/scheduled-pushes.server.ts", "utf8");
+    expect(tick).toMatch(/try \{\s*const \{ runWeeklyBusinessSummary \} = await import\("@\/lib\/bi\/weekly-push\.server"\)/);
+    const runner = readFileSync("src/lib/bi/weekly-push.server.ts", "utf8");
+    expect(runner).toContain('.eq("role", "admin")');
+    expect(runner).toMatch(/eventKey: `bi-weekly:\$\{uid\}:\$\{weekFrom\}`/);
   });
 });
