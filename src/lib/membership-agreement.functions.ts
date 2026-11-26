@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { MEMBERSHIP_AGREEMENT_SLUG, membershipAckText } from "@/lib/membership-agreement/acks";
+import { MEMBERSHIP_AGREEMENT_SLUG, membershipAckText, isMemberAppAcceptance, CLICK_ACCEPTANCE_VERSION_ID } from "@/lib/membership-agreement/acks";
 
 /**
  * Version 3 is the first with the health, risk and release terms signed in the
@@ -16,6 +16,8 @@ type CurrentVersion = {
   title: string;
   body: string;
   effective_date: string | null;
+  signature_method: "typed_name" | "checkbox";
+  requires_reacceptance: boolean;
 };
 
 /** The published Membership Agreement, if there is one live. */
@@ -31,13 +33,14 @@ async function loadCurrent(): Promise<CurrentVersion | null> {
   if (!d?.current_version_id || d.archived || d.emergency_disabled) return null;
   const { data: ver, error: versionError } = await supabaseAdmin
     .from("legal_document_versions")
-    .select("id, version_number, title, body, effective_date, status")
+    .select("id, version_number, title, body, effective_date, status, signature_method, requires_reacceptance")
     .eq("id", d.current_version_id)
     .maybeSingle();
   if (versionError) throw new Error(versionError.message);
   const v = ver as (Omit<CurrentVersion, "documentId"> & { status: string }) | null;
   if (!v || v.status !== "published") return null;
-  return { documentId: d.id, id: v.id, version_number: v.version_number, title: v.title, body: v.body, effective_date: v.effective_date };
+  if (v.signature_method !== "typed_name" && v.signature_method !== "checkbox") throw new Error("Unsupported membership acceptance method.");
+  return { documentId: d.id, id: v.id, version_number: v.version_number, title: v.title, body: v.body, effective_date: v.effective_date, signature_method: v.signature_method, requires_reacceptance: v.requires_reacceptance };
 }
 
 /**
@@ -56,21 +59,33 @@ export const getMyMembershipAgreement = createServerFn({ method: "GET" })
     if (!current) return { applicable: false as const };
     const { data: acc, error: acceptanceError } = await supabase
       .from("legal_acceptances")
-      .select("version_id, accepted_at, signature_method, context_ref")
+      .select("version_id, accepted_at, signature_method, context_ref, checkbox_checked, acknowledgement_text")
       .eq("user_id", userId)
       .eq("document_id", current.documentId)
       .is("revoked_at", null)
       .order("accepted_at", { ascending: false });
     if (acceptanceError) throw new Error(acceptanceError.message);
-    const rows = (acc ?? []) as Array<{ version_id: string; accepted_at: string; signature_method: string; context_ref: string | null }>;
+    const rows = (acc ?? []) as Array<{ version_id: string; accepted_at: string; signature_method: string; context_ref: string | null; checkbox_checked: boolean | null; acknowledgement_text: string | null }>;
     const onThis = rows.filter((r) => r.version_id === current.id);
-    // the checkout box accepts the terms; the health and risk ticks and a typed name are given in the app
-    const signed = onThis.find((r) => r.signature_method === "typed_name" && r.context_ref === "member_app") ?? null;
+    // Checkout acceptance is not the in-app health and risk acknowledgement.
+    let signed = onThis.find(isMemberAppAcceptance) ?? null;
+    let acceptedVersionNumber = signed ? current.version_number : null;
+    // This exact non-substantive method-only revision honors existing v6 evidence.
+    // Do not treat arbitrary older signatures as acceptance of future material changes.
+    if (!signed && current.id === CLICK_ACCEPTANCE_VERSION_ID && !current.requires_reacceptance) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: prior, error } = await supabaseAdmin.from("legal_document_versions")
+        .select("id").eq("document_id", current.documentId).eq("version_number", 6).maybeSingle();
+      if (error) throw new Error(error.message);
+      signed = rows.find(r => r.version_id === prior?.id && isMemberAppAcceptance(r)) ?? null;
+      if (signed) acceptedVersionNumber = 6;
+    }
     return {
       applicable: true as const,
       version: current,
-      /** signed in the app (typed name and every tick) */
+      /** accepted in the app (every required tick, plus name on legacy versions) */
       signedAt: signed?.accepted_at ?? null,
+      acceptedVersionNumber,
       /** accepted at checkout (the box) */
       acceptedAt: onThis[0]?.accepted_at ?? null,
       needsSigning: !signed && current.version_number >= IN_APP_SIGNING_FROM_VERSION,
@@ -79,14 +94,14 @@ export const getMyMembershipAgreement = createServerFn({ method: "GET" })
     };
   });
 
-/** Record a member's acceptance: their typed name, every tick word for word, and the exact text. */
+/** Record a member's acceptance: authenticated identity, every tick word for word, and the exact text. */
 export const acceptMembershipAgreement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
     z
       .object({
         versionId: z.string().uuid(),
-        typedName: z.string().trim().min(2).max(120),
+        typedName: z.string().trim().min(2).max(120).optional(),
         acks: z.array(z.string().max(20)).max(10),
       })
       .parse(i),
@@ -103,6 +118,7 @@ export const acceptMembershipAgreement = createServerFn({ method: "POST" })
     }
     const acknowledgement = membershipAckText(data.acks);
     if (!acknowledgement) throw new Error("Tick every box to accept.");
+    if (current.signature_method === "typed_name" && !data.typedName) throw new Error("Enter your name for this version of the agreement.");
 
     const { getRequestMeta } = await import("@/lib/coaching-agreement.server");
     const meta = await getRequestMeta();
@@ -116,9 +132,9 @@ export const acceptMembershipAgreement = createServerFn({ method: "POST" })
       version_id: current.id,
       context: "reaccept_prompt",
       context_ref: "member_app",
-      signature_method: "typed_name",
+      signature_method: current.signature_method,
       checkbox_checked: true,
-      typed_name: data.typedName,
+      typed_name: current.signature_method === "typed_name" ? data.typedName : null,
       acknowledgement_text: acknowledgement,
       rendered_snapshot: current.body,
       ip_address: meta.ip,

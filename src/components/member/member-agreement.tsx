@@ -32,7 +32,7 @@ export function useMembershipAgreement() {
 const fmtDate = (iso: string | null | undefined) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
 
-/** Read the short version, open the full text, tick, type your name, accept. */
+/** Review and explicitly accept the published agreement; legacy versions retain their original method. */
 function MemberAgreementSheet({
   open,
   onOpenChange,
@@ -58,15 +58,16 @@ function MemberAgreementSheet({
 
   if (!data?.applicable) return null;
   const v = data.version;
-  const ready = ticks.length === MEMBERSHIP_AGREEMENT_ACKS.length && name.trim().length >= 2;
+  const requiresName = v.signature_method === "typed_name";
+  const ready = ticks.length === MEMBERSHIP_AGREEMENT_ACKS.length && (!requiresName || name.trim().length >= 2);
 
   const submit = async () => {
     if (!ready || saving) return;
     setSaving(true);
     try {
-      await accept({ data: { versionId: v.id, typedName: name.trim(), acks: ticks } });
+      await accept({ data: { versionId: v.id, ...(requiresName ? { typedName: name.trim() } : {}), acks: ticks } });
       await Promise.all([qc.invalidateQueries({ queryKey: [QUERY_ROOT] }), qc.invalidateQueries({ queryKey: ["legal-status"] })]);
-      toast.success("Membership Agreement signed", { description: "Your copy is in Account → Agreement." });
+      toast.success("Membership Agreement accepted", { description: "Your copy is in Account → Agreement." });
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save that. Try again.");
@@ -87,9 +88,9 @@ function MemberAgreementSheet({
             </SheetTitle>
             <SheetDescription>
               {data.acceptedEarlier
-                ? "We updated the agreement. Read what's new and sign to carry on. "
+                ? "We updated the agreement. Read what's new and agree to continue. "
                 : data.acceptedAt
-                  ? "One last step: confirm the health and safety terms and sign. "
+                  ? "One last step: confirm the health and safety terms and agree. "
                   : ""}
               Version {v.version_number}
               {v.effective_date ? ` · effective ${fmtDate(v.effective_date)}` : ""}
@@ -143,7 +144,7 @@ function MemberAgreementSheet({
               })}
             </section>
 
-            <div>
+            {requiresName && <div>
               <Label htmlFor="member-agreement-name" className="text-sm font-semibold">Type your full name to sign</Label>
               <Input
                 id="member-agreement-name"
@@ -153,13 +154,13 @@ function MemberAgreementSheet({
                 placeholder="Your full name"
                 className="mt-1.5 h-11 text-base"
               />
-            </div>
+            </div>}
           </div>
 
           <div className="shrink-0 space-y-2 border-t bg-background px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]">
             <Button onClick={() => void submit()} disabled={!ready || saving} className="h-12 w-full text-base font-bold">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Sign and continue
+              Agree & continue
             </Button>
             {required && <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground"><a href="mailto:support@jfeffect.com" className="underline">Contact support</a><Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/auth"; }}>Sign out</Button></div>}
           </div>
@@ -182,7 +183,7 @@ export function MemberAgreementGate({ children }: { children: ReactNode }) {
 /** Where a member's agreement stands, for the Account row: "Signed" / "Accepted" / "Action required"; null when it doesn't apply. */
 export function membershipAgreementStatus(data: ReturnType<typeof useMembershipAgreement>["data"]): { label: string; needsYou: boolean } | null {
   if (!data?.applicable) return null;
-  if (data.signedAt) return { label: "Signed", needsYou: false };
+  if (data.signedAt) return { label: "Accepted", needsYou: false };
   if (!data.needsSigning && data.acceptedAt) return { label: "Accepted", needsYou: false };
   if (data.needsSigning) return { label: "Action required", needsYou: true };
   // applicable but nothing to do (an older version): the row stays, with no status
@@ -204,13 +205,13 @@ export function MemberAgreementCard() {
       <div className="text-sm font-medium">{v.title}</div>
       <p className="text-sm text-muted-foreground">
         {data.signedAt
-          ? `You signed version ${v.version_number} on ${fmtDate(data.signedAt)}.`
+          ? `You accepted version ${data.acceptedVersionNumber ?? v.version_number} on ${fmtDate(data.signedAt)}.${data.acceptedVersionNumber !== v.version_number ? " No new acceptance is required for this update." : ""}`
           : data.acceptedAt && !data.needsSigning
             ? `You accepted version ${v.version_number} at checkout on ${fmtDate(data.acceptedAt)}.`
             : `Version ${v.version_number} covers your membership, training safety, Crew and billing. It takes about two minutes.`}
       </p>
       <div className="flex flex-wrap gap-2">
-        {data.needsSigning && <Button onClick={() => setOpen(true)}>Review and sign</Button>}
+        {data.needsSigning && <Button onClick={() => setOpen(true)}>Review and accept</Button>}
         <Button variant="outline" asChild>
           <a href="/legal/membership-agreement" target="_blank" rel="noreferrer">
             Read the agreement <ExternalLink className="ml-1 h-3.5 w-3.5" />
