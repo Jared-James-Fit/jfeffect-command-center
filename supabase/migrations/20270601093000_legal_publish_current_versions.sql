@@ -21,7 +21,7 @@
 -- asked to accept the Terms, Privacy Policy, Refund Policy or Billing Disclosure again; members
 -- sign the Membership Agreement in the app as designed (from v3, IN_APP_SIGNING_FROM_VERSION).
 -- Superseded drafts are archived, never deleted. Idempotent: a second run finds the published
--- versions (by their summaries) and does nothing.
+-- versions (by their review notes, never the summaries readers see) and does nothing.
 
 DO $legal$
 DECLARE
@@ -36,17 +36,13 @@ DECLARE
   f_doc uuid; f_v4 public.legal_document_versions%ROWTYPE; f_next int; f_id uuid;
   b_doc uuid; b_v3 public.legal_document_versions%ROWTYPE; b_next int; b_id uuid;
   p_doc uuid; p_v8 uuid;
-  t_marker constant text := 'Free membership terms, current (Nov 26 2026)';
-  m_marker constant text := 'Free membership agreement, current (Nov 26 2026)';
-  f_marker constant text := 'Refund policy, current (Nov 26 2026)';
-  b_marker constant text := 'Billing disclosure, current (Nov 26 2026)';
 BEGIN
   SELECT user_id INTO v_owner FROM public.business_owners ORDER BY created_at NULLS LAST LIMIT 1;
 
   ------------------------------------------------------------------ Terms of Service
   SELECT id INTO t_doc FROM public.legal_documents WHERE slug = 'terms-of-service';
   IF t_doc IS NOT NULL AND NOT EXISTS (
-       SELECT 1 FROM public.legal_document_versions WHERE document_id = t_doc AND summary LIKE t_marker || '%') THEN
+       SELECT 1 FROM public.legal_document_versions WHERE document_id = t_doc AND legal_review_note LIKE 'Built Nov 26 2026 from%') THEN
     SELECT body INTO t_v4 FROM public.legal_document_versions
      WHERE document_id = t_doc AND version_number = 4 AND md5(body) = '36020d706f175345e19cd28720e3f1a1';
     SELECT body INTO t_v8 FROM public.legal_document_versions
@@ -94,7 +90,7 @@ BEGIN
       (document_id, version_number, status, title, summary, body, signature_method,
        requires_reacceptance, reacceptance_audience, effective_date, needs_legal_review, legal_review_note, created_by)
     SELECT t_doc, t_next, 'draft', v.title,
-           t_marker || ': the free membership (no trial, price, renewal or cancellation terms; joining by application), 2.3 account access and "View as", 2.4 badges and virtual accounts, 8.1 Crew community guidelines, 10.1 optional AI features.',
+           'JF Effect is free and joining is by application. These Terms cover your account, who at JF Effect can see it and why, community badges and virtual accounts, the Crew community guidelines and optional AI features. Paid services such as coaching have their own terms.',
            r_body, v.signature_method, false, v.reacceptance_audience, DATE '2026-11-26', false,
            'Built Nov 26 2026 from draft v4 (free membership) and draft v8 (support@, 2.3/2.4, 8.1). Published at the owner''s request; still worth a lawyer''s read, especially 2.3/2.4 and 8.1.',
            v_owner
@@ -109,7 +105,7 @@ BEGIN
   ------------------------------------------------------------------ JF Membership Agreement
   SELECT id INTO m_doc FROM public.legal_documents WHERE slug = 'membership-agreement';
   IF m_doc IS NOT NULL AND NOT EXISTS (
-       SELECT 1 FROM public.legal_document_versions WHERE document_id = m_doc AND summary LIKE m_marker || '%') THEN
+       SELECT 1 FROM public.legal_document_versions WHERE document_id = m_doc AND legal_review_note LIKE 'Built Nov 26 2026 from%') THEN
     SELECT * INTO m_v4 FROM public.legal_document_versions
      WHERE document_id = m_doc AND version_number = 4 AND md5(body) = 'eacf63b12531a07def698922d556c3b0';
     IF m_v4.id IS NULL THEN RAISE EXCEPTION 'membership: draft v4 changed since Nov 26 2026'; END IF;
@@ -140,7 +136,7 @@ BEGIN
       (document_id, version_number, status, title, summary, body, signature_method,
        requires_reacceptance, reacceptance_audience, effective_date, needs_legal_review, legal_review_note, created_by)
     VALUES (m_doc, m_next, 'draft', m_v4.title,
-            m_marker || ': JF Membership is free and by application, nothing posts to Crew by itself, optional paid extras, AI only with permission, support@jfeffect.com. Members sign it in the app.',
+            'JF Membership is free. This agreement covers what it includes, training on your own safely, the Crew rules, your content and the release of liability. Members accept it in the app.',
             r_body, m_v4.signature_method, true, m_v4.reacceptance_audience, DATE '2026-11-26', false,
             'Built Nov 26 2026 from draft v4 (Nov 6, free membership) with what changed since. Published at the owner''s request; the release and $100 liability cap are worth a lawyer''s read.',
             v_owner)
@@ -154,7 +150,7 @@ BEGIN
   ------------------------------------------------------------------ Cancellation & Refund Policy
   SELECT id INTO f_doc FROM public.legal_documents WHERE slug = 'cancellation-and-refund-policy';
   IF f_doc IS NOT NULL AND NOT EXISTS (
-       SELECT 1 FROM public.legal_document_versions WHERE document_id = f_doc AND summary LIKE f_marker || '%') THEN
+       SELECT 1 FROM public.legal_document_versions WHERE document_id = f_doc AND legal_review_note LIKE 'Built Nov 26 2026 from%') THEN
     SELECT * INTO f_v4 FROM public.legal_document_versions
      WHERE document_id = f_doc AND version_number = 4 AND md5(body) = '3cbbb1406a552e39b56eb31778898933';
     IF f_v4.id IS NULL THEN RAISE EXCEPTION 'refund: draft v4 changed since Nov 26 2026'; END IF;
@@ -177,7 +173,7 @@ BEGIN
       (document_id, version_number, status, title, summary, body, signature_method,
        requires_reacceptance, reacceptance_audience, effective_date, needs_legal_review, legal_review_note, created_by)
     VALUES (f_doc, f_next, 'draft', f_v4.title,
-            f_marker || ': plans in the app (the free app, monthly coaching packages, coaching by approval, special prices kept), changed or cancelled in Account → Your plan at jfeffect.com or by email. Replaces the retired paid-membership wording.',
+            'How to cancel or change a coaching plan (Account → Your plan at jfeffect.com, or by email), when changes take effect, special prices, and how refunds work.',
             r_body, f_v4.signature_method, false, f_v4.reacceptance_audience, DATE '2026-11-26', false,
             'Built Nov 26 2026 from draft v4 (Nov 24, matching Coaching Agreement 3.0), pointing plan changes at jfeffect.com since the iPhone app no longer opens Your plan. Published at the owner''s request.',
             v_owner)
@@ -191,7 +187,7 @@ BEGIN
   ------------------------------------------------------------------ Recurring Billing Disclosure
   SELECT id INTO b_doc FROM public.legal_documents WHERE slug = 'recurring-billing-disclosure';
   IF b_doc IS NOT NULL AND NOT EXISTS (
-       SELECT 1 FROM public.legal_document_versions WHERE document_id = b_doc AND summary LIKE b_marker || '%') THEN
+       SELECT 1 FROM public.legal_document_versions WHERE document_id = b_doc AND legal_review_note LIKE 'Built Nov 26 2026 from%') THEN
     SELECT * INTO b_v3 FROM public.legal_document_versions
      WHERE document_id = b_doc AND version_number = 3 AND md5(body) = '5d98adf6c6217d5ad3ecad9d462897fb';
     IF b_v3.id IS NULL THEN RAISE EXCEPTION 'billing: draft v3 changed since Nov 26 2026'; END IF;
@@ -211,7 +207,7 @@ BEGIN
       (document_id, version_number, status, title, summary, body, signature_method,
        requires_reacceptance, reacceptance_audience, effective_date, needs_legal_review, legal_review_note, created_by)
     VALUES (b_doc, b_next, 'draft', b_v3.title,
-            b_marker || ': monthly coaching packages in CAD plus tax, prorated upgrades, changes at the end of the paid month, cancel in Account → Your plan at jfeffect.com or by email. Replaces the retired $29 USD membership wording.',
+            'How coaching packages are billed each month in CAD plus tax, how plan changes and cancellations work, and where to find your receipts.',
             r_body, b_v3.signature_method, false, b_v3.reacceptance_audience, DATE '2026-11-26', false,
             'Built Nov 26 2026 from draft v3 (Nov 24), pointing plan changes at jfeffect.com since the iPhone app no longer opens Your plan. Published at the owner''s request.',
             v_owner)
@@ -229,7 +225,8 @@ BEGIN
      AND md5(v.body) = 'b147b2a7df1304f1cdef41bd4ae15907';
   IF p_v8 IS NOT NULL THEN
     UPDATE public.legal_document_versions SET status = 'published', needs_legal_review = false, published_by = v_owner, published_at = v_now,
-           legal_review_note = coalesce(legal_review_note, '') || ' Published Nov 26 2026 at the owner''s request.'
+           legal_review_note = coalesce(legal_review_note, '') || ' Published Nov 26 2026 at the owner''s request.',
+           summary = 'What we collect and why, who at JF Effect can see your account, how account headshots work, membership badges and virtual community accounts, AI processing (only with your permission), and your rights.'
      WHERE id = p_v8;
     UPDATE public.legal_document_versions SET status = 'archived'
      WHERE document_id = p_doc AND status = 'draft' AND id <> p_v8;
