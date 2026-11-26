@@ -45,6 +45,7 @@ function compact(v: number): string {
 
 export function RecordsView({
   initialSection = "gym",
+  onSectionChange,
   lifetime,
   records,
   byExercise,
@@ -56,6 +57,7 @@ export function RecordsView({
   today = new Date().toISOString().slice(0,10),
 }: {
   initialSection?: "gym"|"competitions"|"lifetime";
+  onSectionChange?: (section:"gym"|"competitions"|"lifetime")=>void;
   bodyweights?: readonly BodyweightPoint[];
   sex?: "male"|"female"|null;
   results?: any[];
@@ -81,7 +83,9 @@ export function RecordsView({
       .slice(0, 4);
   }, [records]);
 
-  const [section,setSection]=useState<"gym"|"competitions"|"lifetime">(initialSection);
+  const [localSection,setLocalSection]=useState<"gym"|"competitions"|"lifetime">(initialSection);
+  const section=onSectionChange?initialSection:localSection;
+  const setSection=(next:"gym"|"competitions"|"lifetime")=>{setLocalSection(next);onSectionChange?.(next);};
   const [category,setCategory]=useState("all");
   const [period,setPeriod]=useState("all");
   const [kind,setKind]=useState<"single"|"estimated"|"rep">("rep");
@@ -118,7 +122,7 @@ export function RecordsView({
   return (
     <div className="space-y-5" data-records-view>
       <div className="flex gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Record type">
-        {(["gym","competitions","lifetime"] as const).filter(k=>k!=="competitions"||meets.length>0).map(k=><button type="button" key={k} aria-pressed={section===k} onClick={()=>setSection(k)} className={cn("min-h-10 flex-1 rounded-lg text-xs font-medium",section===k?"bg-background text-foreground":"text-muted-foreground")}>{k==="gym"?"Gym PRs":k==="competitions"?"Competitions":"Lifetime"}</button>)}
+        {(["gym","competitions","lifetime"] as const).map(k=><button type="button" key={k} aria-pressed={section===k} onClick={()=>setSection(k)} className={cn("min-h-10 flex-1 rounded-lg text-xs font-medium",section===k?"bg-background text-foreground":"text-muted-foreground")}>{k==="gym"?"Gym PRs":k==="competitions"?"Competitions":"Lifetime"}</button>)}
       </div>
       {section==="gym"&&<>
         {results.length>0&&<section className="space-y-3" aria-label="Historical gym bests">
@@ -131,7 +135,7 @@ export function RecordsView({
         </section>}
         <details><summary className="min-h-10 cursor-pointer text-sm font-medium">Record progression history</summary><ExerciseRecordList rows={byExercise} unit={unit}/></details>
       </>}
-      {section==="competitions"&&<MeetTimeline meets={meets} unit={unit}/>}
+      {section==="competitions"&&(meets.length?<MeetTimeline meets={meets} unit={unit}/>:<p className="text-sm text-muted-foreground">No recorded competition results yet.</p>)}
       {section==="lifetime"&&<>
 
       <section aria-label="Lifetime">
