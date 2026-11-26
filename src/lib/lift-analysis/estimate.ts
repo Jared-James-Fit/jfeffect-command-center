@@ -864,18 +864,27 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     // can't be read, from its edges
     const motion = measureByMotion(frames, points, seed);
     const prof = measureExtent(frames, points, seed, opts.hiRes);
+    // the two disagree on real stacks both ways: what moves with the plate stops short of its rim
+    // (blur, shadow, a lit edge), its edges run on into whatever dark is beside it (an upright, a hand).
+    // Measured on Dwayne's front-on squats: motion 55 px, edges 77, the plate 63; another set, motion 43,
+    // edges 60, the plate 60. When they're within 1.6× of each other the size is their geometric mean,
+    // its margin the spread of a size known only to lie between them (the gap ÷ √12, in log terms: the
+    // truth lay between in every set checked); further apart, the edges have run into something and
+    // motion stands
+    const blend = !!motion && !!prof && prof.b > 1.1 * motion.b && prof.b <= 1.6 * motion.b;
+    const bB = blend ? Math.sqrt(prof!.b * motion!.b) : motion?.b ?? 0;
     const ext: Extent | null = motion
       ? {
-          b: motion.b,
-          relB: motion.relB,
-          a: prof ? Math.min(prof.a, 1.4 * motion.b) : seed.hw * (motion.b / seed.hh),
+          b: bB,
+          relB: blend ? Math.max(motion.relB, prof!.relB, Math.log(prof!.b / motion.b) / Math.sqrt(12)) : motion.relB,
+          a: prof ? Math.min(prof.a, 1.4 * bB) : seed.hw * (bB / seed.hh),
           relA: prof?.relA ?? 0.1,
           frames: motion.pairs,
           faint: false,
         }
       : prof;
     // edge-on: a stack front-on is clearly narrower than it is tall (a plate's face turned that far isn't read)
-    const edgeOn = !!ext && (seed.from === "stack" ? ext.a / ext.b < 0.75 : ext.a / ext.b < 0.62);
+    const edgeOn = !!ext && (seed.from === "stack" || seed.from === "wide" ? ext.a / ext.b < 0.75 : ext.a / ext.b < 0.62);
     const pts = ext ? points.map((p) => (p.found ? { ...p, a: ext.a, b: ext.b, r: Math.sqrt(ext.a * ext.b) } : p)) : points;
     const a = analyzeTrack(pts, {
       plate,

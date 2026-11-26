@@ -219,6 +219,7 @@ function Body({
     analysis,
     lift,
     initialLayers: openAt?.layers as never,
+    setVideoId,
   });
   const { data: notes = [] } = useFilmNotes(setVideoId);
   const noteDraft = useNoteDraft(api);

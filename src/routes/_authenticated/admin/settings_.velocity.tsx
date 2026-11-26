@@ -68,11 +68,25 @@ type Job = {
     quality: string | null;
     from_this_video: boolean | null;
   } | null;
+  /** The athlete's body read (pl_set_video_poses), null before the bar's read is saved. */
+  pose: {
+    status: string;
+    attempts: number;
+    available_at: string | null;
+    found: number | null;
+    frames: number | null;
+    view: string | null;
+    error: string | null;
+    why: string | null;
+    compute_ms: number | null;
+    observations: number;
+  } | null;
 };
 
 type Overview = {
   worker: { last_seen?: string; worker?: string; updated_at?: string } | null;
   counts: Record<string, number>;
+  pose_counts: Record<string, number>;
   oldest_queued: string | null;
   jobs: Job[];
 };
@@ -86,6 +100,25 @@ export function jobBucket(j: Pick<Job, "status" | "enabled" | "available_at" | "
   if (j.status === "failed") return "failed";
   if (j.status === "cancelled") return "removed";
   return "no_speed";
+}
+
+/** Where the body read stands, in words (pure). */
+export function poseWords(p: Job["pose"]): { text: string; tone: string } | null {
+  if (!p) return null;
+  if (p.status === "done") {
+    const seen = p.frames ? `${p.found ?? 0} of ${p.frames} frames` : "read";
+    const view = p.view && p.view !== "unknown" ? `, ${p.view} view` : "";
+    const obs = p.observations ? `, ${p.observations} observation${p.observations === 1 ? "" : "s"}` : "";
+    return { text: `Body read: ${seen}${view}${obs}`, tone: "text-muted-foreground" };
+  }
+  if (p.status === "no_body") return { text: "Body read: no one found in the frame", tone: "text-warning" };
+  if (p.status === "running") return { text: "Body read: reading on the server", tone: "text-muted-foreground" };
+  if (p.status === "queued")
+    return p.available_at && Date.parse(p.available_at) > Date.now()
+      ? { text: `Body read: trying again${p.error ? ` (${p.error})` : ""}`, tone: "text-warning" }
+      : { text: "Body read: waiting", tone: "text-muted-foreground" };
+  if (p.status === "failed") return { text: `Body read failed${p.error ? `: ${p.error}` : ""}`, tone: "text-destructive" };
+  return null;
 }
 
 const BUCKETS: { key: string; label: string }[] = [
@@ -138,7 +171,13 @@ function VelocityDiagnostics() {
       const { data, error } = await (supabase.rpc as any)("velocity_admin_overview", { _limit: 300 });
       if (error) throw error;
       const o = (data ?? {}) as Overview;
-      return { worker: o.worker ?? null, counts: o.counts ?? {}, oldest_queued: o.oldest_queued ?? null, jobs: o.jobs ?? [] };
+      return {
+        worker: o.worker ?? null,
+        counts: o.counts ?? {},
+        pose_counts: o.pose_counts ?? {},
+        oldest_queued: o.oldest_queued ?? null,
+        jobs: o.jobs ?? [],
+      };
     },
     refetchInterval: 30_000,
   });
@@ -156,6 +195,19 @@ function VelocityDiagnostics() {
     onError: () => toast.error("Couldn't queue it"),
   });
 
+  const requeuePose = useMutation({
+    mutationFn: async (video: string) => {
+      const { data, error } = await (supabase.rpc as any)("pose_admin_requeue", { _video: video });
+      if (error) throw error;
+      return String(data ?? "");
+    },
+    onSuccess: (r) => {
+      toast.success(r === "running" ? "It's being read now" : r === "removed" ? "The video was removed" : "Body queued to read again");
+      void qc.invalidateQueries({ queryKey: ["velocity-admin-overview"] });
+    },
+    onError: () => toast.error("Couldn't queue it"),
+  });
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4">
       <PageHeader
@@ -164,7 +216,18 @@ function VelocityDiagnostics() {
         backTo="/admin/settings"
       />
       <QueryState query={overview} what="the readings" skeleton={<ListSkeleton rows={6} />}>
-        {(o) => <Body o={o} bucket={bucket} setBucket={setBucket} canRequeue={isAdmin} onRequeue={(id) => requeue.mutate(id)} busyId={requeue.isPending ? requeue.variables : null} />}
+        {(o) => (
+          <Body
+            o={o}
+            bucket={bucket}
+            setBucket={setBucket}
+            canRequeue={isAdmin}
+            onRequeue={(id) => requeue.mutate(id)}
+            busyId={requeue.isPending ? requeue.variables : null}
+            onRequeuePose={(id) => requeuePose.mutate(id)}
+            poseBusyId={requeuePose.isPending ? requeuePose.variables : null}
+          />
+        )}
       </QueryState>
     </div>
   );
@@ -177,6 +240,8 @@ function Body({
   canRequeue,
   onRequeue,
   busyId,
+  onRequeuePose,
+  poseBusyId,
 }: {
   o: Overview;
   bucket: string;
@@ -184,6 +249,8 @@ function Body({
   canRequeue: boolean;
   onRequeue: (id: string) => void;
   busyId: string | null | undefined;
+  onRequeuePose: (id: string) => void;
+  poseBusyId: string | null | undefined;
 }) {
   const withBucket = useMemo(() => o.jobs.map((j) => ({ j, b: jobBucket(j) })), [o.jobs]);
   const counts = useMemo(() => {
@@ -193,6 +260,7 @@ function Body({
   }, [withBucket]);
   const shown = bucket === "all" ? withBucket : withBucket.filter((x) => x.b === bucket);
   const waiting = (o.counts.queued ?? 0) + (o.counts.running ?? 0);
+  const bodiesWaiting = (o.pose_counts.queued ?? 0) + (o.pose_counts.running ?? 0);
   const lastSeen = o.worker?.last_seen ?? null;
   const stale = waiting > 0 && (!lastSeen || Date.now() - Date.parse(lastSeen) > 45 * 60_000);
 
@@ -209,6 +277,12 @@ function Body({
           {waiting === 0
             ? "Nothing waiting."
             : `${waiting} waiting${o.oldest_queued ? `, the oldest since ${ago(o.oldest_queued)}` : ""}. It runs every 30 minutes and keeps reading while videos arrive.`}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Body reads (joints for Technique): {o.pose_counts.done ?? 0} done
+          {bodiesWaiting ? ` · ${bodiesWaiting} waiting` : ""}
+          {o.pose_counts.no_body ? ` · ${o.pose_counts.no_body} with no one in frame` : ""}
+          {o.pose_counts.failed ? ` · ${o.pose_counts.failed} failed` : ""}. Read after each video's bar speed.
         </p>
         {stale && (
           <p className="mt-2 text-sm text-destructive">
@@ -240,7 +314,16 @@ function Body({
       ) : (
         <Card className="divide-y divide-border p-0">
           {shown.map(({ j, b }) => (
-            <JobRow key={j.set_video_id} j={j} b={b} canRequeue={canRequeue} onRequeue={onRequeue} busy={busyId === j.set_video_id} />
+            <JobRow
+              key={j.set_video_id}
+              j={j}
+              b={b}
+              canRequeue={canRequeue}
+              onRequeue={onRequeue}
+              busy={busyId === j.set_video_id}
+              onRequeuePose={onRequeuePose}
+              poseBusy={poseBusyId === j.set_video_id}
+            />
           ))}
         </Card>
       )}
@@ -248,7 +331,23 @@ function Body({
   );
 }
 
-function JobRow({ j, b, canRequeue, onRequeue, busy }: { j: Job; b: string; canRequeue: boolean; onRequeue: (id: string) => void; busy: boolean }) {
+function JobRow({
+  j,
+  b,
+  canRequeue,
+  onRequeue,
+  busy,
+  onRequeuePose,
+  poseBusy,
+}: {
+  j: Job;
+  b: string;
+  canRequeue: boolean;
+  onRequeue: (id: string) => void;
+  busy: boolean;
+  onRequeuePose: (id: string) => void;
+  poseBusy: boolean;
+}) {
   const a = j.analysis;
   const detail =
     b === "reading"
@@ -256,6 +355,8 @@ function JobRow({ j, b, canRequeue, onRequeue, busy }: { j: Job; b: string; canR
       : j.error ?? (a?.why && b !== "logged" ? a.why.replace(/_/g, " ") : null);
   const speed = j.set?.from_this_video && j.set.velocity != null ? j.set.velocity : a?.accepted ? a.set_mcv : null;
   const requeueable = canRequeue && b !== "reading" && b !== "logged" && b !== "removed" && a?.source !== "tap";
+  const body = poseWords(j.pose);
+  const poseRequeueable = canRequeue && !!j.pose && (j.pose.status === "failed" || j.pose.status === "no_body");
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -276,6 +377,7 @@ function JobRow({ j, b, canRequeue, onRequeue, busy }: { j: Job; b: string; canR
           {j.set?.reps != null && <span className="text-muted-foreground"> · {j.set.reps} logged</span>}
         </p>
         {detail && <p className="mt-0.5 text-sm text-muted-foreground">{detail}</p>}
+        {body && <p className={cn("mt-0.5 text-sm", body.tone)}>{body.text}</p>}
         <p className="mt-0.5 text-xs text-muted-foreground">
           Sent {ago(j.created_at)}
           {j.server_attempts > 0 ? ` · server tries ${j.server_attempts}` : ""}
@@ -284,11 +386,20 @@ function JobRow({ j, b, canRequeue, onRequeue, busy }: { j: Job; b: string; canR
           {j.outcome ? ` · ${j.outcome.replace(/_/g, " ")}` : ""}
         </p>
       </div>
-      {requeueable && (
-        <Button variant="outline" size="sm" loading={busy} onClick={() => onRequeue(j.set_video_id)} aria-label="Read again">
-          <RotateCcw className="h-4 w-4" />
-          Read again
-        </Button>
+      {(requeueable || poseRequeueable) && (
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {requeueable && (
+            <Button variant="outline" size="sm" loading={busy} onClick={() => onRequeue(j.set_video_id)} aria-label="Read again">
+              <RotateCcw className="h-4 w-4" />
+              Read again
+            </Button>
+          )}
+          {poseRequeueable && (
+            <Button variant="ghost" size="sm" loading={poseBusy} onClick={() => onRequeuePose(j.set_video_id)}>
+              Read body again
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

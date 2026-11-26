@@ -66,6 +66,8 @@ import { canvasToPng, grabFrame, renderAnnotatedClip } from "@/lib/lift-analysis
 import { runPose, type PoseProgress } from "@/lib/lift-analysis/pose/pose-run";
 import { nearSide, smoothTrack, viewOf, type PoseTrack } from "@/lib/lift-analysis/pose/skeleton";
 import { readTechnique, type TechniqueRead } from "@/lib/lift-analysis/pose/technique";
+import { storedPoseCovers, unpackPose } from "@/lib/lift-analysis/pose/pose-pack";
+import { useStoredPose } from "@/lib/lift-analysis/pose/pose-queries";
 import { isViewingAsClient } from "@/lib/pov-guard";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +106,8 @@ export type TechniqueState = {
   compare: Compare | null;
   setCompare: (c: Compare | null) => void;
   scene: PoseScene | null;
+  /** The body came from the server's read (stored on upload), not this device. */
+  fromServer: boolean;
   start: () => void;
   cancel: () => void;
 };
@@ -114,8 +118,12 @@ export function useTechnique(input: {
   analysis: LiftAnalysis | null;
   lift: GuideLift;
   initialLayers?: Partial<Layers>;
+  /** The set video, for the body read the server stored on upload (pl_set_video_poses). */
+  setVideoId?: string;
 }): TechniqueState {
-  const { active, src, analysis, lift } = input;
+  const { active, src, analysis, lift, setVideoId } = input;
+  const storedQ = useStoredPose(setVideoId, active);
+  const [fromServer, setFromServer] = useState(false);
   const [status, setStatus] = useState<TechniqueState["status"]>("idle");
   const [progress, setProgress] = useState<PoseProgress | null>(null);
   const [failure, setFailure] = useState("");
@@ -138,6 +146,7 @@ export function useTechnique(input: {
 
   const start = useCallback(() => {
     if (!src) return;
+    setFromServer(false);
     ctrl.current?.abort();
     const c = new AbortController();
     ctrl.current = c;
@@ -189,11 +198,31 @@ export function useTechnique(input: {
   }, []);
 
   useEffect(() => () => ctrl.current?.abort(), []);
-  // opening Technique starts the read (once)
+  // opening Technique starts the read (once): the server's stored read when it covers the set,
+  // else the device's own (a stored read still being made, or none, never holds Technique up)
   useEffect(() => {
-    if (active && status === "idle" && !raw && src) start();
+    if (!active || status !== "idle" || raw || !src) return;
+    if (setVideoId && storedQ.isLoading) return;
+    const stored = storedQ.data;
+    if (stored && stored.window && storedPoseCovers(stored.window, analysis)) {
+      if (stored.status === "done") {
+        const track = unpackPose(stored.track);
+        if (track) {
+          setRaw(track);
+          setFromServer(true);
+          setStatus("done");
+          return;
+        }
+      }
+      if (stored.status === "no_body") {
+        setFailure("No one was found in this video. The whole body needs to be in the frame, side-on.");
+        setStatus("failed");
+        return;
+      }
+    }
+    start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, src]);
+  }, [active, src, storedQ.isLoading, storedQ.data]);
 
   const track = useMemo(() => (raw ? smoothTrack(raw) : null), [raw]);
   const read = useMemo(
@@ -226,6 +255,7 @@ export function useTechnique(input: {
     compare,
     setCompare,
     scene,
+    fromServer,
     start,
     cancel,
   };
