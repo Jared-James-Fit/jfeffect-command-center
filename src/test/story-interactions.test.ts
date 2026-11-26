@@ -41,10 +41,10 @@ describe("a story has no page of its own", () => {
     expect(storyLinkLabel(post({ shared_post: { id: "p9", author: me, kind: "note", series: null } }))).toBe("View post");
   });
 
-  it("the viewer never draws a bare Post / View post button; swipe up goes to comments unless there is a link", () => {
+  it("the viewer never draws a bare Post / View post button; swipe up always goes to its comments, never a page", () => {
     expect(viewer).not.toMatch(/"Post"\} <ChevronRight/);
     expect(viewer).not.toContain('"View post"}');
-    expect(viewer).toContain("return storyLinkLabel(post) ? onOpenPost(storyTarget(post)) : setAskComments((n) => n + 1);");
+    expect(viewer).toContain("if (post.is_mine) return setAskActivity((n) => n + 1);\n      return openComments();");
   });
 });
 
@@ -56,24 +56,23 @@ describe("the interaction bar", () => {
     expect(heart).toBeGreaterThan(0);
     expect(comment).toBeGreaterThan(heart);
     expect(share).toBeGreaterThan(comment);
-    expect(viewer).toContain('placeholder={full ? `You can message ${first} again once they reply` : "Send a message…"}');
+    expect(viewer).toContain('placeholder={full ? `You can message ${first} again once they reply` : "Message…"}');
     expect(viewer).toContain('aria-label={mine ? "Unlike" : "Like"}');
     expect(viewer).not.toContain('win ? "Celebrate" : "Like"');
   });
 
-  it("a message goes through the existing direct path with its request rules; a comment is the post's own thread", () => {
+  it("a message goes through the existing direct path with its request rules; a comment is the post's own thread, in the story's panel", () => {
     expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true });");
     expect(viewer).toContain("const full = !!thread?.outgoing && thread.left === 0;");
-    expect(viewer).toContain("<CommentsSheet story open={commentsOpen} post={post}");
-    const sheet = read("src/components/community/comments-sheet.tsx");
-    expect(sheet).toContain("Comments show to everyone who can see this story.");
-    expect(sheet).toContain("overlayClassName={story ? \"bg-black/25\" : undefined}");
-    expect(viewer).toContain("Only {first} sees this, in your messages.");
+    expect(viewer).toContain("<StoryCommentsPanel key={post.id} post={post} open={commentsOpen}");
+    expect(read("src/components/community/story-comments.tsx")).toContain("const list = useComments(post.id, open);");
+    expect(viewer).toContain("Private · only {first} sees it");
   });
 
   it("the story waits while typing or while the comments, the share sheet, the menu or the viewers are open", () => {
     expect(viewer).toContain("onComposing(focused || text.trim().length > 0 || sheetOpen);");
-    expect(viewer).toContain("onHold(viewers || sticker || menuBusy || commentsOpen || sharingOpen);");
+    expect(viewer).toContain("onHold(viewers || sticker || menuBusy || sharingOpen);");
+    expect(viewer).toContain("const waiting = composing || commentsOpen;");
     expect(viewer).toContain("<PostShareSheet");
   });
 

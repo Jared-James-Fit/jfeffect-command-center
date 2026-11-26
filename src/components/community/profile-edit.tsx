@@ -14,6 +14,7 @@ import {
 } from "@/lib/community-discover";
 
 import { CoachPublicRow, PostMyFilmRow, PrivateAccountRow } from "@/components/community/privacy-settings";
+import { CrewGuidelinesRow } from "@/components/community/crew-rules-sheet";
 
 // Messages' blocked list, loaded only when it's opened (it lives with the chat screens).
 const BlockedPeopleSheet = lazyWithRetry(() => import("@/components/messages/inbox-parts").then((m) => ({ default: m.BlockedPeopleSheet })));
@@ -201,13 +202,15 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
                     />
                   </label>
                 )}
-                <button type="button" onClick={() => setBlockedOpen(true)} className="flex min-h-[52px] w-full items-center justify-between gap-3 px-3.5 py-3 text-left active:bg-muted" data-blocked-open>
+                <button type="button" onClick={() => setBlockedOpen(true)} className="flex min-h-[52px] w-full items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3 text-left active:bg-muted" data-blocked-open>
                   <span className="min-w-0">
                     <span className="block text-[13px] font-bold">Blocked accounts</span>
                     <span className="block text-[11.5px] leading-snug text-muted-foreground">They can't find you, see your posts or message you</span>
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
+                {/* the guidelines agreed to with the Terms, any time */}
+                <CrewGuidelinesRow variant="list" className="border-b-0" />
               </div>
               </Field>
             </div>

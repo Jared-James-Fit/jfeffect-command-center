@@ -49,47 +49,34 @@ const REPLIES_SHOWN = 2;
  * Light chatter on a post. Coaching conversations stay in Messages — this is
  * the "nice work" and the banter.
  */
-export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor, story = false, open }: {
+export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor, open }: {
   post: CommunityPost | null;
   viewerIsStaff: boolean;
   onClose: () => void;
   /** A commenter's photo or name opens their profile (the sheet closes first). */
   onOpenAuthor?: (a: CommunityAuthor) => void;
-  /**
-   * Opened over a story (the story viewer's 💬): a shorter sheet over a light dim, so the story stays
-   * in view above it, and a line saying these comments are public, unlike a message to the poster.
-   */
-  story?: boolean;
   /** Open or not, with the post kept so it slides away with its comments still in it (default: open while there's a post). */
   open?: boolean;
 }) {
+  // (a story's comments are the story's own panel, story-comments.tsx: never this sheet)
   return (
     <Sheet open={open ?? !!post} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="bottom"
         swipeToClose
         hideCloseButton
-        overlayClassName={story ? "bg-black/25" : undefined}
-        className={cn("flex max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]", story ? "h-[64dvh]" : "h-[78dvh]")}
-        data-story-comments={story ? "" : undefined}
+        className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]"
       >
         {post && (
           <>
             <SheetHeader className="relative shrink-0 space-y-0 pb-2 pt-2 text-center">
               <span aria-hidden className="mx-auto block h-1 w-10 rounded-full bg-muted-foreground/35" />
               <SheetTitle className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</SheetTitle>
-              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s ${story ? "story" : "post"}`}</SheetDescription>
+              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s post`}</SheetDescription>
               <SheetClose className="absolute right-2 top-[14px] grid h-10 w-10 place-items-center rounded-full text-foreground active:scale-95" aria-label="Close comments">
                 <X className="h-[22px] w-[22px]" strokeWidth={1.75} />
               </SheetClose>
             </SheetHeader>
-            {story && (
-              <p className="shrink-0 border-b border-border/60 px-5 pb-2.5 text-center text-[12px] leading-snug text-muted-foreground" data-story-comments-note>
-                {post.is_mine
-                  ? "Comments show to everyone who can see your story."
-                  : `Comments show to everyone who can see this story. To tell ${post.author.name.split(" ")[0]} privately, send a message instead.`}
-              </p>
-            )}
             <CommentThread
               key={post.id}
               post={post}
@@ -577,13 +564,13 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
 }
 
 /** "a photo" · "a video" · "a GIF" · "a voice memo" */
-function mediaWord(c: CommunityComment, cap = false): string {
+export function mediaWord(c: CommunityComment, cap = false): string {
   const t = c.media?.type;
   const w = t === "video" ? "a video" : t === "gif" ? "a GIF" : t === "audio" ? "a voice memo" : "a photo";
   return cap ? w[0].toUpperCase() + w.slice(1) : w;
 }
 
-function urlFor(c: CommunityComment, urls: Record<string, string> | undefined): string | null {
+export function urlFor(c: CommunityComment, urls: Record<string, string> | undefined): string | null {
   const m = c.media;
   if (!m) return null;
   if (m.type === "audio" || m.type === "gif") return urls?.[m.path] ?? null;
@@ -610,7 +597,7 @@ function CommentSkeleton() {
 const HOLD_MS = 450;
 
 /** Hold (touch or mouse) to open a comment's options; right-click and the keyboard work too. */
-function useHold(onHold: () => void, disabled: boolean) {
+export function useHold(onHold: () => void, disabled: boolean) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const held = useRef(false);
@@ -792,7 +779,7 @@ function CommentRow({
   );
 }
 
-function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | null; onOpen: (c: CommunityComment) => void }) {
+export function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | null; onOpen: (c: CommunityComment) => void }) {
   const m = c.media!;
   if (m.type === "audio") return <VoiceMemoPlayer src={c.local_preview ?? url} duration={m.duration} seed={c.id.length + (c.created_at?.length ?? 0)} className="mt-1.5" />;
   if (m.type === "gif") return <img data-comment-gif src={m.path} alt="GIF" loading="lazy" decoding="async" className="mt-1.5 block max-h-40 max-w-[200px] rounded-2xl bg-muted object-cover" />;
@@ -829,7 +816,7 @@ function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | n
 }
 
 /** What holding a comment opens. Delete only shows for its writer, the post's owner and coaches; Report on anyone else's. */
-function CommentMenu({
+export function CommentMenu({
   c,
   onClose,
   onReply,
@@ -981,7 +968,7 @@ function MenuRow({
 }
 
 /** Share a comment to the feed as its own post, with an optional line of your own. */
-function ShareCommentSheet({ c, onClose, postAuthor }: { c: CommunityComment | null; onClose: () => void; postAuthor: string }) {
+export function ShareCommentSheet({ c, onClose, postAuthor }: { c: CommunityComment | null; onClose: () => void; postAuthor: string }) {
   const [caption, setCaption] = useState("");
   const share = useShareComment();
   useEffect(() => {
@@ -1040,7 +1027,7 @@ function ShareCommentSheet({ c, onClose, postAuthor }: { c: CommunityComment | n
 }
 
 /** Full-size photo / the video, only fetched when opened. */
-function MediaViewer({ c, thumbUrl, onClose }: { c: CommunityComment | null; thumbUrl: string | null; onClose: () => void }) {
+export function MediaViewer({ c, thumbUrl, onClose }: { c: CommunityComment | null; thumbUrl: string | null; onClose: () => void }) {
   const m = c?.media ?? null;
   const local = c?.local_preview ?? null;
   const { data: full } = useFullMediaUrl(m?.path, !!m && !local);
