@@ -23,7 +23,8 @@ describe("the first tab is Crew: the feed and the rankings in one place", () => 
     expect(screen).not.toContain('aria-label="Crew view"');
     expect(screen).toContain("<RankingsHub />");
     // Rankings is a tab under the same bar as the feed, never a page with ‹ back
-    expect(screen).toContain('const crewBar = !ownBar ? null : scope.kind === "feed" || scope.kind === "rankings" ? (');
+    // (a post on its own screen has its own ‹ back bar first: post-open.ts)
+    expect(screen).toContain(') : scope.kind === "feed" || scope.kind === "rankings" ? (');
     expect(screen).toContain('tab={scope.kind === "rankings" ? "rankings" : feedTab}');
     expect(screen).not.toContain('<CrewBar label="Rankings"');
     expect(read("src/components/community/activity-heart.tsx")).toContain('aria-label={unread ? "Activity, new" : "Activity"}');
@@ -49,7 +50,7 @@ describe("the first tab is Crew: the feed and the rankings in one place", () => 
   });
   it("a profile's back button returns to the tab you came from", () => {
     expect(screen).toContain('{TAB_LABEL[youAsPage ? "feed" : tab]}');
-    expect(screen).toContain("const tab: Tab = scope.kind === \"author\" ? scope.from : scope.kind;");
+    expect(screen).toContain("const tab: Tab = view.kind === \"author\" ? view.from : view.kind;");
   });
   it("+ (post, meal, lock in, workout, write) is the bar's first button, Instagram's spot", () => {
     expect(screen).toContain('<BarButton label="Create a post" onClick={begin} data-crew-create>');
