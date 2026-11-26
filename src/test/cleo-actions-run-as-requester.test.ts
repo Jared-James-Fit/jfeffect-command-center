@@ -88,7 +88,13 @@ describe("an approvable card never goes through a request-bound server function"
       const isProgram = /"(build_program|edit_program_day|publish_program|correct_logged_exercise|set_nutrition_targets)"/.test(`"${kind}"`);
       const block = isProgram
         ? caseBlock(program, "export async function executeProgramAction", kind)
-        : caseBlock(actions, "async function execute(", kind);
+        : kind === "update_meet_from_attachment"
+          ? actions.slice(actions.indexOf('if (kind === "update_meet_from_attachment") {', actions.indexOf("async function execute(")), actions.indexOf('const senderRole:', actions.indexOf("async function execute(")))
+          : caseBlock(actions, "async function execute(", kind);
+      if (kind === "update_meet_from_attachment") {
+        expect(block).toContain('admin.rpc("cleo_apply_meet_intake"');
+        expect(block).toContain("assertRequesterReaches");
+      }
       expect(block).not.toMatch(/\w+\(\{\s*data:/);
     });
   }
