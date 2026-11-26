@@ -5,7 +5,7 @@ import { parseLocalDate } from "@/lib/today";
 import { COMP_LIFTS, COMP_LIFT_LABEL, type CompLift, type MeetResult } from "@/lib/analytics/competition-strength";
 import { liftStrengths, type LiftStrength } from "@/lib/analytics/lift-strength";
 import type { BodyweightPoint } from "@/lib/bodyweight";
-import { currentRing, competitionRing, gymRingRecords, gymRingBests, officialClass, ringTotal, type RingLifts } from "@/lib/analytics/performance-ring";
+import { currentRing, recentTrainingRing, competitionRing, gymRingRecords, gymRingBests, officialClass, ringTotal, type RingLifts } from "@/lib/analytics/performance-ring";
 import { normalizeWeights, weightReferences, weightContextAt, weightPeriods } from "@/lib/analytics/weight-context";
 import { dualLoad, loadNum, otherUnit, LB_PER_KG, type Unit } from "@/lib/analytics/units";
 import { arcPath, LIFT_SERIES, Segmented } from "@/components/analytics/viz";
@@ -80,12 +80,14 @@ export function SbdDonut({
   const classFilter = classPick && (classPick === "all" || classPick === "unknown" || options.includes(classPick)) ? classPick : defaultClass;
   const competition = useMemo(() => competitionRing(meets, classFilter, meetPick), [meets, classFilter, meetPick]);
   const gym = useMemo(() => gymRingBests(gymRecords, metric, classFilter), [gymRecords, metric, classFilter]);
-  const lifts: RingLifts = view === "current" ? projection.lifts : view === "competition" ? competition.lifts : gym;
-  const total = view === "current" ? projection.totalLb : view === "competition" ? competition.totalLb : ringTotal(gym);
+  const recent = useMemo(() => recentTrainingRing(strength, today), [strength, today]);
+  const fallback = view === "current" && projection.totalLb == null && recent.totalLb != null;
+  const lifts: RingLifts = view === "current" ? (fallback ? recent.lifts : projection.lifts) : view === "competition" ? competition.lifts : gym;
+  const total = view === "current" ? (fallback ? recent.totalLb : projection.totalLb) : view === "competition" ? competition.totalLb : ringTotal(gym);
   const low = view === "current" ? projection.lowLb : null;
-  const title = view === "current" ? "Projected top end" : view === "competition" ? (meetPick === "individual" ? "Combined lift bests" : "Meet total") : "Combined gym bests";
+  const title = view === "current" ? (fallback ? (recent.lowerBound ? "Recent lower-bound total" : "Recent estimated total") : "Projected top end") : view === "competition" ? (meetPick === "individual" ? "Combined lift bests" : "Meet total") : "Combined gym bests";
   const description = view === "current"
-    ? total == null ? "A current total needs recent usable training evidence for all three lifts. Past meet results and stale estimates are not substituted." : "Same-day conservative and optimistic scenarios from the shared strength engine. The top end assumes favourable execution across all three lifts; it is not a guaranteed total."
+    ? fallback ? "Sum of recent training estimates from separate sessions; not a competition projection. Lower-bound evidence may underestimate strength. A projected range requires more qualifying evidence." : total == null ? "A current total needs recent usable training evidence for all three lifts. Past meet results and stale estimates are not substituted." : "Same-day conservative and optimistic scenarios from the shared strength engine. The top end assumes favourable execution across all three lifts; it is not a guaranteed total."
     : view === "competition" && meetPick !== "individual"
       ? "The successful lifts recorded at the selected meet."
       : "Individual bests may have been achieved on different dates. Their sum is not an official or demonstrated single-session total.";
@@ -93,7 +95,7 @@ export function SbdDonut({
   const size = 208;
   const radius = 87;
   const sum = ringTotal(lifts);
-  const selectedKind = view === "current" ? "projected" : view === "competition" && meetPick !== "individual" ? "official" : view === "gym" && metric === "estimated" ? "estimated" : "actual";
+  const selectedKind = view === "current" ? (fallback ? "estimated" : "projected") : view === "competition" && meetPick !== "individual" ? "official" : view === "gym" && metric === "estimated" ? "estimated" : "actual";
   const selectedVersion: PerformanceVersion = {key:"selected",label:title,kind:selectedKind,lifts,totalLb:total,end:view==="current"?today:competition.meet?.date,bodyweightKg:view==="current"?bw.averageKg: view==="competition"&&competition.meet?.bodyweightLb?competition.meet.bodyweightLb/LB_PER_KG:null,category:view==="current"?bw.category?.label:classFilter==="all"?null:classFilter};
   const comparePeriods=[...timeline.map(p=>({id:"weight:"+p.start,name:p.category,start:p.start,end:p.end})),...periods,...(customStart&&customEnd&&customEnd>=customStart&&customEnd<=today?[{id:"custom",name:"Custom period",start:customStart,end:customEnd}]:[])];
   const historicalProjections=useMemo<PerformanceVersion[]>(()=>{if(!compareOpen)return [];const options=comparePeriods.filter(p=>p.end<today).sort((a,b)=>a.id==='custom'?-1:b.id==='custom'?1:b.end.localeCompare(a.end)).slice(0,8);return options.map(p=>{const historicalMeets=meets.filter(m=>m.date<=p.end);const context=weightContextAt(weights,refs,p.end);const read=liftStrengths(results,historicalMeets,p.end);const projection=currentRing(read,p.end,historicalMeets,context.category?.label);return {key:p.id+":projection",label:p.name+" · projection on "+p.end,kind:"projected" as const,lifts:projection.lifts,totalLb:projection.totalLb,end:p.end,bodyweightKg:context.averageKg,category:context.category?.label}}).filter(v=>v.totalLb!=null);},[compareOpen,results,meets,weights,refs,today,periods,timeline,customStart,customEnd]);
@@ -198,7 +200,7 @@ export function SbdDonut({
         </ul>
       </div>
       <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>{view === "current" ? (total == null ? "Recent evidence needed" : `${projection.confidence} confidence · ${fmtDay(today)}`) : competition.meet && view === "competition" ? `${competition.meet.name ?? "Competition"} · ${fmtDay(competition.meet.date)}` : "Individual bests · different dates possible"}</span>
+        <span>{view === "current" ? (fallback ? "Recent training only · projection unavailable" : total == null ? "Recent evidence needed" : `${projection.confidence} confidence · ${fmtDay(today)}`) : competition.meet && view === "competition" ? `${competition.meet.name ?? "Competition"} · ${fmtDay(competition.meet.date)}` : "Individual bests · different dates possible"}</span>
         <InfoTip label="About this total">{description}</InfoTip>
         {view === "gym" && onRecords && <button type="button" className="min-h-10 shrink-0 font-medium text-foreground" onClick={onRecords}>Records ›</button>}
       </div>

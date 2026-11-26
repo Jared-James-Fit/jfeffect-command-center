@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { currentRing, competitionRing, gymRingBests, ringTotal, type GymRingRecord } from "@/lib/analytics/performance-ring";
+import { recentTrainingRing, currentRing, competitionRing, gymRingBests, ringTotal, type GymRingRecord } from "@/lib/analytics/performance-ring";
 import { weightContextAt, weightPeriods, nearestWeightReference } from "@/lib/analytics/weight-context";
-import { liftStrengths } from "@/lib/analytics/lift-strength";
+import { liftStrengths, type LiftStrength } from "@/lib/analytics/lift-strength";
 import { attemptStats, lifterProfile, compareInsights, type PerformanceVersion } from "@/lib/analytics/coach-analysis";
-import type { MeetResult } from "@/lib/analytics/competition-strength";
+import type { MeetResult, CompLift } from "@/lib/analytics/competition-strength";
 
 const refs = [{ kg: 66, label: "66 kg" }, { kg: 74, label: "74 kg" }];
 const meet = (date: string, weightClass: string, squat: number, bench: number, deadlift: number): MeetResult => ({
@@ -69,5 +69,29 @@ describe("evidence-based coaching comparisons", () => {
     const out=compareInsights(v,other);
     expect(out[0].label).toBe("Evidence types differ");
     expect(out.some(i=>i.label==="Bodyweight efficiency")).toBe(true);
+  });
+});
+
+describe("recent training estimates independent of meet forecasts", () => {
+  const session = (day: string, e1rm: number, kind = "exact", outlier = false) => ({day, e1rm, kind, outlier});
+  const fixture = (squat: unknown[], bench: unknown[], deadlift: unknown[]) => ({
+    squat: {sessions: squat}, bench: {sessions: bench}, deadlift: {sessions: deadlift},
+  }) as unknown as Record<CompLift, LiftStrength>;
+  it("shows all three recent estimates while preserving lower-bound evidence", () => {
+    const data = fixture([session("2026-11-24", 481)], [session("2026-11-19", 304, "floor")], [session("2026-11-21", 574)]);
+    const result = recentTrainingRing(data, "2026-11-26");
+    expect(result.totalLb).toBe(1359);
+    expect(result.lowerBound).toBe(true);
+    expect(result.lifts.bench?.detail).toContain("lower-bound");
+  });
+  it("never uses future, stale, invalid or outlier sets to fill a missing lift", () => {
+    const data = fixture([session("2026-11-24", 481)], [session("2026-10-01", 304), session("2026-11-27", 320), session("2026-11-22", 999, "exact", true), session("2026-11-23", NaN)], [session("2026-11-21", 574)]);
+    const result = recentTrainingRing(data, "2026-11-26");
+    expect(result.totalLb).toBeNull();
+    expect(result.lifts.bench).toBeNull();
+  });
+  it("uses latest valid evidence instead of an older maximum", () => {
+    const data = fixture([session("2026-11-04", 500), session("2026-11-24", 470)], [session("2026-11-19", 304)], [session("2026-11-21", 574)]);
+    expect(recentTrainingRing(data, "2026-11-26").totalLb).toBe(1348);
   });
 });

@@ -41,7 +41,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 export type MuscleMode = "distribution" | "fit" | "development" | "change";
 export const MUSCLE_MODES: Array<{ key: MuscleMode; label: string }> = [
   { key: "distribution", label: "Volume" },
-  { key: "fit", label: "Goals" },
+  { key: "fit", label: "Plan / balance" },
   { key: "development", label: "Progress" },
 ];
 
@@ -1022,7 +1022,7 @@ function MuscleDetail({
     mode === "change"
       ? !row.period.before ? "No comparable prior period" : row.period.total > row.period.before.total ? "More training" : row.period.total < row.period.before.total ? "Less training" : "Similar training"
       : mode === "fit"
-      ? FIT_WORD[row.fit.status]
+      ? (row.targetSets != null ? row.fit.words : `${FIT_WORD[row.fit.status]} · relative training balance`)
       : mode === "development"
         ? DEV_WORD[row.dev.status]
         : MUSCLE_LEVELS[row.level].label;
@@ -1055,10 +1055,11 @@ function MuscleDetail({
         </button>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3" data-muscle-stats>
-        <Stat label="Total sets" value={fmtSets(p.total)} sub={row.perWeek > 0 ? `about ${fmtSets(row.perWeek)} a week` : undefined} />
-        <Stat label={mode==="fit"&&row.targetSets!=null?"Planned sets":"Direct sets"} value={mode==="fit"&&row.targetSets!=null?fmtSets(row.targetSets):p.direct} sub={mode==="fit"&&row.targetSets!=null?"elapsed plan":"aimed at it"} />
+        <Stat label="Credited sets" value={fmtSets(p.total)} sub={row.perWeek > 0 ? `about ${fmtSets(row.perWeek)} a week` : undefined} />
+        <Stat label="Direct sets" value={p.direct} sub="Primary muscle work" />
+        <Stat label="Supporting sets" value={p.supporting} sub={supportingSub} />
         <Stat label="Days trained" value={p.days} />
-        {mode!=="change"&&row.averageRpe!=null?<Stat label="Average effort" value={row.averageRpe} sub="rated sets · RPE"/>:<Stat
+        {mode!=="change"?<Stat label="Average effort" value={row.averageRpe ?? "—"} sub={row.averageRpe==null?"No rated sets":"rated sets · RPE"}/>:<Stat
           label="Change"
           value={
             p.changePct != null ? (
@@ -1076,8 +1077,8 @@ function MuscleDetail({
         /> }
       </div>
       {mode === "change" && change && <p className="mt-3 text-[13px] text-foreground/85" data-muscle-change>{change}</p>}
-      <details className="mt-2 text-xs text-muted-foreground"><summary className="min-h-9 cursor-pointer pt-2 font-medium">Set breakdown</summary><p>{p.direct} direct · {p.supporting} supporting ({supportingSub}) · {p.exerciseCount} exercises.</p></details>
-      {row.targetSets!=null && mode!=="change" && <div className="mt-3 border-t border-border pt-2 text-xs"><span className="font-medium">Plan vs actual</span><div className="mt-1 flex justify-between text-muted-foreground"><span>{fmtSets(p.total)} completed / {fmtSets(row.targetSets)} planned sets</span></div>{row.targetSets>0&&<div className="mt-1.5 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{width:Math.min(100,p.total/row.targetSets*100)+"%"}}/></div>}</div>}
+      {mode==="fit"&&row.targetSets==null&&<p className="mt-2 text-xs text-muted-foreground">No elapsed plan available. This is relative training balance, not adherence.</p>}
+      {row.targetSets!=null && mode!=="change" && <div className="mt-3 border-t border-border pt-2 text-xs"><div className="flex items-baseline justify-between gap-2"><span className="font-medium">Elapsed plan adherence</span><strong className="text-base tabular-nums">{row.targetSets>0?Math.round(p.total/row.targetSets*100)+"%":p.total>0?"Unplanned":"No target"}</strong></div><div className="mt-1 flex justify-between text-muted-foreground"><span>{fmtSets(p.total)} completed / {fmtSets(row.targetSets)} planned credited sets</span></div>{row.targetSets>0&&<div className="mt-1.5 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{width:Math.min(100,p.total/row.targetSets*100)+"%"}}/></div>}</div>}
       {mode!=="change"&&<details className="mt-2 border-t border-border text-xs"><summary className="min-h-9 cursor-pointer pt-2 font-medium">Exercise progress <span className="font-normal text-muted-foreground">· {DEV_SHORT[row.dev.status]}</span></summary>
         <div className="space-y-1 pb-2 text-muted-foreground">{row.dev.why&&<p>{row.dev.why}</p>}{row.dev.evidence.slice(0,3).map(e=><p key={e}>{e}</p>)}{row.dev.consider&&<p>{row.dev.consider}</p>}{row.dev.status==="unknown"&&<p>No reliable trend in this period. Open a contributing exercise for its actual logged performance.</p>}</div>
       </details>}

@@ -53,8 +53,8 @@ export type LiftHistoryPoint = LiftSetInput & {
 export type LiftHistory = { name: string; pr: LiftHistoryPoint | null; points: LiftHistoryPoint[] };
 
 const METRICS: { key: Metric; label: string }[] = [
-  { key: "est", label: "e1RM" },
-  { key: "single", label: "1RM (single)" },
+  { key: "est", label: "Estimated max" },
+  { key: "single", label: "Recorded single" },
   { key: "top", label: "Best set" },
   { key: "volume", label: "Total weight" },
   { key: "effort", label: "Effort" },
@@ -78,6 +78,7 @@ export function LiftProgressCard({
   onOpenSet,
   single = false,
   compact: bare = false,
+  detailed = false,
   comparisonHistory,
   periods,
 }: {
@@ -96,6 +97,8 @@ export function LiftProgressCard({
    * maxes or session list (Records and the exercise's History have those).
    */
   compact?: boolean;
+  /** Dedicated exercise workspace keeps full records and session history. */
+  detailed?: boolean;
   comparisonHistory?: LiftHistory[];
   periods?: Array<{id:string;name:string;start:string;end:string}>;
 }) {
@@ -134,7 +137,8 @@ export function LiftProgressCard({
   const color = exerciseColor(activeEx, series?.points?.[0]?.muscle_group);
   const hasVelocity = sessions.some((s) => s.velocity != null);
   const singleOf=(s:LiftSession)=>s.sets.filter(p=>p.reps===1).reduce<LiftSetInput|null>((a,p)=>!a||p.load>a.load?p:a,null);
-  const defaultMetric: Metric = liftFamily(activeEx) ? "est" : "top";
+  const competitionLike = !!liftFamily(activeEx) && !/belt squat|hack squat|leg press|smith|machine|cable|dumbbell|landmine|goblet|sissy/i.test(activeEx);
+  const defaultMetric: Metric = competitionLike ? "est" : "top";
   const chosen = metric ?? defaultMetric;
   const activeMetric: Metric = chosen === "velocity" && !hasVelocity ? defaultMetric : chosen;
   // The estimated max from comparable sets (strength-read.ts) once 3+ sessions have
@@ -293,7 +297,7 @@ export function LiftProgressCard({
   // A squat, bench or deadlift (or a variation) reads by its estimated max; anything
   // else by the weight and reps actually lifted (an estimated max from a 12-rep
   // belt squat says little, and machines differ from gym to gym).
-  const mainLift = !!liftFamily(activeEx);
+  const mainLift = competitionLike;
   const latestSession = sessions.length ? sessions[sessions.length - 1] : null;
   const maxes = useMemo(() => repMaxes(series?.points ?? []).slice(0, 6), [series]);
   const effortChange = useMemo(() => sameLoadEffortChange(sessions), [sessions]);
@@ -553,7 +557,7 @@ export function LiftProgressCard({
             />
           </div>
 
-          {maxes.length > 0 && !bare && (
+          {maxes.length > 0 && (!bare || detailed) && (
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
                 Heaviest weight for each rep count
@@ -568,7 +572,7 @@ export function LiftProgressCard({
                     <span className="text-[11px] font-bold text-muted-foreground">
                       {m.reps} rep{m.reps === 1 ? "" : "s"}
                     </span>
-                    <span className="text-sm font-bold tabular-nums">{fmtLoad(m.load)}</span>
+                    <span className="text-sm font-bold tabular-nums">{dualLoad(m.load, displayUnit).main}</span><span className="text-[10px] text-muted-foreground">{dualLoad(m.load, displayUnit).other}</span>
                   </span>
                 ))}
               </div>
@@ -607,7 +611,7 @@ export function LiftProgressCard({
           {velocityInsight}
           </details>
 
-          {!single && !bare && (
+          {!single && (!bare || detailed) && (
           <div>
             <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
               Workouts
