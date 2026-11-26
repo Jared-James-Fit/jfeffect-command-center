@@ -47,6 +47,12 @@ const dayChange = rxSchema.extend({
 
 export const CLEO_ACTION_PARAMS = {
   update_meet_from_attachment: meetIntakeParams,
+  update_client_identity: z.object({
+    client_id: uuid,
+    first_name: z.string().trim().min(1).max(100).optional(),
+    last_name: z.string().trim().min(1).max(100).optional(),
+    preferred_name: z.string().trim().min(1).max(100).nullable().optional(),
+  }).refine(p => (p.first_name !== undefined && p.last_name !== undefined) || (p.first_name === undefined && p.last_name === undefined && p.preferred_name !== undefined), "Provide both verified name parts, or only the preferred name."),
   create_task: z.object({
     title: z.string().trim().min(1).max(200),
     notes: z.string().trim().max(2000).optional(),
@@ -191,6 +197,7 @@ export function isCleoActionKind(v: unknown): v is CleoActionKind {
 
 /** Card heading and the tool description Cleo sees. */
 export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: string }> = {
+  update_client_identity: { title: "Update client name", tool: "Actually update a client's profile identity (first and last name, or preferred name). Use when staff ask to correct a name, including from a client competition document. Read the selected client's file and the named source first; never infer a missing surname or guess a client ID. For a full name supply both verified name parts, preserving the preferred nickname unless explicitly asked to change it. If name parts or identity are ambiguous, ask. Do not use for login email, password, permissions or account status." },
   update_meet_from_attachment: { title: "Update competition logistics", tool: "Update the existing competition record from a schedule attachment. First resolve the exact client and competition using competition_intake_matches. Never guess an ID, never use a coach note instead, omit uncertain fields, and flag conflicting existing values before confirming. Times are local 24-hour HH:MM. If multiple accounts or meets match, ask the coach to choose." },
   create_task: { title: "Add a task", tool: "Add a task to the team board." },
   complete_task: { title: "Complete a task", tool: "Mark a task on the team board done (task ids are in OPEN TASKS)." },
@@ -241,6 +248,7 @@ export type ActionRule = {
 };
 
 export const CLEO_ACTION_RULES: Record<CleoActionKind, ActionRule> = {
+  update_client_identity: { need: "client", approvable: true },
   update_meet_from_attachment: { need: "client", approvable: true },
   create_task: { need: "tasks", approvable: false },
   complete_task: { need: "tasks", approvable: false },

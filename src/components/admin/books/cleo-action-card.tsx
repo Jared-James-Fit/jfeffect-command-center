@@ -84,6 +84,12 @@ export function CleoActionCard({
     try {
       const r: any = await decide({ data: { id: action.id, decision } });
       if (r?.status === "done") {
+        if (action.kind === "update_client_identity") {
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["client"] }),
+            qc.invalidateQueries({ queryKey: ["clients"] }),
+          ]);
+        }
         toast.success(r.result ?? "Done", action.link && onOpen ? { action: { label: "Open", onClick: () => onOpen(action.link!.href) } } : undefined);
       }
       else if (r?.status === "failed") toast.error(r.error ?? "That didn't work");
