@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, Copy, ExternalLink, Plus, Star, Users } from "lucide-react";
+import { ChevronRight, ChevronDown, Copy, ExternalLink, Plus, Star, Users, Utensils } from "lucide-react";
 import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
@@ -111,6 +111,10 @@ function ClientsDirectoryPage() {
   const archiveFn = useServerFn(archiveClient);
   const [archiveTarget, setArchiveTarget] = useState<DirectoryRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [nutritionOpen, setNutritionOpen] = useState(true);
+  useEffect(() => {
+    try { setNutritionOpen(window.localStorage.getItem("jf:nutrition-directory-open") !== "false"); } catch { /* optional */ }
+  }, []);
 
   const lifecycle = search.lifecycle ?? "active";
   const isActiveLifecycle = lifecycle === "active";
@@ -128,6 +132,7 @@ function ClientsDirectoryPage() {
     coachId: search.coachId ?? null,
     sort: search.sort,
     lifecycle,
+    separateNutrition: !starredMode,
   };
   const paged = useQuery({
     queryKey: ["clients-directory", clientSearch],
@@ -149,7 +154,7 @@ function ClientsDirectoryPage() {
     if (!starredMode) return paged.data;
     if (!whole.data) return undefined;
     const arranged = arrangeStarred(whole.data.rows, stars.ids, starredMode);
-    return { rows: pageOf(arranged, search.page, search.size), total: arranged.length, counts: whole.data.counts };
+    return { rows: pageOf(arranged, search.page, search.size), total: arranged.length, counts: whole.data.counts, nutritionRows: [] as DirectoryRow[] };
   }, [starredMode, paged.data, whole.data, stars.ids, search.page, search.size]);
   const active = starredMode ? whole : paged;
   const { isFetching, isError, refetch } = active;
@@ -229,6 +234,8 @@ function ClientsDirectoryPage() {
   const counts = data?.counts;
   const total = data?.total ?? 0;
   const rows = data?.rows ?? [];
+  const nutritionRows = data?.nutritionRows ?? [];
+  const visibleTotal = total + nutritionRows.length;
   // A row names the client's coach only when there's more than one coach to tell apart.
   const showCoach = isAdmin && (coaches as unknown[]).length > 1;
 
@@ -246,9 +253,9 @@ function ClientsDirectoryPage() {
     ? null
     : isFetching && !data
       ? "Loading…"
-      : total === 0
+      : visibleTotal === 0
         ? "No matches"
-        : `${total} result${total === 1 ? "" : "s"}`;
+        : `${visibleTotal} result${visibleTotal === 1 ? "" : "s"}`;
 
   const teamCount = teamData?.members.length;
 
@@ -320,7 +327,7 @@ function ClientsDirectoryPage() {
           match={match}
           lifecycle={lifecycle}
           counts={counts}
-          total={total}
+          total={visibleTotal}
           loading={isFetching && !data}
         />
 
@@ -342,6 +349,28 @@ function ClientsDirectoryPage() {
         )}
         {/* Handling stays on the same page but is no longer hidden under pagination. */}
         <HandlingDirectory search={search.search} />
+        {nutritionRows.length > 0 && (
+          <section className="rounded-2xl border border-border bg-card" data-nutrition-directory>
+            <button type="button" aria-expanded={nutritionOpen || !!search.search} onClick={() => {
+              const next = !nutritionOpen;
+              setNutritionOpen(next);
+              try { window.localStorage.setItem("jf:nutrition-directory-open", String(next)); } catch { /* optional */ }
+            }} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+              <Utensils className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-sm font-medium">Nutrition coaching <span className="font-normal text-muted-foreground">{nutritionRows.length}</span></span>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${nutritionOpen || search.search ? "rotate-180" : ""}`} />
+            </button>
+            {(nutritionOpen || !!search.search) && <ul className="space-y-2 border-t border-border p-2">
+              {nutritionRows.map((r) => (
+                <ClientRow key={r.id} r={r} showCoach={showCoach}
+                  onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined}
+                  starred={stars.isStarred(r.id)}
+                  onToggleStar={stars.canStar ? () => stars.toggle({ id: r.id, full_name: r.full_name, profile_picture_url: r.profile_picture_url }) : undefined}
+                />
+              ))}
+            </ul>}
+          </section>
+        )}
 
         {isError ? (
           <Card className="p-8 text-center">
@@ -352,7 +381,7 @@ function ClientsDirectoryPage() {
           <ul className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
           </ul>
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && nutritionRows.length > 0 ? null : rows.length === 0 ? (
           <EmptyState
             starred={starredMode === "only"}
             hasFilters={starredMode === "only" ? hasOtherFilters : hasActiveFilters}
