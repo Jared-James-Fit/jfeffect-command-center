@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { canAutoSaveHeadshot, submitCapture } from "@/lib/headshots/headshots.server";
+import { canAutoSaveHeadshot, recoverPendingHeadshot, submitCapture } from "@/lib/headshots/headshots.server";
 
 const passedChecks = { blink: { confirmed: true }, turn: { confirmed: true }, deviceProblems: [] };
 function fakeDb(status: string, method = "coach_assisted", commitError: string | null = null, flags: string[] = [], checks: any = null) {
@@ -14,9 +14,10 @@ function fakeDb(status: string, method = "coach_assisted", commitError: string |
     return { data: null, error: null };
   });
   const db = {
-    from: (table: string) => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === "clients" ? c : h }) }) }),
-    }),
+    from: (table: string) => {
+      const query = { eq: () => query, order: () => query, limit: () => query, maybeSingle: async () => ({ data: table === "clients" ? c : h }) };
+      return { select: () => query };
+    },
     storage: { from: () => ({ upload, download: async () => ({ data: new Blob(["photo"]), error: null }) }) },
     rpc,
   };
@@ -56,6 +57,21 @@ describe("account headshot persistence", () => {
     expect(canAutoSaveHeadshot("live", [], passedChecks)).toBe(false);
     expect(canAutoSaveHeadshot("guided", [], { ...passedChecks, turn: { confirmed: false } })).toBe(false);
     expect(canAutoSaveHeadshot("guided", [], { ...passedChecks, deviceProblems: ["faces"] })).toBe(false);
+  });
+  it("recovers an eligible old submission on account access, without waiting for a scheduled job", async () => {
+    const { db, rpc, c } = fakeDb("pending", "guided", null, ["exif"], passedChecks);
+    const client = { ...c, user_id: "actor", service_tier: "coaching", archived: false, status: "Active" } as any;
+    expect(await recoverPendingHeadshot(db, client)).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("commit_account_headshot", expect.objectContaining({ _automatic: true }));
+    expect(c.profile_picture_url).toBe("login/headshot-capture.jpg");
+  });
+  it("does not recover a pending capture from a different owner or with uncertain checks", async () => {
+    const { db, rpc, c } = fakeDb("pending", "guided", null, ["exif"], passedChecks);
+    expect(await recoverPendingHeadshot(db, { ...c, service_tier: "coaching", archived: false, status: "Active" } as any)).toBe(false);
+    const unsafe = fakeDb("pending", "guided", null, ["device_inconsistent"], passedChecks);
+    expect(await recoverPendingHeadshot(unsafe.db, { ...c, user_id: "actor", service_tier: "coaching", archived: false, status: "Active" } as any)).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(unsafe.rpc).not.toHaveBeenCalled();
   });
   it("recognizes an already saved capture after a lost response", async () => {
     const { db, rpc } = fakeDb("accepted");
