@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS public.competition_handling (
   access_ends_on date,
   -- the personalized invite: only its hash is kept
   invite_token_hash text UNIQUE CHECK (invite_token_hash IS NULL OR invite_token_hash ~ '^[0-9a-f]{64}$'),
+  -- the server works the token out again from this (only staff read it; a new nonce is a new link)
+  invite_nonce text CHECK (invite_nonce IS NULL OR char_length(invite_nonce) BETWEEN 8 AND 40),
   invite_expires_at timestamptz,
   invite_revoked_at timestamptz,
   invite_opened_at timestamptz,

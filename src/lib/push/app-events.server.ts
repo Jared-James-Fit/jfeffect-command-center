@@ -52,7 +52,11 @@ export type AppEvent =
   | "roadmap_checkin_due"
   | "roadmap_update_ready"
   | "competition_update_released"
-  | "competition_plan_released";
+  | "competition_plan_released"
+  // competition handling & preparation (competition/prep.server.ts)
+  | "meet_info_updated"
+  | "gameplan_suggested"
+  | "gameplan_approved";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -307,6 +311,27 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     body: (n) => `${n} has completed your game plan. Tap to review your attempts and the day.`,
     url: (_id, assessmentId) => `/portal/competition${assessmentId ? `?update=${assessmentId}` : ""}`, rateMinutes: 60,
   },
+  // The athlete sent or changed their meet details in a way that matters (athlete-info.ts infoChanges).
+  meet_info_updated: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n} updated their meet details`,
+    body: () => "Something that affects the gameplan changed. Tap to review it.",
+    url: (id) => `/admin/clients/${id}?tab=competition`, rateMinutes: 60,
+  },
+  // The athlete suggested a change to their approved gameplan (never applied by itself).
+  gameplan_suggested: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n} suggested a gameplan change`,
+    body: () => "Their approved plan stays as it is until you accept it. Tap to compare.",
+    url: (id) => `/admin/clients/${id}?tab=competition&section=gameplan`, rateMinutes: 60,
+  },
+  // The coach approved (a new version of) the athlete's gameplan.
+  gameplan_approved: {
+    to: "client", category: "workouts",
+    title: () => "Your meet gameplan is ready",
+    body: (n) => `${n} approved your attempts, warm-ups and timeline. Tap to confirm it.`,
+    url: () => `/portal/competition`, rateMinutes: 60,
+  },
   competition_update_released: {
     to: "client", category: "workouts",
     title: () => "Competition prep update",
@@ -390,6 +415,13 @@ export async function staffUserIdsForClient(admin: SupabaseClient, clientId: str
   }
   const { data: admins } = await admin.from("user_roles").select("user_id").eq("role", "admin");
   (admins ?? []).forEach((a: any) => a.user_id && ids.add(a.user_id));
+  // whoever is handling them at a competition right now (competition_handling)
+  const { data: handlers } = await admin
+    .from("competition_handling")
+    .select("handler_user_id")
+    .eq("client_id", clientId)
+    .not("status", "in", "(completed,cancelled)");
+  (handlers ?? []).forEach((h: any) => h.handler_user_id && ids.add(h.handler_user_id));
   return [...ids];
 }
 

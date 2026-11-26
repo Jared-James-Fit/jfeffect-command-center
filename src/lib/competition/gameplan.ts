@@ -107,16 +107,16 @@ export function readGameplan(raw: unknown): GameplanDoc {
     }
     const w = r.warmups?.[l];
     if (w && Array.isArray(w.rows)) {
+      const rows: WarmupRow[] = [];
+      for (const x of w.rows as any[]) {
+        const kgv = num(x?.kg, 0, 600);
+        const reps = num(x?.reps, 1, 30);
+        if (kgv == null || reps == null) continue;
+        rows.push({ kg: kgv, reps, minutesBefore: num(x?.minutesBefore, 0, 180), note: typeof x?.note === "string" ? x.note.slice(0, 120) : null });
+        if (rows.length >= 14) break;
+      }
       g.warmups[l] = {
-        rows: (w.rows as any[])
-          .map((x) => ({
-            kg: num(x?.kg, 0, 600),
-            reps: num(x?.reps, 1, 30),
-            minutesBefore: num(x?.minutesBefore, 0, 180),
-            note: typeof x?.note === "string" ? x.note.slice(0, 120) : null,
-          }))
-          .filter((x): x is WarmupRow => x.kg != null && x.reps != null)
-          .slice(0, 14),
+        rows,
         status: st(w.status),
         source: src(w.source),
       };

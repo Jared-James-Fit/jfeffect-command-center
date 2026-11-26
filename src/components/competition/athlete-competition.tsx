@@ -10,7 +10,7 @@
  * acknowledges anything for them.
  */
 import { useEffect, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Check, Trophy } from "lucide-react";
@@ -22,6 +22,9 @@ import { countdownWords, daysBetween, MILESTONE_BY_KIND } from "@/lib/competitio
 import { useClientImpersonation, useViewingAsClient } from "@/lib/client-impersonation";
 import { todayLocalISO } from "@/lib/today";
 import { AttemptsView, GameDayView, WarmupsView } from "./plan-views";
+import { AthleteMeet } from "./prep/athlete-meet";
+import { myMeetKey } from "./prep/meet-day-now";
+import { getMyMeetFn } from "@/lib/competition/handling.functions";
 import { cn } from "@/lib/utils";
 
 const fmt = (iso: string | null | undefined) =>
@@ -36,8 +39,19 @@ const fmt = (iso: string | null | undefined) =>
 const fmtWhen = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "";
 
-export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | null }) {
+export function AthleteCompetition({
+  focusUpdate,
+  focusMeet,
+  onboard,
+}: {
+  focusUpdate?: string | null;
+  /** a competition to open (a handling invite lands here) */
+  focusMeet?: string | null;
+  /** open its meet-details steps */
+  onboard?: boolean;
+}) {
   const read = useServerFn(getMyCompetitionsFn);
+  const readMeet = useServerFn(getMyMeetFn);
   const mark = useServerFn(markMyUpdateFn);
   const { client } = useClientImpersonation();
   const previewing = useViewingAsClient();
@@ -64,6 +78,18 @@ export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | nul
     .sort((a, b) => String(a.meet_date).localeCompare(String(b.meet_date)));
   const past = comps.filter((c) => c.status !== "upcoming");
   const ordered = [...upcoming, ...past];
+  // the meet preparation for each upcoming meet (the same reads AthleteMeet makes, shared by key):
+  // once a gameplan is approved, its numbers are the ones shown, never a second set
+  const meets = useQueries({
+    queries: upcoming.map((c) => ({
+      queryKey: myMeetKey(c.id, clientId),
+      queryFn: () => readMeet({ data: { competitionId: c.id, clientId } }),
+      staleTime: 60_000,
+    })),
+  });
+  const approvedFor = new Set(
+    upcoming.filter((_c, i) => !!(meets[i]?.data as any)?.plan).map((c) => c.id),
+  );
 
   // opening the page with an update on screen counts as opening it (never in a preview)
   const toOpen = useMemo(() => {
@@ -147,6 +173,15 @@ export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | nul
               ) : null}
             </div>
 
+            {c.status === "upcoming" ? (
+              <AthleteMeet
+                competitionId={c.id}
+                clientId={clientId}
+                previewing={previewing}
+                startOnboarding={!!onboard && focusMeet === c.id}
+              />
+            ) : null}
+
             {plan ? (
               <div
                 className="space-y-3 rounded-2xl border border-border bg-card p-4"
@@ -187,7 +222,7 @@ export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | nul
                     ))}
                   </ul>
                 ) : null}
-                {plan.athlete?.plan ? (
+                {plan.athlete?.plan && !approvedFor.has(c.id) ? (
                   <>
                     <div>
                       <h4 className="mb-2 text-[15px] font-semibold">Attempts</h4>
@@ -217,10 +252,6 @@ export function AthleteCompetition({ focusUpdate }: { focusUpdate?: string | nul
                   Saved on this phone, so it opens at the venue without signal.
                 </p>
               </div>
-            ) : c.status === "upcoming" ? (
-              <p className="rounded-2xl border border-dashed border-border p-4 text-[14px] text-muted-foreground">
-                Your game plan comes about two weeks out.
-              </p>
             ) : null}
 
             {others.length ? (
