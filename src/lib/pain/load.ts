@@ -146,6 +146,31 @@ export async function loadPainSessions(sb: any, clientId: string, tz: string | n
       names.set(r.day_id, list);
     }
   }
+  // each workout's training block, for "changes across blocks" (best effort)
+  const blockOfDay = new Map<string, { id: string; name: string }>();
+  try {
+    const weekOfDay = new Map<string, string>();
+    for (const ids of chunks(dayIds)) {
+      const { data } = await sb.from("pl_days").select("id, week_id").in("id", ids);
+      for (const d of data ?? []) if (d.week_id) weekOfDay.set(d.id, d.week_id);
+    }
+    const blockOfWeek = new Map<string, string>();
+    for (const ids of chunks([...new Set(weekOfDay.values())])) {
+      const { data } = await sb.from("pl_weeks").select("id, block_id").in("id", ids);
+      for (const w of data ?? []) if (w.block_id) blockOfWeek.set(w.id, w.block_id);
+    }
+    const blockName = new Map<string, string>();
+    for (const ids of chunks([...new Set(blockOfWeek.values())])) {
+      const { data } = await sb.from("pl_blocks").select("id, name").in("id", ids);
+      for (const b of data ?? []) blockName.set(b.id, (b.name ?? "").trim() || "Block");
+    }
+    for (const [day, week] of weekOfDay) {
+      const block = blockOfWeek.get(week);
+      if (block) blockOfDay.set(day, { id: block, name: blockName.get(block) ?? "Block" });
+    }
+  } catch {
+    // without blocks, the rest of the history reads as before
+  }
   const fb = new Map<string, any>();
   for (const ids of chunks(completions.map((c) => c.id))) {
     const { data } = await sb.from("pl_workout_feedback").select("completion_id, session_rpe, review_version, sleep_bucket, recovery_today").in("completion_id", ids);
@@ -156,6 +181,7 @@ export async function loadPainSessions(sb: any, clientId: string, tz: string | n
     return {
       date: localDay(c.completed_at, tz),
       dayId: c.day_id,
+      block: blockOfDay.get(c.day_id) ?? null,
       exercises: names.get(c.day_id) ?? [],
       sessionRpe: f && (f.review_version ?? 0) >= 2 && f.session_rpe != null ? Number(f.session_rpe) : null,
       sleep: f?.sleep_bucket ?? null,
@@ -204,6 +230,38 @@ export async function loadDayExercises(sb: any, dayId: string): Promise<{ id: st
     if (!name || seen.has(name.toLowerCase())) continue;
     seen.add(name.toLowerCase());
     out.push({ id: r.exercise_id ?? null, name });
+  }
+  return out;
+}
+
+/**
+ * What they've trained lately (the last `days` days, newest first), so a
+ * description that names a lift from another day ("my hack squat") reads as
+ * their own exercise. Names and ids only; best effort.
+ */
+export async function loadRecentExercises(sb: any, clientId: string, days = 28): Promise<{ id: string | null; name: string }[]> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data: done } = await sb
+    .from("pl_day_completions")
+    .select("day_id, completed_at")
+    .eq("client_id", clientId)
+    .not("completed_at", "is", null)
+    .gte("completed_at", since)
+    .order("completed_at", { ascending: false })
+    .limit(40);
+  const dayIds = [...new Set(((done ?? []) as { day_id: string }[]).map((d) => d.day_id).filter(Boolean))];
+  if (!dayIds.length) return [];
+  const seen = new Set<string>();
+  const out: { id: string | null; name: string }[] = [];
+  for (const ids of chunks(dayIds)) {
+    const { data } = await sb.from("pl_exercise_rows").select("exercise_id, exercise_name_override, exercises(name)").in("day_id", ids).limit(1500);
+    for (const r of data ?? []) {
+      const name = (r.exercise_name_override || r.exercises?.name || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ id: r.exercise_id ?? null, name });
+      if (out.length >= 60) return out;
+    }
   }
   return out;
 }

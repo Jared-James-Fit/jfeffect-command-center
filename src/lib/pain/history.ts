@@ -52,6 +52,8 @@ export type PainEntry = {
   note: string | null;
   /** The place was read from their words, not picked. */
   inferred: boolean;
+  /** They answered "how bad?" with Unsure (Nov 26 2026): no number, and none stands in. */
+  unsure?: boolean;
 };
 
 export const WINDOW_DAYS = 84;
@@ -73,7 +75,7 @@ export type PainReportRow = {
   region: string;
   side: string | null;
   site?: string | null;
-  severity: string;
+  severity: string | null;
   score?: number | null;
   timing?: string[] | null;
   trigger: string | null;
@@ -102,6 +104,7 @@ export function entriesFromReports(rows: PainReportRow[]): PainEntry[] {
     site: siteOf(r.site) ? r.site! : null,
     severity: (["mild", "moderate", "severe"] as const).includes(r.severity as Severity) ? (r.severity as Severity) : null,
     score: typeof r.score === "number" ? r.score : null,
+    unsure: r.severity == null && typeof r.score !== "number",
     timing: ((r.timing ?? []) as Timing[]).filter((t) => ["during", "after", "rest", "movement"].includes(t)),
     trigger: (r.trigger as Trigger) ?? null,
     exerciseName: r.exercise_name ?? null,
@@ -285,6 +288,8 @@ export type PainArea = {
   sites: { site: string; count: number }[];
   /** The latest 0–10 (when the latest report had one). */
   latestScore: number | null;
+  /** The latest report said "not sure how bad". */
+  latestUnsure: boolean;
   /** When it hurts, across the recent reports. */
   timing: Timing[];
   /** Reasons the coach should look, most pressing first (empty = nothing to act on). */
@@ -433,6 +438,7 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
       feel,
       sites,
       latestScore: latest.score,
+      latestUnsure: !!latest.unsure,
       timing,
       reasons: REASON_ORDER.filter((r) => reasons.has(r)),
       minor,
@@ -511,6 +517,7 @@ export type FollowUp = {
   date: string;
   /** The spot it was about, when they picked one. */
   site: string | null;
+  side: PainSide | null;
   score: number | null;
   severity: Severity | null;
   trigger: Trigger | null;
@@ -545,5 +552,5 @@ export function followUpFor(
     }
   }
   if (!best) return null;
-  return { id: best.id, stored: best.stored, date: best.date, site: best.site, score: best.score, severity: best.severity, trigger: best.trigger, exerciseName: best.exerciseName, feel: best.feel };
+  return { id: best.id, stored: best.stored, date: best.date, site: best.site, side: best.side ?? null, score: best.score, severity: best.severity, trigger: best.trigger, exerciseName: best.exerciseName, feel: best.feel };
 }

@@ -99,7 +99,8 @@ export type PainReportInput = {
   side: PainSide | null;
   /** The exact spot on the body map (sites.ts), or null for the region in general. */
   site?: string | null;
-  severity: Severity;
+  /** Null (with no score) when they said they're not sure how bad (Nov 26 2026). */
+  severity: Severity | null;
   /** 0–10 (the review from Nov 21 2026); older reports have only the severity. */
   score?: number | null;
   timing?: Timing[];
@@ -122,7 +123,8 @@ export const painReportSchema = z.object({
   region: z.string().refine((r) => REGION_SET.has(r), "Unknown body area"),
   side: z.enum(["L", "R"]).nullable(),
   site: z.string().max(40).refine((s) => SITE_KEYS.has(s), "Unknown spot").nullable().optional(),
-  severity: z.enum(["mild", "moderate", "severe"]),
+  // null: "not sure how bad" (score null too); an older app always sends one
+  severity: z.enum(["mild", "moderate", "severe"]).nullable(),
   score: z.number().int().min(0).max(SCORE_MAX).nullable().optional(),
   timing: z.array(z.enum(["during", "after", "rest", "movement"])).max(4).optional(),
   trigger: z.enum(["training", "exercise", "daily", "unsure"]).nullable().optional(),
@@ -142,6 +144,9 @@ export function severityLevel(s: Severity): number {
   return SEVERITIES.find((x) => x.v === s)?.level ?? 5;
 }
 
+/** What a place says when they weren't sure how bad (never a number standing in for one). */
+export const UNSURE_WORDS = "Not sure how bad";
+
 /** A stored 1–10 level as a word (the review stored 3 / 5 / 8; anything older reads by band). */
 export function severityOf(level: number | null | undefined): Severity | null {
   if (level == null) return null;
@@ -157,7 +162,7 @@ export function severityRank(s: Severity | null | undefined): number {
   return s ? RANK[s] : 0;
 }
 
-/** The worst place, for the review's one pain_level. */
+/** The worst place, for the review's one pain_level (a place they weren't sure about counts as none). */
 export function worstSeverity(reports: Pick<PainReportInput, "severity">[]): Severity | null {
   let worst: Severity | null = null;
   for (const r of reports) if (severityRank(r.severity) > severityRank(worst)) worst = r.severity;
@@ -194,7 +199,7 @@ export function cleanReports(reports: PainReportInput[]): PainReportInput[] {
       region: r.region,
       side,
       site,
-      severity: score != null ? severityFromScore(score) : r.severity,
+      severity: score != null ? severityFromScore(score) : r.severity ?? null,
       score,
       timing,
       trigger,
@@ -213,8 +218,9 @@ export function cleanReports(reports: PainReportInput[]): PainReportInput[] {
 
 /** The review's legacy columns from the structured places: pain_area text and pain_level. */
 export function legacyColumns(reports: PainReportInput[]): { painArea: string | null; painLevel: number | null } {
-  // the worst place: its 0–10 when it has one, else its band's level (the column is 1–10, so a "none right now" is 1)
-  const levels = reports.map((r) => (typeof r.score === "number" ? r.score : severityLevel(r.severity)));
+  // the worst place: its 0–10 when it has one, else its band's level (the column is 1–10, so a "none right now" is 1);
+  // a place they weren't sure about has none, and with no rated place the review has none either
+  const levels = reports.flatMap((r) => (typeof r.score === "number" ? [r.score] : r.severity ? [severityLevel(r.severity)] : []));
   const level = levels.length ? Math.max(1, ...levels) : null;
   return {
     painArea: legacyAreaText(reports.map((r) => ({ region: r.region, side: r.side, note: r.note }))),

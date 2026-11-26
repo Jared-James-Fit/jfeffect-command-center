@@ -264,7 +264,7 @@ export function AiConsentInline({
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1 text-[13px] leading-snug">
           <p className="text-foreground">
-            {use ? `This ${use} using ${via}.` : `This uses ${via}.`} Only what this needs is sent, and only if you allow it. {AI_CONSENT_COPY.abroad}
+            {use ? `This ${use} using ${via}.` : `This uses ${via}.`} Only if you allow it; it may be processed outside Canada.
           </p>
           {!declined && <MoreToggle open={open} onToggle={() => setOpen((o) => !o)} />}
           {open && <AiConsentDetails className="mt-2" />}
