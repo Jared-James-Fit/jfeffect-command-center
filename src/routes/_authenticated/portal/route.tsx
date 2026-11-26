@@ -75,11 +75,11 @@ function PortalContent() {
             page — they must never lock the portal. See
             <SetupChecklistBanner /> in /portal/index.tsx. */}
         <Outlet />
-        {/* Popup gates run off the signed-in session, so in coach "View as
-            client" they'd show the coach's own popups/legal status — skip. */}
+        {/* The setup reminder uses the target account and existing read-only POV steps.
+            Keep session-owned popup gates below excluded from client previews. */}
+        {clientId && portalUserId && !tierLoading && <SetupChecklistBanner key={`${isImpersonating ? "pov" : "self"}:${clientId}:${portalUserId}`} clientId={clientId} userId={portalUserId} reminderOnly />}
         {!isImpersonating && (
           <>
-            {clientId && portalUserId && !tierLoading && <SetupChecklistBanner key={clientId} clientId={clientId} userId={portalUserId} reminderOnly />}
             <FormPopupGate />
             <HomeScreenSetupGate />
             {/* a screen's short tutorial on its first visit, once (server-side), and the hub's replays */}
