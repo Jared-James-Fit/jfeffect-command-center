@@ -168,7 +168,8 @@ export function rowStatusSummary(r: DirectoryRow): { primary: RowStatus | null; 
  */
 export function rowMetaLine(r: DirectoryRow, opts: { showCoach?: boolean; primary?: RowStatus | null } = {}): string {
   const parts: string[] = [];
-  if (r.coaching_type) parts.push(r.coaching_type);
+  if (r.service_kind === "nutrition") parts.push("Nutrition coaching");
+  else if (r.coaching_type) parts.push(r.coaching_type);
   if (opts.showCoach && r.coach_name) parts.push(`Coach ${r.coach_name.trim().split(/\s+/)[0]}`);
   if (opts.primary?.id !== "never_signed_in") parts.push(shortAgo(lastSeenChip(r).label));
   return parts.join(" · ");
