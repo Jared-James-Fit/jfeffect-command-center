@@ -198,6 +198,8 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     category: "Communication", parent: "Admin → Communication", roles: ADMIN, icon: Phone, hidden: true },
   { id: "sms-settings", label: "SMS Settings", to: "/admin/settings/sms",
     category: "Settings", parent: "Admin → Settings", roles: ADMIN, icon: Smartphone, hidden: true },
+  { id: "velocity-diagnostics", label: "Bar speed from videos", to: "/admin/settings/velocity",
+    category: "Settings", parent: "Admin → Settings", roles: ADMIN, icon: Activity, hidden: true },
   { id: "chat-gifs", label: "Chat GIFs", to: "/admin/chat-gifs",
     category: "Communication", parent: "Admin → Communication", roles: ADMIN, icon: Image, hidden: true },
   { id: "chat-sounds", label: "Chat Sounds", to: "/admin/chat-sounds",

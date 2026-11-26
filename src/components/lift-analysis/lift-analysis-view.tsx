@@ -1695,7 +1695,9 @@ function HowMeasured({ analysis: a }: { analysis: LiftAnalysis }) {
           Camera:{" "}
           {a.plate.view === "side"
             ? "side-on"
-            : `about ${Math.round(a.plate.offDeg)}° off side-on (corrected from the plate's shape)`}
+            : a.plate.view === "front"
+              ? "front-on (the plates seen edge-on: their height is the ruler)"
+              : `about ${Math.round(a.plate.offDeg)}° off side-on (corrected from the plate's shape)`}
           . Bar found {a.plate.source === "tap" ? "from your tap" : "on its own"}. Plate followed in{" "}
           {Math.round(a.quality.tracked * 100)}% of frames.
         </p>

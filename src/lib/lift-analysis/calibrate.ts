@@ -21,7 +21,8 @@ import type { TrackPoint } from "@/lib/lift-analysis/track";
 
 export const STANDARD_PLATE_MM = 450;
 
-export type View = "side" | "turned" | "tilted";
+/** "front": the plates seen edge-on (a stack front-on): only their height is a ruler, which it is at any yaw. */
+export type View = "side" | "turned" | "tilted" | "front";
 export type Calibration = {
   ok: boolean;
   plateMm: number;
@@ -64,7 +65,17 @@ export type RimSizeInput = {
    * of the travel say so; b is then the size at y0.
    */
   grad?: { y0: number; k: number };
+  /**
+   * The plate's height was measured edge-on (a stack front-on, estimate.ts):
+   * its width is the stack's thickness, not a view angle. Its height is still
+   * its true diameter (a yaw never changes it), so the vertical scale stands,
+   * with a little more uncertainty for the edge of a stack of mixed plates.
+   */
+  edgeOn?: boolean;
 };
+
+/** The extra relative uncertainty of a plate's height measured edge-on (smaller plates, a rounded stack edge). */
+export const EDGE_ON_REL = 0.03;
 
 export type PlateSize = {
   mm: number;
@@ -143,6 +154,26 @@ function fromSize(plate: PlateSize, size: RimSizeInput): Calibration {
   const { a, b } = size;
   const wide = Math.max(a, b);
   const ratio = Math.min(a, b) / wide;
+  if (size.edgeOn) {
+    const out: Calibration = {
+      ok: true,
+      plateMm: plate.mm,
+      mmPerPxX: plate.mm / (2 * b),
+      mmPerPxY: plate.mm / (2 * b),
+      a,
+      b,
+      ratio,
+      view: "front",
+      offDeg: 90,
+      relErr: Math.sqrt(plate.rel ** 2 + size.relB ** 2 + EDGE_ON_REL ** 2),
+      // sideways the bar's path front-on is its width across the lifter, scaled like its height
+      relErrX: Math.sqrt(plate.rel ** 2 + size.relB ** 2 + 0.1 ** 2),
+      frames: size.frames,
+      why: "ok",
+      faint: size.faint,
+    };
+    return b < 8 ? { ...out, ok: false, why: "plate_too_small" } : out;
+  }
   const view: View = ratio >= 0.96 ? "side" : a < b ? "turned" : "tilted";
   const offDeg = (Math.acos(Math.min(1, ratio)) * 180) / Math.PI;
   const viewY = view === "tilted" ? 0.4 * (1 - ratio) : view === "turned" ? 0.05 * (1 - ratio) : 0;
