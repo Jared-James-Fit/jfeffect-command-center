@@ -1,0 +1,24 @@
+name: Competition review checks
+on:
+  pull_request:
+    paths:
+      - 'src/components/competition/**'
+      - 'src/lib/competition/**'
+      - 'src/test/competition*'
+      - '.github/workflows/competition-review-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run test src/test/competition-handling-ui.test.tsx src/test/competition-handling.test.ts
+      - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
+        if: ${{ !cancelled() }}
+      - run: bun run build
+        if: ${{ !cancelled() }}

@@ -140,6 +140,7 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
       "id, name, meet_date, meet_end_date, status, is_primary, level, federation, weight_class, live, prep_id",
     )
     .eq("client_id", clientId)
+    .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
     .order("meet_date", { ascending: false });
   if (error) throw new Error(error.message);
   const list = (comps ?? []) as any[];
@@ -147,10 +148,12 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
   const today = todayWinnipeg();
   const pick =
     (competitionId && list.find((c) => c.id === competitionId)) ||
-    list.find((c) => c.is_primary && c.status === "upcoming") ||
     [...list]
-      .filter((c) => c.status === "upcoming")
-      .sort((a, b) => String(a.meet_date).localeCompare(String(b.meet_date)))[0] ||
+      .filter((c) => c.status === "upcoming" && String(c.meet_end_date ?? c.meet_date) >= today)
+      .sort((a, b) => String(a.meet_date).localeCompare(String(b.meet_date)) || Number(b.is_primary) - Number(a.is_primary))[0] ||
+    list.find((c) => c.status === "completed") ||
+    list.find((c) => c.status === "upcoming") ||
+    list.find((c) => c.status !== "archived") ||
     list[0] ||
     null;
   if (!pick) return { today, competitions: list, suggestions, selected: null };
@@ -277,6 +280,7 @@ export async function loadOverview(sb: Db, clientIds: string[] | null) {
     .from("competitions")
     .select("id, client_id, name, meet_date, meet_end_date, status, is_primary, level, live, watch")
     .in("status", ["upcoming", "completed"])
+    .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
     .gte("meet_date", today.slice(0, 4) + "-01-01")
     .order("meet_date")
     .limit(300);

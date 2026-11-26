@@ -55,30 +55,31 @@ export function PrepOverview({
   const go = act();
   return (
     <div className="space-y-3" data-prep-overview>
-      <section className="grid grid-cols-2 gap-2">
-        <div className="rounded-2xl border border-border bg-card p-4">
+      <section className="grid grid-cols-2 divide-x divide-border rounded-xl border border-border bg-card">
+        <div className="min-w-0 p-3">
           <p className="text-[12px] text-muted-foreground">Countdown</p>
           <p className="text-[22px] font-semibold leading-tight" data-countdown>
             {countdown(prep.today, String(comp.meet_date))}
           </p>
           <p className="text-[12.5px] text-muted-foreground">{dayWords(String(comp.meet_date))}</p>
         </div>
-        <button type="button" onClick={() => onSection("checklist")} className="rounded-2xl border border-border bg-card p-4 text-left hover:bg-muted/30">
-          <p className="text-[12px] text-muted-foreground">Readiness</p>
+        <button type="button" onClick={() => onSection("checklist")} className="min-w-0 p-3 text-left hover:bg-muted/30">
+          <p className="text-[12px] text-muted-foreground">Checklist readiness</p>
           <ReadinessWord verdict={prep.readiness.verdict} className="text-[22px] leading-tight" />
           <p className="text-[12.5px] text-muted-foreground">{prep.readiness.line}</p>
         </button>
       </section>
 
-      <section className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4" data-prep-recommendation>
+      <section className="flex items-start gap-2 rounded-xl border border-border bg-card p-3" data-prep-recommendation>
         <CleoAvatar size="sm" />
         <div className="min-w-0 flex-1">
-          <p className="text-[14.5px] leading-snug">{r.text}</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Next recommendation</p>
+          <p className="text-[14px] leading-snug">{r.text}</p>
           {r.why ? <p className="text-[12.5px] text-muted-foreground">{r.why}</p> : null}
         </div>
         {go ? (
           <Button size="sm" variant="outline" onClick={go}>
-            Open
+            {r.action === "approve_plan" || r.action === "fix_plan" || r.action === "review_suggestion" ? "Review plan" : r.action === "checklist" ? "Checklist" : r.action === "schedule" ? "Timeline" : "Review"}
           </Button>
         ) : null}
       </section>

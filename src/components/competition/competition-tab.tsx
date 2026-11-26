@@ -13,9 +13,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CalendarClock, ChevronRight, Pencil, Plus, Trophy } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, ChevronRight, Pencil, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { EmptyState, ErrorState } from "@/components/loading";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import {
@@ -277,6 +278,7 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
         selected={comp}
         brief={brief}
         onPick={(id) => {
+          setAssessmentId(null);
           setCompetitionId(id);
           setSection("overview");
         }}
@@ -652,6 +654,12 @@ function Header({
   onEdit: () => void;
 }) {
   const days = brief?.daysOut;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const groups = [
+    { label: "Upcoming", items: competitions.filter((c) => c.status === "upcoming").sort((a, b) => String(a.meet_date).localeCompare(String(b.meet_date))) },
+    { label: "Past", items: competitions.filter((c) => c.status === "completed") },
+    { label: "Other competitions", items: competitions.filter((c) => !["upcoming", "completed"].includes(c.status)) },
+  ];
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
@@ -692,19 +700,9 @@ function Header({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {competitions.length > 1 ? (
-          <select
-            className="h-9 max-w-[220px] rounded-lg border border-input bg-background px-2 text-[13px]"
-            value={selected.id}
-            onChange={(e) => onPick(e.target.value)}
-            aria-label="Competition"
-          >
-            {competitions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} · {String(c.meet_date).slice(0, 10)}
-                {c.status !== "upcoming" ? ` (${c.status})` : ""}
-              </option>
-            ))}
-          </select>
+          <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} aria-label="Switch competition">
+            Switch meet <ChevronDown className="h-4 w-4" />
+          </Button>
         ) : null}
         <Button size="sm" variant="outline" onClick={onEdit} aria-label="Edit competition">
           <Pencil className="h-4 w-4" />
@@ -713,6 +711,33 @@ function Header({
           <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
+      <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
+        <SheetContent side="bottom" className="max-h-[80dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          <SheetHeader>
+            <SheetTitle>Competitions</SheetTitle>
+            <SheetDescription>Choose the meet you want to review.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-3 space-y-4" data-competition-picker>
+            {groups.filter((g) => g.items.length).map((g) => (
+              <section key={g.label}>
+                <h3 className="mb-1 text-xs font-medium text-muted-foreground">{g.label}</h3>
+                <div className="divide-y divide-border">
+                  {g.items.map((c) => (
+                    <button key={c.id} type="button" aria-pressed={c.id === selected.id} onClick={() => { setPickerOpen(false); onPick(c.id); }} className="flex min-h-12 w-full items-center gap-3 py-3 text-left">
+                      <Trophy className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words text-sm font-medium">{c.name}</span>
+                        <span className="block text-xs text-muted-foreground">{[fmtDate(c.meet_date), c.weight_class ? String(c.weight_class).replace(/\s*kg$/i, "") + " kg" : null, c.status !== "upcoming" ? c.status : null].filter(Boolean).join(" · ")}</span>
+                      </span>
+                      {c.id === selected.id ? <Check className="h-4 w-4 shrink-0 text-success" /> : null}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
       {typeof days === "number" ? <span className="sr-only">{countdownWords(days)}</span> : null}
     </div>
   );
