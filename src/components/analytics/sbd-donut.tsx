@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/today";
 import { COMP_LIFTS, COMP_LIFT_LABEL, type CompLift, type MeetResult } from "@/lib/analytics/competition-strength";
-import type { LiftStrength } from "@/lib/analytics/lift-strength";
+import { liftStrengths, type LiftStrength } from "@/lib/analytics/lift-strength";
 import type { BodyweightPoint } from "@/lib/bodyweight";
 import { currentRing, competitionRing, gymRingRecords, gymRingBests, officialClass, ringTotal, type RingLifts } from "@/lib/analytics/performance-ring";
 import { normalizeWeights, weightReferences, weightContextAt, weightPeriods } from "@/lib/analytics/weight-context";
@@ -65,12 +65,14 @@ export function SbdDonut({
   const [comparePick, setComparePick] = useState("latest");
   const [compareA, setCompareA] = useState("current");
   const [allowMixed, setAllowMixed] = useState(false);
+  const [customStart,setCustomStart]=useState("");
+  const [customEnd,setCustomEnd]=useState("");
   const scouting = useMemo(() => lifterProfile(meets, sex), [meets, sex]);
   const weights = useMemo(() => normalizeWeights(bodyweights), [bodyweights]);
   const refs = useMemo(() => weightReferences(meets, sex), [meets, sex]);
   const bw = useMemo(() => weightContextAt(weights, refs, today), [weights, refs, today]);
   const timeline = useMemo(() => (historyOpen || compareOpen) ? weightPeriods(weights, refs) : [], [weights, refs, historyOpen, compareOpen]);
-  const projection = useMemo(() => currentRing(strength, today), [strength, today]);
+  const projection = useMemo(() => currentRing(strength, today, meets, bw.category?.label), [strength, today, meets, bw.category?.label]);
   const gymRecords = useMemo(() => (view === "gym" || compareOpen) ? gymRingRecords(results, strength, weights, refs, today) : [], [view, compareOpen, results, strength, weights, refs, today]);
   const options = view === "competition" ? classes(meets.map(officialClass)) : classes(gymRecords.map((x) => x.classLabel));
   const unknown = view === "competition" ? meets.some((m) => !officialClass(m)) : gymRecords.some((r) => !r.classLabel);
@@ -93,19 +95,22 @@ export function SbdDonut({
   const sum = ringTotal(lifts);
   const selectedKind = view === "current" ? "projected" : view === "competition" && meetPick !== "individual" ? "official" : view === "gym" && metric === "estimated" ? "estimated" : "actual";
   const selectedVersion: PerformanceVersion = {key:"selected",label:title,kind:selectedKind,lifts,totalLb:total,end:view==="current"?today:competition.meet?.date,bodyweightKg:view==="current"?bw.averageKg: view==="competition"&&competition.meet?.bodyweightLb?competition.meet.bodyweightLb/LB_PER_KG:null,category:view==="current"?bw.category?.label:classFilter==="all"?null:classFilter};
-  const compareChoices: PerformanceVersion[] = compareOpen ? [
+  const comparePeriods=[...timeline.map(p=>({id:"weight:"+p.start,name:p.category,start:p.start,end:p.end})),...periods,...(customStart&&customEnd&&customEnd>=customStart&&customEnd<=today?[{id:"custom",name:"Custom period",start:customStart,end:customEnd}]:[])];
+  const historicalProjections=useMemo<PerformanceVersion[]>(()=>{if(!compareOpen)return [];const options=comparePeriods.filter(p=>p.end<today).slice(0,8);return options.map(p=>{const historicalMeets=meets.filter(m=>m.date<=p.end);const context=weightContextAt(weights,refs,p.end);const read=liftStrengths(results,historicalMeets,p.end);const projection=currentRing(read,p.end,historicalMeets,context.category?.label);return {key:p.id+":projection",label:p.name+" · projection on "+p.end,kind:"projected",lifts:projection.lifts,totalLb:projection.totalLb,end:p.end,bodyweightKg:context.averageKg,category:context.category?.label}}).filter(v=>v.totalLb!=null);},[compareOpen,results,meets,weights,refs,today,periods,timeline,customStart,customEnd]);
+  const compareChoices: PerformanceVersion[] = compareOpen ? ([
     selectedVersion,
-    {key:"current",label:"Current projection",kind:"projected",lifts:projection.lifts,totalLb:projection.totalLb,end:today,bodyweightKg:bw.averageKg,category:bw.category?.label},
+    {key:"current",label:"Current projection",kind:"projected" as const,lifts:projection.lifts,totalLb:projection.totalLb,end:today,bodyweightKg:bw.averageKg,category:bw.category?.label},
     ...meets.filter(m=>!m.event||m.event.toUpperCase()==="SBD").map(m=>({key:"meet:"+ (m.id??m.date+":"+m.name),label:(m.name??"Competition")+" · "+m.date,kind:"official" as const,lifts:competitionRing([m],"all","latest").lifts,totalLb:m.total,start:m.date,end:m.date,bodyweightKg:m.bodyweightLb?m.bodyweightLb/LB_PER_KG:null,category:officialClass(m)})),
     ...["all", ...classes(gymRecords.map(r=>r.classLabel))].flatMap(category=>(["actual","estimated"] as const).map(kind=>{
       const ls=gymRingBests(gymRecords,kind,category);
       return {key:"gym:"+category+":"+kind,label:(category==="all"?"All-time":category)+" · "+(kind==="actual"?"gym singles":"gym e1RM"),kind,lifts:ls,totalLb:ringTotal(ls),category};
     })),
-    ...[...timeline.map(p=>({id:"weight:"+p.start,name:p.category,start:p.start,end:p.end})),...periods].flatMap(p=>(["actual","estimated"] as const).map(kind=>{
+    ...historicalProjections,
+    ...comparePeriods.flatMap(p=>(["actual","estimated"] as const).map(kind=>{
       const ls=gymRingBests(gymRecords.filter(r=>r.day>=p.start&&r.day<=p.end),kind,"all");
       return {key:p.id+":"+kind,label:p.name+" · "+p.start+" – "+p.end+" · "+(kind==="actual"?"singles":"e1RM"),kind,lifts:ls,totalLb:ringTotal(ls),start:p.start,end:p.end};
     })),
-  ].filter(v=>COMP_LIFTS.some(l=>v.lifts[l]&&!v.lifts[l]?.stale)||v.key==="selected"||v.key==="current") : [];
+  ] as PerformanceVersion[]).filter(v=>COMP_LIFTS.some(l=>v.lifts[l]&&!v.lifts[l]?.stale)||v.key==="selected"||v.key==="current") : [];
   const versionA=compareChoices.find(c=>c.key===compareA)??compareChoices[0];
   const compatible=compareChoices.filter(c=>c.key!==versionA?.key&&!(c.kind==="projected"&&versionA?.kind==="projected"&&((c.key==="selected"&&versionA.key==="current")||(c.key==="current"&&versionA.key==="selected")))&&(allowMixed||c.kind===versionA?.kind));
   const comparison=compatible.find(c=>c.key===comparePick)??compatible[0];
@@ -210,6 +215,7 @@ export function SbdDonut({
           <SheetTitle>Compare performance</SheetTitle>
           <SheetDescription>Choose two versions. Gym bests may come from different sessions.</SheetDescription>
           <label className="text-xs text-muted-foreground">Version A<select className={selectStyle+" block w-full mt-1"} value={versionA?.key??""} onChange={e=>setCompareA(e.target.value)}>{compareChoices.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
+          <details className="text-xs"><summary className="min-h-9 cursor-pointer pt-2">Custom comparison period</summary><div className="grid grid-cols-2 gap-2"><label>From<input type="date" className={selectStyle+" block w-full"} value={customStart} onChange={e=>setCustomStart(e.target.value)}/></label><label>To<input type="date" max={today} className={selectStyle+" block w-full"} value={customEnd} onChange={e=>setCustomEnd(e.target.value)}/></label></div></details>
           <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={allowMixed} onChange={e=>setAllowMixed(e.target.checked)}/> Allow different evidence types (e.g. projected vs achieved)</label>
           <label className="text-xs text-muted-foreground">Version B<select className={selectStyle+" block w-full mt-1"} value={comparison?.key??""} onChange={e=>setComparePick(e.target.value)}>{!compatible.length&&<option value="">No comparable version</option>}{compatible.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
           {versionA && comparison ? <div className="space-y-3">
