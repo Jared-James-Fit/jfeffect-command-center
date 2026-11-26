@@ -144,7 +144,7 @@ function useHeadshotActions() {
 
 /* ---- the client's panel ---------------------------------------------------- */
 
-export function AccountHeadshotPanel({ clientId, clientName }: { clientId: string; clientName?: string }) {
+export function AccountHeadshotPanel({ clientId, clientName, bare = false }: { clientId: string; clientName?: string; bare?: boolean }) {
   const { data: v, isPending, isError, refetch } = useClientHeadshot(clientId);
   const actions = useHeadshotActions();
   const invalidate = useInvalidate();
@@ -152,17 +152,19 @@ export function AccountHeadshotPanel({ clientId, clientName }: { clientId: strin
   const [capture, setCapture] = useState(false);
   const [history, setHistory] = useState(false);
 
-  if (isPending) return <Card className="h-40 animate-pulse p-5" />;
+  // In a sheet (the Clients list's ⋯, the client header's ⋯) the panel sits bare: no card in a sheet.
+  const Wrap = bare ? "div" : Card;
+  if (isPending) return bare ? <div className="h-40 animate-pulse rounded-xl bg-muted" /> : <Card className="h-40 animate-pulse p-5" />;
   if (isError || !v)
     return (
-      <Card className="p-5">
+      <Wrap className={bare ? "" : "p-5"}>
         <p className="text-sm text-muted-foreground">Couldn't load the account headshot.</p>
         <Button size="sm" variant="outline" className="mt-2" onClick={() => void refetch()}>Try again</Button>
-      </Card>
+      </Wrap>
     );
 
   return (
-    <Card className="space-y-4 p-5" id="account-headshot" data-headshot-panel>
+    <Wrap className={bare ? "space-y-4" : "space-y-4 p-5"} id={bare ? undefined : "account-headshot"} data-headshot-panel>
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-[16px] font-semibold"><UserRound className="h-4 w-4 text-muted-foreground" /> Account headshot</h3>
         <HeadshotStatusChip status={v.status} />
@@ -292,7 +294,25 @@ export function AccountHeadshotPanel({ clientId, clientName }: { clientId: strin
           }}
         />
       )}
-    </Card>
+    </Wrap>
+  );
+}
+
+/**
+ * The account headshot in a sheet, so a retake is one tap from client management (the Clients
+ * list row's ⋯) and from the client's header ⋯, without opening the client's details.
+ */
+export function HeadshotSheet({ open, onOpenChange, clientId, clientName }: { open: boolean; onOpenChange: (o: boolean) => void; clientId: string; clientName?: string | null }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" swipeToClose className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] sm:mx-auto sm:max-w-[560px]" data-headshot-sheet>
+        <SheetHeader className="text-left">
+          <SheetTitle>{clientName || "Account headshot"}</SheetTitle>
+          <SheetDescription>Their private account headshot. Request one or a retake, approve one waiting, or take it with them.</SheetDescription>
+        </SheetHeader>
+        <div className="mt-3">{open && <AccountHeadshotPanel clientId={clientId} clientName={clientName ?? undefined} bare />}</div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

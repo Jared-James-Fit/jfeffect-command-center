@@ -19,6 +19,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { demoCrumbMessage, takeDemoCrumb } from "@/lib/demo-crumb";
+import { AccessRevocationWatch } from "@/components/pov/access-revocation-watch";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -1130,6 +1131,7 @@ export function AppShell({
         role={(role as AdminRole | null) ?? null}
       />
       <ClientPovQuickPicker />
+      <AccessRevocationWatch />
     </div>
     </TooltipProvider>
   );

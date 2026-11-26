@@ -438,8 +438,10 @@ export const bootstrapClientOccurrences = createServerFn({ method: "POST" })
       clientId = (c as any)?.id;
     }
     if (!clientId) return { ok: false, reason: "no_client" as const };
-    // the coach's recurring tasks (check-ins, reviews): never for a JF member
+    // the coach's recurring tasks (check-ins, reviews): never for a JF member; and only a client
+    // the caller can see (their own, or one they coach), since the rows are written as the server
     const { data: tierRow } = await context.supabase.from("clients").select("service_tier").eq("id", clientId).maybeSingle();
+    if (!tierRow) return { ok: false, reason: "no_client" as const };
     if ((tierRow as any)?.service_tier === "self_serve") return { ok: false, reason: "self_serve" as const };
 
     const { data: defs } = await context.supabase

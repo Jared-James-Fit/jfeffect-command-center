@@ -125,7 +125,12 @@ const CLIENT_COLS =
 export function peekClientQuery(clientId: string) {
   return queryOptions({
     queryKey: ["client-peek-record", clientId] as const,
-    queryFn: async () => must<PeekClientRecord>(await sb.from("clients").select(CLIENT_COLS).eq("id", clientId).maybeSingle(), "the client"),
+    // null (never an empty list) when this login can't read them: RLS hides a client who isn't theirs
+    queryFn: async (): Promise<PeekClientRecord | null> => {
+      const res = await sb.from("clients").select(CLIENT_COLS).eq("id", clientId).maybeSingle();
+      if (res.error) throw new Error(`Couldn't read the client: ${res.error.message ?? "unknown error"}`);
+      return (res.data as PeekClientRecord | null) ?? null;
+    },
     staleTime: 60_000,
     gcTime: 15 * 60_000,
   });

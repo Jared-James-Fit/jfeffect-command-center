@@ -105,7 +105,8 @@ export function velocityVerdict(a: LiftAnalysis): VelocityVerdict {
   if (!(a.quality.tracked >= ACCEPT_RULES.minTracked) || lostInside) reasons.add("plate_lost");
   const minRatio =
     a.plate.view === "turned" ? ACCEPT_RULES.minTurnedRatio : ACCEPT_RULES.minViewRatio;
-  if (Number.isFinite(a.plate.ratio) && a.plate.ratio < minRatio) reasons.add("camera_angle");
+  if (a.plate.view !== "front" && Number.isFinite(a.plate.ratio) && a.plate.ratio < minRatio)
+    reasons.add("camera_angle");
   for (const r of reps) {
     if (!r.complete) reasons.add("rep_incomplete");
     // a rep's mean needs both its ends and the bar seen rising across any hidden moment

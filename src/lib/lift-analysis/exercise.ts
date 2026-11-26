@@ -26,7 +26,12 @@ export function analysableExercise(
   if (!s.trim()) return false;
   if (NOT_A_BAR.test(s)) return false;
   if (MACHINE.test(s) && !SMITH.test(s)) return false;
-  return /\b(barbell|smith|trap bar|ez bar|larsen|spoto|floor press|pin press|jerks?)\b/i.test(s) || LIFT_FIRST.test(s) || LOWER_FIRST.test(s);
+  return (
+    /\b(barbell|smith|trap bar|ez bar|larsen|spoto|floor press|pin press|block press|board press|close[\s-]?grip press|jerks?)\b/i.test(s) ||
+    /\b(incline|decline)\b.*\bpress\b|\bpress\b.*\b(incline|decline)\b/i.test(s) ||
+    LIFT_FIRST.test(s) ||
+    LOWER_FIRST.test(s)
+  );
 }
 
 /** Explosive multi-phase lifts (and their pulls): read for bar path and peak bar speed, never a squat/deadlift-style mean. */
@@ -78,7 +83,7 @@ export function repDirection(name: string | null | undefined): "lower_first" | "
   const s = name ?? "";
   // "Romanian deadlift", "stiff-leg deadlift": lowered first even though they're deadlifts
   if (/\b(rdls?|romanian|stiff[\s-]?leg)\b/i.test(s)) return "lower_first";
-  if (/\b(bench|floor press|pin press|larsen)\b/i.test(s)) return "lower_first";
+  if (/\b(bench|floor press|pin press|larsen|block press|board press)\b/i.test(s) || INCLINE_PRESS.test(s)) return "lower_first";
   if (LIFT_FIRST.test(s)) return "lift_first";
   if (LOWER_FIRST.test(s)) return "lower_first";
   return null;
@@ -87,9 +92,12 @@ export function repDirection(name: string | null | undefined): "lower_first" | "
 /** Which of the three lifts the filming guide and the phase words speak to (pure). */
 export type GuideLift = "squat" | "bench" | "deadlift" | "other";
 
+/** An incline or decline press is a bench press at an angle (lowered to the chest first). */
+const INCLINE_PRESS = /\b(incline|decline)\b.*\bpress\b|\bpress\b.*\b(incline|decline)\b/i;
+
 export function guideLift(name: string | null | undefined): GuideLift {
   const s = name ?? "";
-  if (/\b(bench|floor press|larsen|spoto|pin press)\b/i.test(s)) return "bench";
+  if (/\b(bench|floor press|larsen|spoto|pin press|block press|board press)\b/i.test(s) || INCLINE_PRESS.test(s)) return "bench";
   if (/\b(dead\s?lifts?|dl|rack pulls?|block pulls?|rdls?|romanian)\b/i.test(s)) return "deadlift";
   if (/\bsquats?\b/i.test(s)) return "squat";
   return "other";

@@ -15,6 +15,13 @@ import { ownOrLinkedClient } from "@/lib/linked-client.server";
 
 type Staff = { isAdmin: boolean; coachId: string | null };
 
+/** The workspace's Google sync health and retries are the admin's (every client's sessions). */
+async function requireAdminStaff(supabase: any, userId: string): Promise<Staff> {
+  const staff = await requireStaff(supabase, userId);
+  if (!staff.isAdmin) throw new Error("Only the admin can manage the calendar sync.");
+  return staff;
+}
+
 async function requireStaff(supabase: any, userId: string): Promise<Staff> {
   const [{ data: roles }, { data: coach }] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
@@ -137,7 +144,7 @@ export const getScheduleSyncStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    await requireStaff(supabase, userId);
+    await requireAdminStaff(supabase, userId);
     const { supabaseAdmin: typedAdmin } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = typedAdmin as any; // generated types predate the sync columns
     const nowISO = new Date().toISOString();
@@ -160,7 +167,7 @@ export const retryFailedScheduleSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    await requireStaff(supabase, userId);
+    await requireAdminStaff(supabase, userId);
     const { supabaseAdmin: typedAdmin } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = typedAdmin as any; // generated types predate the sync columns
     await supabaseAdmin.from("pt_sessions").update({ gcal_attempts: 0 }).eq("gcal_dirty", true).gte("gcal_attempts", 5);

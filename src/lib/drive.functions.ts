@@ -275,14 +275,29 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     await assertCanUploadForClient(context, data.clientId);
     const supabaseAdmin = await getAdminClient();
     const { driveGetFile, driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await getDriveHelpers();
+    // The batch it joins must be this client's own.
+    if (data.submissionId) {
+      const { data: sub } = await (supabaseAdmin as any)
+        .from("media_submissions").select("client_id").eq("id", data.submissionId).maybeSingle();
+      if (!sub || sub.client_id !== data.clientId) throw new Error("That upload batch isn't this client's.");
+    }
     let meta: any = null;
     try {
       meta = await driveGetFile(data.driveFileId);
     } catch (err) {
       console.warn(`[drive] uploaded file ${data.driveFileId} could not be read back; saving fallback metadata`, err);
     }
+    // Only a file sitting in this client's own Drive folders is theirs to attach (never any file
+    // the workspace account owns), and only that one is ever shared by link.
+    const { data: folderRow } = await (supabaseAdmin as any)
+      .from("client_drive_folders").select("folder_id, subfolders").eq("client_id", data.clientId).maybeSingle();
+    const ownFolders = new Set<string>(
+      [folderRow?.folder_id, ...Object.values((folderRow?.subfolders ?? {}) as Record<string, string>)].filter(Boolean) as string[],
+    );
+    const inOwnFolder = !!meta?.parents?.some((p: string) => ownFolders.has(p));
+    if (meta && !inOwnFolder) throw new Error("That file isn't in this client's folder.");
     const settings = await loadSettings(context.supabase);
-    if (settings?.share_uploads_with_link) {
+    if (settings?.share_uploads_with_link && inOwnFolder) {
       await driveShareAnyoneReader(data.driveFileId);
     }
     const fileId = meta?.id ?? data.driveFileId;

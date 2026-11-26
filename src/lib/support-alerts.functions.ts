@@ -30,7 +30,8 @@ export const notifyCoachOfWorkoutFailure = createServerFn({ method: "POST" })
     // Resolve client. If not passed, look up by current user.
     let clientRow: any = null;
     if (data.client_id) {
-      const { data: c } = await supabaseAdmin
+      // read with the caller's own login: their own record, or a client they coach (never anyone's by id)
+      const { data: c } = await supabase
         .from("clients")
         .select("id, full_name, first_name, assigned_coach_id")
         .eq("id", data.client_id)

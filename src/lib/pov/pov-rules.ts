@@ -1,7 +1,8 @@
 /**
- * Account view ("view as") rules, pure. A staff member opens an account through a session the
- * server starts (admin_pov_start: who may, why, until when); it's view-only until they switch
- * edits on, and every page opened and every change made is kept on the session.
+ * Account view ("view as") rules, pure. A staff member opens an account in one tap through a
+ * session the server starts (admin_pov_start: an admin any account, a coach only their assigned
+ * clients, until when; no reason asked); it's view-only until they switch edits on, and every
+ * page opened and every change made (with its before and after values) is kept on the session.
  *
  * View-only is enforced twice: the server refuses any server call that isn't a read while the
  * view says view-only (src/start.ts, the same read rule as a team preview), and the browser stops
@@ -29,23 +30,13 @@ export type PovSession = {
   editUntil: string | null;
 };
 
-export type PovStartStatus = "ok" | "reason_required" | "confirm" | "no_two_step" | "not_found" | "ended";
+export type PovStartStatus = "ok" | "forbidden" | "confirm" | "no_two_step" | "not_found" | "ended";
 
-/** One-tap reasons (any reason can be typed instead). */
-export const POV_REASONS = [
-  "Support request",
-  "Check their program",
-  "Log a session",
-  "Review their nutrition",
-  "Fix their data",
-  "Check their billing or plan",
-] as const;
-
-/** The reason when the coach opens today's workout to log a session (it starts with edits on). */
-export const LOGGING_REASON = "Log a session";
+/** How a view ended, in the record's words (admin_pov_sessions.end_reason). */
+export type PovEndReason = "exit" | "switched" | "signed_out" | "closed" | "replaced" | "expired" | "interrupted" | "revoked" | string;
 
 /** Server calls that run the view itself: never refused, never recorded as a change. */
-export const POV_OWN_FNS = new Set(["startPovSessionFn", "setPovModeFn", "touchPovFn", "endPovFn", "povLogFn"]);
+export const POV_OWN_FNS = new Set(["startPovSessionFn", "setPovModeFn", "touchPovFn", "endPovFn", "povLogFn", "accessLogFn", "accessSessionFn"]);
 
 export type RequestKind = { kind: "read" | "write"; target: string | null };
 
@@ -118,16 +109,32 @@ export function povPath(pathname: string): string {
 /** What the start call's status means for the person starting it. */
 export function startStatusWords(status: PovStartStatus): string | null {
   switch (status) {
-    case "reason_required":
-      return "Say why you're opening their account.";
+    case "forbidden":
+      return "You don't have access to this account.";
     case "confirm":
-      return "Confirm it's you to switch on edits in a member's account.";
+      return "Confirm it's you to switch on edits in this account.";
     case "no_two_step":
-      return "Set up two-step sign-in (Account → Two-step sign-in) to edit inside someone's account.";
+      return "Set up two-step sign-in (Account → Two-step sign-in) to edit inside this account.";
     case "not_found":
       return "That account no longer exists.";
     case "ended":
       return "This account view has ended.";
+    default:
+      return null;
+  }
+}
+
+/** Why a view the staff member was in ended, said to them (null: they ended it themselves). */
+export function endedWords(reason: PovEndReason | null | undefined): string | null {
+  switch (reason) {
+    case "revoked":
+      return "Your access to this account was removed.";
+    case "expired":
+      return "Account views close after 4 hours.";
+    case "interrupted":
+      return "Account views close after 30 minutes away.";
+    case "replaced":
+      return "You opened another account.";
     default:
       return null;
   }

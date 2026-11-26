@@ -7,6 +7,7 @@ PSQL=${PSQL:-psql}
 DB=${DB:-virtual_names}
 T=supabase/tests/virtual-names
 M=supabase/migrations/20270602090000_virtual_account_names.sql
+R=supabase/migrations/20270602100000_virtual_likes_rollout.sql
 
 $PSQL -q -c "drop database if exists $DB" -c "create database $DB"
 run() {
@@ -25,3 +26,6 @@ apply $M
 apply $M   # twice: idempotent
 run $T/cases.sql
 run $T/scenario.sql
+apply $R
+apply $R   # twice: idempotent
+run $T/rollout.sql

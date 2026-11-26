@@ -4,6 +4,13 @@ import { classifyDbRequest, povPath, startStatusWords, timeLeft, POV_OWN_FNS } f
 import { STARTER_PERSONAS } from "@/lib/virtual-accounts/personas";
 
 const SQL = readFileSync("supabase/migrations/20270601090000_accounts_directory_badges_pov_virtual.sql", "utf8");
+// account views as they are now (one tap, no reason, admin-only record): the later migration
+const ACCESS = readFileSync("supabase/migrations/20270602110000_account_access_hardening.sql", "utf8");
+const accessBody = (name: string) => {
+  const start = ACCESS.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+  expect(start, `${name} exists`).toBeGreaterThan(-1);
+  return ACCESS.slice(start, ACCESS.indexOf("$$;", start));
+};
 const fnBody = (name: string) => {
   const start = SQL.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
   expect(start, `${name} exists`).toBeGreaterThan(-1);
@@ -34,7 +41,9 @@ describe("account view (View as): what counts as a change", () => {
     expect(classifyDbRequest("not a url", "POST")).toBeNull();
   });
   it("the view's own calls are never refused", () => {
-    for (const f of ["startPovSessionFn", "touchPovFn", "endPovFn", "setPovModeFn", "povLogFn"]) expect(POV_OWN_FNS.has(f)).toBe(true);
+    for (const f of ["startPovSessionFn", "touchPovFn", "endPovFn", "setPovModeFn", "povLogFn", "accessLogFn", "accessSessionFn"]) {
+      expect(POV_OWN_FNS.has(f)).toBe(true);
+    }
   });
   it("the access record keeps paths with ids and dates taken out", () => {
     expect(povPath("/portal/workouts/2026-11-26/2b3c4d5e-1111-2222-3333-444455556666")).toBe("/portal/workouts/:date/:id");
@@ -46,31 +55,42 @@ describe("account view (View as): what counts as a change", () => {
     expect(timeLeft("2026-11-26T14:05:00Z", now)).toBe("2h 5m");
     expect(timeLeft("2026-11-26T11:00:00Z", now)).toBe("Ended");
     expect(startStatusWords("ok")).toBeNull();
-    expect(startStatusWords("reason_required")).toMatch(/why/);
+    expect(startStatusWords("forbidden")).toMatch(/access/);
   });
 });
 
-describe("account view: the server decides who, why and until when", () => {
-  it("a reason is required, a coach reaches only their clients, other views end, it expires", () => {
-    const start = fnBody("admin_pov_start");
-    expect(start).toContain("reason_required");
-    expect(start).toContain("coached_client_ids()");
+describe("account view: the server decides who and until when, and asks nothing", () => {
+  it("no reason; an admin any account, a coach only their own; a refusal is recorded; other views end; it expires", () => {
+    const start = accessBody("admin_pov_start");
+    expect(start).not.toContain("reason_required");
+    expect(start).toContain("_reason text DEFAULT NULL");
+    expect(start).toContain("public._staff_can_reach(v_uid, _client_id)");
+    expect(start).toContain("_log_access_denial(v_uid, _client_id, 'view_as'");
+    expect(start).toContain("'status', 'forbidden'");
     expect(start).toMatch(/interval '30 minutes'/);
     expect(start).toMatch(/interval '4 hours'/);
-    expect(start).toContain("end_reason");
+    expect(start).toContain("end_reason = 'replaced'");
+    const reach = accessBody("_staff_can_reach");
+    expect(reach).toContain("public.has_role(_staff, 'admin')");
+    expect(reach).toContain("co.status = 'Active'");
   });
   it("editing a non-coaching account asks for two-step again; view-only never does", () => {
     const step = fnBody("_pov_needs_step_up");
     expect(step).toContain("service_tier = 'coaching'");
-    const mode = fnBody("admin_pov_set_mode");
+    const mode = accessBody("admin_pov_set_mode");
     expect(mode).toContain("_pov_step_up_state");
     expect(mode).toContain("interval '15 minutes'");
+    expect(mode).not.toContain("reason_required");
   });
-  it("every view, edit and block is recorded, and staff read only their own record", () => {
-    expect(SQL).toContain("kind IN ('start', 'view', 'edit_on', 'edit_off', 'write', 'blocked', 'end', 'expired')");
-    expect(SQL).toContain(
-      "ON public.admin_pov_sessions FOR SELECT TO authenticated\n  USING ((SELECT public.has_role((SELECT auth.uid()), 'admin')) OR staff_user_id = (SELECT auth.uid()));",
+  it("every view, edit, change and block is recorded, and only the admin reads the record", () => {
+    expect(ACCESS).toContain("kind IN ('start', 'view', 'edit_on', 'edit_off', 'write', 'blocked', 'change', 'end', 'expired', 'interrupted', 'revoked')");
+    expect(ACCESS).toContain(
+      'CREATE POLICY "Admins read account views" ON public.admin_pov_sessions FOR SELECT TO authenticated\n  USING ((SELECT public.has_role((SELECT auth.uid()), \'admin\'::app_role)));',
     );
+    expect(ACCESS).not.toMatch(/staff_user_id = \(SELECT auth\.uid\(\)\)\);/);
+    for (const fn of ["admin_access_log", "admin_access_session", "admin_pov_log"]) {
+      expect(accessBody(fn)).toContain("IF NOT public.has_role(auth.uid(), 'admin') THEN RAISE EXCEPTION 'Not allowed'");
+    }
   });
   it("the server middleware refuses non-read calls while a view is view-only", () => {
     const start = readFileSync("src/start.ts", "utf8");

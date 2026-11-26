@@ -530,3 +530,31 @@ export function painLine(f: PeekFeedback | null | undefined): string | null {
   const area = text(f.pain_area).split(/[;,|]/)[0]?.trim();
   return [area || "Pain", f.pain_level ? `${f.pain_level}/10` : null].filter(Boolean).join(" · ");
 }
+
+/**
+ * One exercise's state in the quick view, told apart at a glance: done (every set it asked for
+ * logged), partial (some), skipped (a workout that was trained left it with nothing), missed
+ * (the whole workout was missed), or still to come (nothing yet on a workout that isn't over).
+ */
+export type ExerciseState = "done" | "partial" | "skipped" | "missed" | "pending";
+
+export function exerciseState(
+  ex: Pick<PeekExercise, "setsPlanned" | "setsLogged" | "cardio">,
+  entry: Pick<PeekEntry, "status" | "date">,
+  todayIso: string,
+  workoutLogged: number,
+): ExerciseState {
+  const planned = ex.setsPlanned ?? 0;
+  if (ex.setsLogged > 0) return planned > 0 && ex.setsLogged < planned ? "partial" : "done";
+  if (entry.status === "missed") return "missed";
+  const over = entry.status === "done" || entry.status === "optional" || entry.date < todayIso;
+  // a workout that was trained and left this one empty; the day's cardio is its own thing
+  if (over && workoutLogged > 0 && !ex.cardio) return "skipped";
+  return "pending";
+}
+
+/** "Sets 1–3: 140 kg × 5 · RPE 8" → { sets: "1–3", text: "140 kg × 5 · RPE 8" } (the quick view's compact line). */
+export function splitLoggedLine(line: string): { sets: string | null; text: string } {
+  const m = /^Sets? ([\d–-]+): (.*)$/.exec(line);
+  return m ? { sets: m[1], text: m[2] } : { sets: null, text: line };
+}

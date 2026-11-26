@@ -132,6 +132,10 @@ const NOTE: Record<QualityNote, { title: string; tip: string }> = {
     title: "Reps edited",
     tip: "A rise you said isn't a rep is left out of the reps and the set's numbers.",
   },
+  estimated_track: {
+    title: "Estimated from this angle",
+    tip: "Read automatically: the end of the bar was followed by its picture and the plate's height (450 mm at any angle) is the ruler, so the speed is logged as an estimate (≈). Filming from the side at hip height measures it more closely.",
+  },
   implausible_scale: {
     title: "Couldn't trust the plate's size",
     tip: "The numbers it gave were impossible for a barbell, so no speeds are shown. If the biggest plate is smaller than 450 mm, set its size.",
@@ -159,6 +163,7 @@ export function shownNotes(a: LiftAnalysis): QualityNote[] {
     "short_track",
     "after_set",
     "reps_edited",
+    "estimated_track",
   ];
   return order.filter((n) => a.quality.notes.includes(n));
 }

@@ -36,3 +36,25 @@ Keep the unpublished frontend off production. Existing historical reads and manu
 ## Nov 25 2026 update: every read reaches the logger (T19)
 
 The "analysed but not on the set" bug had two causes: the phone read an unconfirmed plate in pixels only, and `_apply_video_velocity` demanded a confirmed diameter and an exact rep count. Now an unconfirmed plate is read as the standard 450 mm and the server logs the set's speed when the plate was confirmed, the load is 60 kg+, or every rep's range fits the movement at 450 mm (`plateCheck`); the logged reps may differ by one. Reads inside the strict limits are measurements, reads inside the tolerant limits (quality.ts `SPEED_RULES`) are estimates shown "≈". Olympic lifts, presses, rows and RDL variants are enqueued (Olympic lifts log mean peak speed). `20270527101300_velocity_always_on_the_set.sql` re-queues recent pixel-only and wrongly skipped jobs and re-applies stored accepted reads. Engine `bar-path/7`. Joint tracking stays on demand (Technique tab, ~24 MB model); it is not run in the background.
+
+## Server reader (Nov 26 2026)
+
+Set videos no longer depend on an open phone. `.github/workflows/velocity-worker.yml`
+runs `scripts/velocity-worker/worker.ts` every 30 minutes (and on demand from the
+Actions tab, "Run workflow"). It authenticates to `/api/public/hooks/velocity-worker`
+with the job's GitHub OIDC token; the hook verifies GitHub's signature and the
+repository, branch, workflow and runner claims (`src/lib/lift-analysis/worker-oidc.ts`).
+
+To check it:
+
+1. Settings → Bar speed from videos (`/admin/settings/velocity`): "Server reader · last
+   seen" updates on every poll; each video shows waiting / reading (with its stage) /
+   on the set / no speed (with why) / failed.
+2. Re-run one with "Read again". It is never offered for a person's own read or a speed
+   already on the set.
+3. Locally, without touching production: `DRY_JOBS=jobs.json PAGE_BUNDLE_DIR=… npx tsx
+   --tsconfig tsconfig.json scripts/velocity-worker/worker.ts` (jobs' `url` may be a local
+   path; commits are printed, not sent).
+4. Tests: `npx vitest run src/test/lift-analysis` (velocity-worker.test.ts covers the
+   token checks and the logging rule; estimate-front.test.ts reads a synthetic front-on
+   squat with a known answer).

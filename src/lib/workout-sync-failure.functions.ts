@@ -27,7 +27,8 @@ export const reportWorkoutSyncStuck = createServerFn({ method: "POST" })
 
     let clientRow: any = null;
     if (data.client_id) {
-      const { data: c } = await supabaseAdmin
+      // the caller's own login decides whose record this can be (their own, or a client they coach)
+      const { data: c } = await supabase
         .from("clients")
         .select("id, full_name, first_name, assigned_coach_id")
         .eq("id", data.client_id)
