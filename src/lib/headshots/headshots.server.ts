@@ -303,6 +303,20 @@ export async function submitCapture(
     await removeFiles(db, h.client_id, h.id);
     return { ok: false, reason, message: FAIL_WORDS[reason] };
   };
+  // A lost response or a transient approval error must not require taking a
+  // new photo. Only the original actor can retry this already-checked capture.
+  if (h.status === "pending") {
+    if (h.method === "coach_assisted" && args.staffAccepts) {
+      await decide(db, { headshotId: h.id, actor: args.actor, decision: "accept", note: null }, now);
+      return { ok: true, status: "accepted", flags: h.flags ?? [] };
+    }
+    return { ok: true, status: "pending", flags: h.flags ?? [] };
+  }
+  if (h.status === "accepted") {
+    const client = await clientById(db, h.client_id);
+    if (h.display_path && client?.profile_picture_url === h.display_path) return { ok: true, status: "accepted", flags: h.flags ?? [] };
+    return { ok: false, reason: "expired", message: FAIL_WORDS.expired };
+  }
   if (h.status !== "capturing") return { ok: false, reason: "expired", message: FAIL_WORDS.expired };
   if (new Date(h.expires_at).getTime() < now.getTime()) return fail("expired");
   const elapsed = now.getTime() - new Date(h.started_at).getTime();
@@ -375,7 +389,7 @@ export async function submitCapture(
   const coachAccepts = h.method === "coach_assisted" && !!args.staffAccepts;
   // one waiting per client: an older pending submission gives way to this one
   await (db as any).from("account_headshots").update({ status: "superseded" }).eq("client_id", h.client_id).eq("status", "pending");
-  const { error } = await (db as any)
+  const { data: submitted, error } = await (db as any)
     .from("account_headshots")
     .update({
       status: "pending",
@@ -390,12 +404,15 @@ export async function submitCapture(
       flags: uniqueFlags,
     })
     .eq("id", h.id)
-    .eq("status", "capturing");
+    .eq("status", "capturing")
+    .select("id")
+    .maybeSingle();
   if (error) {
     // the unique fingerprints: another submission got there first with these files
     if (/duplicate|unique/i.test(error.message)) return fail("replay");
     throw new Error(error.message);
   }
+  if (!submitted) throw new Error("This capture changed while saving. Retry save to check its status.");
   await logHeadshotEvent(db, { clientId: h.client_id, headshotId: h.id, actor: args.actor, kind: "submitted", detail: { method: h.method, flags: uniqueFlags } });
 
   if (coachAccepts) {
@@ -441,6 +458,10 @@ export async function decide(
 ): Promise<{ status: "accepted" | "declined" }> {
   const { data: h } = await (db as any).from("account_headshots").select("*").eq("id", args.headshotId).maybeSingle();
   if (!h) throw new Error("That headshot isn't there any more.");
+  if (h.status === "accepted" && args.decision === "accept") {
+    const c = await clientById(db, h.client_id);
+    if (h.display_path && c?.profile_picture_url === h.display_path) return { status: "accepted" };
+  }
   if (h.status !== "pending") throw new Error("That headshot was already reviewed.");
   const c = await clientById(db, h.client_id);
   if (!c) throw new Error("That client isn't there any more.");
@@ -458,39 +479,19 @@ export async function decide(
   const photo = await download(db, BUCKET, h.photo_path);
   if (!photo) throw new Error("The photo file is missing. Ask for a new one.");
   if (!c.user_id) throw new Error("This client has no login.");
-  const displayPath = `${c.user_id}/headshot-${now.getTime()}.jpg`;
-  const { error: upErr } = await db.storage.from(AVATARS).upload(displayPath, new Blob([photo as BlobPart], { type: "image/jpeg" }), { contentType: "image/jpeg", upsert: false });
+  // A stable, session-specific key lets us safely retry the same checked photo.
+  const displayPath = `${c.user_id}/headshot-${h.id}.jpg`;
+  const { error: upErr } = await db.storage.from(AVATARS).upload(displayPath, new Blob([photo as BlobPart], { type: "image/jpeg" }), { contentType: "image/jpeg", upsert: true });
   if (upErr) throw new Error(upErr.message);
-  const previous = c.profile_picture_url;
-  const { error: cErr } = await (db as any)
-    .from("clients")
-    .update({
-      profile_picture_url: displayPath,
-      profile_picture_updated_at: now.toISOString(),
-      profile_picture_updated_by: h.method === "coach_assisted" ? "coach" : "client",
-      profile_picture_source: h.method === "coach_assisted" ? "coach_assisted" : h.method === "guided" ? "camera_verified" : "camera_reviewed",
-      profile_picture_needs_update: false,
-      profile_picture_needs_update_at: null,
-      profile_picture_needs_update_reason: null,
-    })
-    .eq("id", c.id);
-  if (cErr) {
-    await db.storage.from(AVATARS).remove([displayPath]).catch(() => {});
-    throw new Error(cErr.message);
-  }
-  await (db as any).from("account_headshots").update({ status: "superseded" }).eq("client_id", c.id).eq("status", "accepted");
-  await (db as any)
-    .from("account_headshots")
-    .update({ status: "accepted", decided_by: args.actor, decided_at: now.toISOString(), decision_note: note, display_path: displayPath })
-    .eq("id", h.id);
-  await (db as any)
-    .from("account_headshot_requests")
-    .update({ resolved_at: now.toISOString(), resolved_headshot_id: h.id, snoozed_until: null })
-    .eq("client_id", c.id)
-    .is("resolved_at", null)
-    .is("cancelled_at", null);
-  await logHeadshotEvent(db, { clientId: c.id, headshotId: h.id, actor: args.actor, kind: "accepted", detail: { method: h.method, note } });
-  await removeOldDisplay(db, previous, displayPath);
+  // One DB transaction: no success unless the profile, decision and request
+  // have all persisted. Do not delete the staged file on an uncertain response.
+  const { data: committed, error: commitErr } = await (db as any).rpc("commit_account_headshot", {
+    _headshot: h.id, _actor: args.actor, _display_path: displayPath, _note: note, _decided_at: now.toISOString(),
+  });
+  if (commitErr) throw new Error(commitErr.message);
+  const saved = await clientById(db, c.id);
+  if (saved?.profile_picture_url !== displayPath) throw new Error("The account photo could not be verified. Retry save.");
+  await removeOldDisplay(db, typeof committed === "string" ? committed : null, displayPath);
   return { status: "accepted" };
 }
 
