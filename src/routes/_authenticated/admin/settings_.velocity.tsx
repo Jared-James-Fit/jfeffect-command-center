@@ -302,7 +302,7 @@ function Body({
         <p className="mt-1 text-sm text-muted-foreground">
           {waiting === 0
             ? "Nothing waiting."
-            : `${waiting} waiting${o.oldest_queued ? `, the oldest since ${ago(o.oldest_queued)}` : ""}. It runs every 30 minutes and keeps reading while videos arrive.`}
+            : `${waiting} waiting${o.oldest_queued ? `, the oldest since ${ago(o.oldest_queued)}` : ""}. It reads all the time and picks a new video up within a minute or two.`}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
           Body reads (joints for Technique): {o.pose_counts.done ?? 0} done
