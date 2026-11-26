@@ -405,7 +405,7 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
       const { requireClientAiConsent } = await import("@/lib/ai-consent/consent.server");
       await requireClientAiConsent(p.client_id);
       const { verifyCompetitionNameEvidence } = await import("@/lib/cleo-competition-evidence.server");
-      const file = await verifyCompetitionNameEvidence(actor.db, p);
+      const file = await verifyCompetitionNameEvidence(actor.db, { ...p, source_id: p.source_id, source_quote: p.source_quote });
       intakeMeta._identity_source = { id: file.id, name: file.file_name };
       summary += `\nSource: ${file.file_name ?? "Competition file"}`;
     }
