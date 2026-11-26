@@ -110,9 +110,11 @@ function MemberGates({ hasHandling, scopeReady }: { hasHandling: boolean; scopeR
   const { loading, hasAccess, accountType, status, subscriptionStatus } = useMemberAccess();
   const lapsed = !loading && accountType === "jf_member" && !hasAccess("app_membership");
   useEffect(() => {
-    if (isCoachingOnlyPath(pathname)) navigate({ to: "/portal", replace: true });
+    if (isCoachingOnlyPath(pathname) && !(pathname === "/portal/goals-setup" && hasHandling)) {
+      if (pathname !== "/portal/goals-setup" || scopeReady) navigate({ to: "/portal", replace: true });
+    }
     // the iPhone app opens no billing page: a lapsed member lands on Account there (native-purchases.ts)
-    else if (scopeReady && lapsed && !isImpersonating && !isLapsedMemberPath(pathname) && !(hasHandling && (pathname === "/portal" || pathname === "/portal/competition")))
+    else if (scopeReady && lapsed && !isImpersonating && !isLapsedMemberPath(pathname) && !(hasHandling && (pathname === "/portal" || pathname === "/portal/competition" || pathname === "/portal/goals-setup")))
       navigate({ to: (isNative() ? "/portal/account" : "/portal/membership") as any, replace: true });
   }, [pathname, lapsed, isImpersonating, navigate, hasHandling, scopeReady]);
   return (
