@@ -139,8 +139,10 @@ export function useRespondToChat() {
 export function useStartDirect() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, body }: { userId: string; body: string }) => {
-      const { data, error } = await db.rpc("chat_direct_start", { _user_id: userId, _body: body });
+    mutationFn: async ({ userId, body, staffClientId }: { userId: string; body: string; staffClientId?: string }) => {
+      const { data, error } = staffClientId
+        ? await db.rpc("chat_staff_direct_start", { _client_id: staffClientId, _body: body })
+        : await db.rpc("chat_direct_start", { _user_id: userId, _body: body });
       if (error) throw new Error(friendlyError(error.message));
       return data as { group_id: string; message_id: string; status: "request" | "active" };
     },
@@ -154,6 +156,8 @@ export function useStartDirect() {
         }
       })();
       qc.invalidateQueries({ queryKey: ["group-messages", r.group_id] });
+      qc.invalidateQueries({ queryKey: directThreadsKey });
+      qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
     },
   });
 }

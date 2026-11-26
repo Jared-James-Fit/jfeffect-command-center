@@ -43,7 +43,7 @@ function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
-type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string; recovery?: string; openipf?: string };
+type Search = { tab: TabKey; client?: string; sub?: string; support?: string; direct?: string; msg?: string; recovery?: string; openipf?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -59,6 +59,7 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
     const support = typeof raw?.support === "string" && UUID.test(raw.support) ? raw.support
       : ticket && UUID.test(ticket) ? ticket : undefined;
     if (support) return { tab: "messages", support };
+    if (typeof raw?.direct === "string" && UUID.test(raw.direct)) return { tab: "messages", direct: raw.direct };
     // the Recovery queue on one item (a push about a reply waiting for approval)
     if (typeof raw?.recovery === "string" && UUID.test(raw.recovery)) return { tab: "messages", recovery: raw.recovery };
     // OpenIPF's review (a push about athletes found on OpenIPF or new meets)
@@ -78,7 +79,7 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
 });
 
 function CommunicationWorkspace() {
-  const { tab, client, sub, support, msg } = Route.useSearch();
+  const { tab, client, sub, support, direct, msg } = Route.useSearch();
   const navigate = useNavigate();
   const viewportLockedTab = tab === "messages" || tab === "groups" || tab === "support";
   const { data: badgeCounts } = useAdminNavBadgeCounts();
@@ -172,7 +173,7 @@ function CommunicationWorkspace() {
           messenger header/sidebar to drift as the outer container scrolls. */}
       {viewportLockedTab && (
         <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialMessage={msg} initialSupport={support} embedded view="chats" />}
+          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialMessage={msg} initialSupport={support} initialDirect={direct} embedded view="chats" />}
           {tab === "groups" && <MessagesInbox key="groups" embedded view="groups" />}
           {tab === "support" && (
             <Suspense fallback={<TabFallback />}>

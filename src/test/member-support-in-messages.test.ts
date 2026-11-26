@@ -107,9 +107,12 @@ describe("Messages wiring", () => {
   const page = read("src/route-pages/_authenticated/admin/messages.tsx");
   const comm = read("src/routes/_authenticated/admin/communication.tsx");
 
-  it("a member never gets a coach-chat row: their row is their Support chat, and Message on their profile opens it", () => {
+  it("a member never gets a coaching workflow: their profile opens their personal chat, with Support separate", () => {
     expect(page).toContain('clients.filter((c) => (c as any).service_tier !== "self_serve")');
-    expect(page).toContain('const selectedIsMember = (selected as any)?.service_tier === "self_serve";');
+    expect(page).toContain('const selectedIsMember = selected?.service_tier === "self_serve";');
+    expect(page).toContain('const supportOpen = !!supportId;');
+    expect(page).toContain('<DirectChatView key={openDirect.group_id}');
+    expect(page).toContain('staffClientId={selected.id}');
     expect(page).toContain("<MemberSupportPane");
     expect(page).toContain('rpc("staff_support_threads")');
   });

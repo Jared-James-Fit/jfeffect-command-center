@@ -335,22 +335,24 @@ export function NewMessageSheet({
 
 /** Writing to someone new: what a request means, then the first message. */
 export function NewRequestView({
-  to, onBack, onSent,
+  to, onBack, onSent, staffClientId,
 }: {
   to: CommunityAuthor;
+  /** Authorized staff first message, not a community request. */
+  staffClientId?: string;
   onBack: () => void;
   onSent: (groupId: string) => void | Promise<void>;
 }) {
   const start = useStartDirect();
   const { data: follows } = useFollowState();
   // they follow you: it opens a chat, no request (the server decides; this is just the wording)
-  const direct = !!follows?.followers.includes(to.user_id);
+  const direct = !!staffClientId || !!follows?.followers.includes(to.user_id);
   const [text, setText] = useState("");
   const send = async () => {
     const body = text.trim();
     if (!body || start.isPending) return;
     try {
-      const r = await start.mutateAsync({ userId: to.user_id, body });
+      const r = await start.mutateAsync({ userId: to.user_id, body, staffClientId });
       setText("");
       await onSent(r.group_id);
     } catch (e: any) {
@@ -366,7 +368,7 @@ export function NewRequestView({
         <UserAvatar src={to.avatar_url} name={to.name} size={36} expandable={false} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold">{to.name}</div>
-          <div className="truncate text-[11px] text-muted-foreground">{direct ? "Follows you" : "New message request"}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{staffClientId ? "Direct message" : direct ? "Follows you" : "New message request"}</div>
         </div>
         <Button variant="ghost" size="icon" className="hidden h-8 w-8 md:inline-flex" onClick={onBack} aria-label="Cancel">
           <X className="h-5 w-5" />
@@ -375,7 +377,7 @@ export function NewRequestView({
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 text-center">
         <UserAvatar src={to.avatar_url} name={to.name} size={72} expandable={false} />
         <div className="mt-3 text-[17px] font-bold">{to.name}</div>
-        {direct ? (
+        {staffClientId ? null : direct ? (
           <div className="mt-4 max-w-sm rounded-2xl border border-border bg-secondary/30 p-4 text-left text-[13px] text-muted-foreground">
             <p><span className="font-semibold text-foreground">{to.name} follows you,</span> so this opens a chat straight away. No request to accept.</p>
           </div>
