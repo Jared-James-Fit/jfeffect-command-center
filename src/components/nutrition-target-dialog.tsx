@@ -40,6 +40,7 @@ import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
 import { publishNutritionPlanAtomic, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
 import { copyPlanDays, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
 import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
+import { manageScheduledNutrition, scheduledNutritionKey, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 
@@ -82,6 +83,7 @@ type Props = {
   initial?: any;
   /** A historical prescription copied into a new, unsaved editor. */
   copyFrom?: PlanRow;
+  scheduled?: ScheduledNutrition;
   /** New targets pre-filled from an AI nutrition plan (ignored when `initial` is set). */
   prefill?: {
     days: Day[];
@@ -98,7 +100,7 @@ type Props = {
   onSaved?: (targetId: string) => void;
 };
 
-export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved, copyFrom }: Props) {
+export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved, copyFrom, scheduled }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
@@ -124,7 +126,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     setPhaseSource(null);
     setPhaseFrom(null);
     setOpenDays([]);
-    if (initial) {
+    if (scheduled) {
+      setForm({ ...scheduled.payload, client_id: scheduled.client_id, start_date: scheduled.start_date, status: "Active" });
+      setDays(scheduled.days.map((d, i) => ({ ...d, sort_order: i })) as Day[]);
+      setPhasePicked(true);
+    } else if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {
         setDays((data ?? []) as Day[]);
@@ -172,11 +178,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         ? prefill.days.map((d, i) => ({ ...d, sort_order: i }))
         : DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
     }
-  }, [open, initial, clientId, prefill, copyFrom]);
+  }, [open, initial, clientId, prefill, copyFrom, scheduled]);
 
   // New targets start on the phase the client is actually working toward
   // (suggestTargetsPhase), never the default "Maintenance".
-  const suggestFor = open && !initial && !copyFrom ? (form?.client_id || clientId || null) : null;
+  const suggestFor = open && !initial && !copyFrom && !scheduled ? (form?.client_id || clientId || null) : null;
   const listRequests = useServerFn(listNutritionRequestsFn);
   const requestsQ = useQuery({
     queryKey: ["nutrition-requests", suggestFor],
@@ -329,9 +335,12 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     setDays(days.filter((_, idx) => idx !== i));
   };
 
-  const save = async () => {
+  const save = async (draftOnly = false) => {
     if (!form.client_id) return toast.error("Pick a client first");
-    if (form.status !== "Archived" && form.start_date > todayLocalISO()) return toast.error("Future plans cannot be published yet. Keep your current plan in place.");
+    const future = form.status !== "Archived" && form.start_date > todayLocalISO();
+    if (future && form.id) return toast.error("Build a new scheduled plan instead of moving the live plan.");
+    if ((scheduled || future) && form.status !== "Active") return toast.error("Choose Active for a scheduled plan.");
+    if (scheduled && !future && !draftOnly && !confirm("Publish this reviewed plan now? It replaces the current plan from today.")) return;
     setSaving(true);
     const payload: any = {
       client_id: form.client_id,
@@ -364,7 +373,24 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       delete rest.target_id;
       return { ...rest, notes: plainOrNull(rest.notes ?? null), sort_order: i };
     });
-    if (targetId) {
+    if ((future || draftOnly) && !targetId) {
+      try {
+        await manageScheduledNutrition(form.client_id, scheduled ?? null, "save", payload, days.map((d, i) => ({ ...dayPayload[i], cardio: d.cardio })));
+        void qc.invalidateQueries({ queryKey: scheduledNutritionKey(form.client_id) });
+        toast.success("Scheduled draft saved · current plan unchanged");
+        onOpenChange(false);
+      } catch (e: any) { toast.error(e?.message ?? "Couldn't save draft"); }
+      finally { setSaving(false); }
+      return;
+    }
+    if (scheduled) {
+      try {
+        const result = await manageScheduledNutrition(form.client_id, scheduled, "activate", payload, dayPayload);
+        targetId = result.targetId;
+        archived = result.archived ?? 0;
+        void qc.invalidateQueries({ queryKey: scheduledNutritionKey(form.client_id) });
+      } catch (e: any) { setSaving(false); return toast.error(e?.message ?? "Couldn't activate plan"); }
+    } else if (targetId) {
       // Save and history are one transaction. Do not fall back to the old
       // delete/insert sequence if the migration isn't present.
       const { error } = await (supabase as any).rpc("update_nutrition_plan_revision", {
@@ -437,7 +463,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-3xl sm:p-0" data-plan-editor>
         <DialogHeader className="shrink-0 space-y-0.5 border-b border-border py-2 pr-4 sm:pr-6">
-          <DialogTitle>{form.id ? "Edit nutrition plan" : "New nutrition plan"}</DialogTitle>
+          <DialogTitle>{scheduled ? "Review scheduled plan" : form.id ? "Edit nutrition plan" : "New nutrition plan"}</DialogTitle>
           <DialogDescription className="text-[13px]">
             {[phaseText, form.start_date ? (form.end_date ? `${format(parseISO(form.start_date), "MMM d")} – ${format(parseISO(form.end_date), "MMM d")}` : `from ${format(parseISO(form.start_date), "MMM d")}, ongoing`) : null].filter(Boolean).join(" · ")}
           </DialogDescription>
@@ -573,7 +599,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                         ))}
                       </div>
                       <DayNumbersCheck day={d} onUseCalories={(kcal) => updateDay(i, "calories", String(kcal))} />
-                      <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active"} />
+                      <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active" && form.start_date <= todayLocalISO()} />
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
                           <Label className="text-[13px] text-muted-foreground">Meals</Label>
@@ -717,7 +743,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <div className="flex shrink-0 gap-2 border-t border-border bg-background px-4 py-3 dark:bg-card sm:justify-end sm:px-6">
           <Button variant="outline" className="h-11 flex-1 sm:flex-none" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button className="h-11 flex-1 sm:flex-none" onClick={save} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Save plan"}</Button>
+          {scheduled && form.start_date <= todayLocalISO() && <Button variant="outline" disabled={saving} onClick={() => void save(true)}>Save draft</Button>}
+          <Button className="h-11 flex-1 sm:flex-none" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : form.start_date > todayLocalISO() && form.status !== "Archived" ? "Save scheduled draft" : scheduled ? "Publish now" : "Save plan"}</Button>
         </div>
       </DialogContent>
     </Dialog>
