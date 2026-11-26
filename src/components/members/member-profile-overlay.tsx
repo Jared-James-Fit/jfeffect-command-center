@@ -61,7 +61,7 @@ export function MemberProfileOverlayMount() {
     <DialogPrimitive.Root
       open={!!memberId && !linked.data?.clientId}
       onOpenChange={(open) => {
-        if (!open) {
+        if (!open && !linked.data?.clientId) {
           close();
           setTimeout(() => {
             const el = triggerRef.current as HTMLElement | null;

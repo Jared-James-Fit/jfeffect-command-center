@@ -110,6 +110,7 @@ export function MemberProfileWorkspace({
   const { data, isError, refetch } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
   const { data: levels = [] } = useQuery({
     queryKey: ["access-levels"],
+    enabled: !sectionOnly || initialTab === "access",
     queryFn: async () => (await supabase.from("access_levels").select("*").order("sort_order")).data ?? [],
   });
   const { data: smsRows = [] } = useQuery({
@@ -119,7 +120,8 @@ export function MemberProfileWorkspace({
       .eq("app_member_id", memberId)
       .order("created_at", { ascending: false })
       .limit(50)).data ?? [],
-    refetchInterval: 20000,
+    enabled: !sectionOnly || initialTab === "sms",
+    refetchInterval: !sectionOnly || initialTab === "sms" ? 20000 : false,
   });
 
   const member = data?.member;
@@ -132,7 +134,7 @@ export function MemberProfileWorkspace({
   if (isError) return <div className="p-4 text-sm">Could not load membership. <button className="underline" onClick={() => refetch()}>Retry</button></div>;
   if (!member) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["admin-member", memberId] });
+  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["admin-member", memberId] }), qc.invalidateQueries({ queryKey: ["client-member-link"] }), qc.invalidateQueries({ queryKey: ["admin-members"] })]);
   const acctLabel = (ACCOUNT_TYPES as any)[member.account_type]?.label ?? member.account_type;
 
   const accessActive = isMemberAccessActive(member);

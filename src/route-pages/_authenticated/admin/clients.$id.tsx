@@ -131,6 +131,15 @@ function TabFallback() {
   );
 }
 
+/** Membership controls are lazy and local to the relevant shared tab. */
+function MembershipWorkspaceSection({ memberId, section, label }: { memberId: string; section: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  return <details className="md:col-span-3 rounded-xl border bg-card p-4" onToggle={e => setOpen(e.currentTarget.open)}>
+    <summary className="cursor-pointer text-sm font-semibold">{label}</summary>
+    {open && <div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberId + ":" + section} memberId={memberId} initialTab={section} sectionOnly /></Suspense></div>}
+  </details>;
+}
+
 function SectionNav({ activeTab, onChange, heading, clientId, selfServe }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string; clientId?: string; selfServe?: boolean }) {
   return (
     <ClientWorkspaceTabs
@@ -701,7 +710,7 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
           <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} onSendSetup={sendSetup} onCopySetup={copySetupLink} onTextSetup={smsLink("setup")} memberSetup={memberLink.data} memberSetupUnknown={memberLink.isError} />
-          {memberLink.data && form.service_tier === "self_serve" && <Card className="md:col-span-3 p-4 flex items-center justify-between gap-3"><div><p className="text-xs text-muted-foreground">Membership</p><p className="text-sm font-semibold">{memberLink.data.type === "jf_member" ? "JF Membership" : memberLink.data.type === "program_only" ? "Program-only" : "App account"}</p><p className="text-xs text-muted-foreground">{memberLink.data.subscription || memberLink.data.status}</p></div><Button size="sm" variant="outline" onClick={() => setTab("account")}>Manage</Button></Card>}
+          {memberLink.data && form.service_tier === "self_serve" && <Card className="md:col-span-3 p-4 flex items-center justify-between gap-3"><div><p className="text-xs text-muted-foreground">Membership</p><p className="text-sm font-semibold">{memberLink.data.type === "jf_member" ? "JF Membership" : memberLink.data.type === "program_only" ? "Program-only" : "App account"}</p><p className="text-xs text-muted-foreground">{memberLink.data.subscription || memberLink.data.status} · Membership access {memberLink.data.accessActive ? "on" : "off"}</p></div><Button size="sm" variant="outline" onClick={() => setTab("account")}>Manage</Button></Card>}
           {memberLink.isError && form.service_tier === "self_serve" && <Card className="md:col-span-3 p-4 text-sm">Membership details couldn’t load. <button className="underline" onClick={() => memberLink.refetch()}>Retry</button></Card>}
           <ClientOverviewSnapshot
             form={form}
@@ -1001,7 +1010,7 @@ export function ClientProfileWorkspace({
 
 
         <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
-          {memberLink.data && <details className="md:col-span-3 rounded-xl border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Membership subscription</summary><div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberLink.data.id + ":subscription"} memberId={memberLink.data.id} initialTab="subscription" sectionOnly /></Suspense></div></details>}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="subscription" label="Membership subscription" />}
           <Suspense fallback={<TabFallback />}>
             <ClientBillingPanel clientId={id} onOpenSessions={() => setTab("sessions")} />
             <ClientSalesTable clientId={id} />
@@ -1015,7 +1024,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
-          {memberLink.data && <details className="md:col-span-3 rounded-xl border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Legacy membership notes</summary><div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberLink.data.id + ":notes"} memberId={memberLink.data.id} initialTab="notes" sectionOnly /></Suspense></div></details>}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="notes" label="Legacy membership notes" />}
           {/* Personal context: coach-only (relationship, work & lifestyle with sources, private notes, history) */}
           <Suspense fallback={<TabFallback />}>
             <SectionErrorBoundary label="Personal context">
@@ -1043,7 +1052,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="info" className={WORKSPACE_GRID_CLASS}>
-          {memberLink.data && <details className="md:col-span-3 rounded-xl border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Saved membership intake</summary><div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberLink.data.id + ":setup"} memberId={memberLink.data.id} initialTab="setup" sectionOnly /></Suspense></div></details>}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="setup" label="Saved membership intake" />}
           {/* the account headshot first: status, a photo waiting to review, request / retake (private reason), take it with them */}
           <div className="md:col-span-3">
             <Suspense fallback={<TabFallback />}>
@@ -1170,9 +1179,9 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
-          {memberLink.data && <details className="md:col-span-3 rounded-xl border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Membership SMS history</summary><div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberLink.data.id + ":sms"} memberId={memberLink.data.id} initialTab="sms" sectionOnly /></Suspense></div></details>}
-          {memberLink.data && <details className="md:col-span-3 rounded-xl border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Advanced membership settings</summary><div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberLink.data.id + ":summary"} memberId={memberLink.data.id} initialTab="summary" sectionOnly /></Suspense></div></details>}
-          {memberLink.data && <details className="md:col-span-3 rounded-xl border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Membership access and feature grants</summary><div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberLink.data.id + ":access"} memberId={memberLink.data.id} initialTab="access" sectionOnly /></Suspense></div></details>}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="sms" label="Membership SMS history" />}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="summary" label="Advanced membership settings" />}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="access" label="Membership access and feature grants" />}
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-muted-foreground">Login & Access</h3>
