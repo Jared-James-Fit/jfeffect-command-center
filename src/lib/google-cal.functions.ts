@@ -2,6 +2,24 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+/**
+ * Who may read the workspace Google Calendar: it's the owner's account, with every client's
+ * appointments on it, so its events and calendar list are the admin's; a coach gets busy times
+ * only (never a title, place or link), for their own coach record. Clients and members nothing.
+ */
+async function calendarReader(supabase: any, userId: string): Promise<"admin" | "coach" | null> {
+  const [{ data: admin }, { data: coach }] = await Promise.all([
+    supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+    supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+  ]);
+  return admin ? "admin" : coach ? "coach" : null;
+}
+
+async function ownCoachId(supabase: any, userId: string): Promise<string | null> {
+  const { data } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
+  return data?.id ?? null;
+}
+
 export const getGoogleConnectionStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -129,6 +147,8 @@ export const disconnectGoogle = createServerFn({ method: "POST" })
 export const listMyCalendars = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    if ((await calendarReader(supabase, userId)) !== "admin") throw new Error("Only the admin can see the workspace calendars");
     const { gcalListCalendars } = await import("./google-cal.server");
     // Let failures propagate so the UI can distinguish "list failed to load"
     // from "saved calendar is genuinely missing from the account".
@@ -168,11 +188,9 @@ export const listGoogleEventsRange = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    let coachId = data.coach_id ?? null;
-    if (!coachId) {
-      const { data: c } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
-      coachId = c?.id ?? null;
-    }
+    // event details (titles, places, Meet links) are the admin's; anyone else gets none
+    if ((await calendarReader(supabase, userId)) !== "admin") return [];
+    const coachId = data.coach_id ?? (await ownCoachId(supabase, userId));
     const { gcalListEvents } = await import("./google-cal.server");
     try {
       const events = await gcalListEvents(coachId, data.timeMin, data.timeMax);
@@ -194,11 +212,10 @@ export const getGoogleBusy = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    let coachId = data.coach_id ?? null;
-    if (!coachId) {
-      const { data: c } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
-      coachId = c?.id ?? null;
-    }
+    const reader = await calendarReader(supabase, userId);
+    if (!reader) return [];
+    // busy times only; a coach reads their own coach record's, never another coach's
+    const coachId = reader === "admin" ? (data.coach_id ?? (await ownCoachId(supabase, userId))) : await ownCoachId(supabase, userId);
     const { gcalFreeBusy } = await import("./google-cal.server");
     try {
       return await gcalFreeBusy(coachId ?? "", data.timeMin, data.timeMax);

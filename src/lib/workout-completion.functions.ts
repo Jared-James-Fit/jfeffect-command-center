@@ -69,7 +69,8 @@ function scopeCompletion(
   dayId: string,
   scheduledWorkoutId: string | null | undefined,
 ): any {
-  if (scheduledWorkoutId) return q.eq("scheduled_workout_id", scheduledWorkoutId);
+  // client_id always: a scheduled instance's id alone must never reach another client's row
+  if (scheduledWorkoutId) return q.eq("client_id", clientId).eq("scheduled_workout_id", scheduledWorkoutId);
   return q
     .eq("client_id", clientId)
     .eq("day_id", dayId)
@@ -113,6 +114,38 @@ async function resolveScopedClientId(
   return { clientId: await resolveClientId(supabase, userId), usedOverride: false };
 }
 
+/**
+ * A coach or admin acting for a client writes with the service role, so check the workout is
+ * that client's own first: its scheduled instance and its day's program. Without it, another
+ * client's instance id would move their completion, review or sets onto this one.
+ */
+async function assertWorkoutOwnedBy(
+  clientId: string,
+  dayId: string | null | undefined,
+  scheduledWorkoutId: string | null | undefined,
+): Promise<void> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const wrong = () => new Error("That workout isn't on this client's program");
+  if (scheduledWorkoutId) {
+    const { data, error } = await (supabaseAdmin as any)
+      .from("pl_scheduled_workouts").select("client_id").eq("id", scheduledWorkoutId).maybeSingle();
+    if (error) throw error;
+    if (!data || data.client_id !== clientId) throw wrong();
+  }
+  if (dayId) {
+    const { data: day, error } = await (supabaseAdmin as any).from("pl_days").select("week_id").eq("id", dayId).maybeSingle();
+    if (error) throw error;
+    if (!day?.week_id) throw wrong();
+    const { data: week, error: wErr } = await (supabaseAdmin as any).from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
+    if (wErr) throw wErr;
+    const { data: block, error: bErr } = week?.block_id
+      ? await (supabaseAdmin as any).from("pl_blocks").select("client_id").eq("id", week.block_id).maybeSingle()
+      : { data: null, error: null };
+    if (bErr) throw bErr;
+    if (!block || block.client_id !== clientId) throw wrong();
+  }
+}
+
 async function getWriter(usedOverride: boolean, supabase: any) {
   if (!usedOverride) return supabase;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -147,6 +180,7 @@ export const startWorkout = createServerFn({ method: "POST" })
       const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
       const writer = await getWriter(usedOverride, supabase);
       const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      if (usedOverride) await assertWorkoutOwnedBy(clientId, data.dayId, scheduledWorkoutId);
       let existingQ = writer
         .from("pl_day_completions")
         .select("id, started_at, last_activity_at, completed_at");
@@ -437,6 +471,7 @@ export const saveDraft = createServerFn({ method: "POST" })
       // and editing a finished workout's notes must not clear completed_at
       // via the column default).
       const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      if (usedOverride) await assertWorkoutOwnedBy(clientId, data.dayId, scheduledWorkoutId);
       const { data: existing } = await scopeCompletion(
         writer.from("pl_day_completions").select("id"),
         clientId,
@@ -525,6 +560,7 @@ export const completeWorkout = createServerFn({ method: "POST" })
       const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, (data as any).actAsClientId);
       const writer = await getWriter(usedOverride, supabase);
       const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      if (usedOverride) await assertWorkoutOwnedBy(clientId, data.dayId, scheduledWorkoutId);
       const { data: existing } = await scopeCompletion(
         writer.from("pl_day_completions").select("id, started_at, completed_at, last_activity_at"),
         clientId,
@@ -839,6 +875,7 @@ export const syncFinishedWorkout = createServerFn({ method: "POST" })
       const key = `${w.dayId}:${w.scheduledWorkoutId ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      if (usedOverride) await assertWorkoutOwnedBy(clientId, w.dayId, w.scheduledWorkoutId ?? null);
       let cq = writer
         .from("pl_day_completions")
         .select("id, completed_at, required_sets_count, logged_sets_count, skipped_exercises_count, logging_percentage, logging_quality, completed_with_missing_logs, session_weight_total, session_weight_unit")
@@ -1032,6 +1069,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         ? (await import("@/integrations/supabase/client.server")).supabaseAdmin
         : supabase;
       const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+      if (usedOverride) await assertWorkoutOwnedBy(clientId, data.dayId, scheduledWorkoutId);
 
       // The quick "Review to Finish" flow intentionally lets the review be the
       // athlete's final tap. That means the feedback request can arrive before
@@ -1260,6 +1298,7 @@ export const setWorkoutStatus = createServerFn({ method: "POST" })
     const writer = await getWriter(usedOverride, supabase);
     const now = new Date().toISOString();
     const scheduledWorkoutId = (data as any).scheduledWorkoutId ?? null;
+    if (usedOverride) await assertWorkoutOwnedBy(clientId, data.dayId, scheduledWorkoutId);
     const { data: existing } = await scopeCompletion(
       writer
         .from("pl_day_completions")

@@ -281,6 +281,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"] },
   { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
+  { to: "/admin/access-log", label: "Account access", icon: ShieldCheck, group: "Team", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["view as", "pov", "audit", "access log", "security", "who opened"] },
 
   // ── SETTINGS ─────────────────────────────────────────────────────────
   // Everything you set once lives here (the old Add-ons and the chat media

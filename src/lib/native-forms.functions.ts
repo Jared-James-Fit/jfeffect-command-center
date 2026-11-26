@@ -71,11 +71,22 @@ async function getAssignmentAccess(userId: string, clientIds: string[]) {
   return { supabaseAdmin, isAdmin: false, coachId: coach.id as string };
 }
 
+/** A coach assigns only forms in their own library (their own, the organization's, shared ones): what RLS on nf_forms lets them read. */
+async function assertFormsInLibrary(supabase: any, formIds: string[]) {
+  const ids = Array.from(new Set(formIds));
+  if (!ids.length) return;
+  const { data, error } = await supabase.from("nf_forms").select("id").in("id", ids);
+  if (error) throw new Error(error.message);
+  if ((data ?? []).length !== ids.length) throw new Error("You can only send forms from your own library.");
+}
+
 export const setNativeFormAssignment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => AssignmentSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await getAssignmentAccess(context.userId, [data.clientId]);
+    const access0 = await getAssignmentAccess(context.userId, [data.clientId]);
+    if (!access0.isAdmin) await assertFormsInLibrary(context.supabase, [data.formId]);
+    const { supabaseAdmin } = access0;
 
     if (data.assigned) {
       const { error } = await supabaseAdmin
@@ -99,7 +110,9 @@ export const bulkAssignNativeFormToClients = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => BulkAssignmentSchema.parse(input))
   .handler(async ({ data, context }) => {
     if (data.clientIds.length === 0) return { ok: true, count: 0 };
-    const { supabaseAdmin } = await getAssignmentAccess(context.userId, data.clientIds);
+    const access0 = await getAssignmentAccess(context.userId, data.clientIds);
+    if (!access0.isAdmin) await assertFormsInLibrary(context.supabase, [data.formId]);
+    const { supabaseAdmin } = access0;
     const rows = Array.from(new Set(data.clientIds)).map((clientId) => ({ form_id: data.formId, client_id: clientId }));
     const { error } = await supabaseAdmin
       .from("nf_assignments")
@@ -113,6 +126,7 @@ export const clearNativeFormAssignments = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => FormSchema.parse(input))
   .handler(async ({ data, context }) => {
     const access = await getAssignmentAccess(context.userId, []);
+    if (!access.isAdmin) await assertFormsInLibrary(context.supabase, [data.formId]);
     let query = access.supabaseAdmin.from("nf_assignments").delete().eq("form_id", data.formId);
 
     if (!access.isAdmin) {
@@ -141,6 +155,7 @@ export const replaceNativeFormAssignments = createServerFn({ method: "POST" })
     try {
       const clientIds = Array.from(new Set(data.clientIds));
       const access = await getAssignmentAccess(context.userId, clientIds);
+      if (!access.isAdmin) await assertFormsInLibrary(context.supabase, [data.formId]);
 
       if (access.isAdmin) {
         // Only the clients taken off: everyone kept keeps their row as it was.
@@ -189,6 +204,7 @@ export const replaceClientNativeFormAssignments = createServerFn({ method: "POST
     try {
       const formIds = Array.from(new Set(data.formIds));
       const access = await getAssignmentAccess(context.userId, [data.clientId]);
+      if (!access.isAdmin) await assertFormsInLibrary(context.supabase, formIds);
 
       // Only what changed: a form still on keeps its row (when it was asked for,
       // what it was sent with), so saving this list never reopens or resets one.

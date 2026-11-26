@@ -1,6 +1,8 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { PovAccessLogDialog } from "@/components/pov/pov-access-log";
+import { noteAccessAttempt } from "@/lib/pov/access-check";
+import { useAuth } from "@/lib/auth";
 import { loadErrorKind, queryView } from "@/lib/loading/load-state";
 import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -269,6 +271,9 @@ export function ClientProfileWorkspace({
   // The account headshot, one tap from the header's ⋯ (mounted on first open).
   const [headshotOpen, setHeadshotOpen] = useState(false);
   const [headshotMounted, setHeadshotMounted] = useState(false);
+  // the access record is the admin's alone (the database refuses anyone else too)
+  const { role: loginRole } = useAuth();
+  const isAdminLogin = loginRole === "admin";
 
   if (!form) {
     // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
@@ -276,12 +281,14 @@ export function ClientProfileWorkspace({
     const clientState = queryView(clientQ as any).kind;
     if (clientState === "error" || clientState === "offline") {
       const gone = clientState === "error" && loadErrorKind(clientQ.error) === "not_found";
+      // a link to an account this login can't reach is on the access record
+      if (gone) noteAccessAttempt(id, "profile");
       return (
         <div className="mx-auto max-w-md space-y-3 p-6">
           {clientState === "offline" ? (
             <OfflineState what="this client" />
           ) : gone ? (
-            <EmptyState title="This client isn't here anymore" detail="They may have been deleted, or the link is out of date." />
+            <EmptyState title="This client isn't available" detail="They may have been deleted or moved to another coach, or the link is out of date." />
           ) : (
             <ErrorState error={clientQ.error} what="this client" onRetry={() => clientQ.refetch()} retrying={clientQ.isFetching} />
           )}
@@ -553,7 +560,9 @@ export function ClientProfileWorkspace({
         ) : (
           <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><PauseCircle className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => setAccessLogOpen(true)}><History className="mr-2 h-4 w-4" />Account access log</DropdownMenuItem>
+        {isAdminLogin && (
+          <DropdownMenuItem onSelect={() => setAccessLogOpen(true)}><History className="mr-2 h-4 w-4" />Account access log</DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
           <Trash2 className="mr-2 h-4 w-4" />Delete client
@@ -563,7 +572,7 @@ export function ClientProfileWorkspace({
   );
   const accessLog = (
     <>
-      <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />
+      {isAdminLogin && <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />}
       {headshotMounted && (
         <Suspense fallback={null}>
           <HeadshotSheet open={headshotOpen} onOpenChange={setHeadshotOpen} clientId={id} clientName={form.full_name} />

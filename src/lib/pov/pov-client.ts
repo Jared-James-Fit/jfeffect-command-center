@@ -1,7 +1,7 @@
 import { toast } from "sonner";
-import { askPovReason, askStepUp } from "@/components/pov/pov-start";
+import { askStepUp } from "@/components/pov/pov-start";
 import { startPovSessionFn, setPovModeFn, type PovServerState } from "@/lib/pov/pov-session.functions";
-import { startStatusWords, type PovMode, type PovSession } from "@/lib/pov/pov-rules";
+import { startStatusWords, type PovMode, type PovSession, type PovStartStatus } from "@/lib/pov/pov-rules";
 
 export function toPovSession(s: PovServerState): PovSession | null {
   if (s.status !== "ok" || !s.id || !s.expires_at || !s.max_until) return null;
@@ -15,25 +15,15 @@ export function toPovSession(s: PovServerState): PovSession | null {
 }
 
 /**
- * Start an account view on the server: asks why (unless the caller already knows, e.g. "Log a
- * session"), then asks the staff member to confirm it's them when edits in a member's account
- * need it. Falls back to view-only when edits can't be switched on. Null when cancelled.
+ * Open an account on the server in one tap: view-only unless `mode` is "edit" (logging a
+ * session). Nothing is asked for routine access; only switching edits on in an account that
+ * isn't an active coaching client asks the staff member to confirm it's them (two-step), and
+ * when they don't it opens view-only. Throws when the account can't be opened (no access).
  */
-export async function beginPov(
-  clientId: string,
-  name: string | null,
-  opts: { reason?: string; mode?: PovMode } = {},
-): Promise<PovSession | null> {
-  let reason = opts.reason;
+export async function beginPov(clientId: string, opts: { mode?: PovMode } = {}): Promise<PovSession | null> {
   let mode: PovMode = opts.mode ?? "view";
-  if (!reason) {
-    const picked = await askPovReason(name);
-    if (!picked) return null;
-    reason = picked.reason;
-    mode = picked.mode;
-  }
   for (let attempt = 0; attempt < 2; attempt++) {
-    const out = await startPovSessionFn({ data: { clientId, reason, mode } });
+    const out = await startPovSessionFn({ data: { clientId, mode } });
     if (out.status === "ok") return toPovSession(out);
     if (out.status === "confirm" && attempt === 0) {
       if (await askStepUp()) continue;
@@ -42,28 +32,27 @@ export async function beginPov(
       continue;
     }
     if (out.status === "no_two_step" || out.status === "confirm") {
-      toast.message(startStatusWords(out.status as any) ?? "Opening view-only.");
-      const view = await startPovSessionFn({ data: { clientId, reason, mode: "view" } });
+      toast.message(startStatusWords(out.status as PovStartStatus) ?? "Opening view-only.");
+      const view = await startPovSessionFn({ data: { clientId, mode: "view" } });
       return toPovSession(view);
     }
-    throw new Error(startStatusWords(out.status as any) ?? "Couldn't open the account.");
+    throw new Error(startStatusWords(out.status as PovStartStatus) ?? "Couldn't open the account.");
   }
   return null;
 }
 
-/** Switch edits on (asks why, and to confirm it's them for a member's account) or off. */
-export async function changePovMode(session: PovSession, mode: PovMode, name: string | null): Promise<PovSession | null> {
+/** Edits on (one tap; a fresh two-step only for an account that isn't an active coaching client) or off. */
+export async function changePovMode(session: PovSession, mode: PovMode): Promise<PovSession | null> {
   if (mode === "view") {
     const out = await setPovModeFn({ data: { sessionId: session.id, mode: "view" } });
     return toPovSession(out);
   }
-  const picked = await askPovReason(name, { forEdit: true });
-  if (!picked) return null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const out = await setPovModeFn({ data: { sessionId: session.id, mode: "edit", reason: picked.reason } });
+    const out = await setPovModeFn({ data: { sessionId: session.id, mode: "edit" } });
     if (out.status === "ok") return toPovSession(out);
     if (out.status === "confirm" && attempt === 0 && (await askStepUp())) continue;
-    throw new Error(startStatusWords(out.status as any) ?? "Couldn't switch on edits.");
+    if (out.status === "confirm") return null;
+    throw new Error(startStatusWords(out.status as PovStartStatus) ?? "Couldn't switch on edits.");
   }
   return null;
 }
