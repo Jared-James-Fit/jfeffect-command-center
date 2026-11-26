@@ -9,6 +9,7 @@ import { Download, Dumbbell } from "lucide-react";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { loadPdfLogo, makeAndDeliverPdf } from "@/lib/pdf/deliver";
@@ -90,7 +91,7 @@ import {
   RecoveryPatternList,
   type Kpi,
 } from "@/components/analytics/overview-pieces";
-import { Change, SectionTitle, LB_PER_KG } from "@/components/analytics/viz";
+import { Change, SectionTitle, Segmented, LB_PER_KG } from "@/components/analytics/viz";
 
 export type Unit = "lb" | "kg";
 
@@ -341,6 +342,8 @@ export function ClientAnalyticsDashboard({
     [displayUnit],
   );
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
+  const [muscleExercise, setMuscleExercise] = useState<string | null>(null);
+  const [strengthMode, setStrengthMode] = useState<"competition" | "exercise">("competition");
 
   const startDay = isoDay(filter.start);
   const endDay = isoDay(filter.end);
@@ -355,16 +358,6 @@ export function ClientAnalyticsDashboard({
     [results, startMs, endMs],
   );
   const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);
-  // the competition lifts have their own chart above; this one is every other exercise
-  const otherHistory = useMemo(() => {
-    const comp = new Set(
-      (filteredResults as any[])
-        .filter((r) => compLiftOfResult(r))
-        .map((r) => String(r.exercise_name)),
-    );
-    const rest = history.filter((h) => !comp.has(h.name));
-    return rest.length ? rest : history;
-  }, [history, filteredResults]);
 
   const trainingLoad = useTrainingLoad({
     clientId,
@@ -950,16 +943,6 @@ export function ClientAnalyticsDashboard({
                 data-analytics-view="overview"
                 data-analytics-profile={profile}
               >
-                {observation && (
-                  <SectionErrorBoundary label="Observation">
-                    <CleoObservationCard
-                      o={observation}
-                      askCleo={coach && cleoOn}
-                      athleteName={athlete?.first_name ?? athlete?.full_name ?? null}
-                    />
-                  </SectionErrorBoundary>
-                )}
-                <KpiStrip items={kpis.slice(0, 3)} />
                 <div
                   className={cn(
                     "grid gap-6",
@@ -987,7 +970,7 @@ export function ClientAnalyticsDashboard({
                       </SectionErrorBoundary>
                     </Card>
                   )}
-                  <Card className="p-4" data-overview-calendar>
+                  <MoreDetail label="Training calendar">
                     <SectionTitle
                       title="Training calendar"
                       sub="Every day you trained. Tap a day to see it."
@@ -1003,8 +986,19 @@ export function ClientAnalyticsDashboard({
                         onOpenWorkout={openWorkout}
                       />
                     </SectionErrorBoundary>
-                  </Card>
+                  </MoreDetail>
                 </div>
+                <KpiStrip items={kpis.filter((k) => profile !== "powerlifting" || k.key !== "lift").slice(0, 3)} />
+                {observation && (
+                  <MoreDetail label="Cleo’s insight"><SectionErrorBoundary label="Observation">
+                    <CleoObservationCard
+                      o={observation}
+                      askCleo={coach && cleoOn}
+                      athleteName={athlete?.first_name ?? athlete?.full_name ?? null}
+                    />
+                  </SectionErrorBoundary></MoreDetail>
+                )}
+
                 {profile === "physique" && muscleRead.rows.some((r) => r.perWeek > 0) && (
                   <section aria-label="Your most trained muscles">
                     <SectionTitle
@@ -1046,7 +1040,8 @@ export function ClientAnalyticsDashboard({
 
             {view === "strength" && (
               <div className="space-y-6" data-analytics-view="strength">
-                {hasPowerlifting && (
+                {hasPowerlifting && <Segmented<"competition" | "exercise"> value={strengthMode} onChange={setStrengthMode} options={[{ key: "competition", label: "Competition lifts" }, { key: "exercise", label: "Exercises" }]} label="Strength explorer" />}
+                {hasPowerlifting && strengthMode === "competition" && (
                   <Card className="p-4" data-strength-section>
                     <SectionTitle
                       title="Squat, bench and deadlift strength"
@@ -1083,6 +1078,7 @@ export function ClientAnalyticsDashboard({
                   </Card>
                 )}
                 {profile !== "powerlifting" && (
+                  <MoreDetail label="Strength summary">
                   <section aria-label="Your lifts">
                     <SectionTitle
                       title="Your lifts"
@@ -1097,24 +1093,25 @@ export function ClientAnalyticsDashboard({
                     />
                     <LiftsMovingCard data={liftsMoving} unit={displayUnit} conv={conv} />
                   </section>
+                  </MoreDetail>
                 )}
-                <Card className="p-4">
+                {(!hasPowerlifting || strengthMode === "exercise") && <Card className="p-4">
                   <SectionTitle
-                    title={hasPowerlifting ? "Other exercises" : "Any exercise"}
+                    title="Exercise progress"
                     sub="Pick an exercise to see its progress. Each dot is your best set that day."
                   />
                   <SectionErrorBoundary label="Exercise progress">
                     <LiftProgressCard
-                      history={hasPowerlifting ? otherHistory : history}
+                      history={history}
                       displayUnit={displayUnit}
                       conv={conv}
                       onOpenSet={setSelectedDot}
                       compact
                     />
                   </SectionErrorBoundary>
-                </Card>
+                </Card>}
                 {blocks.length >= 2 && (
-                  <Card className="p-4">
+                  <MoreDetail label="Compare training blocks">
                     <SectionTitle
                       title="Compare your training blocks"
                       sub="See how each block went, side by side"
@@ -1129,7 +1126,7 @@ export function ClientAnalyticsDashboard({
                     <SectionErrorBoundary label="Blocks">
                       <BlockComparisonCard rows={blocks} powerlifter={hasPowerlifting} />
                     </SectionErrorBoundary>
-                  </Card>
+                  </MoreDetail>
                 )}
                 {coach && (
                   <MoreDetail label="Programming detail (coach)">
@@ -1157,8 +1154,23 @@ export function ClientAnalyticsDashboard({
 
             {view === "training" && (
               <div className="space-y-6" data-analytics-view="training">
+                <Card className="p-4" data-training-muscles>
+                  <SectionTitle
+                    title="Muscle training map"
+                    sub="See which muscles you've trained the most."
+                  />
+                  <SectionErrorBoundary label="Muscle training map">
+                    <MuscleMap
+                      read={muscleRead}
+                      coached={coached}
+                      credit={supportCredit}
+                      onCredit={setSupportCredit}
+                      onExercise={setMuscleExercise}
+                    />
+                  </SectionErrorBoundary>
+                </Card>
                 {hasSbdInPeriod && (
-                  <Card className="p-4" data-training-workload>
+                  <MoreDetail label="Squat, bench and deadlift workload">
                     <SectionTitle
                       title="Squat, bench and deadlift training"
                       sub="How much you did of each lift, week by week"
@@ -1195,22 +1207,8 @@ export function ClientAnalyticsDashboard({
                         }))}
                       />
                     </SectionErrorBoundary>
-                  </Card>
+                  </MoreDetail>
                 )}
-                <Card className="p-4" data-training-muscles>
-                  <SectionTitle
-                    title="Muscle training map"
-                    sub="See which muscles you've trained the most."
-                  />
-                  <SectionErrorBoundary label="Muscle training map">
-                    <MuscleMap
-                      read={muscleRead}
-                      coached={coached}
-                      credit={supportCredit}
-                      onCredit={setSupportCredit}
-                    />
-                  </SectionErrorBoundary>
-                </Card>
                 <section aria-label="Consistency">
                   <SectionTitle
                     title="How often you train"
@@ -1219,6 +1217,7 @@ export function ClientAnalyticsDashboard({
                   <ConsistencyBlock c={consistency} loading={trainingLoad.planLoading} />
                 </section>
                 {patterns.length > 0 && (
+                  <MoreDetail label="Recovery patterns">
                   <section aria-label="Recovery patterns">
                     <SectionTitle
                       title="What helps your training"
@@ -1233,6 +1232,7 @@ export function ClientAnalyticsDashboard({
                     />
                     <RecoveryPatternList patterns={patterns} />
                   </section>
+                  </MoreDetail>
                 )}
                 <SectionErrorBoundary label="Running">
                   <RunningAnalyticsSection
@@ -1339,6 +1339,13 @@ export function ClientAnalyticsDashboard({
         )}
       </div>
 
+      <Sheet open={!!muscleExercise} onOpenChange={(open) => { if (!open) setMuscleExercise(null); }}>
+        <SheetContent side="bottom" swipeToClose className="max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4">
+          <SheetTitle>{muscleExercise ?? "Exercise"}</SheetTitle>
+          <SheetDescription>{filter.label} · Exercise performance</SheetDescription>
+          {muscleExercise && <LiftProgressCard key={muscleExercise} history={history.filter((h) => h.name === muscleExercise)} displayUnit={displayUnit} conv={conv} onOpenSet={setSelectedDot} compact single />}
+        </SheetContent>
+      </Sheet>
       <GraphDotDetail
         point={selectedDot}
         clientId={clientId}
