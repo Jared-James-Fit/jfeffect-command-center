@@ -125,6 +125,22 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
       acceptances = acc ?? [];
     }
 
+    // Respect the owner's non-reacceptance updates without inventing a signature
+    // on the new version: prior valid evidence is kept separate.
+    const noResignIds = published.filter((d: any) =>
+      (SIGNUP_LEGAL_SLUGS as readonly string[]).includes(d.slug) &&
+      d.current_version.requires_reacceptance === false,
+    ).map((d: any) => d.id);
+    let priorAcceptances: any[] = [];
+    if (noResignIds.length) {
+      const { data: prior, error: priorError } = await context.supabase
+        .from("legal_acceptances").select("document_id, accepted_at, revoked_at")
+        .eq("user_id", context.userId).in("document_id", noResignIds)
+        .is("revoked_at", null).order("accepted_at", { ascending: false });
+      if (priorError) throw new Error(priorError.message);
+      priorAcceptances = prior ?? [];
+    }
+
     // Resolve effective enforcement per doc for THIS user (kill switch,
     // emergency disable, audience, effective date, grace period).
     const effective = await Promise.all(published.map(async (d: any) => {
@@ -152,6 +168,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
         version: d.current_version,
         accepted_at: accepted?.accepted_at ?? null,
         acceptance_id: accepted?.id ?? null,
+        satisfied_by_prior_version: !accepted && noResignIds.includes(d.id) && priorAcceptances.some(a => a.document_id === d.id),
       };
     });
   });
