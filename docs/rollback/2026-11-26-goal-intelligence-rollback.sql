@@ -1,4 +1,4 @@
--- Rollback for 20270601090000_goal_intelligence.sql (Goal & Performance Intelligence).
+-- Rollback for 20270601095000_goal_intelligence.sql (Goal & Performance Intelligence).
 -- Removes the goal ledger, its history, the outbox, the sync triggers and the
 -- schedule. What the sync already wrote to competitions (target totals), the
 -- clients' bodyweight goals and the long-term goal stays as it is: those are

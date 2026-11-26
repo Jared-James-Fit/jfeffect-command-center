@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { BellOff, Pin } from "lucide-react";
+import { NameMarks } from "@/components/name-marks";
 import { cn } from "@/lib/utils";
 import { activityAge } from "@/lib/crew-activity";
 import { StoryRing, useStoryRing } from "@/components/community/story-ring";
@@ -145,9 +146,11 @@ export function ChatListRow({
       <span className="block min-w-0 flex-1">
         <span
           data-chat-name
-          className={cn("block truncate text-[16px] leading-5 text-foreground", unread ? "font-semibold" : "font-normal")}
+          className={cn("flex min-w-0 items-center gap-1 text-[16px] leading-5 text-foreground", unread ? "font-semibold" : "font-normal")}
         >
-          {name}
+          <span className="truncate">{name}</span>
+          {/* a person's 1:1: their membership badge (and Virtual), never on a group */}
+          {storyUserId && <NameMarks userId={storyUserId} size={13} />}
         </span>
         <span
           data-chat-preview

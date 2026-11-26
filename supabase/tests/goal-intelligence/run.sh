@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# The goal ledger's database tests (20270601090000_goal_intelligence.sql) on a local Postgres 16.
+# The goal ledger's database tests (20270601095000_goal_intelligence.sql) on a local Postgres 16.
 # Usage: PSQL="psql -h /tmp/pggoal -p 54339 -U postgres" supabase/tests/goal-intelligence/run.sh
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 PSQL=${PSQL:-psql}
 DB=${DB:-goal_intel}
 T=supabase/tests/goal-intelligence
-M=supabase/migrations/20270601090000_goal_intelligence.sql
+M=supabase/migrations/20270601095000_goal_intelligence.sql
 
 $PSQL -q -c "drop database if exists $DB" -c "create database $DB"
 run() {

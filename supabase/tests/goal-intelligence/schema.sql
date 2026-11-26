@@ -1,4 +1,4 @@
--- Minimal stand-ins for what 20270601090000_goal_intelligence.sql reads and
+-- Minimal stand-ins for what 20270601095000_goal_intelligence.sql reads and
 -- writes: the auth context, roles, clients (with their bodyweight goal),
 -- competitions, the intel profile, settings, and the tables goal_intel_due()
 -- looks at. A coach (Ana) with one client (Sam, who has a login), a second

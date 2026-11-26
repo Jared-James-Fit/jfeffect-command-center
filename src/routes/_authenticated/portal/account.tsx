@@ -53,8 +53,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DeactivateAccountPanel, DeleteAccountPanel, useLifecycleStatus } from "@/components/account/account-lifecycle";
 import { AiConsentPanel } from "@/components/ai-consent/ai-consent";
+import { CrewGuidelinesRow } from "@/components/community/crew-rules-sheet";
 import { UsageAnalyticsPanel } from "@/components/privacy/usage-analytics-panel";
-import { ProfilePictureCapture } from "@/components/profile-picture-capture";
+import { AccountHeadshotSection, headshotSummary, useMyHeadshot } from "@/components/headshots/headshot-ui";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS, SOCIAL_PLATFORMS } from "@/lib/social-handles";
 import { BasicInfoForm } from "@/components/basic-info-form";
@@ -134,6 +135,8 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   basic: "basic-information",
   "profile-picture": "profile-picture",
   photo: "profile-picture",
+  "account-headshot": "profile-picture",
+  headshot: "profile-picture",
   "social-media": "social-media",
   social: "social-media",
   devices: "devices",
@@ -152,6 +155,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "delete-account": "legal",
   delete: "legal",
   "privacy-data": "legal",
+  // the Crew community guidelines live in Privacy & data (agreed to with the Terms at sign-up)
+  "community-guidelines": "legal",
+  guidelines: "legal",
   deactivate: "deactivate",
   "deactivate-account": "deactivate",
 };
@@ -171,6 +177,7 @@ function AccountPage() {
   const [form, setForm] = useState<any>(null);
   const [open, setOpen] = useState<string[]>([]);
   const aiCredits = useAiCredits();
+  const { data: headshot } = useMyHeadshot(tier === "coaching");
 
   const { data: client } = useQuery({
     queryKey: ["my-client-account", portalUserId],
@@ -360,30 +367,10 @@ function AccountPage() {
     }
   };
 
-  const updatePicture = async (path: string) => {
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        profile_picture_url: path,
-        profile_picture_updated_at: new Date().toISOString(),
-        profile_picture_updated_by: "client",
-        profile_picture_source: "camera",
-        profile_picture_needs_update: false,
-        profile_picture_needs_update_at: null,
-        profile_picture_needs_update_reason: null,
-      })
-      .eq("id", form.id);
-    if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["my-client-account"] });
-    qc.invalidateQueries({ queryKey: ["my-client-picture-gate"] });
-    qc.invalidateQueries({ queryKey: ["my-client"] });
-    setForm({ ...form, profile_picture_url: path, profile_picture_updated_at: new Date().toISOString(), profile_picture_needs_update: false });
-  };
-
   // ── Row summaries ──
   // a member's profile asks only what member setup asks (no coach intake)
   const coachingIntake = tier !== "self_serve";
-  const missing = profileMissing(client, goalsStatus, goalsOn, coachingIntake);
+  const missing = profileMissing(client, goalsStatus, goalsOn, coachingIntake, !!headshot?.outstanding);
   const basicMissing = missing.filter((m) => m.section === "basic-information").length;
   const unitsOk = !!client?.weight_unit_confirmed_at;
   const scheduleOk = !!client?.training_schedule_completed;
@@ -393,14 +380,9 @@ function AccountPage() {
     : !scheduleOk || days.length === 0
       ? { text: "Set your training days", warn: true }
       : { text: `${client?.preferred_weight_unit === "kg" ? "kg" : "lb"} · ${days.length} day${days.length === 1 ? "" : "s"} a week` };
-  const photoOk = !!form.profile_picture_url && !form.profile_picture_needs_update;
-  const photoSummary: Summary = !form.profile_picture_url
-    ? { text: "Add a photo", warn: coachingIntake }
-    : !photoOk
-      ? { text: "Needs a new photo", warn: true }
-      : form.profile_picture_updated_at
-        ? { text: `Updated ${format(new Date(form.profile_picture_updated_at), "MMM d")}` }
-        : null;
+  // the account headshot is a coaching client's (a member's Crew picture is their own business, in Crew)
+  const headshotOn = tier === "coaching";
+  const photoSummary: Summary = headshotSummary(headshot) as Summary;
   // only the handles they've filled in
   const socialValues = SOCIAL_PLATFORMS.map((p) => String(form[p.field] ?? "").trim()).filter(Boolean);
 
@@ -451,27 +433,27 @@ function AccountPage() {
         {/* Who this is: photo (a tap opens it big; the camera badge, or a tap while there's none, opens the photo section), name, email. */}
         <div className="flex items-center gap-3 px-1">
           <div className="relative shrink-0">
-            {form.profile_picture_url ? (
+            {form.profile_picture_url || !headshotOn ? (
               <UserAvatar src={form.profile_picture_url} name={displayName} size={56} />
             ) : (
               <button
                 type="button"
                 onClick={() => openSection("profile-picture")}
-                aria-label="Add your profile photo"
+                aria-label="Add your account headshot"
                 className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <UserAvatar src={null} name={displayName} size={56} expandable={false} />
               </button>
             )}
-            <button
+            {headshotOn && <button
               type="button"
               onClick={() => openSection("profile-picture")}
               data-account-photo-change
-              aria-label={form.profile_picture_url ? "Change your profile photo" : "Add your profile photo"}
+              aria-label={form.profile_picture_url ? "Update your account headshot" : "Add your account headshot"}
               className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2.5 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
             >
               <Camera className="h-3 w-3" />
-            </button>
+            </button>}
           </div>
           <div className="min-w-0">
             <div className="truncate text-lg font-semibold leading-tight">{displayName}</div>
@@ -634,17 +616,13 @@ function AccountPage() {
               </SectionErrorBoundary>
             </SettingsSection>
 
-            <SettingsSection id="profile-picture" icon={ImageIcon} title="Profile photo" summary={photoSummary}>
-              <SectionErrorBoundary label="Profile Picture">
-                <ProfilePictureCapture
-                  mode="client"
-                  userId={portalUserId ?? user.id}
-                  currentUrl={form.profile_picture_url}
-                  onUploaded={updatePicture}
-                />
-                <p className="text-center text-[11px] text-muted-foreground">Use a clear, current headshot.</p>
-              </SectionErrorBoundary>
-            </SettingsSection>
+            {headshotOn && (
+              <SettingsSection id="profile-picture" icon={ImageIcon} title="Account headshot" summary={photoSummary}>
+                <SectionErrorBoundary label="Account headshot">
+                  <AccountHeadshotSection />
+                </SectionErrorBoundary>
+              </SettingsSection>
+            )}
 
             <SettingsSection
               id="social-media"
@@ -694,6 +672,10 @@ function AccountPage() {
                   <ClientLegalSafety bare />
                 </SectionErrorBoundary>
               )}
+              {/* the Crew community guidelines, any time (agreed to with the Terms, never asked mid-comment) */}
+              <div className={cn(!isImpersonating && "mt-3")}>
+                <CrewGuidelinesRow />
+              </div>
               {/* AI processing: the person's own permission (OpenAI, Google), so never in "View as client" */}
               {!isImpersonating && (
                 <div className="mt-5 border-t border-border pt-5">
@@ -904,11 +886,11 @@ function profileMissing(
   goalsStatus: { completed_at: string | null; main_goal: string | null } | null | undefined,
   goalsOn: boolean,
   coachingIntake = true,
+  headshotNeeded = false,
 ): MissingItem[] {
   if (!client) return [];
   const goalsOk = !!(goalsStatus?.completed_at || goalsStatus?.main_goal);
   const unitsOk = !!client.weight_unit_confirmed_at;
-  const photoOk = !!client.profile_picture_url && !client.profile_picture_needs_update;
   const scheduleOk = !!client.training_schedule_completed;
   const isFilled = (v: any) => v !== null && v !== undefined && String(v).trim() !== "";
   const missing: MissingItem[] = [];
@@ -936,7 +918,7 @@ function profileMissing(
     missing.push({ key: "basic", label: "Basic info", section: basic });
   }
 
-  if (!photoOk) missing.push({ key: "photo", label: "Profile photo", section: "profile-picture" });
+  if (headshotNeeded) missing.push({ key: "photo", label: "Account headshot", section: "profile-picture" });
   if (!unitsOk) missing.push({ key: "units", label: "Weight units (lb or kg)", section: "units" });
   if (!scheduleOk) missing.push({ key: "schedule", label: "Training schedule", section: "units" });
   if (goalsOn && !goalsOk) missing.push({ key: "goals", label: "Goals & Training setup", section: "goals" });

@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { StoryAvatar } from "@/components/community/story-ring";
-import { CoachBadge } from "@/components/community/post-card";
 import { FollowButton } from "@/components/community/follow-button";
 import { CrewList } from "@/components/community/crew-list";
 import type { CommunityAuthor } from "@/lib/community";
@@ -12,6 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   inviteFriends, mutualsLabel, reasonLabel, searchTerm, useFollowBack, useHideSuggestion, usePeopleSearch, useSuggestions, type DiscoverPerson, type Mutuals,
 } from "@/lib/community-discover";
+import { NameMarks } from "@/components/name-marks";
 
 /** The search box waits this long after the last key before asking (feels instant, saves calls). */
 const SEARCH_DEBOUNCE_MS = 160;
@@ -245,7 +245,7 @@ export function PersonRow({ p, sub, faces, onOpen, onHide }: { p: DiscoverPerson
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1">
             <span className="truncate text-[15px] font-bold">{p.name}</span>
-            {p.is_coach && <CoachBadge />}
+            <NameMarks person={p as any} userId={(p as any).user_id} />
             {p.is_private && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Private account" />}
           </span>
           {/* two lines on narrow phones, so the reason isn't cut to "Follo…" */}

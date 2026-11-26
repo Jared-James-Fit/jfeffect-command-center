@@ -39,7 +39,7 @@ describe("the coach's community, in one place", () => {
     expect(screen).toContain("else if (coachPage && manageTabFromHash(`#${routeHash}`)) setScope({ kind: \"manage\" });");
     // the paged feed is everyone's: no card feed or League bubble for the coach, no people-to-follow screen either
     expect(screen).toContain("const paging = ownBar && scope.kind === \"feed\";");
-    expect(screen).toContain("if (!previewOnly && !following && !coach && i === 0 && !weekCard)");
+    expect(screen).toContain("if (!previewOnly && !following && !coach && i === 0 && !weekCard && !photoCard)");
     expect(hub).not.toContain("data-crew-hub-bar");
     // Manage's three tabs, the tab in the hash
     expect(read("src/lib/crew-manage.ts")).toContain('{ key: "needs", label: "Needs you" },\n  { key: "posts", label: "Posts" },\n  { key: "insights", label: "Insights" },');

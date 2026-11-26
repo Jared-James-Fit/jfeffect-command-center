@@ -66,15 +66,19 @@ export async function runSessionWork(sb: Db, opts: { limit?: number; deadlineMs?
  */
 export async function keepMeetingsReady(sb: Db) {
   const { autoPrepare, refreshMeeting } = await import("./meetings.server");
-  const { isTrainingSessionType } = await import("@/lib/booking-types");
+  const { isTrainingSessionType, NOT_TRAINING_FILTER } = await import("@/lib/booking-types");
   const now = new Date();
   const to = new Date(now.getTime() + 14 * 86_400_000).toISOString();
+  // calls for coaching clients only, filtered before the limit (training sessions never take a call's place)
   const { data: calls } = await sb
     .from("pt_sessions")
     .select("id, client_id, title, session_type, starts_at, ends_at, start_time, end_time, status, clients!inner(archived, service_tier)")
     .eq("status", "Scheduled")
     .gt("starts_at", now.toISOString())
     .lt("starts_at", to)
+    .or(NOT_TRAINING_FILTER)
+    .eq("clients.service_tier", "coaching")
+    .not("clients.archived", "is", true)
     .order("starts_at")
     .limit(60);
   const wanted = ((calls ?? []) as any[]).filter((p) => !isTrainingSessionType(p.session_type) && !p.clients?.archived && p.clients?.service_tier === "coaching");
@@ -145,25 +149,35 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
       const brief = await writeBrief(sb, s, route, state, save);
       // Cleo's phrasing goes onto the points it refines (never one the coach wrote or edited)
       const { normalizeAgenda } = await import("./prepare");
-      const { data: fresh } = await sb.from("coaching_sessions").select("agenda").eq("id", s.id).maybeSingle();
-      const agenda = normalizeAgenda((fresh as any)?.agenda ?? s.agenda);
+      const { writeFresh } = await import("./fresh-write.server");
       const say = new Map((brief.brief.phrasing ?? []).map((p) => [p.pointId, p.say]));
-      const withSay = agenda
-        ? { ...agenda, sections: agenda.sections.map((sec) => ({ ...sec, items: sec.items.map((i) => (say.has(i.id) && !i.edited && !i.custom ? { ...i, cleoSay: say.get(i.id) } : i)) })) }
-        : null;
-      await sb
-        .from("coaching_sessions")
-        .update({ write_up: { ...brief.brief, model: brief.model, at: new Date().toISOString() }, write_up_status: "ready", progress: dropKey(progress, job), locked_at: null, ...(withSay ? { agenda: withSay } : {}) })
-        .eq("id", s.id);
+      // onto the plan as it is when written, so a coach's edit meanwhile is never undone
+      await writeFresh(sb, s.id, (row) => {
+        const agenda = normalizeAgenda(row.agenda);
+        const withSay = agenda
+          ? { ...agenda, sections: agenda.sections.map((sec) => ({ ...sec, items: sec.items.map((i) => (say.has(i.id) && !i.edited && !i.custom ? { ...i, cleoSay: say.get(i.id) } : i)) })) }
+          : null;
+        return { write_up: { ...brief.brief, model: brief.model, at: new Date().toISOString() }, write_up_status: "ready", progress: dropKey(progress, job), locked_at: null, ...(withSay ? { agenda: withSay } : {}) };
+      });
       await log(sb, s, "brief_ready", { model: brief.model, dropped: brief.brief.dropped.length });
       return "ready";
     }
     const a = await analyse(sb, s, route, state, save);
+    // the transcript deleted while Cleo was reading it: nothing it found is kept
+    const { data: still } = await sb.from("coaching_sessions").select("analysis_status, transcript_deleted_at").eq("id", s.id).maybeSingle();
+    if (!still || (still as any).transcript_deleted_at || (still as any).analysis_status !== "running") {
+      await sb.from("coaching_sessions").update({ locked_at: null, progress: dropKey(progress, job) }).eq("id", s.id);
+      await sb.from("coaching_sessions").update({ analysis_status: "none" }).eq("id", s.id).eq("analysis_status", "running");
+      await log(sb, s, "analysis_dropped", { reason: "transcript_deleted" });
+      return "dropped";
+    }
     await saveAnalysis(sb, s, a.analysis, a.model, a.source);
     await sb
       .from("coaching_sessions")
       .update({ analysis: { ...a.analysis, model: a.model, at: new Date().toISOString(), source: a.source, clipped: a.clipped }, analysis_status: "ready", analysis_error: null, progress: dropKey(progress, job), locked_at: null })
-      .eq("id", s.id);
+      .eq("id", s.id)
+      .eq("analysis_status", "running")
+      .is("transcript_deleted_at", null);
     await log(sb, s, "analysis_ready", { model: a.model, items: a.analysis.items.length, recommendations: a.analysis.recommendations.length, dropped: a.analysis.dropped.length });
     // the goals it names go to the goal ledger as proposed (goal-intel; the 5-minute tick catches any this misses)
     try {

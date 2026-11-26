@@ -29,6 +29,12 @@ const purchaseRow: any = {
 };
 
 let processedEventIds = new Set<string>();
+// What Stripe says the subscription is right now (the webhook reads it again, so a late event
+// can't roll it back). null = a bare active subscription.
+let liveSubscription: any = null;
+let reclaims: string[] = [];
+// What Stripe says an invoice is right now (null = open).
+let liveInvoiceStatus: string | null = null;
 let updates: Array<{ table: string; patch: any }> = [];
 let inserts: Array<{ table: string; row: any }> = [];
 let upserts: Array<{ table: string; row: any }> = [];
@@ -36,8 +42,10 @@ let upserts: Array<{ table: string; row: any }> = [];
 vi.mock("@/lib/stripe.server", () => ({
   stripeFetch: vi.fn(async (path: string) => {
     if (path.startsWith("/subscriptions/")) {
+      if (liveSubscription) return { ...liveSubscription };
       return { id: purchaseRow.stripe_subscription_id, customer: purchaseRow.stripe_customer_id, status: "active", metadata: {} };
     }
+    if (path.startsWith("/invoices/")) return { id: path.split("/")[2], status: liveInvoiceStatus ?? "open" };
     return {};
   }),
   getStripeKeyForMode: () => "sk_test_fake_for_tests",
@@ -59,6 +67,11 @@ vi.mock("@/lib/promo-capture", () => ({
 
 vi.mock("@supabase/supabase-js", () => {
   const makeClient = () => ({
+    // stripe_event_reclaim: a claim still being worked on (or finished) is never taken back here.
+    rpc: async (fn: string, args: any) => {
+      if (fn === "stripe_event_reclaim") reclaims.push(args?._event_id);
+      return { data: false, error: null };
+    },
     from(table: string) {
       const builder: any = {
         _table: table,
@@ -168,6 +181,9 @@ beforeEach(() => {
   updates = [];
   inserts = [];
   upserts = [];
+  liveSubscription = null;
+  reclaims = [];
+  liveInvoiceStatus = null;
   Object.assign(purchaseRow, {
     next_billing_date: null,
     stripe_subscription_status: null,
@@ -180,6 +196,10 @@ beforeEach(() => {
 describe("Stripe webhook — recurring billing sync", () => {
   it("customer.subscription.updated (active) stores status and next_billing_date", async () => {
     const periodEnd = Math.floor(new Date("2027-01-15T00:00:00Z").getTime() / 1000);
+    liveSubscription = {
+        id: "sub_test", customer: "cus_test", status: "active",
+        current_period_end: periodEnd, cancel_at_period_end: false, metadata: {},
+      };
     const res = await postEvent({
       id: "evt_sub_upd_active",
       type: "customer.subscription.updated",
@@ -199,6 +219,10 @@ describe("Stripe webhook — recurring billing sync", () => {
 
   it("customer.subscription.updated with cancel_at_period_end=true keeps status but clears next_billing_date", async () => {
     const periodEnd = Math.floor(new Date("2027-02-01T00:00:00Z").getTime() / 1000);
+    liveSubscription = {
+        id: "sub_test", customer: "cus_test", status: "active",
+        current_period_end: periodEnd, cancel_at_period_end: true, metadata: {},
+      };
     const res = await postEvent({
       id: "evt_sub_upd_cape",
       type: "customer.subscription.updated",
@@ -305,5 +329,52 @@ describe("Stripe webhook — recurring billing sync", () => {
     expect(body2).toEqual({ received: true, duplicate: true });
     expect(updates.length).toBe(updatesAfterFirst);
     expect(upserts.length).toBe(upsertsAfterFirst);
+  });
+
+  it("a late subscription.updated never rolls back what Stripe says now (out-of-order delivery)", async () => {
+    const periodEnd = Math.floor(new Date("2027-03-01T00:00:00Z").getTime() / 1000);
+    // Stripe: cancellation already scheduled. The event: an older copy from before it was.
+    liveSubscription = { id: "sub_test", customer: "cus_test", status: "active", current_period_end: periodEnd, cancel_at_period_end: true, metadata: {} };
+    const res = await postEvent({
+      id: "evt_sub_upd_stale",
+      type: "customer.subscription.updated",
+      livemode: false,
+      data: { object: { id: "sub_test", customer: "cus_test", status: "active", current_period_end: periodEnd, cancel_at_period_end: false, metadata: {} } },
+    });
+    expect(res.status).toBe(200);
+    expect(lastPurchaseUpdate().cancel_at_period_end).toBe(true);
+    expect(lastPurchaseUpdate().next_billing_date).toBeNull();
+  });
+
+  it("a payment_failed for an invoice a retry already paid marks nothing overdue", async () => {
+    liveInvoiceStatus = "paid";
+    const res = await postEvent({
+      id: "evt_inv_failed_late",
+      type: "invoice.payment_failed",
+      livemode: false,
+      data: { object: { id: "in_paid_already", customer: "cus_test", subscription: "sub_test", amount_due: 5000, currency: "cad" } },
+    });
+    expect(res.status).toBe(200);
+    expect(updates.filter((u) => u.table === "purchase_records" && u.patch.payment_status === "Overdue")).toHaveLength(0);
+    expect(purchaseRow.payment_status).toBe("Active Subscription");
+  });
+
+  it("a payment_failed for an open invoice still marks the sale overdue", async () => {
+    const res = await postEvent({
+      id: "evt_inv_failed_open",
+      type: "invoice.payment_failed",
+      livemode: false,
+      data: { object: { id: "in_open", customer: "cus_test", subscription: "sub_test", amount_due: 5000, currency: "cad" } },
+    });
+    expect(res.status).toBe(200);
+    expect(purchaseRow.payment_status).toBe("Overdue");
+  });
+
+  it("a duplicate delivery asks to take back a stale claim, and is skipped when it isn't stale", async () => {
+    const ev = { id: "evt_claim_dup", type: "customer.subscription.updated", livemode: false, data: { object: { id: "sub_test", customer: "cus_test", status: "active", metadata: {} } } };
+    await postEvent(ev);
+    const r2 = await postEvent(ev);
+    expect(await r2.json()).toEqual({ received: true, duplicate: true });
+    expect(reclaims).toEqual(["evt_claim_dup"]);
   });
 });

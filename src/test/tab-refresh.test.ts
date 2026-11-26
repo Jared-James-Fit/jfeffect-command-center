@@ -33,7 +33,7 @@ describe("tabs: re-tap goes to the top and refreshes, pull down refreshes (Insta
     expect(tr).toContain("{ cancelRefetch: false }");
     // never mid-save (a moved workout, a logged set), and never a gesture something else took (a calendar drag)
     expect(tr).toContain("if (qc.isMutating() > 0) {");
-    expect(tr).toContain("if (e.defaultPrevented) {");
+    expect(tr).toContain("if (e.defaultPrevented || (pulling && gestureHolder())) {");
     expect(tr).toContain("sleep(8_000)");
     // makes room under the bar while it loads, then closes back up
     expect(tr).toContain('height: phase === "refreshing" ? GAP : 0');

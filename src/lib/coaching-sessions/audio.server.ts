@@ -22,6 +22,8 @@ const BUCKET = "coaching-recordings";
 const MAX_ATTEMPTS = 4;
 const STALE_MS = 4 * 60_000;
 export const DIARIZE_MODEL = "gpt-4o-transcribe-diarize";
+/** How often a part waiting on the client's AI permission is checked again. */
+export const CONSENT_RECHECK_MS = 10 * 60_000;
 
 export type Segment = { start: number; end: number; speaker: string | null; text: string };
 
@@ -144,10 +146,21 @@ export async function transcribeDueParts(
   const key = process.env.OPENAI_API_KEY;
   if (!key) return { skipped: "no_openai_key" };
   const staleAt = new Date(Date.now() - STALE_MS).toISOString();
+  // a part cut off on its last try is failed, never left "transcribing" (so the recording can finish)
+  await sb
+    .from("coaching_session_audio")
+    .update({ status: "failed", locked_at: null, error: "This part couldn't be transcribed after several tries." })
+    .eq("status", "transcribing")
+    .gte("attempts", MAX_ATTEMPTS)
+    .or(`locked_at.is.null,locked_at.lt.${staleAt}`);
+  // parts waiting on the client's AI permission are checked again now and then (no model call)
+  const recheckAt = new Date(Date.now() - CONSENT_RECHECK_MS).toISOString();
   const { data: rows } = await sb
     .from("coaching_session_audio")
     .select("*")
-    .or(`status.eq.uploaded,and(status.eq.transcribing,locked_at.lt.${staleAt})`)
+    .or(
+      `status.eq.uploaded,and(status.eq.transcribing,locked_at.lt.${staleAt}),and(status.eq.waiting_consent,updated_at.lt.${recheckAt})`,
+    )
     .lt("attempts", MAX_ATTEMPTS)
     .order("created_at")
     .limit(8);
@@ -325,26 +338,30 @@ export async function assembleIfComplete(
   const okToRead = text.replace(/\s+/g, " ").trim().length >= 40;
   const { cleoForUser } = await import("./sessions.server");
   const cleo = await cleoForUser(sb, (s as any).coach_user_id);
-  await sb
-    .from("coaching_sessions")
-    .update({
+  const { writeFresh } = await import("./fresh-write.server");
+  // onto the meeting as it is now (speaker names or samples saved meanwhile stay)
+  await writeFresh(
+    sb,
+    sessionId,
+    (row) => ({
       transcript_path: path,
       transcript_source: "other",
       transcript_consent_at: rec.consent?.at ?? now.toISOString(),
       transcript_retain_until: retain,
       transcript_deleted_at: null,
       recording: {
-        ...rec,
+        ...(row.recording ?? rec),
         status: "ready",
         transcript_ready: true,
         assembled_at: now.toISOString(),
       },
-      ...(okToRead && cleo && (s as any).analysis_status !== "running"
+      ...(okToRead && cleo && row.analysis_status !== "running"
         ? { analysis_status: "queued", analysis_error: null, attempts: 0 }
         : {}),
-      status: (s as any).status === "cancelled" ? "cancelled" : "done",
-    })
-    .eq("id", sessionId);
+      status: row.status === "cancelled" ? "cancelled" : "done",
+    }),
+    { first: s as any },
+  );
   await sb
     .from("coaching_session_events")
     .insert({
@@ -380,16 +397,21 @@ export async function deleteRecordingAudio(sb: Db, sessionId: string): Promise<n
       .update({ status: "deleted", path: "" })
       .eq("session_id", sessionId)
       .neq("status", "deleted");
-  if ((s as any)?.recording)
-    await sb
-      .from("coaching_sessions")
-      .update({
-        recording: {
-          ...(s as any).recording,
-          audio_deleted_at: new Date().toISOString(),
-          speaker_refs: [],
-        },
-      })
-      .eq("id", sessionId);
+  if ((s as any)?.recording) {
+    const { writeFresh } = await import("./fresh-write.server");
+    await writeFresh(sb, sessionId, (row) =>
+      row.recording
+        ? {
+            recording: {
+              ...row.recording,
+              audio_deleted_at: new Date().toISOString(),
+              speaker_refs: [],
+              // a recording that never became a transcript has nothing left to finish
+              ...(row.recording.status === "ready" ? {} : { status: "expired" }),
+            },
+          }
+        : null,
+    );
+  }
   return paths.length;
 }

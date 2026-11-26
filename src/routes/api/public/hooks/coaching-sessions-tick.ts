@@ -40,7 +40,24 @@ export const Route = createFileRoute("/api/public/hooks/coaching-sessions-tick")
           });
           removed.push(s.id);
         }
-        return Response.json({ ok: true, work, removed });
+        // a recording that never became a transcript: its audio goes when its retention runs out
+        const expired: string[] = [];
+        const { data: audioDue } = await sb.rpc("coaching_audio_due");
+        for (const r of (audioDue ?? []) as any[]) {
+          const { deleteRecordingAudio } = await import("@/lib/coaching-sessions/audio.server");
+          const n = await deleteRecordingAudio(sb, r.session_id).catch(() => 0);
+          const { data: s } = await sb.from("coaching_sessions").select("client_id").eq("id", r.session_id).maybeSingle();
+          if (s)
+            await sb.from("coaching_session_events").insert({
+              session_id: r.session_id,
+              client_id: (s as any).client_id,
+              actor: "system",
+              action: "recording_audio_removed",
+              detail: { reason: "retention", parts: n },
+            });
+          expired.push(r.session_id);
+        }
+        return Response.json({ ok: true, work, removed, expired });
       },
     },
   },

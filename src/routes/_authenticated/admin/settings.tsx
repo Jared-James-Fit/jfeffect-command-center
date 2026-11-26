@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FocusUsageCard } from "@/components/admin/focus-usage-card";
+import { PhotoReminderSettingsCard } from "@/components/headshots/headshot-admin";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -24,6 +25,7 @@ import { AccountProfileSettings } from "@/components/account-profile-settings";
 import { JfMembershipSettingsCard } from "@/components/admin/jf-membership-settings-card";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { AppReviewDemoCard } from "@/components/admin/app-review-demo-card";
+import { DeveloperToolsCard } from "@/components/admin/developer-tools-card";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -116,6 +118,8 @@ function SettingsPage() {
         <JfMembershipSettingsCard />
         {/* Is the workout logger's Focus view worth keeping? (admins; moved here from Training Intel) */}
         {isAdmin && <FocusUsageCard />}
+        {/* how often account headshot and Crew picture reminders come (admins) */}
+        {isAdmin && <PhotoReminderSettingsCard />}
 
         <Card className={isAdmin ? "space-y-3 p-5 md:col-span-2" : "space-y-3 p-5"}>
           <h3 className="flex items-center gap-2 text-base font-semibold">
@@ -230,6 +234,7 @@ function SettingsPage() {
          <SignNowIntegrationCard />
          {/* synthetic data for the App Store reviewer's two logins (admins) */}
          {isAdmin && <AppReviewDemoCard />}
+         {isAdmin && <DeveloperToolsCard />}
        </div>
      </>
    );

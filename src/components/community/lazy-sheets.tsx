@@ -14,10 +14,18 @@ export const InstagramShareSheet = lazyWithRetry(() =>
   import("@/components/community/instagram-share-sheet").then((m) => ({ default: m.InstagramShareSheet })),
 );
 
-/** The comments over a story (💬 in the story viewer), loaded on the first tap. */
-export const CommentsSheet = lazyWithRetry(() =>
-  import("@/components/community/comments-sheet").then((m) => ({ default: m.CommentsSheet })),
+/**
+ * A story's comments panel (the story viewer's 💬, a swipe up, or a tap on the comments floating
+ * over it): part of the story itself, never the feed's comment sheet. Loaded with the viewer, in
+ * idle time, so the first tap opens it at once.
+ */
+export const StoryCommentsPanel = lazyWithRetry(() =>
+  import("@/components/community/story-comments").then((m) => ({ default: m.StoryCommentsPanel })),
 );
+
+export function preloadStoryComments(): void {
+  preloadWhenIdle("story-comments-panel", () => StoryCommentsPanel.preload(), 1200);
+}
 
 export function preloadShareSheets(instagram: boolean): void {
   preloadWhenIdle("post-share-sheet", () => PostShareSheet.preload(), 5000);

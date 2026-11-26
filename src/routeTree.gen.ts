@@ -18,6 +18,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CoachingAgreementRouteImport } from './routes/coaching-agreement'
+import { Route as CommunityGuidelinesRouteImport } from './routes/community-guidelines'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as JoinRouteImport } from './routes/join'
@@ -135,6 +136,7 @@ import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './ro
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_authenticated/admin/transactions'
 import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin/usage'
+import { Route as AuthenticatedAdminVirtualAccountsRouteImport } from './routes/_authenticated/admin/virtual-accounts'
 import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authenticated/admin/voice'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
@@ -387,6 +389,11 @@ const AuthRoute = AuthRouteImport.update({
 const CoachingAgreementRoute = CoachingAgreementRouteImport.update({
   id: '/coaching-agreement',
   path: '/coaching-agreement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityGuidelinesRoute = CommunityGuidelinesRouteImport.update({
+  id: '/community-guidelines',
+  path: '/community-guidelines',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
@@ -1042,6 +1049,12 @@ const AuthenticatedAdminUsageRoute = AuthenticatedAdminUsageRouteImport.update({
   path: '/usage',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminVirtualAccountsRoute =
+  AuthenticatedAdminVirtualAccountsRouteImport.update({
+    id: '/virtual-accounts',
+    path: '/virtual-accounts',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminVoiceRoute = AuthenticatedAdminVoiceRouteImport.update({
   id: '/voice',
   path: '/voice',
@@ -2289,6 +2302,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2405,6 +2419,7 @@ export interface FileRoutesByFullPath {
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
+  '/admin/virtual-accounts': typeof AuthenticatedAdminVirtualAccountsRoute
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -2625,6 +2640,7 @@ export interface FileRoutesByTo {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2737,6 +2753,7 @@ export interface FileRoutesByTo {
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
+  '/admin/virtual-accounts': typeof AuthenticatedAdminVirtualAccountsRoute
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -2959,6 +2976,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -3075,6 +3093,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
+  '/_authenticated/admin/virtual-accounts': typeof AuthenticatedAdminVirtualAccountsRoute
   '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -3297,6 +3316,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3413,6 +3433,7 @@ export interface FileRouteTypes {
     | '/admin/training-phases'
     | '/admin/transactions'
     | '/admin/usage'
+    | '/admin/virtual-accounts'
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
@@ -3633,6 +3654,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3745,6 +3767,7 @@ export interface FileRouteTypes {
     | '/admin/training-phases'
     | '/admin/transactions'
     | '/admin/usage'
+    | '/admin/virtual-accounts'
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
@@ -3966,6 +3989,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -4082,6 +4106,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/admin/transactions'
     | '/_authenticated/admin/usage'
+    | '/_authenticated/admin/virtual-accounts'
     | '/_authenticated/admin/voice'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
@@ -4304,6 +4329,7 @@ export interface RootRouteChildren {
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   CoachingAgreementRoute: typeof CoachingAgreementRoute
+  CommunityGuidelinesRoute: typeof CommunityGuidelinesRoute
   DeleteAccountRoute: typeof DeleteAccountRoute
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
@@ -4478,6 +4504,13 @@ declare module '@tanstack/react-router' {
       path: '/coaching-agreement'
       fullPath: '/coaching-agreement'
       preLoaderRoute: typeof CoachingAgreementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community-guidelines': {
+      id: '/community-guidelines'
+      path: '/community-guidelines'
+      fullPath: '/community-guidelines'
+      preLoaderRoute: typeof CommunityGuidelinesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/delete-account': {
@@ -5297,6 +5330,13 @@ declare module '@tanstack/react-router' {
       path: '/usage'
       fullPath: '/admin/usage'
       preLoaderRoute: typeof AuthenticatedAdminUsageRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/virtual-accounts': {
+      id: '/_authenticated/admin/virtual-accounts'
+      path: '/virtual-accounts'
+      fullPath: '/admin/virtual-accounts'
+      preLoaderRoute: typeof AuthenticatedAdminVirtualAccountsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/voice': {
@@ -7000,6 +7040,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminTransactionsRoute: typeof AuthenticatedAdminTransactionsRoute
   AuthenticatedAdminUsageRoute: typeof AuthenticatedAdminUsageRoute
+  AuthenticatedAdminVirtualAccountsRoute: typeof AuthenticatedAdminVirtualAccountsRoute
   AuthenticatedAdminVoiceRoute: typeof AuthenticatedAdminVoiceRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -7153,6 +7194,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminTransactionsRoute: AuthenticatedAdminTransactionsRoute,
     AuthenticatedAdminUsageRoute: AuthenticatedAdminUsageRoute,
+    AuthenticatedAdminVirtualAccountsRoute:
+      AuthenticatedAdminVirtualAccountsRoute,
     AuthenticatedAdminVoiceRoute: AuthenticatedAdminVoiceRoute,
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
@@ -7460,6 +7503,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   CoachingAgreementRoute: CoachingAgreementRoute,
+  CommunityGuidelinesRoute: CommunityGuidelinesRoute,
   DeleteAccountRoute: DeleteAccountRoute,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,

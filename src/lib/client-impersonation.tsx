@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
+import type { PovSession } from "@/lib/pov/pov-rules";
+import { setPovSession } from "@/lib/pov/pov-store";
 
 export interface ImpersonatedClient {
   id: string;
   user_id: string | null;
   full_name: string | null;
+  /** The server's record of this view (admin_pov_sessions): view-only or edits on, until when. */
+  pov?: PovSession | null;
 }
 
 interface ImpersonationState {
@@ -13,6 +17,8 @@ interface ImpersonationState {
   returnTo: string | null;
   start: (client: ImpersonatedClient, returnTo?: string | null) => void;
   stop: () => void;
+  /** The view's session changed (edits on / off, extended, ended). */
+  updatePov: (pov: PovSession | null) => void;
 }
 
 const STORAGE_KEY = "jfeffect.clientPov";
@@ -48,10 +54,16 @@ const Ctx = createContext<ImpersonationState>({
   returnTo: null,
   start: () => {},
   stop: () => {},
+  updatePov: () => {},
 });
 
 export function ClientImpersonationProvider({ children }: { children: ReactNode }) {
-  const [client, setClient] = useState<ImpersonatedClient | null>(() => readStoredClient());
+  const [client, setClient] = useState<ImpersonatedClient | null>(() => {
+    const c = readStoredClient();
+    // before the first render's server calls go out
+    setPovSession(c?.pov ?? null);
+    return c;
+  });
   const [returnTo, setReturnTo] = useState<string | null>(() => readStoredReturnTo());
 
   useEffect(() => {
@@ -61,8 +73,14 @@ export function ClientImpersonationProvider({ children }: { children: ReactNode 
     if (storedReturnTo) setReturnTo(storedReturnTo);
   }, []);
 
+  // The server-call middleware and the fetch guard read the open view from outside React.
+  useEffect(() => {
+    setPovSession(client?.pov ?? null);
+  }, [client]);
+
   const start = useCallback((c: ImpersonatedClient, ret?: string | null) => {
     setClient(c);
+    setPovSession(c.pov ?? null);
     try {
       const payload = JSON.stringify(c);
       sessionStorage.setItem(STORAGE_KEY, payload);
@@ -81,6 +99,7 @@ export function ClientImpersonationProvider({ children }: { children: ReactNode 
 
   const stop = useCallback(() => {
     setClient(null);
+    setPovSession(null);
     setReturnTo(null);
     try {
       sessionStorage.removeItem(STORAGE_KEY);
@@ -90,9 +109,22 @@ export function ClientImpersonationProvider({ children }: { children: ReactNode 
     } catch {}
   }, []);
 
+  const updatePov = useCallback((pov: PovSession | null) => {
+    setClient((c) => {
+      if (!c) return c;
+      const next = { ...c, pov };
+      try {
+        const payload = JSON.stringify(next);
+        sessionStorage.setItem(STORAGE_KEY, payload);
+        localStorage.setItem(STORAGE_KEY, payload);
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
-    () => ({ client, isImpersonating: !!client, returnTo, start, stop }),
-    [client, returnTo, start, stop],
+    () => ({ client, isImpersonating: !!client, returnTo, start, stop, updatePov }),
+    [client, returnTo, start, stop, updatePov],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

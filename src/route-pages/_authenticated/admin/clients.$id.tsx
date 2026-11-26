@@ -1,5 +1,6 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { PovAccessLogDialog } from "@/components/pov/pov-access-log";
 import { loadErrorKind, queryView } from "@/lib/loading/load-state";
 import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -45,7 +46,7 @@ import { AppActivityCard } from "@/components/app-activity-card";
 import { ClientCalendarSyncStatus } from "@/components/admin/client-calendar-sync-status";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
-import { Send } from "lucide-react";
+import { History, Send } from "lucide-react";
 import { FolderOpen, Eye, PauseCircle, Power } from "lucide-react";
 import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -97,7 +98,7 @@ const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-fi
 const GoalSummary = lazyDefault(() => import("@/components/goals/goal-summary"), "GoalSummary");
 const ClientDocumentsPanel = lazyDefault(() => import("@/components/documents/documents-pages"), "ClientDocumentsPanel");
 const HealthCard = lazyDefault(() => import("@/components/health/HealthCard"), "HealthCard");
-const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
+const AccountHeadshotPanel = lazyDefault(() => import("@/components/headshots/headshot-admin"), "AccountHeadshotPanel");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
 const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
@@ -262,6 +263,8 @@ export function ClientProfileWorkspace({
     setBase(next);
     setForm((f: any) => ({ ...(f ?? {}), ...patch }));
   };
+
+  const [accessLogOpen, setAccessLogOpen] = useState(false);
 
   if (!form) {
     // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
@@ -491,53 +494,6 @@ export function ClientProfileWorkspace({
     qc.invalidateQueries({ queryKey: ["client", id] });
   };
 
-  const adminUpdatePicture = async (path: string) => {
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        profile_picture_url: path,
-        profile_picture_updated_at: new Date().toISOString(),
-        profile_picture_updated_by: "admin",
-        profile_picture_source: "admin_override",
-        profile_picture_needs_update: false,
-        profile_picture_needs_update_at: null,
-        profile_picture_needs_update_reason: null,
-      })
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    markSaved({
-      profile_picture_url: path,
-      profile_picture_needs_update: false,
-      profile_picture_needs_update_at: null,
-      profile_picture_needs_update_reason: null,
-    });
-  };
-
-  const requestPictureUpdate = async () => {
-    const reason = window.prompt(
-      "Reason for requesting a new profile picture (optional, shown to the client):",
-      "Please take a new clear headshot.",
-    );
-    if (reason === null) return;
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        profile_picture_needs_update: true,
-        profile_picture_needs_update_at: new Date().toISOString(),
-        profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
-      })
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Client will be asked to update their profile picture on next login.");
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    markSaved({
-      profile_picture_needs_update: true,
-      profile_picture_needs_update_at: new Date().toISOString(),
-      profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
-    });
-  };
-
   // An empty preview helps nobody: client view needs their login.
   const needsLogin = () => {
     if (form.user_id) return false;
@@ -590,6 +546,7 @@ export function ClientProfileWorkspace({
         ) : (
           <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><PauseCircle className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
         )}
+        <DropdownMenuItem onSelect={() => setAccessLogOpen(true)}><History className="mr-2 h-4 w-4" />Account access log</DropdownMenuItem>
         <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
           <Trash2 className="mr-2 h-4 w-4" />Delete client
@@ -597,6 +554,7 @@ export function ClientProfileWorkspace({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+  const accessLog = <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />;
 
   const links = [
     ["Program Sheet", form.program_sheet_link],
@@ -664,6 +622,7 @@ export function ClientProfileWorkspace({
           moreMenu={moreMenu}
         />
       )}
+      {accessLog}
       <div className={cn(WORKSPACE_CONTAINER_CLASS, embedded && "px-3 py-3 md:px-6 md:py-4")}>
       {/*
         The profile-shell "Actions" grid was removed — Message, POV and More
@@ -1093,39 +1052,10 @@ export function ClientProfileWorkspace({
             </div>
           </div>
 
-          <Card className="border-border bg-card p-6 space-y-3">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
-            <Suspense fallback={<TabFallback />}>
-              <ProfilePictureCapture
-                userId={form.user_id ?? id}
-                currentUrl={form.profile_picture_url}
-                onUploaded={adminUpdatePicture}
-                allowFileUpload
-              />
-            </Suspense>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" className="min-h-[44px]" onClick={requestPictureUpdate}>
-                {form.profile_picture_needs_update ? "Update reminder active" : "Request client to update"}
-              </Button>
-              <span className="text-[11px] text-muted-foreground">
-                Status:{" "}
-                {form.profile_picture_needs_update
-                  ? "Needs Update"
-                  : form.profile_picture_url
-                  ? "Complete"
-                  : "Required"}
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Admin can capture or upload on behalf of the client. Source:{" "}
-              {form.profile_picture_source ?? "—"} · Updated by: {form.profile_picture_updated_by ?? "—"}
-            </p>
-            {form.profile_picture_needs_update && form.profile_picture_needs_update_reason && (
-              <p className="text-[11px] text-warning">
-                Reason shown to client: {form.profile_picture_needs_update_reason}
-              </p>
-            )}
-          </Card>
+          {/* the account headshot: status, a photo waiting to review, request / retake (private reason), take it with them */}
+          <Suspense fallback={<TabFallback />}>
+            <AccountHeadshotPanel clientId={id} clientName={form.preferred_name || form.first_name || form.full_name || undefined} />
+          </Suspense>
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground">Communication Preferences</h3>

@@ -131,7 +131,8 @@ export function FullScreenPage({
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <>
-      <SwipeBack enabled target={layer} onBack={() => back.current()} />
+      {/* going back closes this page: it stays out of sight until it's gone (never slid back in) */}
+      <SwipeBack enabled closes target={layer} onBack={() => back.current()} />
       <section
         ref={layer}
         aria-label={typeof title === "string" ? title : undefined}
