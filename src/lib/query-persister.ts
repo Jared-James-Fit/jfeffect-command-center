@@ -25,6 +25,8 @@ export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 // Query keys we never want to persist to disk. These are either large,
 // sensitive, or change too often for a cached copy to be useful.
 const DO_NOT_PERSIST_PREFIXES = [
+  // Private client POV results are short-lived and must never be restored from disk.
+  "pov-crew",
   // The full exercise lists are mutable operational data. Rehydrating a disk
   // snapshot can hide exercises created in another tab or device, including
   // immediately after a successful save. Always obtain these lists fresh.
