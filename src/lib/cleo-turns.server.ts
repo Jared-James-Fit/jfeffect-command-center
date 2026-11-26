@@ -559,7 +559,7 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
       const { isBasicInfoComplete } = await import("@/lib/basic-info");
       const { isGoalsSetupComplete } = await import("@/lib/client-goals/schema");
       const { accountSetupRequirements } = await import("@/lib/account-setup-scope");
-      const { setupMissing } = await import("@/lib/member-setup-steps");
+      const { memberSetupSummary } = await import("@/lib/member-setup-steps");
       const [client, goals, enrollments] = await Promise.all([
         cleo.db.from("clients").select("id, user_id, last_signed_in_at, portal_access_disabled, profile_picture_url, service_tier, first_name, last_name, phone, date_of_birth, height_cm, address, city, country, timezone, emergency_contact_name, emergency_contact_phone, training_schedule_completed").eq("id", chat.client_id).maybeSingle(),
         cleo.db.from("client_goals_setup").select("*").eq("client_id", chat.client_id).maybeSingle(),
@@ -581,10 +581,12 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
       if (req.memberSetup && c.user_id) {
         const member = await supabaseAdmin.from("app_members").select("account_type, is_admin_sandbox, subscription_status, stripe_subscription_id, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, committed_training_days").eq("user_id", c.user_id).maybeSingle();
         if (member.error) lines.push("Membership setup — couldn’t verify");
-        else if (member.data?.account_type === "jf_member" && !member.data.is_admin_sandbox) {
-          const missing = setupMissing(member.data);
-          lines.push(status(missing.length === 0, "Membership setup"));
-          if (missing.length) lines.push("Remaining: " + missing.map(s => s.replace(/_/g, " ")).join(", "));
+        else {
+          const summary = memberSetupSummary(member.data);
+          if (summary.applicable) {
+            lines.push(status(summary.complete, summary.free ? "Training setup" : "Membership setup"));
+            if (summary.missing.length) lines.push("Remaining: " + summary.missing.map(s => s.replace(/_/g, " ")).join(", "));
+          }
         }
       }
       for (const meet of handlingMeets) {
