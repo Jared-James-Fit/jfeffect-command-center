@@ -20,3 +20,16 @@ describe("universal account setup scope", () => {
     expect(accountSetupRequirements("coaching", [], false)).toMatchObject({ coachingGoals: true, trainingSchedule: true });
   });
 });
+
+import { fillMissing, memberBasicPrefill, memberIntakePrefill } from "../lib/account-setup-prefill";
+describe("previous account intake reuse", () => {
+  it("maps only one unambiguous goal, never chooses among multiple goals", () => {
+    expect(memberIntakePrefill({ goals_tags: ["Lose fat"] })).toEqual({ main_goal: "Lose body fat" });
+    expect(memberIntakePrefill({ goals_tags: ["Lose fat", "Build muscle"] })).toEqual({});
+    expect(memberIntakePrefill({ goals: "a different target" })).toEqual({});
+  });
+  it("fills missing contact fields without overwriting existing profile details", () => {
+    const defaults = memberBasicPrefill({ phone: "1234567", address_city: "Winnipeg", emergency_contact_phone: "7654321", avatar_url: "ignored" });
+    expect(fillMissing({ phone: "existing", city: null }, defaults)).toEqual({ phone: "existing", city: "Winnipeg", emergency_contact_phone: "7654321" });
+  });
+});

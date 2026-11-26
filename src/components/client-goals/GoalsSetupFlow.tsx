@@ -19,7 +19,7 @@ import {
   EDITABLE_GOALS_FIELDS,
   type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
-import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import { getAccountSetupPrefillFn, saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
 import {
   availabilityWith, codesToDays, daysToCodes, pickTrainingDays, sameDays, weekOrder,
 } from "@/lib/client-goals/schedule-sync";
@@ -61,6 +61,8 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const saveGoalsSetup = useServerFn(saveGoalsSetupFn);
+  const readPrefill = useServerFn(getAccountSetupPrefillFn);
+  const prefill = useQuery({ queryKey: ["account-setup-prefill", clientId], queryFn: () => readPrefill({ data: { clientId } }), retry: false });
   const reschedule = useServerFn(rescheduleFromCommittedDays);
   const navigate = useNavigate();
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
@@ -110,7 +112,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
     // Re-hydrate whenever the target client changes (coach switching
     // between client profiles in the admin sheet).
     if (hydratedClientRef.current === clientId) return;
-    if (isLoading || scheduleLoading) return;
+    if (isLoading || scheduleLoading || prefill.isPending) return;
     // Merge server row with any local draft from this device — the draft
     // wins so a tab reload doesn't lose unsaved typing.
     let draft: Partial<ClientGoalsSetupRow> | null = null;
@@ -121,6 +123,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
       }
     } catch { /* ignore parse / quota errors */ }
     const merged: Partial<ClientGoalsSetupRow> = { ...(row ?? {}), ...(draft ?? {}) };
+    if (!nutritionOnly && !merged.main_goal && !draft?.main_goal && prefill.data?.goals.main_goal) merged.main_goal = prefill.data.goals.main_goal;
     const live = committedDays ?? [];
     if (live.length) {
       // The schedule wins over this device's draft: it may have changed since.
@@ -131,7 +134,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
     setTrainingDays(live);
     setLocal(merged);
     hydratedClientRef.current = clientId;
-  }, [row, isLoading, committedDays, scheduleLoading, clientId, draftKey]);
+  }, [row, isLoading, committedDays, scheduleLoading, clientId, draftKey, prefill.isPending, prefill.data, nutritionOnly]);
 
   // Persist working copy as a draft on this device — survives reload, tab
   // close, and network failures. Cleared after a successful save.

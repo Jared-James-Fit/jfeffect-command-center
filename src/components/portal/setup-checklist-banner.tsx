@@ -26,7 +26,6 @@ import { useHeadshotCamera, useMyHeadshot } from "@/components/headshots/headsho
 type Props = {
   clientId: string;
   userId: string;
-  handlingOnly?: boolean;
   /**
    * Shown instead of the checklist once it has nothing to ask but the
    * agreement (a client who finished setup and is asked to sign a new
