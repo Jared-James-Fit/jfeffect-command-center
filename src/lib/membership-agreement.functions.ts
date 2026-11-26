@@ -50,7 +50,9 @@ async function loadCurrent(): Promise<CurrentVersion | null> {
  */
 export const getMyMembershipAgreement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }) => readMembershipAgreement(context));
+
+async function readMembershipAgreement(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
     const { supabase, userId } = context;
     const { data: client, error: clientError } = await supabase.from("clients").select("id, service_tier").eq("user_id", userId).maybeSingle();
     if (clientError) throw new Error(clientError.message);
@@ -92,6 +94,15 @@ export const getMyMembershipAgreement = createServerFn({ method: "GET" })
       /** they accepted an earlier version (so this is an update, not a first time) */
       acceptedEarlier: onThis.length === 0 && rows.length > 0,
     };
+}
+
+/** Read exactly the selected account, only after checking staff access. */
+export const previewMembershipAgreement = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ clientId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { agreementReadContext } = await import("@/lib/agreement-preview.server");
+    return readMembershipAgreement(await agreementReadContext(context, data.clientId));
   });
 
 /** Record a member's acceptance: authenticated identity, every tick word for word, and the exact text. */
@@ -107,6 +118,8 @@ export const acceptMembershipAgreement = createServerFn({ method: "POST" })
       .parse(i),
   )
   .handler(async ({ data, context }) => {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    if (getRequest()?.headers.get("x-jf-pov-session")) throw new Error("Only the member can accept their agreement.");
     const { supabase, userId } = context;
     const { data: client } = await supabase.from("clients").select("id, service_tier").eq("user_id", userId).maybeSingle();
     if (!client || (client as any).service_tier !== "self_serve") {

@@ -44,7 +44,7 @@ const VersionSchema = z.object({
   legal_review_note: z.string().nullable().optional(),
 });
 
-async function assertAdmin(context: { supabase: any; userId: string }) {
+async function assertAdmin(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
   const { data, error } = await context.supabase.rpc("has_role", {
     _user_id: context.userId,
     _role: "admin",
@@ -89,7 +89,9 @@ export const listVersions = createServerFn({ method: "GET" })
  */
 export const listMyLegalStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }) => readLegalStatus(context));
+
+async function readLegalStatus(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
     const { data: docs, error: e1 } = await context.supabase
       .from("legal_documents")
       .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!fk_legal_documents_current_version(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
@@ -190,18 +192,36 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
         satisfied_by_prior_version: !accepted && ((noResignIds.includes(d.id) && priorAcceptances.some(a => a.document_id === d.id)) || (d.id === clickVersion?.id && priorMembershipAccepted)),
       };
     });
+}
+
+export const previewLegalStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ clientId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { agreementReadContext } = await import("@/lib/agreement-preview.server");
+    return readLegalStatus(await agreementReadContext(context, data.clientId));
   });
 
 export const listMyAcceptanceHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }) => readAcceptanceHistory(context));
+
+async function readAcceptanceHistory(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
     const { data, error } = await context.supabase
       .from("legal_acceptances")
-      .select("id, document_id, version_id, context, signature_method, accepted_at, revoked_at, acknowledgement_text, document:legal_documents(title, doc_type), version:legal_document_versions(version_number, title)")
+      .select("id, document_id, version_id, context, signature_method, context_ref, accepted_at, revoked_at, acknowledgement_text, document:legal_documents(title, doc_type), version:legal_document_versions(version_number, title)")
       .eq("user_id", context.userId)
       .order("accepted_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
+}
+
+export const previewAcceptanceHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ clientId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { agreementReadContext } = await import("@/lib/agreement-preview.server");
+    return readAcceptanceHistory(await agreementReadContext(context, data.clientId));
   });
 
 export const listAcceptancesForVersion = createServerFn({ method: "GET" })
@@ -351,6 +371,8 @@ export const recordAcceptance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => AcceptSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    if (getRequest()?.headers.get("x-jf-pov-session")) throw new Error("Only the account holder can accept their agreement.");
     // Confirm this is the actual published document, not an arbitrary version or signature method.
     const { data: doc, error: docError } = await context.supabase.from("legal_documents").select("slug, current_version_id, archived, emergency_disabled").eq("id", data.document_id).single();
     if (docError || !doc || doc.archived || doc.emergency_disabled || doc.current_version_id !== data.version_id) throw new Error("This document was updated or is unavailable. Review the current version.");

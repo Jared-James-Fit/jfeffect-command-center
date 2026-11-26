@@ -74,6 +74,7 @@ const DO_NOT_PERSIST_PREFIXES = [
   "coaching-agreement",
   "membership-agreement",
   "legal-status",
+  "legal-history",
   // One-time "What's new" popups: seen state must always come fresh from the
   // server, never from a stale on-device snapshot.
   "feature-announcement",

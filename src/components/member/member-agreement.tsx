@@ -10,19 +10,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
-import { acceptMembershipAgreement, getMyMembershipAgreement } from "@/lib/membership-agreement.functions";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { AgreementExitButton } from "@/components/legal/agreement-access-screen";
+import { acceptMembershipAgreement, getMyMembershipAgreement, previewMembershipAgreement } from "@/lib/membership-agreement.functions";
 import { MEMBERSHIP_AGREEMENT_ACKS, MEMBERSHIP_AGREEMENT_SUMMARY } from "@/lib/membership-agreement/acks";
-import { supabase } from "@/integrations/supabase/client";
 
 const QUERY_ROOT = "membership-agreement";
 
 export function useMembershipAgreement() {
   const { user } = useAuth();
   const fetch = useServerFn(getMyMembershipAgreement);
+  const preview = useServerFn(previewMembershipAgreement);
+  const { client, isImpersonating } = useClientImpersonation();
   return useQuery({
-    queryKey: [QUERY_ROOT, user?.id ?? "anon"],
-    enabled: !!user?.id,
-    queryFn: () => fetch(),
+    queryKey: isImpersonating ? [QUERY_ROOT, "pov", client?.pov?.id, client?.id] : [QUERY_ROOT, user?.id ?? "anon"],
+    enabled: !!user?.id && (!isImpersonating || !!client?.pov?.id),
+    queryFn: () => isImpersonating ? preview({ data: { clientId: client!.id } }) : fetch(),
     staleTime: 0,
     refetchOnWindowFocus: true,
     retry: 1,
@@ -43,6 +46,7 @@ function MemberAgreementSheet({
   required?: boolean;
 }) {
   const qc = useQueryClient();
+  const { isImpersonating } = useClientImpersonation();
   const { data } = useMembershipAgreement();
   const accept = useServerFn(acceptMembershipAgreement);
   const [ticks, setTicks] = useState<string[]>([]);
@@ -62,7 +66,7 @@ function MemberAgreementSheet({
   const ready = ticks.length === MEMBERSHIP_AGREEMENT_ACKS.length && (!requiresName || name.trim().length >= 2);
 
   const submit = async () => {
-    if (!ready || saving) return;
+    if (isImpersonating || !ready || saving) return;
     setSaving(true);
     try {
       await accept({ data: { versionId: v.id, ...(requiresName ? { typedName: name.trim() } : {}), acks: ticks } });
@@ -158,11 +162,12 @@ function MemberAgreementSheet({
           </div>
 
           <div className="shrink-0 space-y-2 border-t bg-background px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]">
-            <Button onClick={() => void submit()} disabled={!ready || saving} className="h-12 w-full text-base font-bold">
+            <Button onClick={() => void submit()} disabled={isImpersonating || !ready || saving} className="h-12 w-full text-base font-bold">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Agree & continue
             </Button>
-            {required && <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground"><a href="mailto:support@jfeffect.com" className="underline">Contact support</a><Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/auth"; }}>Sign out</Button></div>}
+            {isImpersonating && <p className="text-center text-xs text-muted-foreground">POV preview · Only the account holder can accept.</p>}
+            {required && <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground"><a href="mailto:support@jfeffect.com" className="underline">Contact support</a><AgreementExitButton /></div>}
           </div>
         </div>
       </SheetContent>

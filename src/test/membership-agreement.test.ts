@@ -36,16 +36,22 @@ describe("JF members sign their own Membership Agreement, never the Coaching Agr
     expect(read("src/components/member/member-agreement.tsx")).toContain("Agree & continue");
   });
 
-  it("the mandatory gate wraps portal content before setup, skips View as client, and keeps the Account copy", () => {
+  it("the mandatory gate wraps portal content before setup, uses the target account in View as client, and keeps the Account copy", () => {
     const route = read("src/routes/_authenticated/portal/route.tsx");
     expect(route).toContain("<MemberAgreementGate><PortalContent /></MemberAgreementGate>");
-    expect(route).toContain("if (isImpersonating) return <PortalContent />;");
+    expect(route).toContain("if (isImpersonating) return <><PovFrame /><ClientPovBanner /><LegalAcceptanceGate><MemberAgreementGate>");
     const gate = read("src/components/member/member-agreement.tsx");
     expect(gate).toContain("q.data.applicable && q.data.needsSigning");
     expect(gate).not.toContain("sessionStorage");
     expect(gate).not.toContain("Not now");
     expect(gate).toContain("if (q.isError || !q.data)");
-    expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("{!isImpersonating && <MemberAgreementCard />}");
+    expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("<MemberAgreementCard />");
+    expect(gate).toContain("isImpersonating || !ready || saving");
+    expect(gate).toContain("preview({ data: { clientId: client!.id } })");
+    expect(read("src/lib/agreement-preview.server.ts")).toContain("await assertStaffReachesClient(context.supabase, context.userId, clientId)");
+    expect(read("src/lib/membership-agreement.functions.ts")).toContain('headers.get("x-jf-pov-session")');
+    expect(read("src/lib/legal.functions.ts")).toContain('headers.get("x-jf-pov-session")');
+    expect(read("src/route-pages/_authenticated/admin/clients.$id.tsx")).toContain("<AccountAgreementStatus clientId={id}");
   });
 
   it("the Coaching Agreement refuses a member wherever it can be reached (/setup, signing, a coach's request), unless the coach approved them for coaching", () => {

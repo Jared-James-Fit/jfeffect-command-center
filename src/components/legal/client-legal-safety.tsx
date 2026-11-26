@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listMyLegalStatus, listMyAcceptanceHistory, listMyConsents, setConsentPreference, recordAcceptance } from "@/lib/legal.functions";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { listMyLegalStatus, listMyAcceptanceHistory, previewLegalStatus, previewAcceptanceHistory, listMyConsents, setConsentPreference, recordAcceptance } from "@/lib/legal.functions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,10 +32,14 @@ export function ClientLegalSafety({ bare = false, requiredOnly }: { bare?: boole
   const consentsFn = useServerFn(listMyConsents);
   const setConsentFn = useServerFn(setConsentPreference);
   const qc = useQueryClient();
+  const { client, isImpersonating } = useClientImpersonation();
+  const preview = useServerFn(previewLegalStatus);
+  const previewHistory = useServerFn(previewAcceptanceHistory);
+  const target = client?.pov?.id;
 
-  const { data: docs = [] } = useQuery({ queryKey: ["legal-status", user?.id ?? "anon"], enabled: !!user?.id, queryFn: () => statusFn() });
-  const { data: history = [] } = useQuery({ queryKey: ["legal-history"], queryFn: () => historyFn() });
-  const { data: consents = [] } = useQuery({ queryKey: ["legal-consents"], queryFn: () => consentsFn() });
+  const { data: docs = [] } = useQuery({ queryKey: isImpersonating ? ["legal-status", "pov", target, client?.id] : ["legal-status", user?.id ?? "anon"], enabled: !!user?.id && (!isImpersonating || !!target), queryFn: () => isImpersonating ? preview({ data: { clientId: client!.id } }) : statusFn() });
+  const { data: history = [] } = useQuery({ queryKey: isImpersonating ? ["legal-history", "pov", target, client?.id] : ["legal-history", user?.id], enabled: !requiredOnly && (!isImpersonating || !!target), queryFn: () => isImpersonating ? previewHistory({ data: { clientId: client!.id } }) : historyFn() });
+  const { data: consents = [] } = useQuery({ queryKey: ["legal-consents", user?.id], enabled: !requiredOnly && !isImpersonating, queryFn: () => consentsFn() });
 
   if (requiredOnly) return <Section title="Required to continue" docs={docs.filter((d: any) => requiredOnly.includes(d.document_id))} />;
 
@@ -84,7 +89,7 @@ export function ClientLegalSafety({ bare = false, requiredOnly }: { bare?: boole
         </div>
       )}
 
-      <div className="space-y-2 pt-2 border-t border-border/50">
+      {!isImpersonating && <div className="space-y-2 pt-2 border-t border-border/50">
         <h4 className="text-xs uppercase tracking-widest text-muted-foreground">Communication & marketing preferences</h4>
         <p className="text-xs text-muted-foreground">
           Withdrawing marketing or testimonial consent does <strong>not</strong> affect required coaching communications.
@@ -103,7 +108,7 @@ export function ClientLegalSafety({ bare = false, requiredOnly }: { bare?: boole
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {history.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-border/50">
@@ -142,9 +147,11 @@ function DocRow({ doc }: { doc: any }) {
   const [typedName, setTypedName] = useState("");
   const acceptFn = useServerFn(recordAcceptance);
   const qc = useQueryClient();
+  const { isImpersonating } = useClientImpersonation();
   const isAccepted = !!doc.accepted_at || !!doc.satisfied_by_prior_version;
 
   const submit = async () => {
+    if (isImpersonating) return;
     try {
       await acceptFn({ data: {
         document_id: doc.document_id,
@@ -221,7 +228,8 @@ function DocRow({ doc }: { doc: any }) {
                     />
                   </div>
                 )}
-                <Button onClick={submit} disabled={(doc.version?.signature_method === "checkbox" && !checked) || (doc.version?.signature_method === "typed_name" && !typedName.trim())} className="w-full">Accept {doc.title}</Button>
+                <Button onClick={submit} disabled={isImpersonating || (doc.version?.signature_method === "checkbox" && !checked) || (doc.version?.signature_method === "typed_name" && !typedName.trim())} className="w-full">Accept {doc.title}</Button>
+                {isImpersonating && <p className="text-xs text-muted-foreground">POV preview · Only the account holder can accept.</p>}
               </div>
             )}
             {isAccepted && (

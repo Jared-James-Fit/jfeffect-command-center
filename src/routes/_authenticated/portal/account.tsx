@@ -388,7 +388,7 @@ function AccountPage() {
 
   const coachingRows = tier === "coaching" ? coachingSetupRows(client, assignedCoach ?? null) : [];
   const coachState = agreement.state?.applicable ? agreement.state.state?.state ?? null : null;
-  const memberStatus = !isImpersonating ? membershipAgreementStatus(memberAgreement) : null;
+  const memberStatus = membershipAgreementStatus(memberAgreement);
   const agreementSummary: Summary =
     coachState === "signed"
       ? { text: "Signed" }
@@ -584,7 +584,7 @@ function AccountPage() {
                   <SectionErrorBoundary label="Coaching Agreement">
                     <AgreementAccountCard bare />
                     {/* a JF member's agreement (the coaching one never applies to them) */}
-                    {!isImpersonating && <MemberAgreementCard />}
+                    <MemberAgreementCard />
                   </SectionErrorBoundary>
                 </div>
               </SettingsSection>
@@ -667,11 +667,9 @@ function AccountPage() {
                 comes from the signed-in session, so in coach "View as client"
                 it'd be the coach's, not the client's: left out there. */}
             <SettingsSection id="legal" icon={ShieldCheck} title="Privacy & data">
-              {!isImpersonating && (
-                <SectionErrorBoundary label="Legal & Safety">
-                  <ClientLegalSafety bare />
-                </SectionErrorBoundary>
-              )}
+              <SectionErrorBoundary label="Legal & Safety">
+                <ClientLegalSafety bare />
+              </SectionErrorBoundary>
               {/* the Crew community guidelines, any time (agreed to with the Terms, never asked mid-comment) */}
               <div className={cn(!isImpersonating && "mt-3")}>
                 <CrewGuidelinesRow />

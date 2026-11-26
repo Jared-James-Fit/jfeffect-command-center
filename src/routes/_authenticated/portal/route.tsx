@@ -32,7 +32,7 @@ const CREW_OWN_BAR = ["/portal/community"] as const;
 function PortalLayout() {
   const { isImpersonating } = useClientImpersonation();
   const { isSelfServe, loading, noAccount, tier } = useServiceTier();
-  if (isImpersonating) return <PortalContent />;
+  if (isImpersonating) return <><PovFrame /><ClientPovBanner /><LegalAcceptanceGate><MemberAgreementGate><PortalContent /></MemberAgreementGate></LegalAcceptanceGate></>;
   if (loading || (!tier && !noAccount)) return <AgreementAccessScreen checking={loading} retry={() => window.location.reload()} />;
   if (noAccount) return <MembershipPendingGate />;
   return (
@@ -65,8 +65,7 @@ function PortalContent() {
   if (noAccount) return <MembershipPendingGate />;
   return (
     <>
-      <PovFrame />
-      <ClientPovBanner />
+      {!isImpersonating && <><PovFrame /><ClientPovBanner /></>}
       {/* Crew draws its own top bar (+ · JF Effect · heart · you), for a coach viewing as a client too (under the banner) */}
       <AppShell items={navForShell(isSelfServe ? memberItems : clientNav, native)} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>
         {isSelfServe && <MemberGates hasHandling={hasHandling} scopeReady={serviceScope.ready} />}
