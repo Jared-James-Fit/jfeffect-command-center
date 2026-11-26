@@ -161,7 +161,8 @@ export async function queuePlanEdit(
     .insert({
       client_id: input.clientId,
       target_id: input.targetId,
-      instructions: input.instructions.trim() + (reference ? "\n\n" + reference : ""),
+      instructions: input.instructions.trim(),
+      ...(reference ? { progress: { calls: {}, pending: {}, reference } } : {}),
       status: "pending",
       before_targets_text: planAsTargetsText(plan),
       before_meal_plan_text: planAsMealPlanText(plan),
@@ -203,6 +204,7 @@ export async function runPlanEdit(sb: any, editId: string) {
     // cardio plan in force and how it's going, training, the coach's rules, what was tried before),
     // worked out once per change and kept with its progress so a resumed run reads the same words
     const intel = await clientIntelFor(sb, row.client_id, progress, save, row.created_by ?? null);
+    const reference = typeof (progress as any).reference === "string" ? (progress as any).reference : "";
     const t = await nutritionCall(
       sb,
       progress,
@@ -210,7 +212,7 @@ export async function runPlanEdit(sb: any, editId: string) {
       "nutrition_write",
       "edit_targets",
       REVISE_TARGETS_PROMPT,
-      [reviseTargetsUserPrompt(before, row.instructions), intel].filter(Boolean).join("\n\n"),
+      [reviseTargetsUserPrompt(before, row.instructions), intel, reference].filter(Boolean).join("\n\n"),
     );
     const next = cleanAiText(t.text);
     const targetsText = revisionLooksRight("targets", before, next) ? next : before;
@@ -228,7 +230,7 @@ export async function runPlanEdit(sb: any, editId: string) {
       history,
       foodNotes,
       foodRestrictions: food.restrictions,
-    });
+    }) + (reference ? "\n\n" + reference : "");
     const m = await nutritionCall(
       sb,
       progress,
