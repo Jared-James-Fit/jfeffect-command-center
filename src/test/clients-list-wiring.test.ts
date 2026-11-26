@@ -135,3 +135,37 @@ describe("the filters reach the database", () => {
     expect(read("src/components/clients/client-filter-rail.tsx")).toContain("<MatchToggle value={match} onChange={onMatch} />");
   });
 });
+
+
+describe("shared client card across categories", () => {
+  it("preserves the handling and nutrition panels but shares the exact row renderer", () => {
+    const handling = read("src/components/competition/prep/handling-directory.tsx");
+    expect(page).toContain("<HandlingDirectory");
+    expect(page).toContain("renderClientRow={renderClientRow}");
+    expect(page).toContain("nutritionRows.map(renderClientRow)");
+    expect(page).toContain("rows.map(renderClientRow)");
+    expect(page.match(/<ClientRow\s/g)).toHaveLength(1);
+    expect(handling).toContain(".map(renderClientRow)");
+    expect(handling).toContain("coachingType: \"Competition Handling\"");
+    expect(handling).not.toContain("params={{ id: r.client_id }}");
+  });
+});
+
+describe("service transfer on the shared client card", () => {
+  it("uses one Change service action and retains the real service and account workflows", () => {
+    expect(row).toContain("<ChangeServiceSheet");
+    expect(read("src/components/clients/quick-actions.tsx")).toContain("Change service");
+    const sheet = read("src/components/clients/change-service-sheet.tsx");
+    expect(sheet).toContain("switchClientServicePackageFn");
+    expect(sheet).toContain("<ChangePlanSheet");
+    expect(sheet).toContain("<HandlingInviteSheet");
+    expect(sheet).toContain("defaults={{ clientId");
+    expect(sheet).toContain("competition");
+    expect(sheet).toContain('["clients-directory"]');
+    expect(sheet).toContain("expectedEnrollmentId");
+    const sql = read("supabase/migrations/20270605091000_switch_client_service_package.sql");
+    expect(sql).toContain("SECURITY INVOKER");
+    expect(sql).toContain("IS DISTINCT FROM _expected_enrollment_id");
+    expect(sql).toContain("pg_advisory_xact_lock");
+  });
+});

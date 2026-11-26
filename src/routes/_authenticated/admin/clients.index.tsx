@@ -258,6 +258,19 @@ function ClientsDirectoryPage() {
         ? "No matches"
         : `${visibleTotal} result${visibleTotal === 1 ? "" : "s"}`;
 
+  const renderClientRow = (r: DirectoryRow) => (
+    <ClientRow
+                key={r.id}
+                r={r}
+                showCoach={showCoach}
+                onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined}
+                onQuickView={openPeek}
+                onQuickViewIntent={() => void WorkoutQuickView.preload().catch(() => {})}
+                starred={stars.isStarred(r.id)}
+                onToggleStar={stars.canStar ? () => stars.toggle({ id: r.id, full_name: r.full_name, profile_picture_url: r.profile_picture_url }) : undefined}
+              />
+  );
+
   const teamCount = teamData?.members.length;
 
   return (
@@ -347,7 +360,7 @@ function ClientsDirectoryPage() {
           </div>
         )}
         {/* Handling stays on the same page but is no longer hidden under pagination. */}
-        <HandlingDirectory search={search.search} />
+        <HandlingDirectory search={search.search} lifecycle={lifecycle} renderClientRow={renderClientRow} starredOnly={starredMode === "only" ? stars.ids : undefined} />
         {nutritionRows.length > 0 && (
           <section className="rounded-2xl border border-border bg-card" data-nutrition-directory>
             <button type="button" aria-expanded={nutritionOpen || !!search.search} onClick={() => {
@@ -360,13 +373,7 @@ function ClientsDirectoryPage() {
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${nutritionOpen || search.search ? "rotate-180" : ""}`} />
             </button>
             {(nutritionOpen || !!search.search) && <ul className="space-y-2 border-t border-border p-2">
-              {nutritionRows.map((r) => (
-                <ClientRow key={r.id} r={r} showCoach={showCoach}
-                  onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined}
-                  starred={stars.isStarred(r.id)}
-                  onToggleStar={stars.canStar ? () => stars.toggle({ id: r.id, full_name: r.full_name, profile_picture_url: r.profile_picture_url }) : undefined}
-                />
-              ))}
+              {nutritionRows.map(renderClientRow)}
             </ul>}
           </section>
         )}
@@ -392,18 +399,7 @@ function ClientsDirectoryPage() {
           />
         ) : (
           <ul className="space-y-2">
-            {rows.map((r) => (
-              <ClientRow
-                key={r.id}
-                r={r}
-                showCoach={showCoach}
-                onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined}
-                onQuickView={openPeek}
-                onQuickViewIntent={() => void WorkoutQuickView.preload().catch(() => {})}
-                starred={stars.isStarred(r.id)}
-                onToggleStar={stars.canStar ? () => stars.toggle({ id: r.id, full_name: r.full_name, profile_picture_url: r.profile_picture_url }) : undefined}
-              />
-            ))}
+            {rows.map(renderClientRow)}
           </ul>
         )}
 

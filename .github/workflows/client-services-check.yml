@@ -14,7 +14,10 @@ on:
       - 'src/routes/coaching.index.tsx'
       - 'src/routes/_authenticated/admin/clients.index.tsx'
       - 'src/route-pages/_authenticated/admin/clients.$id.tsx'
+      - 'src/components/competition/prep/handling-directory.tsx'
       - 'src/test/client-directory-services.test.ts'
+      - 'supabase/migrations/20270605090000_universal_client_directory.sql'
+      - 'supabase/migrations/20270605091000_switch_client_service_package.sql'
       - 'src/test/coaching-packages.test.ts'
       - '.github/workflows/client-services-check.yml'
   workflow_dispatch:
