@@ -37,7 +37,9 @@ import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/Pla
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
-import { archiveReplacedPlans, syncPlanCardio } from "@/lib/nutrition-targets/plan-publish";
+import { archiveReplacedPlans, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
+import { copyPlanDays, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
+import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 
 const QUICK_DAY_TYPES = [
@@ -77,6 +79,8 @@ type Props = {
   clientId?: string;
   clients?: Array<{ id: string; full_name: string }>;
   initial?: any;
+  /** A historical prescription copied into a new, unsaved editor. */
+  copyFrom?: PlanRow;
   /** New targets pre-filled from an AI nutrition plan (ignored when `initial` is set). */
   prefill?: {
     days: Day[];
@@ -93,7 +97,7 @@ type Props = {
   onSaved?: (targetId: string) => void;
 };
 
-export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved }: Props) {
+export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved, copyFrom }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
@@ -143,7 +147,12 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         pdf_name: "",
         water: "3.5 L",
       };
-      if (prefill) {
+      if (copyFrom) {
+        for (const key of ["phase", "custom_phase", "goal", "custom_goal", "structure", "client_notes", "admin_notes", "food_weighing_rules", "water", "supplements"] as const) {
+          if (copyFrom[key] !== undefined) Object.assign(f, { [key]: copyFrom[key] });
+        }
+        setPhasePicked(true);
+      } else if (prefill) {
         Object.assign(f, {
           structure: prefill.structure ?? "Custom",
           ...(prefill.phase ? { phase: prefill.phase, goal: PHASE_GOAL[prefill.phase] ?? f.goal } : {}),
@@ -158,15 +167,15 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       }
       if (prefill?.supplements) Object.assign(f, { supplements: prefill.supplements });
       setForm(f);
-      setDays(prefill?.days.length
+      setDays(copyFrom ? copyPlanDays(copyFrom.nutrition_target_days) as Day[] : prefill?.days.length
         ? prefill.days.map((d, i) => ({ ...d, sort_order: i }))
         : DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
     }
-  }, [open, initial, clientId, prefill]);
+  }, [open, initial, clientId, prefill, copyFrom]);
 
   // New targets start on the phase the client is actually working toward
   // (suggestTargetsPhase), never the default "Maintenance".
-  const suggestFor = open && !initial ? (form?.client_id || clientId || null) : null;
+  const suggestFor = open && !initial && !copyFrom ? (form?.client_id || clientId || null) : null;
   const listRequests = useServerFn(listNutritionRequestsFn);
   const requestsQ = useQuery({
     queryKey: ["nutrition-requests", suggestFor],
@@ -262,6 +271,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cardioQ.data, days, cardioClient, initial?.id]);
+
+  const historyClient = open ? (form?.client_id || clientId || "") : "";
+  const historyQ = useQuery({ ...clientPlansQuery(historyClient), enabled: !!historyClient });
+  const history = splitPlans(historyQ.data ?? []);
+  const references = [...history.current, ...history.previous].filter((p) => p.id !== form?.id);
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
@@ -490,7 +504,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </div>
           </div>
 
-          <Accordion type="single" collapsible defaultValue={!initial && !prefill ? "paste" : undefined} className="rounded-xl border border-border">
+          {open && historyClient && <NutritionWeekSummary
+            key={historyClient}
+            clientId={historyClient}
+            days={days}
+            references={references}
+            anchor={form.start_date > todayLocalISO() ? form.start_date : undefined}
+          />}
+          <Accordion type="single" collapsible defaultValue={!initial && !prefill && !copyFrom ? "paste" : undefined} className="rounded-xl border border-border">
             <Section value="paste" icon={ClipboardPaste} title="Paste a meal plan" meta="Fills the days">
               <MealPlanBulkPaste
                 clientId={form.client_id || clientId || null}
