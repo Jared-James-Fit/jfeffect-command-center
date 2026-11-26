@@ -127,3 +127,18 @@ export const adminUpdateMemberSetup = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+/** Staff POV: return the same existing intake, never the staff member's own answers. */
+export const previewMemberSetup = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ clientId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { assertStaffReachesClient } = await import("@/lib/staff-client-access.server");
+    await assertStaffReachesClient(context.supabase, context.userId, data.clientId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const c = await supabaseAdmin.from("clients").select("user_id").eq("id", data.clientId).maybeSingle();
+    if (c.error || !c.data?.user_id) throw new Error("Client account not linked");
+    const { data: m, error } = await supabaseAdmin.from("app_members").select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox, committed_training_days, committed_training_frequency, subscription_status, stripe_subscription_id").eq("user_id", c.data.user_id).maybeSingle();
+    if (error) throw new Error("Could not load membership setup");
+    const { memberSetupSummary } = await import("@/lib/member-setup-steps");
+    return { member: m, ...memberSetupSummary(m) };
+  });
