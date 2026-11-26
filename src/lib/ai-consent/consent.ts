@@ -39,7 +39,7 @@ export const AI_CONSENT_COPY = {
   /** The optional, unticked box at account creation (never part of agreeing to them). */
   checkboxLead: "Enable AI features (optional).",
   checkboxBody:
-    "Meal estimates, imports, voice-to-text and coaching drafts use OpenAI and Google. Data may be processed outside Canada.",
+    "Allow OpenAI and Google to process meal estimates, imports, voice notes and coaching data (including health notes). Data may be processed outside Canada.",
   checkboxNote: "Change this anytime in Account → Privacy & data. JF Effect works without it.",
   /** Someone who said no, at a feature that needs it: a state, never a request. */
   off: "AI processing is off for your account, so this isn't available.",
