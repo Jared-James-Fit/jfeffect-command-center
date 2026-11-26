@@ -1,7 +1,8 @@
 import { COMP_LIFTS, compLiftOfResult, type CompLift, type MeetResult } from "@/lib/analytics/competition-strength";
 import { localDay, isMeetLog, type LiftStrength } from "@/lib/analytics/lift-strength";
 import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
-import { forecastMeet, type LiftEvidence } from "@/lib/competition/forecast";
+import { forecastMeet, type LiftEvidence, type ConversionPoint } from "@/lib/competition/forecast";
+import { envelopeAt } from "@/lib/analytics/strength-estimate";
 import { LB_PER_KG } from "@/lib/analytics/units";
 import { weightContextAt, type WeightReference, type WeightSample } from "./weight-context";
 
@@ -28,7 +29,7 @@ export function ringTotal(lifts: RingLifts): number | null {
 /** Same-day strength scenarios from the existing forecast engine. No
  * extrapolation, no substitution of a past meet or coach-entered max.
  * Its high scenario requires favourable performance across all three lifts. */
-export function currentRing(strength: Record<CompLift, LiftStrength>, today: string): {
+export function currentRing(strength: Record<CompLift, LiftStrength>, today: string, meets: readonly MeetResult[] = [], weightClass?: string | null): {
   lifts: RingLifts;
   totalLb: number | null;
   lowLb: number | null;
@@ -64,9 +65,22 @@ export function currentRing(strength: Record<CompLift, LiftStrength>, today: str
         stale: true,
         detail: "Last known training estimate; there is not enough recent evidence for a current range.",
       };
+      else {const last=[...data.sessions].reverse().find(s=>!s.outlier&&s.day<=today&&s.e1rm>0);if(last)lifts[lift]={lb:last.e1rm,day:last.day,stale:true,detail:last.kind==="exact"?"Last comparable training estimate; not a current projection.":"Last logged lower-bound estimate; not a current projected max."};}
     }
   }
-  const forecast = forecastMeet({ today, meetDate: today, lifts: evidence, meets: [], conversion: [], concerns: [] });
+  const conversion: ConversionPoint[] = [];
+  for (const meet of meets) {
+    if (meet.date>today || (meet.event??"SBD").toUpperCase()!=="SBD") continue;
+    if(weightClass&&officialClass(meet)!==weightClass)continue;
+    const before=new Date(Date.parse(meet.date)-21*DAY).toISOString().slice(0,10);
+    for(const lift of COMP_LIFTS){
+      if(!strength[lift].meets.some(m=>m.day===meet.date))continue;
+      const point=envelopeAt(strength[lift].envelope,before);
+      if(!point||!["measured","raised"].includes(point.state)||age(point.basis,before)>42||!strength[lift].sessions.some(s=>s.day===point.basis&&s.kind==="exact"&&!s.outlier))continue;
+      conversion.push({lift,meetDate:meet.date,meetKg:meet.lifts[lift]/LB_PER_KG,trainingKg:point.value/LB_PER_KG,weightClass:meet.weightClass});
+    }
+  }
+  const forecast = forecastMeet({ today, meetDate: today, lifts: evidence, meets: [], conversion, concerns: [], weightClass });
   for (const lift of COMP_LIFTS) {
     const f = forecast.lifts[lift];
     if (!f || f.source !== "training") continue;
