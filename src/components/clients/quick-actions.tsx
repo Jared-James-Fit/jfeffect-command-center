@@ -115,6 +115,7 @@ export function ClientMoreMenu({
           </DropdownMenuItem>
         )}
 
+        {r.service_kind !== "nutrition" && <>
         <DropdownMenuLabel className="pt-2 text-xs text-muted-foreground">Training</DropdownMenuLabel>
         {r.block_id ? (
           <DropdownMenuItem asChild>
@@ -141,15 +142,16 @@ export function ClientMoreMenu({
           <Download className="h-4 w-4" /> Training PDF
         </DropdownMenuItem>
 
+        </>}
         <DropdownMenuLabel className="pt-2 text-xs text-muted-foreground">Coaching</DropdownMenuLabel>
         {onOpenPanel ? (
           <>
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onOpenPanel("nutrition"); }}>
               <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Assign Nutrition"}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onOpenPanel("cardio"); }}>
+            {r.service_kind !== "nutrition" && <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onOpenPanel("cardio"); }}>
               <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Assign Cardio"}
-            </DropdownMenuItem>
+            </DropdownMenuItem>}
           </>
         ) : (
           <DropdownMenuItem asChild>
