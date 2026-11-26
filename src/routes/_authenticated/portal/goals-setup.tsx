@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/app-shell";
 import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
 import { BellRing, CheckCircle2, Loader2 } from "lucide-react";
 import { clearGoalsUpdateRequestFn } from "@/lib/client-goals/goals.functions";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/_authenticated/portal/goals-setup")({
 
 function PortalGoalsSetupPage() {
   const userId = usePortalUserId();
+  const preview = useViewingAsClient();
   const qc = useQueryClient();
 
   const { data: client, isLoading } = useQuery({
@@ -98,7 +99,7 @@ function PortalGoalsSetupPage() {
             <Button
               size="sm" variant="ghost"
               onClick={() => clearReqMut.mutate()}
-              disabled={clearReqMut.isPending}
+              disabled={preview || clearReqMut.isPending}
             >
               Dismiss
             </Button>
@@ -118,7 +119,7 @@ function PortalGoalsSetupPage() {
         key={`${client.id}:${scope.nutritionOnly}`}
         nutritionOnly={scope.nutritionOnly}
         clientId={client.id}
-        onComplete={() => toast.success("Thanks — your coach will see your updates.")}
+        onComplete={preview ? undefined : () => toast.success("Thanks — your coach will see your updates.")}
       /> : <Card className="p-4 text-sm text-muted-foreground">{scope.error ? "Could not load your service. Refresh to try again." : "Loading your setup…"}</Card>}
 
       <div className="pt-2 text-center">
