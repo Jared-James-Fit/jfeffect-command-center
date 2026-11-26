@@ -341,7 +341,7 @@ function ClientsDirectoryPage() {
           </div>
         )}
         {/* Handling stays on the same page but is no longer hidden under pagination. */}
-        <HandlingDirectory />
+        <HandlingDirectory search={search.search} />
 
         {isError ? (
           <Card className="p-8 text-center">
