@@ -16,7 +16,7 @@ import { PostComposer, StudioShell, preloadStudio } from "@/components/community
 import { opensLibraryOnTap, useComposerPicker } from "@/components/community/composer-pick";
 import { NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
 import { mealCameraCard } from "@/lib/community";
-import { PostDetailDialog } from "@/components/community/post-detail";
+import { openCommunityPost } from "@/lib/community-notifications";
 import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
 import { MANAGE_TABS, manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
 import { feedback } from "@/lib/feedback";
@@ -234,9 +234,8 @@ function CrewManage({ counts }: { counts: Record<ManageTab, number> }) {
 function NeedsYou({ onGo }: { onGo: (t: ManageTab) => void }) {
   const { user } = useAuth();
   const { data: unit = "lb" } = useViewerUnit(user?.id);
-  const { data: p, refetch, isLoading } = useCommunityPulse();
+  const { data: p, isLoading } = useCommunityPulse();
   const feed = useCommunityFeed(null);
-  const [openPost, setOpenPost] = useState<string | null>(null);
   const [showProps, setShowProps] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const reportCount = useOpenReports().data?.length ?? 0;
@@ -283,7 +282,8 @@ function NeedsYou({ onGo }: { onGo: (t: ManageTab) => void }) {
             title={r.who}
             sub={`“${r.body}”`}
             tag="Reply"
-            onClick={() => setOpenPost(r.post_id)}
+            // the post on its own screen with its comments up (Crew's, as the feed shows it); ‹ back lands here
+            onClick={() => openCommunityPost({ id: r.post_id, sheet: "comments" })}
           />
         ))}
 
@@ -331,21 +331,12 @@ function NeedsYou({ onGo }: { onGo: (t: ManageTab) => void }) {
         )}
       </div>
 
-      <PostDetailDialog
-        postId={openPost}
-        unit={unit}
-        viewerIsStaff
-        onClose={() => {
-          setOpenPost(null);
-          void refetch();
-        }}
-      />
       <ReportsReviewSheet
         open={showReports}
         onOpenChange={setShowReports}
         onOpenPost={(id) => {
           setShowReports(false);
-          setOpenPost(id);
+          openCommunityPost(id);
         }}
       />
     </section>
