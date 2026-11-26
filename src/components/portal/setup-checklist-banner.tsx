@@ -24,6 +24,8 @@ import { useHeadshotCamera, useMyHeadshot } from "@/components/headshots/headsho
 type Props = {
   clientId: string;
   userId: string;
+  onOpenMeet?: (meetId: string) => void;
+  onOpenGoals?: () => void;
   /**
    * Shown instead of the checklist once it has nothing to ask but the
    * agreement (a client who finished setup and is asked to sign a new
@@ -35,7 +37,7 @@ type Props = {
 type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "member_setup";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
-export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Props) {
+export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals, whenHidden = null }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
   const { isImpersonating } = useClientImpersonation();
@@ -44,7 +46,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
   const memberEnabled = scope.requirements?.memberSetup === true;
   const memberApplies = scope.membership?.applicable === true;
   const memberFree = scope.membership?.free === true;
-  const needsGoals = scope.requirements?.coachingGoals === true;
+  const needsGoals = scope.requirements?.generalGoals === true;
   const { data: client, isPending: clientPending, isFetched: clientFetched, isError: clientError, refetch: retryClient } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
@@ -93,7 +95,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       },
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
-      { key: "goals_setup", label: scope.nutritionOnly ? "Finish nutrition setup" : "Finish Goals & Setup", description: scope.nutritionOnly ? "Nutrition preferences and goals for your coach." : "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null, scope.nutritionOnly) },
+      { key: "goals_setup", label: scope.nutritionOnly ? "Finish nutrition setup" : "Finish Goals & Setup", description: scope.nutritionOnly ? "Nutrition preferences and goals for your coach." : "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", onClick: onOpenGoals, icon: Target, done: isGoalsSetupComplete(goals ?? null, scope.nutritionOnly) },
       { key: "calendar", label: "Sync your calendar", description: "Optional: add your sessions and workouts to Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone, optional: true },
     ];
     // The Coaching Agreement is the one mandatory step, so it leads the list. It only
@@ -118,7 +120,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
         case "profile_picture": return !!req?.headshot;
         case "basic_info": return !!req?.basicInfo;
         case "training_schedule": return !!req?.trainingSchedule;
-        case "goals_setup": return !!req?.coachingGoals;
+        case "goals_setup": return !!req?.generalGoals;
         case "agreement": return !!req?.coachingGoals;
         default: return true;
       }
@@ -128,9 +130,9 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       description: memberFree ? "Your goal, experience and training days." : "Your remaining membership details.",
       icon: IdCard, done: scope.membership?.complete === true, onClick: memberEnabled ? () => setMemberOpen(true) : undefined, to: "/portal/account",
     });
-    for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done });
+    for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done, onClick: onOpenMeet && !meet.done ? () => onOpenMeet(meet.id) : undefined });
     return applicable;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, isImpersonating, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, scope.membership?.complete, memberEnabled]);
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, isImpersonating, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, scope.membership?.complete, memberEnabled, onOpenMeet, onOpenGoals]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
@@ -148,7 +150,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       <Card className="p-4 sm:p-5" data-testid="setup-checklist">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2"><h2 className="text-base font-semibold tracking-tight">{isImpersonating ? "Client setup preview" : "Complete your setup"}</h2><Badge variant="secondary" className="text-[11px]">{done}/{required.length}</Badge></div>
-          <p className="text-[13px] text-muted-foreground">{needsGoals ? "A few quick steps so your coach can tailor your program." : scope.handlingMeets.length ? "Complete your account and competition setup." : "A few quick details to get started."}</p>
+          <p className="text-[13px] text-muted-foreground">{scope.handlingMeets.length ? "Complete your regular account questions and competition setup." : needsGoals ? "A few quick steps so your coach can tailor your program." : "A few quick details to get started."}</p>
         </div>
         <div className="mt-3"><Progress value={Math.round((done / required.length) * 100)} /></div>
         <ul className="mt-3 divide-y divide-border">
