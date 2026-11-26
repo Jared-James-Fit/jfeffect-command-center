@@ -125,7 +125,7 @@ export function reportToMarkdown(report: IntelReport, rec: IntelRecords, meta: E
   out.push(`- Training dates in scope: ${c.firstDate ?? "—"} → ${c.lastDate ?? "—"} · today ${rec.today}`);
   out.push(`- Coaching brain: ${BRAIN_LABEL[report.brain]} (${report.brainSource === "override" ? "chosen by the coach" : "classified from the data"})`);
   out.push(`- Generated ${report.generatedAt} · data fingerprint ${report.dataHash} · report v${report.version}${meta.reportId ? ` · export ${meta.reportId}` : ""}`);
-  out.push(`- Units: loads in ${u}; e1RM = Epley-style estimate from logged load × (reps + reps in reserve)${rec.settings.e1rmFormula === "brzycki" ? " (Brzycki)" : ""}`);
+  out.push(`- Units: loads in ${u}; e1RM = the RPE chart (RTS) read from logged load, reps and reps in reserve${rec.settings.e1rmFormula === "brzycki" ? " (Brzycki)" : ""}`);
   if (meta.privacySafe) out.push(`- Privacy-safe export: the athlete's name and personal notes are removed.`);
   out.push("");
   out.push(`## How to read this`);

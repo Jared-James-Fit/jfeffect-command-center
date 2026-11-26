@@ -138,6 +138,6 @@ describe("the athlete's workout card (source)", () => {
   });
   it("reads the reference lift and the logged e1RM", () => {
     expect(wdv).toContain("family: refFamily,");
-    expect(wdv).toContain("loggedE1rmByFamily={loggedE1rmByFamily}");
+    expect(wdv).toContain("strengthRefs={strengthRefs}");
   });
 });

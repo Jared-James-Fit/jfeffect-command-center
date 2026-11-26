@@ -201,6 +201,10 @@ export function computeRowLoad(opts: {
   ownCompetition?: boolean;
   /** the app's estimated max of that lift from their training, in kg (planning-e1rm.ts) */
   loggedE1rmKg?: number | null;
+  /** their competition PR for that lift, kg (a % of competition PR) */
+  compPrKg?: number | null;
+  /** this exercise's own estimated max, kg (a % of the variation's own e1RM: strength-intel/planning.ts) */
+  variationE1rmKg?: number | null;
 }): {
   load: number | null;
   unit: "kg" | "lb";
@@ -233,6 +237,21 @@ export function computeRowLoad(opts: {
 
   if (!percentage) {
     return { load: null, unit, exact: null, base: null, baseLabel: basis, status: "no-percentage" };
+  }
+
+  // a % of their competition PR, or of this exercise's own estimate: read from
+  // what they lifted, never a max row, never carried across lifts
+  if (basis === "comp_pr" || basis === "var_e1rm") {
+    const kg = basis === "comp_pr" ? opts.compPrKg : opts.variationE1rmKg;
+    const baseLabel = basis === "comp_pr" ? "Competition PR" : "Est. 1RM";
+    if (kg == null || !(kg > 0)) return { load: null, unit, exact: null, base: null, baseLabel, status: "no-max", max: null };
+    const baseInUnit = unit === "kg" ? kg : kg * 2.20462262;
+    const exact = (baseInUnit * percentage) / 100;
+    const load = roundLoadWithMode(exact, defaultRoundingStep(unit), "nearest");
+    const famName = opts.family ? `Competition ${opts.family === "bench" ? "Bench" : opts.family === "squat" ? "Squat" : "Deadlift"}` : null;
+    const refLift = basis === "comp_pr" ? famName : (exerciseName ?? null);
+    const label = plannedLoadLabel({ percentage, basis, refLift, viaFamily: basis === "comp_pr" && !opts.ownCompetition });
+    return { load, unit, exact, base: baseInUnit, baseLabel, status: "ok", max: null, label, refLift, fromTraining: basis === "var_e1rm" };
   }
 
   const all = Array.from(maxesIndex.values());

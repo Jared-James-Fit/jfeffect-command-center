@@ -143,7 +143,7 @@ describe("SBD card wiring", () => {
   it("reads comp lifts (never variations) through the shared loads and outlier guard", () => {
     // getClientResults' load is resultLoadLb's; the guard runs before any estimate
     expect(dash).toContain("liftStrengths(allResults as any[], meets, today)");
-    const ls = readFileSync("src/lib/analytics/lift-strength.ts", "utf8");
+    const ls = readFileSync("src/lib/strength-intel/profile.ts", "utf8");
     expect(ls).toContain("neutralizeObviousLoadOutliers(");
     expect(lib).toContain("neutralizeObviousLoadOutliers(");
     expect(lib).toContain('if (!r || r.is_competition_lift !== true) return null;');

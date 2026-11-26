@@ -24,6 +24,8 @@ export type PercentageBasis =
   | "1rm"
   | "training_max"
   | "est_1rm"
+  | "comp_pr"
+  | "var_e1rm"
   | "top_set"
   | "prev_set"
   | "prev_week"
@@ -83,6 +85,8 @@ export const PERCENTAGE_BASES: { value: PercentageBasis; label: string }[] = [
   { value: "1rm",          label: "% of 1RM" },
   { value: "training_max", label: "% of Training Max" },
   { value: "est_1rm",      label: "% of Estimated 1RM" },
+  { value: "comp_pr",      label: "% of Competition PR" },
+  { value: "var_e1rm",     label: "% of this exercise's own e1RM" },
   { value: "top_set",      label: "% of Top Set (linked row)" },
   { value: "prev_set",     label: "% of Previous Set (linked row)" },
   { value: "prev_week",    label: "% of Previous Week" },

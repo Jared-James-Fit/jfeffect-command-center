@@ -3,7 +3,8 @@
  * program builder and the AI generator's loading guard all read this file.
  *
  * A row plans its load one of these ways (pl_exercise_rows.percentage_basis):
- *   training_max · 1rm · est_1rm  a % of a max
+ *   training_max · 1rm · est_1rm  a % of a max (the coach's TM / 1RM, their current estimate)
+ *   comp_pr · var_e1rm            a % of their competition PR · of this exercise's own estimate
  *   top_set · prev_set            a % of a set logged earlier today (filled in once it's logged)
  *   manual                        a fixed load the coach typed
  *   none / null                   RPE or RIR only
@@ -29,7 +30,7 @@ export const isLiftFamily = (v: unknown): v is LiftFamily =>
   (FAMILIES as readonly string[]).includes(String(v ?? "").trim().toLowerCase());
 
 /** Bases that read a max (the rest read a set logged today, a fixed load, or nothing). */
-export const MAX_BASES = ["training_max", "1rm", "est_1rm"] as const;
+export const MAX_BASES = ["training_max", "1rm", "est_1rm", "comp_pr", "var_e1rm"] as const;
 export type MaxBasis = (typeof MAX_BASES)[number];
 export const isMaxBasis = (b: unknown): b is MaxBasis => (MAX_BASES as readonly string[]).includes(String(b ?? ""));
 /** Bases whose load comes from a set logged earlier in the same session. */
@@ -78,7 +79,7 @@ export function competitionMax<T extends { lift: string; active?: boolean | null
 export const E1RM_WINDOW_DAYS = 42;
 export const E1RM_MIN_SESSIONS = 2;
 
-const BASIS_SHORT: Record<MaxBasis, string> = { training_max: "TM", "1rm": "1RM", est_1rm: "e1RM" };
+const BASIS_SHORT: Record<MaxBasis, string> = { training_max: "TM", "1rm": "1RM", est_1rm: "e1RM", comp_pr: "PR", var_e1rm: "e1RM" };
 
 /** "Competition Squat" → "Comp Squat", "Competition Bench Press" → "Comp Bench". */
 export function shortLiftName(lift: string): string {
