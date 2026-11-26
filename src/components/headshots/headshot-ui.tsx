@@ -60,6 +60,8 @@ export function useHeadshotCamera() {
       onDone={() => {
         void qc.invalidateQueries({ queryKey: [MY_HEADSHOT_KEY] });
         void qc.invalidateQueries({ queryKey: ["setup-banner-client"] });
+        void qc.invalidateQueries({ queryKey: ["my-client-account"] });
+        void qc.invalidateQueries({ queryKey: ["my-client"] });
       }}
     />
   ) : null;
