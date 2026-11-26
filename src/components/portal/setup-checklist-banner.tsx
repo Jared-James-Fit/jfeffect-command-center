@@ -22,6 +22,7 @@ import { useHeadshotCamera, useMyHeadshot } from "@/components/headshots/headsho
 type Props = {
   clientId: string;
   userId: string;
+  handlingOnly?: boolean;
   /**
    * Shown instead of the checklist once it has nothing to ask but the
    * agreement (a client who finished setup and is asked to sign a new
@@ -30,10 +31,10 @@ type Props = {
    */
   whenHidden?: ReactNode;
 };
-type ItemKey = "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
+type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
-export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Props) {
+export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, whenHidden = null }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const agreement = useCoachingAgreement();
   const scope = useGoalsServiceScope(clientId);
@@ -48,7 +49,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
     },
   });
   const { data: goals, isPending: goalsPending, isFetched: goalsFetched, isError: goalsError, refetch: retryGoals } = useQuery({
-    queryKey: ["client-goals-setup", clientId], enabled: !!clientId, staleTime: 60_000,
+    queryKey: ["client-goals-setup", clientId], enabled: !!clientId && !handlingOnly, staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("client_goals_setup").select("*").eq("client_id", clientId).maybeSingle();
       if (error) throw error;
@@ -103,15 +104,17 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
         done: agreement.state.state.state !== "needs_signature",
       });
     }
-    return scope.nutritionOnly ? base.filter(i => i.key !== "training_schedule") : base;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly]);
+    const applicable = handlingOnly ? base.filter(i => ["profile_picture", "basic_info", "calendar"].includes(i.key)) : scope.nutritionOnly ? base.filter(i => i.key !== "training_schedule") : base;
+    for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done });
+    return applicable;
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, handlingOnly]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
   const done = required.filter((i) => i.done).length;
   if (!clientId || !userId) return null;
-  if (scope.error || clientError || goalsError) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), retryGoals()]); }}>Try again</Button></Card>;
-  if (!scope.ready || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
+  if (scope.error || clientError || (!handlingOnly && goalsError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(!handlingOnly ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
+  if (!scope.ready || clientPending || !clientFetched || (!handlingOnly && (goalsPending || !goalsFetched))) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
   if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;
@@ -122,7 +125,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       <Card className="p-4 sm:p-5" data-testid="setup-checklist">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2"><h2 className="text-base font-semibold tracking-tight">Complete your setup</h2><Badge variant="secondary" className="text-[11px]">{done}/{required.length}</Badge></div>
-          <p className="text-[13px] text-muted-foreground">A few quick steps so your coach can tailor your program.</p>
+          <p className="text-[13px] text-muted-foreground">{handlingOnly ? "A few quick steps so your handler can prepare your meet." : "A few quick steps so your coach can tailor your program."}</p>
         </div>
         <div className="mt-3"><Progress value={Math.round((done / required.length) * 100)} /></div>
         <ul className="mt-3 divide-y divide-border">

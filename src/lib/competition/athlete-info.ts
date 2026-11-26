@@ -360,3 +360,27 @@ export function splitEventPatch(
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Offer existing facts as editable defaults only for unsaved steps. Never mark a step complete. */
+export function prefillMeetInfo(info: AthleteInfo, source: {
+  unit?: unknown; phone?: unknown; emergencyName?: unknown; emergencyPhone?: unknown;
+  bodyweightKg?: unknown; bodyweightOn?: unknown; bests?: Trio; recent?: Trio;
+}): AthleteInfo {
+  const next: AthleteInfo = { ...info };
+  if (next.completedAt) return next;
+  if (!next.unit && (source.unit === "kg" || source.unit === "lb")) next.unit = source.unit;
+  if (!next.steps?.body && next.bodyweightKg == null && source.bodyweightKg != null) {
+    const n = readNumber(source.bodyweightKg, 25, 300);
+    if (n != null) { next.bodyweightKg = n; if (typeof source.bodyweightOn === "string") next.bodyweightOn = source.bodyweightOn; }
+  }
+  if (!next.steps?.lifts) {
+    next.bests = { ...source.bests, ...next.bests };
+    next.recent = { ...source.recent, ...next.recent };
+  }
+  if (!next.steps?.day) next.meetDay = {
+    phone: next.meetDay?.phone ?? cleanText(source.phone, 30),
+    emergencyName: next.meetDay?.emergencyName ?? cleanText(source.emergencyName, 80),
+    emergencyPhone: next.meetDay?.emergencyPhone ?? cleanText(source.emergencyPhone, 30),
+  };
+  return readAthleteInfo(next);
+}

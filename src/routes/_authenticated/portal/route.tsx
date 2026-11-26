@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav, selfServeNav, selfServeBottomNav } from "@/lib/admin-nav";
 import { isCoachingOnlyPath, isLapsedMemberPath, useServiceTier } from "@/lib/service-tier";
+import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { useMemberAccess } from "@/lib/member-access";
 import { MemberSetupGate } from "@/components/member/member-setup-gate";
 import { MemberAgreementGate } from "@/components/member/member-agreement";
@@ -30,7 +31,10 @@ function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
   // Coaching client or JF member: one portal, the coach's screens only for coaching.
-  const { isSelfServe, loading: tierLoading, noAccount } = useServiceTier();
+  const { isSelfServe, loading: tierLoading, noAccount, clientId } = useServiceTier();
+  const serviceScope = useGoalsServiceScope(isSelfServe ? clientId : null);
+  const hasHandling = serviceScope.handlingMeets.length > 0;
+  const memberItems = hasHandling ? [...selfServeNav.slice(0, 2), ...clientNav.filter(i => i.to === "/portal/competition"), ...selfServeNav.slice(2)] : selfServeNav;
   // Workouts and Nutrition open from the cache: their data is fetched once the app has painted.
   const portalUserId = usePortalUserId();
   useWarmClientPages({ portalUserId, enabled: !isImpersonating && !tierLoading, nutrition: !isSelfServe });
@@ -49,8 +53,8 @@ function PortalLayout() {
       <PovFrame />
       <ClientPovBanner />
       {/* Crew draws its own top bar (+ · JF Effect · heart · you), for a coach viewing as a client too (under the banner) */}
-      <AppShell items={navForShell(isSelfServe ? selfServeNav : clientNav, native)} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>
-        {isSelfServe && <MemberGates />}
+      <AppShell items={navForShell(isSelfServe ? memberItems : clientNav, native)} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>
+        {isSelfServe && <MemberGates hasHandling={hasHandling} scopeReady={serviceScope.ready} />}
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home
             page — they must never lock the portal. See
@@ -86,7 +90,7 @@ function PortalLayout() {
  * membership opens Membership (billing, account, support stay reachable),
  * with the status banner; first-time setup as before.
  */
-function MemberGates() {
+function MemberGates({ hasHandling, scopeReady }: { hasHandling: boolean; scopeReady: boolean }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { isImpersonating } = useClientImpersonation();
@@ -95,9 +99,9 @@ function MemberGates() {
   useEffect(() => {
     if (isCoachingOnlyPath(pathname)) navigate({ to: "/portal", replace: true });
     // the iPhone app opens no billing page: a lapsed member lands on Account there (native-purchases.ts)
-    else if (lapsed && !isImpersonating && !isLapsedMemberPath(pathname))
+    else if (scopeReady && lapsed && !isImpersonating && !isLapsedMemberPath(pathname) && !(hasHandling && (pathname === "/portal" || pathname === "/portal/competition")))
       navigate({ to: (isNative() ? "/portal/account" : "/portal/membership") as any, replace: true });
-  }, [pathname, lapsed, isImpersonating, navigate]);
+  }, [pathname, lapsed, isImpersonating, navigate, hasHandling, scopeReady]);
   return (
     <>
       {lapsed && (

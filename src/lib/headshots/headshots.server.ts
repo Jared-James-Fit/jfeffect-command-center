@@ -101,6 +101,7 @@ type ClientRow = {
   id: string;
   user_id: string | null;
   service_tier: string | null;
+  handling_active?: boolean;
   archived: boolean | null;
   status: string | null;
   created_at: string;
@@ -112,17 +113,22 @@ type ClientRow = {
 };
 const CLIENT_COLS = "id, user_id, service_tier, archived, status, created_at, timezone, first_name, preferred_name, full_name, profile_picture_url";
 
-export function headshotApplies(c: Pick<ClientRow, "user_id" | "service_tier" | "archived" | "status"> | null | undefined): boolean {
-  return !!c && !!c.user_id && c.service_tier === "coaching" && !c.archived && !GONE.has(String(c.status ?? ""));
+export function headshotApplies(c: Pick<ClientRow, "user_id" | "service_tier" | "handling_active" | "archived" | "status"> | null | undefined): boolean {
+  return !!c && !!c.user_id && (c.service_tier === "coaching" || c.handling_active === true) && !c.archived && !GONE.has(String(c.status ?? ""));
 }
 
+async function withHandlingAccess(db: Admin, c: ClientRow | null): Promise<ClientRow | null> {
+  if (!c || c.service_tier === "coaching" || c.archived || !c.user_id) return c;
+  const { loadHandlingSetup } = await import("@/lib/competition/handling-setup.server");
+  return { ...c, handling_active: (await loadHandlingSetup(db, c.id)).length > 0 };
+}
 export async function clientForUser(db: Admin, userId: string): Promise<ClientRow | null> {
   const { data } = await (db as any).from("clients").select(CLIENT_COLS).eq("user_id", userId).maybeSingle();
-  return (data as ClientRow) ?? null;
+  return withHandlingAccess(db, (data as ClientRow) ?? null);
 }
 export async function clientById(db: Admin, clientId: string): Promise<ClientRow | null> {
   const { data } = await (db as any).from("clients").select(CLIENT_COLS).eq("id", clientId).maybeSingle();
-  return (data as ClientRow) ?? null;
+  return withHandlingAccess(db, (data as ClientRow) ?? null);
 }
 
 type RequestRow = {
@@ -695,7 +701,8 @@ export async function runHeadshotTick(db: Admin, now = new Date()): Promise<{ re
     for (let i = 0; i < ids.length; i += 100) {
       const { data: rows } = await (db as any).from("clients").select(CLIENT_COLS).in("id", ids.slice(i, i + 100));
       for (const c of (rows ?? []) as ClientRow[]) {
-        if (await sendDueReminder(db, c, now, s).catch(() => false)) reminders++;
+        const scoped = await withHandlingAccess(db, c).catch(() => null);
+        if (scoped && await sendDueReminder(db, scoped, now, s).catch(() => false)) reminders++;
       }
     }
   }
@@ -900,7 +907,8 @@ export async function headshotQueue(db: Admin, reachable: (ids: string[]) => Pro
   if (!ids.length) return [];
   const ok = await reachable(ids);
   const { data: clients } = await (db as any).from("clients").select(CLIENT_COLS).in("id", ids.filter((i) => ok.has(i)));
-  const byId = new Map(((clients ?? []) as ClientRow[]).filter(headshotApplies).map((c) => [c.id, c]));
+  const scopedClients = await Promise.all(((clients ?? []) as ClientRow[]).map(c => withHandlingAccess(db, c).catch(() => null)));
+  const byId = new Map(scopedClients.filter((c): c is ClientRow => !!c && headshotApplies(c)).map((c) => [c.id, c]));
   const nameOf = (c: ClientRow) => c.preferred_name || c.full_name || c.first_name || "Client";
   const out: HeadshotQueueItem[] = [];
   const seen = new Set<string>();

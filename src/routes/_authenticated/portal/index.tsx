@@ -154,7 +154,7 @@ function PortalHome() {
     },
   });
 
-  const scope = useGoalsServiceScope(coaching ? client?.id : null);
+  const scope = useGoalsServiceScope(client?.id);
   const [goalsSetupPromptOpen, setGoalsSetupPromptOpen] = useState(false);
 
   // Prompt incomplete clients once per app launch (not on every visit to Home),
@@ -248,11 +248,12 @@ function PortalHome() {
               is the one onboarding card (agreement, photo, info, schedule, Goals &
               Setup, calendar sync); once only the agreement is left, or a new
               version needs signing, the agreement card takes its place. */}
-          {client?.id && portalUserId && coaching && (
+          {client?.id && portalUserId && (coaching || scope.handlingMeets.length > 0 || (isSelfServe && client.source === "competition_handling" && !scope.ready)) && (
             <SectionErrorBoundary label="Setup checklist">
               <SetupChecklistBanner
                 clientId={client.id}
                 userId={portalUserId ?? ""}
+                handlingOnly={!coaching}
                 whenHidden={
                   <SectionErrorBoundary label="Coaching agreement">
                     <AgreementDashboardCard />

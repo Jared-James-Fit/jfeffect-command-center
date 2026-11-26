@@ -277,5 +277,7 @@ export const getGoalsServiceScopeFn = createServerFn({ method: "GET" })
       .eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10));
     if (error) throw new Error("Could not read service scope");
     // Multiple active services must not hide onboarding or omit training intake.
-    return { nutritionOnly: !!enrollments?.length && enrollments.every((e: any) => e.coaching_packages?.slug === "nutrition") };
+    const { loadHandlingSetup } = await import("@/lib/competition/handling-setup.server");
+    const handlingMeets = await loadHandlingSetup(supabaseAdmin, data.clientId);
+    return { nutritionOnly: !!enrollments?.length && enrollments.every((e: any) => e.coaching_packages?.slug === "nutrition"), handlingMeets };
   });

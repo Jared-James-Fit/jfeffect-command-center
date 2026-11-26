@@ -586,7 +586,26 @@ export const getMyMeetFn = createServerFn({ method: "POST" })
     if (!self) await reach(context, comp.client_id);
     const P = await import("./prep.server");
     const prep = await P.loadPrep(sb, comp.id, { coach: false });
-    const { data: me } = await sb.from("clients").select("email, phone").eq("id", comp.client_id).maybeSingle();
+    const { data: me } = await sb.from("clients").select("user_id, phone, emergency_contact_name, emergency_contact_phone, preferred_weight_unit, intake_lift_unit").eq("id", comp.client_id).maybeSingle();
+    const { prefillMeetInfo, toKg } = await import("./athlete-info");
+    let info = prep.info;
+    if (!info.completedAt && me) {
+      const [weight, results, maxes] = await Promise.all([
+        me.user_id ? sb.from("progress_bodyweight").select("weight_value, weight_unit, logged_date").eq("user_id", me.user_id).lte("logged_date", prep.today).order("logged_date", { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
+        sb.from("athlete_powerlifting_results").select("squat_kg, bench_kg, deadlift_kg").eq("client_id", comp.client_id).lt("meet_date", prep.today).limit(100),
+        sb.from("pl_client_maxes").select("lift, one_rm, unit, tested_at").eq("client_id", comp.client_id).eq("active", true).not("tested_at", "is", null).order("tested_at", { ascending: false }).limit(20),
+      ]);
+      const bests: Record<string, number> = {}, recent: Record<string, number> = {};
+      for (const lift of ["squat", "bench", "deadlift"]) {
+        const vals = (results.data ?? []).map((row: any) => Number(row[lift + "_kg"])).filter((n: number) => Number.isFinite(n) && n > 0);
+        if (vals.length) bests[lift] = Math.max(...vals);
+        const max = (maxes.data ?? []).find((row: any) => row.lift === lift && Number(row.one_rm) > 0 && ["kg", "lb"].includes(row.unit) && row.tested_at <= prep.today && row.tested_at >= new Date(Date.parse(prep.today) - 90 * 86400000).toISOString().slice(0, 10));
+        if (max) recent[lift] = toKg(Number(max.one_rm), max.unit);
+      }
+      const bw = weight.data?.[0];
+      const fresh = bw && ["kg", "lb"].includes(bw.weight_unit) && bw.logged_date >= new Date(Date.parse(prep.today) - 14 * 86400000).toISOString().slice(0, 10);
+      info = prefillMeetInfo(info, { unit: me.intake_lift_unit ?? me.preferred_weight_unit, phone: me.phone, emergencyName: me.emergency_contact_name, emergencyPhone: me.emergency_contact_phone, bests, recent, bodyweightKg: fresh ? toKg(Number(bw.weight_value), bw.weight_unit) : undefined, bodyweightOn: fresh ? bw.logged_date : undefined });
+    }
     const h = prep.handling;
     const terms = h
       ? P.termsFor({ handler: h.handler ?? "Your handler", meetName: prep.competition.name, priceCents: h.priceCents, currency: h.currency, payment: h.payment })
@@ -598,7 +617,7 @@ export const getMyMeetFn = createServerFn({ method: "POST" })
       competition: pick(prep.competition, ["id", "name", "meet_date", "meet_end_date", "federation", "division", "weight_class", "location", "status", "registration", "lifting_start", "weigh_in_at", "flight", "flights_in_session", "lifters_per_flight", "timezone", "sport", "session_label", "equipment_event", "rules", "schedule", "results"]),
       client: prep.client,
       contact: { phone: me?.phone ?? null },
-      info: prep.info,
+      info,
       steps: prep.steps,
       infoComplete: prep.infoComplete,
       handling: h
