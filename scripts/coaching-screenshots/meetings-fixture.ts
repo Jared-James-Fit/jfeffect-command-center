@@ -15,6 +15,7 @@ import { writeFileSync } from "node:fs";
 import { buildSessionPrep, planAgenda, recommendIntervention, type SessionPrepInput } from "../../src/lib/coaching-sessions/prepare";
 import { athleteView, SECTION_PROMPTS } from "../../src/lib/coaching-sessions/presentation";
 import type { SessionEvent } from "../../src/lib/coaching-sessions/events";
+import { meetingReadiness } from "../../src/lib/coaching-sessions/lifecycle";
 
 const out = process.argv[2] ?? "/tmp/meetings-fixture.json";
 const TODAY = "2026-11-25";
@@ -306,5 +307,77 @@ const presentation = {
   agreed: [],
 };
 
-writeFileSync(out, JSON.stringify({ CLIENT_ID, SESSION_ID, home, before, after, presentation }, null, 2));
+// The meeting's command centre (/admin/meetings/$id): the same session with what
+// getSession adds: the booked call it's for, readiness, what changed since the
+// coach last looked, the recording's parts and the client's memories.
+const PT_ID = "p1111111-2222-4333-8444-555555555555";
+const appointment = {
+  ptSessionId: PT_ID,
+  title: "Coaching Plus Call",
+  startsAt: "2026-11-26T00:00:00Z",
+  endsAt: "2026-11-26T00:30:00Z",
+  timezone: "America/Winnipeg",
+  location: "Video call",
+  meetLink: "https://meet.google.com/abc-defg-hij",
+  status: "Scheduled",
+  sessionType: "Coaching Plus Call",
+  state: "confirmed",
+  confirmedAt: "2026-11-25T16:10:00Z",
+  confirmationRequestedAt: "2026-11-25T15:11:49Z",
+  pendingChange: null,
+  bookedByClient: false,
+};
+const changesSinceReview = [
+  { at: "2026-11-25T16:03:00Z", text: "New in Evaluate: Left knee achy after high-bar days (their answer)" },
+  { at: "2026-11-25T16:03:00Z", text: "New in Execute: Exams Monday and Wednesday may cut sleep short" },
+];
+const readinessFor = (over: Partial<Parameters<typeof meetingReadiness>[0]> = {}) =>
+  meetingReadiness({
+    state: "confirmed",
+    planReady: true,
+    briefStatus: "ready",
+    coachReviewed: true,
+    changesSinceReview: changesSinceReview.length,
+    questions: "answered",
+    clarify: (agenda.clarify ?? []).length,
+    access: { kind: "video", label: "Video link" },
+    format: "call",
+    ...over,
+  });
+const centreBase = {
+  unit: "kg",
+  reviewedBefore: "2026-11-25T15:30:00Z",
+  appointment,
+  audio: [] as unknown[],
+  memories: [
+    ...home.intelligence.map((i) => ({ ...i, client_id: CLIENT_ID, visibility: "coach", source_session_id: "a1111111-2222-4333-8444-555555555556", source_quote: null, created_at: "2026-10-29T01:00:00Z", updated_at: "2026-10-29T01:00:00Z" })),
+  ],
+};
+const centre = {
+  before: { ...before, ...centreBase, session: { ...before.session, pt_session_id: PT_ID, coach_reviewed_at: "2026-11-25T15:30:00Z", changes: changesSinceReview }, changesSinceReview, readiness: readinessFor() },
+  // a client who sent nothing: the plan is still whole
+  bare: {
+    ...before,
+    ...centreBase,
+    appointment: { ...appointment, state: "awaiting_confirmation", confirmedAt: null },
+    session: { ...before.session, pt_session_id: PT_ID, questionnaire: null, questionnaire_submission_id: null, coach_reviewed_at: null, changes: [] },
+    changesSinceReview: [],
+    reviewedBefore: null,
+    readiness: readinessFor({ state: "awaiting_confirmation", questions: "not_needed", coachReviewed: false, changesSinceReview: 0 }),
+  },
+  live: {
+    ...before,
+    ...centreBase,
+    session: { ...before.session, pt_session_id: PT_ID, status: "live", live: { started_at: "2026-11-25T18:52:00Z", notes: "Bench opener: wants 60. Knee fine on comp days." } },
+    changesSinceReview: [],
+    readiness: readinessFor({ changesSinceReview: 0 }),
+    audio: [
+      { id: "au1", seq: 0, status: "done", offset_ms: 0, duration_ms: 300000, transcript: { segments: [{ start: 2, end: 9, speaker: "A", text: "So ten days out, how are you feeling about the bench opener?" }, { start: 10, end: 18, speaker: "B", text: "Honestly a bit nervous. I think 60 would feel better than 62.5." }] }, model: "gpt-4o-transcribe-diarize", error: null, created_at: "2026-11-25T18:57:00Z" },
+      { id: "au2", seq: 1, status: "transcribing", offset_ms: 300000, duration_ms: 300000, transcript: null, model: null, error: null, created_at: "2026-11-25T19:02:00Z" },
+    ],
+  },
+  after: { ...after, ...centreBase, session: { ...after.session, pt_session_id: PT_ID, outcome: {} }, changesSinceReview: [], readiness: readinessFor({ changesSinceReview: 0 }) },
+};
+
+writeFileSync(out, JSON.stringify({ CLIENT_ID, SESSION_ID, home, before, after, presentation, centre }, null, 2));
 console.log(`wrote ${out}: ${agenda.minutes} min, athlete's share ${agenda.athleteShare}, ${intervention.level}`);

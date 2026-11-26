@@ -49,6 +49,7 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 import { LeagueWeekScreen } from "@/components/community/league-week-card";
 import { useLeagueWeek, useLeagueWeekSeen } from "@/lib/league-week.queries";
 import { spotlightReady } from "@/lib/league-week";
+import { CrewPhotoReminderScreen, crewPhotoShownThisSession, useCrewPhotoReminder } from "@/components/community/crew-photo-reminder";
 import { ownAudience } from "@/lib/rankings-audience";
 import { useRankingsAudience } from "@/lib/use-rankings-audience";
 import { useServiceTier } from "@/lib/service-tier";
@@ -377,6 +378,17 @@ export function CommunityScreen({
     const unseen = previewOnly || weekSeen.data === false;
     setWeekSlot(unseen && window.scrollY < window.innerHeight * 0.5 ? "show" : "skip");
   }, [weekSlot, weekOn, scope.kind, weekQ.isPending, weekQ.isError, week, previewOnly, weekSeen.isPending, weekSeen.data]);
+  // "Make your Crew profile yours!" (crew-photo-reminder.tsx): someone with no Crew picture, at the admin's
+  // moments, once a session at most, decided while still on the first screen and never on a League week
+  const photoOn = ownBar && !coach && !previewOnly && scope.kind === "feed";
+  const photoQ = useCrewPhotoReminder(photoOn);
+  const [photoSlot, setPhotoSlot] = useState<"wait" | "show" | "skip">("wait");
+  useEffect(() => {
+    if (photoSlot !== "wait" || !photoOn || weekSlot === "wait") return;
+    if (weekSlot === "show" || crewPhotoShownThisSession()) return setPhotoSlot("skip");
+    if (photoQ.isPending && !photoQ.isError) return;
+    setPhotoSlot(photoQ.data?.show && window.scrollY < window.innerHeight * 0.5 ? "show" : "skip");
+  }, [photoSlot, photoOn, weekSlot, photoQ.isPending, photoQ.isError, photoQ.data]);
   useLayoutEffect(() => {
     if (!paging) return;
     setFeedPaging(true);
@@ -888,8 +900,11 @@ export function CommunityScreen({
             // last week in the League takes the spot right after the first post, once a week (then people to follow do)
             const weekCard = i === 0 && !following && weekSlot === "show" && week;
             if (weekCard) out.push({ key: "league-week", node: <LeagueWeekScreen week={week} onRankings={openRankings} /> });
+            // no Crew picture yet: the occasional, dismissible nudge takes that spot on the visits it shows
+            const photoCard = i === 0 && !following && !weekCard && photoSlot === "show";
+            if (photoCard) out.push({ key: "crew-photo", node: <CrewPhotoReminderScreen /> });
             // people to follow right after the first post (Instagram's spot), a screen of their own (never the coach's)
-            if (!previewOnly && !following && !coach && i === 0 && !weekCard)
+            if (!previewOnly && !following && !coach && i === 0 && !weekCard && !photoCard)
               out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
             if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
               out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });

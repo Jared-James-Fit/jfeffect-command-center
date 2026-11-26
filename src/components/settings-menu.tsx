@@ -41,9 +41,15 @@ export function SettingsMenu({
   trigger: ReactNode;
   align?: "start" | "center" | "end";
 }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  // a client's or member's account photo is their account headshot, taken in Account with its live camera
+  const athlete = role === "client" || role === "member";
+  const changePhoto = () => {
+    if (athlete) void navigate({ to: "/portal/account", hash: "account-headshot" });
+    else setPicOpen(true);
+  };
   const [picOpen, setPicOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
@@ -114,7 +120,7 @@ export function SettingsMenu({
               type="button"
               onClick={() => {
                 if (signedPic) setViewOpen(true);
-                else setPicOpen(true);
+                else if (role !== "member") changePhoto();
               }}
               className="shrink-0"
               aria-label="View profile picture"
@@ -135,9 +141,11 @@ export function SettingsMenu({
               <ImageIcon className="mr-2 h-4 w-4" /> View photo
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={() => setPicOpen(true)}>
-            <Camera className="mr-2 h-4 w-4" /> {mePic ? "Change photo" : "Add photo"}
-          </DropdownMenuItem>
+          {role !== "member" && (
+            <DropdownMenuItem onSelect={changePhoto}>
+              <Camera className="mr-2 h-4 w-4" /> {athlete ? (mePic ? "Update account headshot" : "Add account headshot") : mePic ? "Change photo" : "Add photo"}
+            </DropdownMenuItem>
+          )}
 
           {settingItems.length > 0 && (
             <>

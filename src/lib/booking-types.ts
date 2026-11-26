@@ -57,6 +57,15 @@ const TRAINING_TYPES = new Set([
   "Custom Session",
 ]);
 
+/**
+ * A PostgREST `or` filter for "not a training session" (null counts as a call,
+ * as `isTrainingSessionType` reads it), so a query can drop training sessions
+ * before it's limited instead of after.
+ */
+export const NOT_TRAINING_FILTER = `session_type.is.null,session_type.not.in.(${[...TRAINING_TYPES]
+  .map((t) => `"${t}"`)
+  .join(",")})`;
+
 export function isTrainingSessionType(sessionType: string | null | undefined): boolean {
   return TRAINING_TYPES.has(String(sessionType ?? ""));
 }

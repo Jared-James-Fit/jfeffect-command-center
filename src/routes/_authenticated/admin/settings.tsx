@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FocusUsageCard } from "@/components/admin/focus-usage-card";
+import { PhotoReminderSettingsCard } from "@/components/headshots/headshot-admin";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -117,6 +118,8 @@ function SettingsPage() {
         <JfMembershipSettingsCard />
         {/* Is the workout logger's Focus view worth keeping? (admins; moved here from Training Intel) */}
         {isAdmin && <FocusUsageCard />}
+        {/* how often account headshot and Crew picture reminders come (admins) */}
+        {isAdmin && <PhotoReminderSettingsCard />}
 
         <Card className={isAdmin ? "space-y-3 p-5 md:col-span-2" : "space-y-3 p-5"}>
           <h3 className="flex items-center gap-2 text-base font-semibold">

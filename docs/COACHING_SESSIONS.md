@@ -170,6 +170,14 @@ change, at most every 3 hours); transcribes recording parts
 retention date. The 5-minute `appointment-reminders` tick runs
 `runMeetingAutomation` before the reminders.
 
+## Reliability (Nov 26 2026)
+
+- **No lost edits.** Every write that depends on what's on a meeting (the plan, live notes, the outcome, the recording record, the questions' send) is `writeFresh` (fresh-write.server.ts): the patch is worked out from the row as read and written only while `updated_at` is unchanged, else the row is read again (5 tries, then "being changed somewhere else"). The command centre sends plan edits one at a time and doesn't let a refetch replace the plan on screen until they've all landed.
+- **Refreshes keep the coach's work.** An objective the coach wrote stays (`objectiveEdited`); a clarification they settled or reworded stays, even once it's no longer on file.
+- **Said once.** A plan never says the same signal twice (`onceEach` when built; an untouched repeat in a stored plan is dropped as it's read). An outcome line the coach noted and the same idea Cleo read are one line, with Cleo's quote and date.
+- **Recordings finish.** A part waiting on the client's AI permission is re-checked every 10 minutes (no model call); a part cut off on its last try is failed; audio that never became a transcript goes when its retention runs out (`coaching_audio_due()`), and the Execute stage offers the transcript upload instead.
+- **Small guards.** A reading whose transcript is deleted keeps nothing; the questions' send is claimed before it goes (no double send) and carries this send's wording; Undo of a memory only touches that client's rows; a meeting links only to its own client's booking; the background queries filter training sessions before their limit; the day-before message uses the client's own clock.
+
 ## Where an approved change goes
 
 Training, nutrition and cardio: words in that tab's own Cleo dock

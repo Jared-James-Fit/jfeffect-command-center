@@ -73,7 +73,7 @@ describe("profile photo crop (Instagram-style move and scale)", () => {
     expect(capture).toContain("startCrop(track(URL.createObjectURL(file)))");
     expect(capture).toContain("Adjust");
     expect(capture).toContain("compressImage(previewBlob");
-    const crew = read("src/components/community/profile-view.tsx");
+    const crew = read("src/components/community/crew-photo-picker.tsx");
     expect(crew).toContain("<AvatarCropper");
     expect(crew).toContain("setCropSrc(URL.createObjectURL(f))");
   });
