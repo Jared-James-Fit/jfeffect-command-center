@@ -143,8 +143,10 @@ export function notificationDeepLink(
         ? `/admin/communication?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`
         : `/portal/messages?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`;
     case "direct_message":
-      // Member-to-member chats live with the client's group chats ("Chats").
-      return `/portal/messages?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`;
+      // Staff personal chats open their ordinary Messages inbox; members use the same existing DM pane.
+      return staff
+        ? `/admin/communication?tab=messages${ids.groupId ? `&direct=${ids.groupId}` : ""}`
+        : `/portal/messages?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`;
     case "workout_review":
       return staff ? "/admin/lift-videos" : "/portal/lift-videos";
     case "check_in":
