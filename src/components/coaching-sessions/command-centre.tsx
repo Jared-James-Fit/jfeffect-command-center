@@ -38,6 +38,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/loading";
@@ -299,6 +300,9 @@ function CommandCentre({ data }: { data: any }) {
                 .reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, " · ", x] : [x]), [])}
             </p>
           </div>
+          <Button asChild variant="ghost" size="sm" className="shrink-0">
+            <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer">Packages</a>
+          </Button>
           {appt ? <StateChip state={appt.state} /> : null}
         </div>
         {appt?.pendingChange ? (
