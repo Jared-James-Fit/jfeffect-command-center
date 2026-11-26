@@ -371,6 +371,8 @@ export type IntelRecords = {
   competitionPlan?: { plan: import("@/lib/competition-plan").CompetitionPlan; approvedAt: string; pendingSince: string | null } | { plan: null; approvedAt: null; pendingSince: string } | null;
   /** Program Intelligence settings the coach saved for this client. */
   profile?: RawIntelProfile | null;
+  /** The goal ledger (client_goals): open and recently resolved goals, the approved targets the program plans toward. */
+  goalLedger?: import("@/lib/goal-intel/types").GoalRow[];
   /** The client's cardio plan (cardio_targets) and the last weeks of its log. */
   cardioTargets?: import("./cardio").RawCardioTarget[];
   cardioCompletions?: import("./cardio").RawCardioCompletion[];

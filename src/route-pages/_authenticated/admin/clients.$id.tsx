@@ -95,6 +95,7 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
+const GoalSummary = lazyDefault(() => import("@/components/goals/goal-summary"), "GoalSummary");
 const ClientDocumentsPanel = lazyDefault(() => import("@/components/documents/documents-pages"), "ClientDocumentsPanel");
 const HealthCard = lazyDefault(() => import("@/components/health/HealthCard"), "HealthCard");
 const AccountHeadshotPanel = lazyDefault(() => import("@/components/headshots/headshot-admin"), "AccountHeadshotPanel");
@@ -1899,6 +1900,12 @@ function ClientOverviewSnapshot({
       {form.service_tier !== "self_serve" && (
         <Suspense fallback={null}>
           <ClientPackageCard clientId={clientId} />
+        </Suspense>
+      )}
+      {/* What they're working toward (the goal ledger): their target, Cleo's projection, the approved target, feasibility, time left, Cleo's action. */}
+      {form.service_tier !== "self_serve" && (
+        <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
+          <GoalSummary clientId={clientId} onOpenTraining={() => onGoToTab("training")} />
         </Suspense>
       )}
       {/* The coach's notes on this client (Quick Notes saved to them land here). */}

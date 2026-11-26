@@ -25,6 +25,7 @@ Exception: `payment-reminder-sms` uses its own Vault secret (`payment_reminder_h
 | sms-unread-reminders | every 10 min (:08, :18, …) | sms-reminders |
 | ai-health-tick | every 5 min (:02, :07, …) | ai-health-tick (AI provider health, alerts, recovery; its hourly parts run at :02) |
 | training-roadmap-tick | every 5 min (:03, :08, …) while a roadmap waits | training-roadmap-tick |
+| goal-intel-tick | every 5 min (:03, :08, …) while `goal_intel_due()` | goal-intel-tick: client goal updates whose review window is up (only to an offline client, outside quiet hours), goals read from new meeting analyses, weekly check-ins and clients' messages (all proposed for the coach), open goals re-read every 6 hours (docs/GOAL_INTELLIGENCE.md); no model call |
 | payment-setup-reminders / payment-reminder-sms | :07/:37, :12/:42 | see payment-links-and-reminders.md |
 | scheduled-jobs-health | :23/:53 | SQL only (below) |
 
