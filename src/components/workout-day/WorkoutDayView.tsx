@@ -35,6 +35,7 @@ import { focusNames } from "@/lib/workouts/focus-names";
 import { noteLead } from "@/lib/workouts/note-lead";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
 import { hasRpeCap, isMaxBasis, referenceFamily, rpeCapValue, type LiftFamily } from "@/lib/workouts/load-reference";
+import { e1rmSourceLine, type PlanningE1rm } from "@/lib/workouts/planning-e1rm";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
@@ -1175,9 +1176,10 @@ function WorkoutDay({
     return out;
   }, [lastWeekDay, rows]);
 
-  // "% of e1RM" rows with no e1RM stored read one worked out from their logged
-  // competition sets (loggedE1rm, load-reference.ts): one small read, only when
-  // this workout has such a row, for the lifts those rows refer to.
+  // "% of e1RM" rows with no e1RM stored read the app's own estimated max for
+  // that lift (planning-e1rm.ts, the Strength tab's line, from their logged
+  // sets and meets): one read, only when this workout has such a row, for the
+  // lifts those rows refer to.
   const e1rmFamilies = useMemo(() => {
     const out = new Set<LiftFamily>();
     for (const r of rows as any[]) {
@@ -1187,8 +1189,8 @@ function WorkoutDay({
     }
     return [...out].sort();
   }, [rows]);
-  const { data: loggedE1rmByFamily = null } = useQuery({
-    queryKey: ["logged-e1rm", historyOwnerId, e1rmFamilies.join(",")],
+  const { data: loggedE1rmByFamily = null, isLoading: e1rmLoading } = useQuery({
+    queryKey: ["logged-e1rm", "v2", historyOwnerId, e1rmFamilies.join(",")],
     enabled: adapter?.kind !== "member" && !!historyOwnerId && e1rmFamilies.length > 0,
     staleTime: 5 * 60_000,
     queryFn: () => fetchLoggedE1rmByFamily(historyOwnerId!, e1rmFamilies),
@@ -3081,6 +3083,7 @@ function WorkoutDay({
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
                       loggedE1rmByFamily={loggedE1rmByFamily}
+                      e1rmPending={e1rmLoading}
                       bodyweightKg={bodyweightNowKg}
                       readiness={readiness}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
@@ -3606,7 +3609,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen, otherOn = null }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setScope = null, startsWorkout = true, existingResults, restOrder = null, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** This client and workout instance: where the card's added / skipped sets are kept (set-session.ts). */ setScope?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** The workout's lifting in order, open while a card has sets to log (where a rest shows, restHosts); null on the cardio. */ restOrder?: ReadonlyArray<{ id: string; open: boolean }> | null; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setScope = null, startsWorkout = true, existingResults, restOrder = null, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, e1rmPending = false, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** This client and workout instance: where the card's added / skipped sets are kept (set-session.ts). */ setScope?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** The workout's lifting in order, open while a card has sets to log (where a rest shows, restHosts); null on the cardio. */ restOrder?: ReadonlyArray<{ id: string; open: boolean }> | null; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** the estimated max per competition lift (planning-e1rm.ts), for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, PlanningE1rm>> | null; /** those estimates are still loading */ e1rmPending?: boolean; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   // What the card says of the coach's note (coach-notes.ts): a coach's words as written, a generated note without its boilerplate.
   const athleteNote = exerciseNoteForAthlete(row?.notes, weekIndex);
   const adapter = useOptionalAdapter();
@@ -4040,7 +4043,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const restRowId = String(row.id ?? exerciseId ?? name);
   const restShows = (owner: string) => restHosts(restOrder ?? [], owner).includes(restRowId);
 
-  const { data: maxes = [], isPending: maxesPending } = useQuery({
+  const { data: maxes = [], isPending: maxesLoading } = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
     enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
     queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
@@ -4053,7 +4056,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     movementFamily: row.exercises?.movement_family,
   });
   const ownCompetition = !!refFamily && String(row.exercises?.competition_lift_type ?? "").toLowerCase() === refFamily;
-  const loggedE1rmKg = refFamily ? loggedE1rmByFamily?.[refFamily] ?? null : null;
+  const loggedE1rm = refFamily ? loggedE1rmByFamily?.[refFamily] ?? null : null;
+  const loggedE1rmKg = loggedE1rm?.kg ?? null;
+  // what a % of a max waits on: the maxes, and for a % of Est. 1RM the estimate
+  const maxesPending = maxesLoading || (row.percentage_basis === "est_1rm" && e1rmPending);
   const computed = useMemo(() => {
     if (!row.percentage || !row.percentage_basis || row.percentage_basis === "manual") return null;
     return computeRowLoad({
@@ -4173,10 +4179,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
         ? maxReference(computed!.max ?? (computed!.refLift ? { lift: computed!.refLift, unit: computed!.unit } : null), computed!.base, computed!.unit)
         : null,
       label: ok ? computed!.label ?? null : null,
+      // a % of Est. 1RM read from their training (no e1RM stored): what it's from
+      referenceNote:
+        ok && computed!.fromTraining && refFamily
+          ? e1rmSourceLine(loggedE1rm?.source, refFamily, activeUnit)
+          : null,
       capOver: capHeld?.over ?? null,
       pending: !topSet && maxesPending,
     });
-  }, [hideWeight, row.manual_override, rowLoadType, row.percentage_basis, row.percentage, row.rpe, maxBasedPct, computed, activeUnit, percentageBackoffWeight, backoffPlan?.plain, backoffPlan?.adjust, plannedFromMax, suggestedWeight, openSetWeight, topSetBasis?.value, topSetBasis?.unit, capHeld?.over?.set, capHeld?.over?.rpe, maxesPending]);
+  }, [hideWeight, row.manual_override, rowLoadType, row.percentage_basis, row.percentage, row.rpe, maxBasedPct, computed, activeUnit, percentageBackoffWeight, backoffPlan?.plain, backoffPlan?.adjust, plannedFromMax, suggestedWeight, openSetWeight, topSetBasis?.value, topSetBasis?.unit, capHeld?.over?.set, capHeld?.over?.rpe, maxesPending, loggedE1rm, refFamily]);
   const loadPlan = useMemo(
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],

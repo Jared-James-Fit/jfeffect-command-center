@@ -11,8 +11,9 @@
  * A % of a max reads the exercise's own max when one carries its name, else the
  * competition lift of its family: a High Bar Squat at 65% TM is 65% of the
  * Competition Squat TM. The family is the row's own (the builder's More) first,
- * then the exercise's. A % of e1RM reads a stored e1RM, else one worked out from
- * their logged competition sets (loggedE1rm), never a guess.
+ * then the exercise's. A % of e1RM reads a stored e1RM, else the app's own
+ * estimated max for that lift (planning-e1rm.ts: the Strength tab's line, from
+ * their logged sets and meets), never a guess.
  *
  * When a % and an RPE are both prescribed, the % is the planned load and the RPE
  * is a cap (said under the prescription by percentLoadLine): a set logged over it
@@ -68,41 +69,14 @@ export function competitionMax<T extends { lift: string; active?: boolean | null
   return live.find((m) => /^comp/i.test(m.lift.trim())) ?? live[0] ?? null;
 }
 
-export type LoggedSet = { kg: number; reps: number; rpe: number | null; at: string | number };
-const DAY_MS = 86_400_000;
-/** How far back a logged e1RM reaches, and how many sessions it needs before it's worth programming from. */
+/**
+ * What Generate Next Program treats as "an e1RM worth programming from" in an
+ * athlete's logs (program-intel/loading.ts): 2+ hard sessions in 6 weeks. The
+ * logger reads a wider estimate (planning-e1rm.ts) that covers every athlete
+ * this does, so a % the generator writes from their logs shows a weight.
+ */
 export const E1RM_WINDOW_DAYS = 42;
 export const E1RM_MIN_SESSIONS = 2;
-/** Sets past 8 reps or under RPE 6.5 say too little about a max (their RIR is a guess). */
-export const E1RM_MAX_REPS = 8;
-export const E1RM_MIN_RPE = 6.5;
-
-/**
- * A recent e1RM worth programming from: RPE-rated sets of 1–8 reps at RPE 6.5+
- * in the last 6 weeks, each session's best (RPE chart), the median of the last
- * three sessions. Null with fewer than two sessions: then the RPE leads.
- */
-export function loggedE1rm(sets: LoggedSet[], now: number = Date.now()): { kg: number; sessions: number } | null {
-  const best = new Map<string, number>();
-  for (const s of sets) {
-    const t = typeof s.at === "number" ? s.at : Date.parse(s.at);
-    if (!Number.isFinite(t) || t > now + DAY_MS || now - t > E1RM_WINDOW_DAYS * DAY_MS) continue;
-    if (!(s.kg > 0) || !(s.reps >= 1) || s.reps > E1RM_MAX_REPS) continue;
-    if (s.rpe == null || !(s.rpe >= E1RM_MIN_RPE) || s.rpe > 10) continue;
-    const pct = percentOf1RM(s.reps, 10 - s.rpe);
-    if (!pct) continue;
-    const day = new Date(t).toISOString().slice(0, 10);
-    best.set(day, Math.max(best.get(day) ?? 0, s.kg / pct));
-  }
-  if (best.size < E1RM_MIN_SESSIONS) return null;
-  const recent = [...best.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .slice(0, 3)
-    .map(([, v]) => v)
-    .sort((a, b) => a - b);
-  const mid = recent.length % 2 ? recent[(recent.length - 1) / 2] : (recent[recent.length / 2 - 1] + recent[recent.length / 2]) / 2;
-  return { kg: Math.round(mid * 2) / 2, sessions: best.size };
-}
 
 const BASIS_SHORT: Record<MaxBasis, string> = { training_max: "TM", "1rm": "1RM", est_1rm: "e1RM" };
 

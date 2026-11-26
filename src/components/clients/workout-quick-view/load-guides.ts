@@ -131,7 +131,7 @@ export function usePeekLoadGuides({
     return [...out].sort();
   }, [rows]);
   const e1rm = useQuery({
-    queryKey: ["logged-e1rm", clientId, e1rmFamilies.join(",")],
+    queryKey: ["logged-e1rm", "v2", clientId, e1rmFamilies.join(",")],
     enabled: on && e1rmFamilies.length > 0,
     staleTime: 5 * 60_000,
     queryFn: () => fetchLoggedE1rmByFamily(clientId, e1rmFamilies),
@@ -200,6 +200,7 @@ export function usePeekLoadGuides({
       maxes: maxes.data ?? [],
       maxesPending: needsMaxes && maxes.isLoading,
       loggedE1rmByFamily: e1rm.data ?? null,
+      e1rmPending: e1rm.isLoading,
     });
   }, [
     ready,
@@ -220,6 +221,7 @@ export function usePeekLoadGuides({
     maxes.isLoading,
     needsMaxes,
     e1rm.data,
+    e1rm.isLoading,
   ]);
 
   return { guides, loading: on && !ready };

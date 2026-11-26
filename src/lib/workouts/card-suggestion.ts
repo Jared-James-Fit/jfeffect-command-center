@@ -54,6 +54,7 @@ import {
 import { trustedSessionRpe } from "@/lib/workout-review";
 import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
 import { plannedLoadView, type PlannedLoadView } from "@/lib/workouts/planned-load";
+import type { PlanningE1rm } from "@/lib/workouts/planning-e1rm";
 import {
   capAdjustedLoad,
   hasRpeCap,
@@ -555,7 +556,9 @@ export type DayGuideInput = {
   warmups: Map<string, WarmupSetRow[]>;
   maxes: ClientMaxRow[];
   maxesPending: boolean;
-  loggedE1rmByFamily: Partial<Record<LiftFamily, number>> | null;
+  loggedE1rmByFamily: Partial<Record<LiftFamily, PlanningE1rm>> | null;
+  /** the estimated maxes a "% of Est. 1RM" row reads are still loading */
+  e1rmPending?: boolean;
 };
 
 /**
@@ -593,7 +596,7 @@ export function dayGuides(x: DayGuideInput): Map<string, CardGuide> {
       firstHeavySet: firstHeavy.has(row.id),
       followsSameExercise: backoffs.has(row.id),
       maxIndex,
-      maxesPending: x.maxesPending,
+      maxesPending: x.maxesPending || (row.percentage_basis === "est_1rm" && !!x.e1rmPending),
       loggedE1rmByFamily: x.loggedE1rmByFamily,
     });
     if (guide) out.set(row.id, guide);
@@ -617,7 +620,7 @@ function cardGuide(c: {
   followsSameExercise: boolean;
   maxIndex: ReturnType<typeof buildMaxIndex>;
   maxesPending: boolean;
-  loggedE1rmByFamily: Partial<Record<LiftFamily, number>> | null;
+  loggedE1rmByFamily: Partial<Record<LiftFamily, PlanningE1rm>> | null;
 }): CardGuide | null {
   const { row, unit } = c;
   if (row.cardio_target_id) return null;
@@ -647,7 +650,7 @@ function cardGuide(c: {
           maxesIndex: c.maxIndex,
           family: refFamily,
           ownCompetition,
-          loggedE1rmKg: refFamily ? (c.loggedE1rmByFamily?.[refFamily] ?? null) : null,
+          loggedE1rmKg: refFamily ? (c.loggedE1rmByFamily?.[refFamily]?.kg ?? null) : null,
         })
       : null;
   const plannedFromMax =

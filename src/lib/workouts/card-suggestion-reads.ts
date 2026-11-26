@@ -7,12 +7,15 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { normalizeWarmupRow, type WarmupSetRow } from "@/lib/final-warmup";
-import { parseRpe } from "@/lib/load-suggestion";
 import { resolveLoadType } from "@/lib/workout-load-type";
 import type { PreviousLiftIdentity, PreviousLiftLog } from "@/lib/workout-previous-lift";
 import { trainedOn } from "@/lib/workouts/exercise-history";
 import { instanceDates } from "@/lib/workouts/history-reads";
-import { loggedE1rm, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
+import type { LiftFamily } from "@/lib/workouts/load-reference";
+import { E1RM_READ_DAYS, planningE1rmByFamily, type PlanningE1rm } from "@/lib/workouts/planning-e1rm";
+import { meetsFromRows } from "@/lib/analytics/competition-strength";
+import { resultLoadLb } from "@/lib/result-load";
+import { todayLocalISO, toLocalISO } from "@/lib/today";
 
 const sb = supabase as any;
 
@@ -120,50 +123,70 @@ export function liftHistoryKey(ownerId: string | null, identities: PreviousLiftI
   return ["workout-previous-lifts", "client", ownerId, null, ids] as const;
 }
 
-/** "% of e1RM" rows with no e1RM stored: one worked out from their logged competition sets in the last 6 weeks (loggedE1rm). */
+/**
+ * "% of e1RM" rows with no e1RM stored: the app's own estimated max for each
+ * lift (planning-e1rm.ts, the Strength tab's line), from their logged
+ * competition sets and meets over the last E1RM_READ_DAYS. Every read throws
+ * on error: a failed read is never "no estimate".
+ */
 export async function fetchLoggedE1rmByFamily(
   clientId: string,
   families: LiftFamily[],
-): Promise<Partial<Record<LiftFamily, number>>> {
-  const since = new Date(Date.now() - 42 * 86_400_000).toISOString();
-  const { data, error } = await sb
-    .from("pl_row_results")
-    .select(
-      "normalized_kg, actual_load, actual_load_unit, actual_reps, actual_rpe_num, actual_rpe, completed_at, load_type, is_bodyweight, pl_exercise_rows!inner(exercises!inner(competition_lift_type))",
-    )
-    .eq("client_id", clientId)
-    .not("completed_at", "is", null)
-    .gte("completed_at", since)
-    .in("pl_exercise_rows.exercises.competition_lift_type", families)
-    .order("completed_at", { ascending: false })
-    .limit(600);
-  if (error) throw error;
-  const byFamily = new Map<LiftFamily, LoggedSet[]>();
-  for (const x of (data ?? []) as any[]) {
-    if (resolveLoadType(x.load_type, x.is_bodyweight) !== "external") continue;
-    const fam = String(x.pl_exercise_rows?.exercises?.competition_lift_type ?? "") as LiftFamily;
-    const kg =
-      x.normalized_kg != null
-        ? Number(x.normalized_kg)
-        : x.actual_load_unit === "lb"
-          ? Number(x.actual_load) * 0.45359237
-          : Number(x.actual_load);
-    byFamily.set(fam, [
-      ...(byFamily.get(fam) ?? []),
-      {
-        kg,
-        reps: Number(x.actual_reps),
-        rpe: parseRpe(x.actual_rpe_num ?? x.actual_rpe),
-        at: x.completed_at,
-      },
-    ]);
-  }
-  const out: Partial<Record<LiftFamily, number>> = {};
-  for (const [fam, sets] of byFamily) {
-    const e = loggedE1rm(sets);
-    if (e) out[fam] = e.kg;
-  }
-  return out;
+): Promise<Partial<Record<LiftFamily, PlanningE1rm>>> {
+  if (!families.length) return {};
+  const sinceMs = Date.now() - E1RM_READ_DAYS * 86_400_000;
+  const since = new Date(sinceMs).toISOString();
+  const sinceDay = toLocalISO(new Date(sinceMs));
+  const [sets, athlete] = await Promise.all([
+    fetchAllPages(
+      (from, to) =>
+        sb
+          .from("pl_row_results")
+          .select(
+            "id, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, completed_at, load_type, is_bodyweight, pl_exercise_rows!inner(exercise_id, exercises!inner(competition_lift_type, is_competition_lift))",
+          )
+          .eq("client_id", clientId)
+          .not("completed_at", "is", null)
+          .not("actual_reps", "is", null)
+          .gte("completed_at", since)
+          .in("pl_exercise_rows.exercises.competition_lift_type", families)
+          .order("completed_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { maxRows: 5_000 },
+    ),
+    sb.from("powerlifting_athletes").select("id").eq("client_id", clientId).maybeSingle(),
+  ]);
+  if (athlete.error) throw athlete.error;
+  const athleteId = (athlete.data as { id: string } | null)?.id ?? null;
+  const meetRes = await sb
+    .from("athlete_powerlifting_results")
+    .select("squat_kg, bench_kg, deadlift_kg, meet_date, meet_name")
+    .or(athleteId ? `client_id.eq.${clientId},athlete_id.eq.${athleteId}` : `client_id.eq.${clientId}`)
+    .gte("meet_date", sinceDay)
+    .order("meet_date", { ascending: false })
+    .limit(30);
+  if (meetRes.error) throw meetRes.error;
+  // analytics' result shape (getClientResults): load in lb, counted only when it's external weight
+  const results = (sets as any[]).map((x) => {
+    const type = resolveLoadType(x.load_type, x.is_bodyweight);
+    const lb = resultLoadLb(x);
+    const ex = x.pl_exercise_rows?.exercises;
+    return {
+      id: x.id,
+      date: x.completed_at,
+      load: type === "external" ? lb : 0,
+      counts_load: type === "external" && lb > 0,
+      reps: Number(x.actual_reps) || 0,
+      rpe: x.actual_rpe ?? null,
+      rir: x.actual_rir ?? null,
+      est_1rm: 0,
+      exercise_id: x.pl_exercise_rows?.exercise_id ?? null,
+      competition_lift_type: ex?.competition_lift_type ?? null,
+      is_competition_lift: ex?.is_competition_lift === true,
+    };
+  });
+  return planningE1rmByFamily(results, meetsFromRows(meetRes.data ?? []), families, todayLocalISO());
 }
 
 /** The athlete's most recent workout review of another day (what readiness is predicted from). */
