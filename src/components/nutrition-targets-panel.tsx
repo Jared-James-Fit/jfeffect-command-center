@@ -1,5 +1,3 @@
-import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
-import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { useMemo, useState } from "react";
 import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { queryView } from "@/lib/loading/load-state";
@@ -33,6 +31,10 @@ import { NutritionCleoEntry } from "@/components/nutrition/nutrition-cleo-dock";
 import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
+import { todayLocalISO } from "@/lib/today";
+import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
+import { manageScheduledNutrition, scheduledNutritionQuery, scheduledNutritionKey, scheduledPlanReference, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
+import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 
 export function NutritionTargetsPanel({
   clientId,
@@ -47,6 +49,10 @@ export function NutritionTargetsPanel({
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [copySource, setCopySource] = useState<PlanRow | null>(null);
+  const [scheduledDraft, setScheduledDraft] = useState<ScheduledNutrition | null>(null);
+  const scheduledQ = useQuery(scheduledNutritionQuery(clientId));
+  const [cancelling, setCancelling] = useState<string | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
   const [groceryOpen, setGroceryOpen] = useState(false);
   const { user, role } = useAuth();
@@ -84,7 +90,7 @@ export function NutritionTargetsPanel({
   const plansState = queryView(plansQ as any).kind;
   const { current, previous } = splitPlans(targets);
   const revisions = useQuery(nutritionRevisionQuery(clientId));
-  const references = orderPlanReferences(previous, revisions.data ?? []);
+  const comparisonReferences = [...orderPlanReferences(previous, revisions.data ?? []), ...(scheduledQ.data ?? []).map(scheduledPlanReference)];
   const [reusing, setReusing] = useState<string | null>(null);
 
   const refresh = () => {
@@ -156,6 +162,7 @@ export function NutritionTargetsPanel({
   };
 
   const startNewPlan = () => {
+    setScheduledDraft(null);
     setEditing(null);
     setOpen(true);
   };
@@ -188,7 +195,7 @@ export function NutritionTargetsPanel({
       <CardHeader
         icon={Apple}
         title="Current plan"
-        info="The live prescription. The review date is a check-in deadline, not an expiry; the plan stays active until replaced."
+        info="The client’s live prescription. The review date is a check-in deadline, not an expiry. The plan stays active until you replace it."
         chip={chip}
         actions={
           <DropdownMenu>
@@ -251,7 +258,18 @@ export function NutritionTargetsPanel({
               </Button>
             </div>
           )}
-          <NutritionWeekSummary key={clientId} clientId={clientId} days={plan.nutrition_target_days ?? []} references={references} historyUnavailable={revisions.isError} historyLoading={revisions.isLoading} currentId={plan.id} showCleo={!cleoEntry} />
+          <NutritionWeekSummary
+            key={clientId}
+            clientId={clientId}
+            days={plan.nutrition_target_days ?? []}
+            references={comparisonReferences}
+            historyUnavailable={revisions.isError || scheduledQ.isError}
+            historyLoading={revisions.isLoading || scheduledQ.isLoading}
+            currentId={plan.id}
+            showCleo={!cleoEntry}
+            anchor={plan.start_date && plan.start_date > todayLocalISO() ? plan.start_date : undefined}
+            onReuse={(source) => { setEditing(null); setCopySource(source); setOpen(true); }}
+          />
           {/* A day at a time: its targets (the client's ring), then its meals. */}
           <PlanDaysView
             days={planViewDays(plan)}
@@ -321,16 +339,16 @@ export function NutritionTargetsPanel({
                       <div className="text-[15px] font-medium">{planPeriod(t)}</div>
                       <div className="text-[13px] text-muted-foreground">{planLine(t, { dates: false })}</div>
                     </div>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => startAgainFrom(t)} disabled={reusing === t.id} title="Make this the client's plan again, from today">
-                      <RotateCcw className="h-3.5 w-3.5" /> Use again
+                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => { setEditing(null); setCopySource(t); setOpen(true); }} title="Copy the previous plan into the editor for review">
+                      <RotateCcw className="h-3.5 w-3.5" /> Use as draft
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <MoreButton label="Previous plan options" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setEditing(t); setOpen(true); }}>
-                          <Pencil className="mr-2 h-4 w-4" /> Open
+                        <DropdownMenuItem onClick={() => { setEditing(null); setCopySource(t); setOpen(true); }}>
+                          <Pencil className="mr-2 h-4 w-4" /> Open as draft
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => downloadPdf(t)}>
                           <Download className="mr-2 h-4 w-4" /> Download PDF
@@ -349,10 +367,23 @@ export function NutritionTargetsPanel({
         )}
       </div>
 
+      {scheduledQ.isError ? <p className="text-xs text-muted-foreground">Scheduled plans unavailable. <button type="button" onClick={() => void scheduledQ.refetch()} className="underline">Retry</button></p> : !!scheduledQ.data?.length && (
+        <details className="min-w-0 rounded-xl border border-border px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-medium">Scheduled plans · {scheduledQ.data.length}</summary>
+          <div className="space-y-2 pt-3">
+            {scheduledQ.data.map((draft) => <div key={draft.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2">
+              <div className="min-w-0"><p className="font-medium">{draft.payload.phase ?? "Nutrition"} · {planDate(draft.start_date)}</p><p className="text-muted-foreground">{draft.start_date <= todayLocalISO() ? "Due for review · not live" : "Awaiting start date"}</p></div>
+              <div className="flex flex-wrap gap-1"><Button type="button" size="sm" variant="outline" onClick={() => {setEditing(null);setCopySource(null);setScheduledDraft(draft);setOpen(true);}}>Review</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={!!cancelling} onClick={async () => {if (!confirm("Cancel this scheduled draft? The current plan stays unchanged.")) return;setCancelling(draft.id);try {await manageScheduledNutrition(clientId,draft,"cancel");void qc.invalidateQueries({queryKey:scheduledNutritionKey(clientId)});toast.success("Draft cancelled");}catch(e:any){toast.error(e?.message ?? "Couldn't cancel draft");}finally{setCancelling(null);}}}>Cancel</Button></div>
+            </div>)}
+            <p className="text-muted-foreground">Review and publish on or after the start date. Nothing changes automatically.</p>
+          </div>
+        </details>
+      )}
       {groceryOpen && (
         <GroceryListSheet open={groceryOpen} onOpenChange={setGroceryOpen} clientId={clientId} viewAsUserId={clientUserId} coachPreview />
       )}
-      <NutritionTargetDialog open={open} onOpenChange={setOpen} clientId={clientId} initial={editing ?? undefined} />
+      <NutritionTargetDialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setCopySource(null); setScheduledDraft(null); } }} clientId={clientId} initial={editing ?? undefined} copyFrom={copySource ?? undefined} scheduled={scheduledDraft ?? undefined} />
       {clientUserId && user?.id && (
         <WaterTargetDialog open={waterOpen} onOpenChange={setWaterOpen} userId={clientUserId} currentUserId={user.id} viewerRole={viewerRole} />
       )}
@@ -360,7 +391,7 @@ export function NutritionTargetsPanel({
   );
 }
 
-/** "Fat Loss · Nov 9 – Dec 9, 2026 · updated Nov 9 · next update in 29 days": the plan in one line. */
+/** "Fat Loss · Nov 9 – Dec 9, 2026 · updated Nov 9 · review in 29 days": the plan in one line. */
 function planLine(t: any, opts: { dates?: boolean } = {}): string {
   const d = deriveTarget(t);
   const updated = planUpdatedAt(t);

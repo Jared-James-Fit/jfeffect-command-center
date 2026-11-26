@@ -19,6 +19,8 @@
  * tab (Adjust program's engine: proposals with a tick per change, nothing applied
  * until the coach applies it), so the coach never leaves the tab to change it.
  */
+import { PlanEventTimeline } from "@/components/clients/plan-event-timeline";
+import { plansOnDate } from "@/lib/plan-event-timeline";
 import { useCleoHandoff } from "@/lib/cleo-handoff";
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
@@ -47,7 +49,7 @@ import { listClientMaxes } from "@/lib/pl-maxes";
 import { supabase } from "@/integrations/supabase/client";
 import { blockNameParts } from "@/lib/training-roadmap";
 import { todayISO, formatRange, type ScheduleBlock } from "@/lib/block-schedule-model";
-import { useClientTrainingSchedule, clientTrainingScheduleKey } from "@/lib/use-client-training-schedule";
+import { useClientTrainingSchedule, clientTrainingScheduleKey, type ClientTrainingSchedule } from "@/lib/use-client-training-schedule";
 import { trainingRoadmap, trainingAlerts, type TrainingAlert } from "@/lib/training-tab";
 import { gapParts } from "@/lib/program-gaps";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
@@ -119,6 +121,7 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
   const qc = useQueryClient();
   // the block Adjust program centres on: the one the program card shows (running, else next)
   const [focusId, setFocusId] = useState<string | null>(null);
+  const schedule = useClientTrainingSchedule(clientId);
   const afterApply = () => {
     qc.invalidateQueries({ queryKey: programQualityKey(clientId) });
     qc.invalidateQueries({ queryKey: clientTrainingScheduleKey(clientId) });
@@ -130,6 +133,15 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     // under the program, a tap from it; on a computer it heads the side column.
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
       <ProgramQualityStrip clientId={clientId} dock={dock} hasProgram={!!focusId} className="order-1 lg:order-none lg:col-span-2" />
+      <div className="order-1 lg:order-none lg:col-span-2">
+        <PlanEventTimeline clientId={clientId} renderMilestone={(m) => {
+          const matches = plansOnDate((schedule.data?.blocks ?? []).filter((b) => b.status_derived !== "Draft"), m.date, (b) => ({ start: b.effective_start, end: b.effective_end }));
+          return schedule.isLoading ? <p>Reading program…</p> : schedule.isError ? <p>Program unavailable.</p> : matches.length ? <div className="space-y-2">{matches.map((b) => <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"><span>{b.name ?? "Training block"} · {b.status_derived}</span><Link to="/admin/blocks/$blockId" params={{ blockId: b.id }} className="font-medium underline">Open block</Link></div>)}<Button variant="outline" size="sm" className="w-full" onClick={() => dock.ask("Review the training for " + m.event.name + " (" + m.label + ", " + m.date + ") using the recorded blocks: " + matches.map((b) => (b.name ?? "Block") + " (block ID " + b.id + ")").join(", ") + ". Identify what is known and propose changes for review, without applying them.")}>Ask Cleo</Button></div> : <p className="text-muted-foreground">No dated block covers this milestone.</p>;
+        }} />
+      </div>
+      {schedule.data && <div className="order-1 lg:order-none lg:col-span-2">
+        <TrainingBlockComparison key={clientId} schedule={schedule.data} onAsk={(text) => dock.ask(text)} />
+      </div>}
       {/* the approved targets the program works toward, and Cleo's read on them (hidden when there are none) */}
       <GoalSummary clientId={clientId} compact hideWhenEmpty className="order-1 lg:order-none lg:col-span-2" />
       <div className="contents lg:block lg:min-w-0 lg:space-y-5">
@@ -964,4 +976,40 @@ function SetupRow({
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
     </button>
   );
+}
+
+/** Compare recorded block periods without treating completed workouts as prescriptions. */
+function TrainingBlockComparison({ schedule, onAsk }: { schedule: ClientTrainingSchedule; onAsk: (text: string) => void }) {
+  const [left, setLeft] = useState("");
+  const [right, setRight] = useState("");
+  const blocks = schedule.blocks.filter((b) => b.status_derived !== "Draft" && b.effective_start).slice().sort((a, b) => String(b.effective_start).localeCompare(String(a.effective_start)));
+  const current = blocks.find((b) => b.id === right) ?? blocks.find((b) => b.status_derived === "Active") ?? blocks[0];
+  const choices = blocks.filter((b) => b.id !== current?.id);
+  const reference = choices.find((b) => b.id === left) ?? choices.find((b) => b.status_derived === "Completed" || b.status_derived === "EndedEarly") ?? choices[0];
+  if (!current || !reference) return null;
+  const summary = (b: ScheduleBlock) => {
+    const workouts = schedule.workouts.filter((w) => w.blockId === b.id);
+    return { planned: workouts.length, done: workouts.filter((w) => w.completed).length, unscheduled: schedule.unscheduled.filter((w) => w.blockId === b.id).length };
+  };
+  const a = summary(reference), b = summary(current);
+  return <details className="min-w-0 rounded-xl border border-border bg-card px-3 py-2 text-xs">
+    <summary className="cursor-pointer py-1 font-medium">Compare training blocks <span className="font-normal text-muted-foreground">· {reference.name ?? "Previous block"}</span></summary>
+    <div className="space-y-3 border-t border-border pt-2">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {[{ title: "Reference", value: reference.id, items: choices, pick: setLeft }, { title: "Compare against", value: current.id, items: blocks, pick: setRight }].map((side) => <label key={side.title} className="min-w-0 text-muted-foreground">{side.title}<select className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-foreground" value={side.value} onChange={(e) => side.pick(e.target.value)}>{side.items.map((block) => <option key={block.id} value={block.id}>{block.name ?? "Block"} · {block.effective_start}</option>)}</select></label>)}
+      </div>
+      <div className="grid grid-cols-3 gap-2 tabular-nums">
+        <span/><span className="text-right text-muted-foreground">Reference</span><span className="text-right text-muted-foreground">Selected</span>
+        <span>Weeks prescribed</span><span className="text-right">{reference.total_weeks ?? "—"}</span><span className="text-right">{current.total_weeks ?? "—"}</span>
+        <span>Scheduled workouts</span><span className="text-right">{a.planned}</span><span className="text-right">{b.planned}</span>
+        <span>Completed workouts</span><span className="text-right">{a.done}</span><span className="text-right">{b.done}</span>
+        <span>Unscheduled workouts</span><span className="text-right">{a.unscheduled}</span><span className="text-right">{b.unscheduled}</span>
+      </div>
+      <p className="text-muted-foreground">Recorded schedule and completion counts, not a measure of intensity or adherence across equal periods.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to="/admin/blocks/$blockId" params={{ blockId: reference.id }} className="rounded-md border border-border px-3 py-2">Open reference</Link>
+        <Button type="button" variant="outline" size="sm" onClick={() => onAsk("Compare training block ID " + reference.id + " against block ID " + current.id + ". Compare their recorded exercises, volume and intensity; treat prescriptions separately from logged performance. Do not change either block unless I approve a proposal.")}>Ask Cleo</Button>
+      </div>
+    </div>
+  </details>;
 }

@@ -89,6 +89,7 @@ export function ChangeServiceSheet({ clientId, clientName, open, onOpenChange }:
           <Button variant="outline" className="w-full justify-between" onClick={() => setTierOpen(true)} disabled={busy}>
             {review.data.tier === "coaching" ? "Move to self-serve / handling only" : "Move to coaching"} <ArrowRight className="h-4 w-4" />
           </Button>
+          {!review.data.hasLogin && <p className="text-xs text-muted-foreground">Have the athlete activate or claim their invitation before moving them to coaching. This protects their existing account and meet history.</p>}
           <p className="text-xs text-muted-foreground">Account access changes are reviewed separately. Billing and active meet services are not cancelled automatically.</p>
         </div>
       </div>}

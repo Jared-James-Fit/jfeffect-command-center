@@ -14,7 +14,7 @@ export function PackageShareDialog({ open, onOpenChange }: { open: boolean; onOp
   const q = useQuery({ queryKey: ["public-package-share"], queryFn: () => read(), enabled: open, staleTime: 15_000 });
   const [picked, setPicked] = useState<string[] | null>(null);
   const packages = listedPackages(q.data ?? []);
-  const selected = selectedPublicSlugs(packages, picked ?? packages.filter(p => p.kind === "subscription").map(p => p.slug));
+  const selected = selectedPublicSlugs(packages, picked ?? packages.filter(p => p.kind !== "one_time").map(p => p.slug));
   const href = packageComparisonLink(selected);
   const toggle = (slug: string) => {
     if (selected.includes(slug)) setPicked(selected.filter(s => s !== slug));
@@ -34,11 +34,11 @@ export function PackageShareDialog({ open, onOpenChange }: { open: boolean; onOp
         {q.isPending ? <p className="py-4 text-sm text-muted-foreground">Loading packages…</p> : !packages.length ? (
           <div className="space-y-2"><p className="text-sm text-muted-foreground">No public options could be loaded.</p><Button variant="outline" onClick={() => void q.refetch()}>Try again</Button></div>
         ) : (
-          <div className="space-y-2">
-            {packages.map(p => <label key={p.slug} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-border p-3">
+          <div className="space-y-4">
+            {[{ title: "Ongoing options", rows: packages.filter(p => p.kind !== "one_time") }, { title: "One-time services", rows: packages.filter(p => p.kind === "one_time") }].filter(g => g.rows.length).map(group => <section key={group.title} className="space-y-2"><h3 className="text-xs font-medium text-muted-foreground">{group.title}</h3>{group.rows.map(p => <label key={p.slug} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-border p-3">
               <Checkbox checked={selected.includes(p.slug)} disabled={selected.length >= 4 && !selected.includes(p.slug)} onCheckedChange={() => toggle(p.slug)} />
               <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{p.name}</span><span className="block text-xs text-muted-foreground">{priceText(p)}</span></span>
-            </label>)}
+            </label>)}</section>)}
           </div>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -53,7 +53,7 @@ export function PackageShareDialog({ open, onOpenChange }: { open: boolean; onOp
   );
 }
 
-export function PackageShareButton() {
+export function PackageShareButton({ label = "Packages" }: { label?: string } = {}) {
   const [open, setOpen] = useState(false);
-  return <><Button variant="ghost" size="sm" className="shrink-0" onClick={() => setOpen(true)}>Packages</Button><PackageShareDialog open={open} onOpenChange={setOpen} /></>;
+  return <><Button variant="ghost" size="sm" className="shrink-0" onClick={() => setOpen(true)}>{label}</Button><PackageShareDialog open={open} onOpenChange={setOpen} /></>;
 }

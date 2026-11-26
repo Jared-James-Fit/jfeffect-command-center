@@ -9,6 +9,8 @@
  * (`?assessment=`).
  */
 import { useState } from "react";
+import { PlanEventTimeline, planEventsKey } from "@/components/clients/plan-event-timeline";
+import { handOffToCleo } from "@/lib/cleo-handoff";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
@@ -154,8 +156,10 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
     queryFn: () => read({ data: { clientId, competitionId } }),
     staleTime: 30_000,
   });
-  const invalidate = () =>
+  const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
+    void qc.invalidateQueries({ queryKey: planEventsKey(clientId) });
+  };
   const saveSchedule = useServerFn(saveScheduleFn);
   const tickChecklist = useServerFn(tickChecklistFn);
   const reviewChanges = useServerFn(reviewChangesFn);
@@ -421,6 +425,16 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
         )
       ) : null}
       {section === "gameplan" && sel.prep ? <GameplanSection prep={sel.prep} onChanged={invalidate} /> : null}
+      {section === "timeline" && <PlanEventTimeline clientId={clientId} selectedEventId={comp.id} renderMilestone={(m) => (
+        <div className="space-y-2">
+          <p className="text-muted-foreground">Open a coaching workspace with this milestone in Cleo.</p>
+          <div className="flex flex-wrap gap-2">
+            {(["nutrition", "training", "cardio"] as const).map((area) => (
+              <Link key={area} to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: area }} onClick={() => handOffToCleo(clientId, area, "Review the " + area + " plan for " + m.event.name + " at " + m.label + " (" + m.date + "). Identify the recorded plan if available, compare it to the current plan, and show proposals for review only.")} className="rounded-md border border-border px-3 py-2 capitalize hover:bg-muted">{area}</Link>
+            ))}
+          </div>
+        </div>
+      )} />}
       {section === "timeline" && sel.prep ? (
         <TimelineSection
           timeline={sel.prep.timeline}
