@@ -14,6 +14,7 @@
  * private to their members (AGENTS.md). The coach thread is `messages`.
  */
 import { wellFormed } from "@/lib/well-formed";
+import { fromPublicRow, listedPackages, packageComparisonLink, priceText } from "@/lib/coaching-packages/packages";
 import { fetchStrengthIntel } from "@/lib/strength-intel/read";
 import { strengthText } from "@/lib/strength-intel/describe";
 import { tool } from "ai";
@@ -168,6 +169,24 @@ export function cleoReadTools(ctx: ToolCtx) {
   const moneyAccess = ctx.money ?? books;
 
   const tools = {
+    public_service_packages: tool({
+      description: "Get the current publicly listed JF Effect service packages, prices, inclusions and the shareable comparison page. Use whenever asked for a packages link, what is included, or a link comparing specific options. Pass exact catalogue slugs to narrow the link; with no slugs return all listed options. Never use for confidential offers or negotiated pricing.",
+      inputSchema: z.object({ slugs: z.array(z.string().max(60)).max(12).optional() }),
+      execute: safe("the public service catalogue", async ({ slugs }: { slugs?: string[] }) => {
+        const { data, error } = await db.rpc("coaching_packages_public");
+        if (error || !Array.isArray(data)) throw new Error(error?.message ?? "Catalogue unavailable");
+        const packages = listedPackages((data as Record<string, unknown>[]).map(fromPublicRow));
+        const requested = [...new Set(slugs ?? [])];
+        const selected = requested.length ? packages.filter((p) => requested.includes(p.slug)) : packages;
+        if (requested.length && selected.length !== requested.length) return "One or more requested options are not publicly listed. Available slugs: " + packages.map((p) => p.slug).join(", ") + ". Do not guess.";
+        if (!selected.length) return "No public packages are currently available. Do not guess prices or inclusions.";
+        return [
+          "Public comparison link: " + packageComparisonLink(requested),
+          ...selected.map((p) => [p.name + " (" + p.slug + "): " + priceText(p), p.bestFor, ...p.features].filter(Boolean).join(" | ")),
+          "These are current public catalogue terms, not an individual client's contract.",
+        ].join("\n");
+      }),
+    }),
     business_analytics: tool({
       description:
         "JF Effect's own business analytics (the admin's Analytics section): website visitors, sessions, engagement and bounce, active users (daily, weekly, monthly), sign-ups, applications, new paying clients and free-to-paid, revenue and MRR, retention (day 1/7/30/90, cohorts, people at risk), acquisition channels and campaigns with first- and last-touch attribution, approximate geography, the conversion funnel and onboarding, feature adoption, web vitals and errors, plus rule-based insights and last week's summary. Use for any question about how the business, the website or the app is doing. Pass `section` (or 'all') and optionally `from` / `to` (YYYY-MM-DD; defaults to the last 30 days).",
