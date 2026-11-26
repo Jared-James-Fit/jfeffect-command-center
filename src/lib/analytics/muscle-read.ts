@@ -525,3 +525,29 @@ const dayStr = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10
 function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
+
+/** Compare equal elapsed windows, with the same muscle attribution on both sides. */
+export function compareMuscleWindows(read: MuscleRead, history: LoadSet[], a: {start:string;end:string}, b:{start:string;end:string}, credit:SupportCredit): MuscleRead {
+  if (![a.start,a.end,b.start,b.end].every(isoDay)) return read;
+  const span=Math.min(dayNum(a.end)-dayNum(a.start)+1,dayNum(b.end)-dayNum(b.start)+1);
+  if(span<=0)return read;
+  const aEnd=dayStr(dayNum(a.start)+span-1),bEnd=dayStr(dayNum(b.start)+span-1);
+  const count=(start:string,end:string)=>{
+    const ss=history.filter(s=>s.day>=start&&s.day<=end&&s.reps>0&&patternOf(s)!==null);
+    const map=new Map<FineMuscle,{direct:number;supporting:number;days:Set<string>;ex:Map<string,{sets:number;direct:boolean}>}>();
+    for(const s of ss)for(const [m,w] of muscleCredits(s)){
+      const t=map.get(m)??{direct:0,supporting:0,days:new Set<string>(),ex:new Map<string,{sets:number;direct:boolean}>()};
+      const direct=w>=1;if(direct)t.direct++;else t.supporting++;
+      if(direct||credit>0){t.days.add(s.day);const e=t.ex.get(s.exercise)??{sets:0,direct:false};e.sets++;e.direct||=direct;t.ex.set(s.exercise,e);}
+      map.set(m,t);
+    }
+    return {map,hasData:ss.length>0};
+  };
+  const now=count(a.start,aEnd),prev=count(b.start,bEnd);
+  const rows=read.rows.map(r=>{
+    const n=now.map.get(r.muscle),p=prev.map.get(r.muscle),total=round1((n?.direct??0)+credit*(n?.supporting??0)),before=round1((p?.direct??0)+credit*(p?.supporting??0));
+    const exercises=[...(n?.ex??new Map<string,{sets:number;direct:boolean}>())].map(([name,v])=>({name,...v})).sort((x,y)=>y.sets-x.sets).slice(0,6);
+    return {...r,perWeek:round1(total*7/span),averageRpe:null,targetSets:null,exercises,period:{total,direct:n?.direct??0,supporting:n?.supporting??0,days:n?.days.size??0,exerciseCount:n?.ex.size??0,before:now.hasData&&prev.hasData?{total:before,start:b.start,end:bEnd}:null,changePct:now.hasData&&prev.hasData&&before>0?Math.round((total-before)/before*100):null}};
+  });
+  return {...read,rows,weeks:span/7,enoughData:now.hasData&&prev.hasData};
+}
