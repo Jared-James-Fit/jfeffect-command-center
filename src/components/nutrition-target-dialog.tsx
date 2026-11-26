@@ -39,6 +39,7 @@ import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
 import { archiveReplacedPlans, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
 import { copyPlanDays, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
+import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 
@@ -274,8 +275,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
   const historyClient = open ? (form?.client_id || clientId || "") : "";
   const historyQ = useQuery({ ...clientPlansQuery(historyClient), enabled: !!historyClient });
+  const revisionsQ = useQuery({ ...nutritionRevisionQuery(historyClient), enabled: !!historyClient });
   const history = splitPlans(historyQ.data ?? []);
-  const references = [...history.current, ...history.previous].filter((p) => p.id !== form?.id);
+  const references = [...history.current.filter((p) => p.id !== form?.id), ...orderPlanReferences(history.previous, revisionsQ.data ?? [])].filter((p) => p.id !== form?.id);
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
@@ -523,6 +525,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             clientId={historyClient}
             days={days}
             references={references}
+            historyUnavailable={historyQ.isError || revisionsQ.isError}
             anchor={form.start_date > todayLocalISO() ? form.start_date : undefined}
           />}
           <Accordion type="single" collapsible defaultValue={!initial && !prefill && !copyFrom ? "paste" : undefined} className="rounded-xl border border-border">
