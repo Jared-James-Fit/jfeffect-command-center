@@ -1,5 +1,7 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { Link } from "@tanstack/react-router";
+import { resolveMemberClientFn } from "@/lib/members.functions";
+import { memberWorkspaceTab } from "@/lib/member-workspace-routing";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { isMemberAccessActive } from "@/lib/memberAccess";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,6 +63,16 @@ const Route = __getRouteApi("/_authenticated/admin/members/$memberId");
 
 export function MemberProfileRoute() {
   const { memberId } = Route.useParams();
+  const navigate = useNavigate();
+  const resolve = useServerFn(resolveMemberClientFn);
+  const linked = useQuery({ queryKey: ["member-client-link", memberId], queryFn: () => resolve({ data: { memberId } }) });
+  useEffect(() => {
+    if (!linked.data?.clientId) return;
+    const oldTab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+    void navigate({ to: "/admin/clients/$id", params: { id: linked.data.clientId }, search: { tab: memberWorkspaceTab(oldTab) }, replace: true });
+  }, [linked.data?.clientId, navigate]);
+  if (linked.isError) return <div className="p-6 space-y-3"><p>Could not resolve this member profile.</p><Button onClick={() => linked.refetch()}>Try again</Button></div>;
+  if (!linked.isSuccess || linked.data.clientId) return <PanelFallback />;
   return <MemberProfileWorkspace memberId={memberId} />;
 }
 
@@ -76,11 +88,13 @@ export function MemberProfileWorkspace({
   embedded = false,
   initialTab,
   onClose,
+  sectionOnly = false,
 }: {
   memberId: string;
   embedded?: boolean;
   initialTab?: string;
   onClose?: () => void;
+  sectionOnly?: boolean;
 }) {
   const qc = useQueryClient();
   const fetch = useServerFn(getMember);
@@ -93,7 +107,7 @@ export function MemberProfileWorkspace({
   const deleteMemberFn = useServerFn(deleteAdminMember);
   const navigate = useNavigate();
 
-  const { data } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
+  const { data, isError, refetch } = useQuery({ queryKey: ["admin-member", memberId], queryFn: () => fetch({ data: { memberId } }) });
   const { data: levels = [] } = useQuery({
     queryKey: ["access-levels"],
     queryFn: async () => (await supabase.from("access_levels").select("*").order("sort_order")).data ?? [],
@@ -115,6 +129,7 @@ export function MemberProfileWorkspace({
   // If the caller opens the overlay with a different tab later, follow.
   useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
 
+  if (isError) return <div className="p-4 text-sm">Could not load membership. <button className="underline" onClick={() => refetch()}>Retry</button></div>;
   if (!member) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin-member", memberId] });
@@ -234,7 +249,7 @@ export function MemberProfileWorkspace({
 
   return (
     <div className={embedded ? "" : "space-y-5"}>
-      {embedded ? (
+      {!sectionOnly && (embedded ? (
         <WorkspaceIdentityHeader
           identity={{
             avatarUrl: member.avatar_url,
@@ -294,17 +309,17 @@ export function MemberProfileWorkspace({
             </div>}
           />
         </>
-      )}
+      ))}
 
-      <div className={embedded ? "p-4 md:p-6" : ""}>
-        <MemberLifecycle userId={member.user_id} />
+      <div className={embedded && !sectionOnly ? "p-4 md:p-6" : ""}>
+        {!sectionOnly && <MemberLifecycle userId={member.user_id} />}
         {/* Membership Action Center (embedded only — non-embedded route keeps existing top cards) */}
-        {embedded && <WorkspaceActionCenter actions={memberActions} />}
+        {embedded && !sectionOnly && <WorkspaceActionCenter actions={memberActions} />}
         {/* Membership Alerts */}
-        {embedded && <WorkspaceAlertsStrip alerts={memberAlerts} />}
+        {embedded && !sectionOnly && <WorkspaceAlertsStrip alerts={memberAlerts} />}
 
         {/* Membership Snapshot (embedded only, before tabs) */}
-        {embedded && (
+        {embedded && !sectionOnly && (
           <Card className="mb-4 border-border bg-card p-4 md:p-5">
             <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Membership Snapshot
@@ -328,18 +343,18 @@ export function MemberProfileWorkspace({
         )}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4 flex flex-wrap h-auto">
+        {!sectionOnly && <TabsList className="mb-4 flex flex-wrap h-auto">
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="subscription">Subscription</TabsTrigger>
           <TabsTrigger value="access">Access</TabsTrigger>
           <TabsTrigger value="setup">Setup Info</TabsTrigger>
           <TabsTrigger value="sms">SMS Activity</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
-        </TabsList>
+        </TabsList>}
 
         {/* ───────────── Summary ───────────── */}
         <TabsContent value="summary" className="space-y-5">
-          {embedded && (
+          {(embedded || sectionOnly) && (
             <MembershipAccessCard
               member={member}
               memberId={memberId}
@@ -575,7 +590,7 @@ export function MemberProfileWorkspace({
       </Tabs>
 
       </div>
-      <DangerZone
+      {!sectionOnly && <DangerZone
         memberEmail={member.email}
         memberName={member.full_name ?? member.email}
         onDelete={async () => {
@@ -585,7 +600,7 @@ export function MemberProfileWorkspace({
           await qc.invalidateQueries({ queryKey: ["recently-deleted"] });
           navigate({ to: "/admin/members" });
         }}
-      />
+      />}
     </div>
   );
 }

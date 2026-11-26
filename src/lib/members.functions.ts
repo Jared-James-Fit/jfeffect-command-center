@@ -506,3 +506,37 @@ export const moveMemberToCoaching = createServerFn({ method: "POST" })
       .then(() => null, () => null);
     return { clientId: (client as any).id as string };
   });
+
+/** Resolve a member's existing client identity by linked login only. Never create a record or match by email on open. */
+export const resolveMemberClientFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ memberId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminView(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const member = await supabaseAdmin.from("app_members").select("user_id").eq("id", data.memberId).maybeSingle();
+    if (member.error || !member.data) throw new Error("Could not find this member.");
+    if (!member.data.user_id) return { clientId: null as string | null };
+    const client = await context.supabase.from("clients").select("id").eq("user_id", member.data.user_id).maybeSingle();
+    if (client.error) throw new Error("Could not verify the linked client profile.");
+    return { clientId: client.data?.id ?? null };
+  });
+
+/** Read membership metadata only after checking both staff membership access and client access. */
+export const getClientMemberLinkFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ clientId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminView(context as any);
+    const client = await context.supabase.from("clients").select("user_id").eq("id", data.clientId).maybeSingle();
+    if (client.error || !client.data) throw new Error("Could not verify this client.");
+    if (!client.data.user_id) return null;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const member = await supabaseAdmin.from("app_members")
+      .select("id, account_type, status, subscription_status, stripe_subscription_id, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, committed_training_days, is_admin_sandbox")
+      .eq("user_id", client.data.user_id).maybeSingle();
+    if (member.error) throw new Error("Could not read membership.");
+    if (!member.data) return null;
+    const { setupMissing } = await import("@/lib/member-setup-steps");
+    return { id: member.data.id, type: member.data.account_type, status: member.data.status, subscription: member.data.subscription_status, missing: member.data.is_admin_sandbox || member.data.account_type !== "jf_member" ? [] : setupMissing(member.data), applies: member.data.account_type === "jf_member" && !member.data.is_admin_sandbox };
+  });

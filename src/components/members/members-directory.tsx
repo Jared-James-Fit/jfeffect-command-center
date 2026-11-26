@@ -287,7 +287,7 @@ function MemberRow({
         <UserAvatar src={r.avatar_url} name={r.name} size={40} className="shrink-0" />
         <div className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
-            {r.client_id && !r.member_id ? (
+            {r.client_id ? (
               <ClientNameLink clientId={r.client_id} className="truncate text-[15px] font-semibold leading-snug hover:underline">
                 {r.name}
               </ClientNameLink>
@@ -342,8 +342,8 @@ function MemberRow({
       </div>
 
       <div className="flex items-center justify-end gap-1.5 max-xl:w-full">
-        <Button variant="secondary" size="sm" className="h-10 min-w-0 flex-1 px-2.5 font-semibold sm:min-w-[7rem] xl:flex-none" onClick={(e) => (r.client_id && !r.member_id ? undefined : open(e))} asChild={!!(r.client_id && !r.member_id)}>
-          {r.client_id && !r.member_id ? <ClientNameLink clientId={r.client_id}>Open</ClientNameLink> : <span>Open</span>}
+        <Button variant="secondary" size="sm" className="h-10 min-w-0 flex-1 px-2.5 font-semibold sm:min-w-[7rem] xl:flex-none" onClick={(e) => (r.client_id ? undefined : open(e))} asChild={!!(r.client_id)}>
+          {r.client_id ? <ClientNameLink clientId={r.client_id}>Open client</ClientNameLink> : <span>Open client</span>}
         </Button>
         {canView && (
           <Button
