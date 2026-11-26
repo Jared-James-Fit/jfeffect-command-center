@@ -52,7 +52,10 @@ export const CLEO_ACTION_PARAMS = {
     first_name: z.string().trim().min(1).max(100).optional(),
     last_name: z.string().trim().min(1).max(100).optional(),
     preferred_name: z.string().trim().min(1).max(100).nullable().optional(),
-  }).refine(p => (p.first_name !== undefined && p.last_name !== undefined) || (p.first_name === undefined && p.last_name === undefined && p.preferred_name !== undefined), "Provide both verified name parts, or only the preferred name."),
+    source_id: uuid.optional().describe("ID of a ready saved competition file from competition_file_evidence; omit for a name explicitly given by staff."),
+    source_quote: z.string().trim().min(3).max(400).optional().describe("Exact supporting excerpt returned by competition_file_evidence."),
+  }).refine(p => (p.first_name !== undefined && p.last_name !== undefined) || (p.first_name === undefined && p.last_name === undefined && p.preferred_name !== undefined), "Provide both verified name parts, or only the preferred name.")
+    .refine(p => Boolean(p.source_id) === Boolean(p.source_quote) && (!p.source_id || (p.first_name !== undefined && p.last_name !== undefined)), "A saved file requires its exact quote and both name parts."),
   create_task: z.object({
     title: z.string().trim().min(1).max(200),
     notes: z.string().trim().max(2000).optional(),
@@ -197,7 +200,7 @@ export function isCleoActionKind(v: unknown): v is CleoActionKind {
 
 /** Card heading and the tool description Cleo sees. */
 export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: string }> = {
-  update_client_identity: { title: "Update client name", tool: "Actually update a client's profile identity (first and last name, or preferred name). Use when staff ask to correct a name, including from a client competition document. Read the selected client's file and the named source first; never infer a missing surname or guess a client ID. For a full name supply both verified name parts, preserving the preferred nickname unless explicitly asked to change it. If name parts or identity are ambiguous, ask. Do not use for login email, password, permissions or account status." },
+  update_client_identity: { title: "Update client name", tool: "Actually update a client's profile identity (first and last name, or preferred name). Use when staff ask to correct a name, including from a client competition document. Read the selected client's file and the named source first; for a saved competition file use competition_file_evidence and supply its source_id and exact supporting source_quote. Never infer a missing surname or guess a client ID. For a full name supply both verified name parts, preserving the preferred nickname unless explicitly asked to change it. If name parts or identity are ambiguous, ask. Do not use for login email, password, permissions or account status." },
   update_meet_from_attachment: { title: "Update competition logistics", tool: "Update the existing competition record from a schedule attachment. First resolve the exact client and competition using competition_intake_matches. Never guess an ID, never use a coach note instead, omit uncertain fields, and flag conflicting existing values before confirming. Times are local 24-hour HH:MM. If multiple accounts or meets match, ask the coach to choose." },
   create_task: { title: "Add a task", tool: "Add a task to the team board." },
   complete_task: { title: "Complete a task", tool: "Mark a task on the team board done (task ids are in OPEN TASKS)." },
