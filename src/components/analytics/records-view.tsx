@@ -44,6 +44,7 @@ function compact(v: number): string {
 }
 
 export function RecordsView({
+  initialSection = "gym",
   lifetime,
   records,
   byExercise,
@@ -54,6 +55,7 @@ export function RecordsView({
   results = [],
   today = new Date().toISOString().slice(0,10),
 }: {
+  initialSection?: "gym"|"competitions"|"lifetime";
   bodyweights?: readonly BodyweightPoint[];
   sex?: "male"|"female"|null;
   results?: any[];
@@ -79,7 +81,7 @@ export function RecordsView({
       .slice(0, 4);
   }, [records]);
 
-  const [section,setSection]=useState<"gym"|"competitions"|"lifetime">("gym");
+  const [section,setSection]=useState<"gym"|"competitions"|"lifetime">(initialSection);
   const [category,setCategory]=useState("all");
   const [period,setPeriod]=useState("all");
   const [kind,setKind]=useState<"single"|"estimated"|"rep">("rep");
