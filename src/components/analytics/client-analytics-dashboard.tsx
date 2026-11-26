@@ -240,7 +240,7 @@ export function ClientAnalyticsDashboard({
         window.requestAnimationFrame(() => {
           const section = document.getElementById(v === "training" ? "analytics-muscles" : "analytics-records");
           const details = section?.querySelector("details");
-          if (details) details.open = true;
+          if (details && v === "records") details.open = true;
           section?.scrollIntoView({ block: "start" });
         });
       } else window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -1070,6 +1070,7 @@ export function ClientAnalyticsDashboard({
                       conv={conv}
                       onOpenSet={setSelectedDot}
                       compact
+                      detailed
                     />
                   </SectionErrorBoundary>
                 </Card>
@@ -1077,7 +1078,7 @@ export function ClientAnalyticsDashboard({
             )}
 
             {view === "overview" && (
-              <div className="space-y-6" id="analytics-muscles">
+              <div className="space-y-6">
                 {hasPowerlifting && (
                   <MoreDetail label="Competition lift trends">
                     <SectionTitle
@@ -1172,7 +1173,7 @@ export function ClientAnalyticsDashboard({
                   </MoreDetail>
                 )}
 
-                <Card className="p-4" data-training-muscles>
+                <Card className="p-4" id="analytics-muscles" data-training-muscles>
                   <SectionTitle
                     title="Muscle training map"
                   />
