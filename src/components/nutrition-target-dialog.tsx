@@ -37,7 +37,7 @@ import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/Pla
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
-import { archiveReplacedPlans, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
+import { publishNutritionPlanAtomic, syncPlanCardio, clientPlansQuery } from "@/lib/nutrition-targets/plan-publish";
 import { copyPlanDays, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
 import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
@@ -331,6 +331,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
+    if (form.status !== "Archived" && form.start_date > todayLocalISO()) return toast.error("Future plans cannot be published yet. Keep your current plan in place.");
     setSaving(true);
     const payload: any = {
       client_id: form.client_id,
@@ -355,6 +356,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       supplements: supplementsOf(form).items.length || supplementsOf(form).notes.length ? supplementsOf(form) : null,
     };
     let targetId = form.id;
+    let archived = 0;
     const dayPayload = days.map((d, i) => {
       const { id: _omit, cardio: _cardio, ...rest } = d as any;
       delete rest.created_at;
@@ -375,28 +377,16 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       });
       if (error) { setSaving(false); return toast.error(error.message); }
     } else {
-      const { data, error } = await supabase.from("nutrition_targets").insert(payload).select("id").single();
-      if (error || !data) { setSaving(false); return toast.error(error?.message ?? "Failed"); }
-      targetId = data.id;
-      if (dayPayload.length) {
-        const { error: dayError } = await supabase.from("nutrition_target_days").insert(dayPayload.map((d) => ({ ...d, target_id: targetId })));
-        if (dayError) {
-          await supabase.from("nutrition_targets").delete().eq("id", targetId);
-          setSaving(false);
-          return toast.error(dayError.message);
-        }
-      }
-    }
-    // A new current plan replaces the one before it: archived with its dates, never deleted.
-    let replacedMsg = "";
-    if (form.status === "Active" && (!form.id || initial?.status === "Archived")) {
       try {
-        const n = await archiveReplacedPlans(form.client_id, targetId, form.start_date);
-        if (n) replacedMsg = " · the old plan is in Previous plans";
+        const result = await publishNutritionPlanAtomic(payload, dayPayload);
+        targetId = result.targetId;
+        archived = result.archived;
       } catch (e: any) {
-        toast.error(`Saved, but the old plan wasn't archived: ${e?.message ?? "error"}`);
+        setSaving(false);
+        return toast.error(e?.message ?? "Couldn't save the plan");
       }
     }
+    const replacedMsg = archived ? " · the old plan is in Previous plans" : "";
     // Cardio follows the plan the client is on: only an Active plan changes it.
     let cardioMsg = "";
     if (form.status === "Active" && cardioQ.data) {
