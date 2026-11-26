@@ -70,15 +70,15 @@ const PALETTE = {
 const FIT_WORD: Record<FitStatus, string> = {
   supported: "On track for target or reference",
   look: "Lighter than your other main muscles",
-  gap: "Almost no work for it yet",
-  more: "Much more than your other muscles",
+  gap: "Below training target or reference",
+  more: "Above training target or reference",
   unknown: "Not enough training to tell yet",
 };
 const FIT_SHORT: Record<FitStatus, string> = {
   supported: "On track",
   look: "Lighter",
-  gap: "Almost none",
-  more: "Much more",
+  gap: "Below target",
+  more: "Above target",
   unknown: "Too early",
 };
 const DEV_WORD: Record<DevStatus, string> = {
@@ -105,7 +105,7 @@ export function modeMeans(mode: MuscleMode, reference: number): string {
   if (mode === "distribution")
     return "Colours compare your muscles with each other by the sets they got. They show training, not muscle size, strength or growth.";
   if (mode === "fit")
-    return `Each muscle against what your goal needs and what your other main muscles get${reference > 0 ? ` (about ${fmtSets(reference)} sets a week)` : ""}. Fewer sets never means a muscle is weak.`;
+    return `Each muscle against its elapsed planned sets when available, otherwise your own training reference${reference > 0 ? ` (about ${fmtSets(reference)} sets a week)` : ""}. Fewer sets never means a muscle is weak.`;
   return "Shown only when two things agree: how the lifts that use a muscle are going and how much work it gets. Logs can't measure muscle growth.";
 }
 
