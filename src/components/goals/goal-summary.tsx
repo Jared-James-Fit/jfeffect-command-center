@@ -235,7 +235,7 @@ function GoalComparisonValue({ label, weight, fallback, className }: { label: st
 const GOAL_GRID = "grid min-w-0 grid-cols-2 items-start gap-x-3 gap-y-2 md:@min-[680px]:grid-cols-[minmax(0,0.8fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,1.75fr)_5.5rem]";
  
 
-function GoalEvidence({ g, source }: { g: GoalRow; source: string }) {
+function GoalEvidence({ g, source, expanded, onExpandedChange }: { g: GoalRow; source: string; expanded: boolean; onExpandedChange: (open: boolean) => void }) {
   const f = g.feasibility;
   const p = f?.projection;
   const basis = p?.basis ?? [];
@@ -245,19 +245,20 @@ function GoalEvidence({ g, source }: { g: GoalRow; source: string }) {
     <p className="text-muted-foreground">{source === "Cleo" ? f?.recommendedWhy ?? "Selected from the available forecast." : source === "Discussed" ? "Upper end of the discussed range, rounded to the meet increment." : source === "Edited" ? "Coach-selected draft, rated against the current forecast." : "Previously approved goal, rated against the current forecast."}</p>
     {p && <p className="text-muted-foreground">{reference}: <WeightWords weight={goalWeight(p.lowKg, "kg", p.highKg)} /> · {CONF_WORD[f!.confidence]}{g.assessed_at ? " · Assessed " + ago(g.assessed_at) : ""}</p>}
     {basis.length > 1 && p?.source === "meet_forecast" ? <p className="text-muted-foreground">{basis[1]}</p> : null}
-    <details className="min-w-0 rounded-md border border-border/70 p-2">
-      <summary className="cursor-pointer font-medium">Sources &amp; evidence</summary>
-      <div className="mt-2 space-y-2 text-muted-foreground [overflow-wrap:anywhere]">
+    <div className="min-w-0 rounded-md border border-border/70 p-2">
+      <button type="button" aria-expanded={expanded} aria-controls={`goal-evidence-${g.id}`} onClick={() => onExpandedChange(!expanded)} className="flex w-full items-center justify-between gap-2 text-left font-medium">Sources &amp; evidence <ChevronDown className={cn("size-3.5 shrink-0", expanded && "rotate-180")} /></button>
+      {expanded && <div id={`goal-evidence-${g.id}`} className="mt-2 space-y-2 text-muted-foreground [overflow-wrap:anywhere]">
         <div><p className="font-medium text-foreground">Discussed target</p><p>{SOURCE_WORD[g.source_kind ?? ""] ?? "On file"}{g.source_at ? " · " + ago(g.source_at) : ""}{g.source_speaker ? " · " + (g.source_speaker === "unclear" ? "Speaker unconfirmed" : g.source_speaker) : ""}</p>{g.source_quote ? <p>“{g.source_quote}”</p> : g.source_context ? <p>{g.source_context}</p> : <p>No source excerpt recorded.</p>}{g.source_kind === "meeting" && g.source_id && <Link to="/admin/meetings/$sessionId" params={{sessionId:g.source_id}} className="inline-block py-1 underline underline-offset-2 text-foreground">Open source meeting</Link>}</div>
         <div><p className="font-medium text-foreground">Forecast inputs</p>{basis.length ? basis.map((line,i)=><p key={i}>{line}</p>) : <p>No supporting forecast data available.</p>}{p?.source === "meet_forecast" && basis.length <= 1 && <p>Detailed forecast inputs are not yet available on this saved assessment.</p>}{f?.missing?.map((line,i)=><p key={i}>{line}</p>)}{g.competition_id && <Link to="/admin/competition/$competitionId" params={{competitionId:g.competition_id}} className="inline-block py-1 underline underline-offset-2 text-foreground">Open competition forecast</Link>}</div>
         {f?.recommendationEvidence && <div><p className="font-medium text-foreground">Recorded approach preference</p><p>“{f.recommendationEvidence}”</p><p>Preference informs the recommendation; it does not prove strength.</p></div>}
-      </div>
-    </details>
+      </div>}
+    </div>
   </div>;
 }
 
 function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: GoalRow[]; view: View; unit: Unit; onOpenTraining?: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [evidenceSelected, setEvidenceSelected] = useState<string | null>(null);
   const first = goals[0];
   const qc = useQueryClient();
   const decide = useServerFn(decideGoalFn);
@@ -369,15 +370,15 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
                   <GoalComparisonValue label="Target" weight={target} fallback="Enter target" />
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]"><DifficultyLabel band={rating.band} label={rating.label} /><span className="text-muted-foreground">{source}</span></div>
                 </div>
-                <Button variant={isOpen ? "secondary" : "ghost"} size="sm" className="col-start-2 row-start-1 h-11 min-w-0 justify-self-end px-2 gap-1 md:@min-[680px]:col-start-5 md:@min-[680px]:h-9" disabled={batch.isPending} aria-expanded={isOpen} aria-controls={`goal-review-${g.id}`} onClick={() => setSelected(isOpen ? null : g.id)}>{isOpen ? "Close" : "Review"}<ChevronDown className={cn("size-3.5", isOpen && "rotate-180")} /></Button>
-                <p className="col-span-full min-w-0 text-xs leading-relaxed text-muted-foreground md:@min-[680px]:col-start-2 md:@min-[680px]:col-span-4 md:@min-[680px]:row-start-2">{rating.summary}{g.client_unit_source === "inferred" && !reviewedSourceUnit(g, confirmedUnits) ? " · Source unit inferred" : ""}<span className="block text-[11px]">{g.feasibility?.projection?.source === "meet_forecast" ? "Competition forecast" : g.feasibility?.projection?.source === "training_trend" ? "Training trend" : "No usable forecast"}{g.source_at ? " · " + (g.source_kind === "meeting" ? "Meeting " : "Source ") + ago(g.source_at) : ""} · <button type="button" className="underline underline-offset-2" onClick={() => setSelected(g.id)}>View evidence</button></span></p>
+                <Button variant={isOpen ? "secondary" : "ghost"} size="sm" className="col-start-2 row-start-1 h-11 min-w-0 justify-self-end px-2 gap-1 md:@min-[680px]:col-start-5 md:@min-[680px]:h-9" disabled={batch.isPending} aria-expanded={isOpen} aria-controls={`goal-review-${g.id}`} onClick={() => { setSelected(isOpen ? null : g.id); setEvidenceSelected(null); }}>{isOpen ? "Close" : "Review"}<ChevronDown className={cn("size-3.5", isOpen && "rotate-180")} /></Button>
+                <p className="col-span-full min-w-0 text-xs leading-relaxed text-muted-foreground md:@min-[680px]:col-start-2 md:@min-[680px]:col-span-4 md:@min-[680px]:row-start-2">{rating.summary}{g.client_unit_source === "inferred" && !reviewedSourceUnit(g, confirmedUnits) ? " · Source unit inferred" : ""}<span className="block text-[11px]">{g.feasibility?.projection?.source === "meet_forecast" ? "Competition forecast" : g.feasibility?.projection?.source === "training_trend" ? "Training trend" : "No usable forecast"}{g.source_at ? " · " + (g.source_kind === "meeting" ? "Meeting " : "Source ") + ago(g.source_at) : ""} · <button type="button" className="underline underline-offset-2" onClick={() => { setSelected(g.id); setEvidenceSelected(g.id); }}>View evidence</button></span></p>
               </div>
               {isOpen && <div data-goal-review-inline={g.id} id={`goal-review-${g.id}`} className="mb-2 min-w-0 rounded-b-md border border-t-0 border-border bg-muted/25 p-2.5 text-sm [overflow-wrap:anywhere] md:@min-[680px]:text-xs">
                 <div className="min-w-0 space-y-2">
                   {g.status === "proposed" ? <>
                     <div className="flex flex-wrap items-center justify-between gap-1"><p className="font-medium capitalize">{g.lift} target</p>{edited && <Button size="sm" variant="ghost" className="h-7 px-2" disabled={batch.isPending} onClick={() => clearDraft(g.id)}>Reset draft</Button>}</div>
                     <p className="text-xs leading-relaxed text-muted-foreground">{rating.brief}</p>
-                    <GoalEvidence g={g} source={source} />
+                    <GoalEvidence g={g} source={source} expanded={evidenceSelected === g.id} onExpandedChange={open => setEvidenceSelected(open ? g.id : null)} />
                     <div className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-2">
                       {g.feasibility?.approaches?.length ? <div className="min-w-0 w-full md:@min-[680px]:w-auto">
                         <Select value={exactApproach} disabled={batch.isPending} onValueChange={key => { const a = g.feasibility?.approaches.find(o => o.key === key); if (!a) return; const kg = nearestMeetTarget(a.targetKg, increment); if (kg != null) setDrafts(old => ({...old,[g.id]:{draft:{value:String(kg),unit:"kg"},version:g.version}})); }}>
@@ -394,7 +395,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
                       <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">History</summary><GoalHistory g={g} view={view} unit="kg" /></details>
                     </div>
                     {!isValid(g) && validMeetIncrement(draftKg(draftFor(g)), increment) && <p className="text-[11px] text-muted-foreground">Confirm the discussed units and meet rules above before approving.</p>}
-                  </> : <><GoalEvidence g={g} source={source} /><ul><GoalItem key={g.id} g={g} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul></>}
+                  </> : <><GoalEvidence g={g} source={source} expanded={evidenceSelected === g.id} onExpandedChange={open => setEvidenceSelected(open ? g.id : null)} /><ul><GoalItem key={g.id} g={g} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul></>}
                 </div>
               </div>}
             </Fragment>;
