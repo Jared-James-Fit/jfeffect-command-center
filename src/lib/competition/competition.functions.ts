@@ -111,6 +111,24 @@ export const getCompetitionWorkspaceFn = createServerFn({ method: "POST" })
     return loadWorkspace(await admin(), data.clientId, data.competitionId ?? null);
   });
 
+/** Lightweight shared event calendar for plan builders. No assessments or AI calls. */
+export const getPlanEventsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: uuid }).parse(d))
+  .handler(async ({ data, context }): Promise<Array<{ id: string; name: string; meet_date: string; status: string; is_primary: boolean }>> => {
+    await assertReach(context.supabase, context.userId, data.clientId);
+    const sb = await admin();
+    const { data: rows, error } = await sb
+      .from("competitions")
+      .select("id,name,meet_date,status,is_primary")
+      .eq("client_id", data.clientId)
+      .in("status", ["upcoming", "completed"])
+      .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
+      .order("meet_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
 /** Every competition that needs the coach, read with the caller's own login (RLS: their clients). */
 export const getCompetitionOverviewFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
