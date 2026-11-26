@@ -12,6 +12,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import type { CommunityAuthor } from "@/lib/community";
 import { directThreadsKey, friendlyError } from "@/lib/direct-chats";
 import { firstName, groupPreview } from "@/lib/group-row";
@@ -57,10 +58,16 @@ export async function listCrewThreads(): Promise<CrewThread[]> {
 
 export function useCrewThreads(enabled = true) {
   const { user } = useAuth();
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: crewThreadsKey,
-    enabled: enabled && !!user,
-    queryFn: listCrewThreads,
+    queryKey: pov.key(crewThreadsKey),
+    enabled: enabled && !!user && pov.ready,
+    queryFn: async (): Promise<CrewThread[]> => {
+      if (!pov.isPov) return listCrewThreads();
+      const { data, error } = await pov.read("crew_threads", "chat_crew_threads");
+      if (error) throw error;
+      return Array.isArray(data) ? data as CrewThread[] : [];
+    },
     staleTime: 15_000,
     refetchInterval: 45_000,
   });
