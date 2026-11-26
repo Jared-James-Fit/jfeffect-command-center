@@ -143,12 +143,13 @@ export type FollowListKind = "followers" | "following";
 
 /** Someone's followers / following (empty on a private account you don't follow). */
 export function useFollowList(userId: string | null, kind: FollowListKind, enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: followKeys.list(userId ?? "", kind),
-    enabled: enabled && !!userId,
+    queryKey: pov.key(followKeys.list(userId ?? "", kind)),
+    enabled: enabled && !!userId && pov.ready,
     staleTime: 30_000,
     queryFn: async (): Promise<CommunityAuthor[]> => {
-      const { data, error } = await db.rpc("community_follow_list", { _user_id: userId, _kind: kind });
+      const { data, error } = await pov.read("follow_list", "community_follow_list", { _user_id: userId, _kind: kind });
       if (error) throw error;
       return (data ?? []) as CommunityAuthor[];
     },
