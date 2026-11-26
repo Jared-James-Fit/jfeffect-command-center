@@ -278,7 +278,8 @@ export const getMyAgreementState = createServerFn({ method: "GET" })
         )
         .eq("id", clientId)
         .maybeSingle();
-      if (error || !client) return { ...base, applicable: false, reason: "no_client" };
+      if (error) throw new Error(error.message);
+      if (!client) return { ...base, applicable: false, reason: "no_client" };
       // the coaching agreement is for coaching: a JF member never signs it
       if ((client as any).service_tier === "self_serve")
         return { ...base, clientId, applicable: false, reason: "self_serve" };
