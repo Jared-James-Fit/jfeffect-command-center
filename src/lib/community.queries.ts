@@ -248,13 +248,16 @@ export function useCrewGoal(enabled = true, opts: { fresh?: boolean } = {}) {
 /** Vote on a post's poll (or switch, or take it back with null): the bars move at once. */
 export function useVotePoll(post: CommunityPost) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (optionId: string | null) => {
+      if (isPov) throw new Error("Poll voting is read-only in POV.");
       const { data, error } = await db.rpc("community_poll_vote", { _post_id: post.id, _option_id: optionId });
       if (error) throw error;
       return data as CommunityPoll | null;
     },
     onMutate: async (optionId) => {
+      if (isPov) return undefined;
       await qc.cancelQueries({ queryKey: ["community-feed"] });
       const snapshot = qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] });
       const detail = qc.getQueryData(communityKeys.post(post.id));
@@ -1525,12 +1528,13 @@ export function usePublicSessionTitle(by: { dayId?: string | null; completionId?
 
 /** Your community switches and public details: Pulse, view privately, suggest my account, @username, training, gym. */
 export function useMyCommunitySettings(enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: ["community-my-settings"],
-    enabled,
+    queryKey: pov.key(["community-my-settings"]),
+    enabled: enabled && pov.ready,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<MyCommunitySettings> => {
-      const { data, error } = await db.rpc("community_my_settings");
+      const { data, error } = await pov.read("my_settings", "community_my_settings");
       if (error) throw error;
       // automatic stories are off unless they switched them on (20270407090000)
       return (data ?? { auto_share_workouts: false, private_views: false }) as MyCommunitySettings;
