@@ -15,7 +15,7 @@ BEGIN
   client_claims := jsonb_build_object('sub',target,'role','authenticated')::text;
   INSERT INTO public.admin_pov_sessions(id,staff_user_id,client_id,target_user_id,reason,mode,expires_at,max_until,auth_session_id)
     VALUES(sid,actor,cid,target,'rollback parity verification','view',now()+interval '30 minutes',now()+interval '4 hours',asid);
-  FOREACH op IN ARRAY ARRAY['feed','ranked','profile','post','follows','activity','follow_list','archived','saved_albums','saved_posts','reposts','crew_notices','direct_threads','crew_threads','chat_prefs'] LOOP
+  FOREACH op IN ARRAY ARRAY['feed','ranked','profile','post','follows','activity','follow_list','archived','saved_albums','saved_posts','reposts','crew_notices','direct_threads','crew_threads','chat_prefs','comments','reactors','hints'] LOOP
     PERFORM set_config('request.jwt.claims',client_claims,true);
     PERFORM set_config('request.jwt.claim.sub',target::text,true);
     args := '{}'::jsonb;
@@ -27,6 +27,9 @@ BEGIN
         pid := (public.community_feed(1)->'posts'->0->>'id')::uuid;
         IF pid IS NULL THEN RAISE EXCEPTION 'No visible post fixture'; END IF;
         normal:=public.community_post(pid); args:=jsonb_build_object('_post_id',pid);
+      WHEN 'comments' THEN normal:=public.community_comments(pid); args:=jsonb_build_object('_post_id',pid);
+      WHEN 'reactors' THEN normal:=public.community_post_reactors(pid); args:=jsonb_build_object('_post_id',pid);
+      WHEN 'hints' THEN SELECT coalesce(jsonb_agg(hint),'[]'::jsonb) INTO normal FROM public.community_hints_seen WHERE user_id=target;
       WHEN 'follows' THEN normal:=public.community_follow_state();
       WHEN 'activity' THEN normal:=public.community_activity();
       WHEN 'follow_list' THEN normal:=public.community_follow_list(target,'following'); args:=jsonb_build_object('_user_id',target,'_kind','following');
