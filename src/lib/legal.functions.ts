@@ -44,7 +44,7 @@ const VersionSchema = z.object({
   legal_review_note: z.string().nullable().optional(),
 });
 
-async function assertAdmin(context: { supabase: any; userId: string }) {
+async function assertAdmin(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
   const { data, error } = await context.supabase.rpc("has_role", {
     _user_id: context.userId,
     _role: "admin",
@@ -91,7 +91,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => readLegalStatus(context));
 
-async function readLegalStatus(context: { supabase: any; userId: string }) {
+async function readLegalStatus(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
     const { data: docs, error: e1 } = await context.supabase
       .from("legal_documents")
       .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!fk_legal_documents_current_version(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
@@ -206,10 +206,10 @@ export const listMyAcceptanceHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => readAcceptanceHistory(context));
 
-async function readAcceptanceHistory(context: { supabase: any; userId: string }) {
+async function readAcceptanceHistory(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
     const { data, error } = await context.supabase
       .from("legal_acceptances")
-      .select("id, document_id, version_id, context, signature_method, accepted_at, revoked_at, acknowledgement_text, document:legal_documents(title, doc_type), version:legal_document_versions(version_number, title)")
+      .select("id, document_id, version_id, context, signature_method, context_ref, accepted_at, revoked_at, acknowledgement_text, document:legal_documents(title, doc_type), version:legal_document_versions(version_number, title)")
       .eq("user_id", context.userId)
       .order("accepted_at", { ascending: false });
     if (error) throw new Error(error.message);

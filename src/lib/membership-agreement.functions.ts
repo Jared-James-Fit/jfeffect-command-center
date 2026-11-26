@@ -52,7 +52,7 @@ export const getMyMembershipAgreement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => readMembershipAgreement(context));
 
-async function readMembershipAgreement(context: { supabase: any; userId: string }) {
+async function readMembershipAgreement(context: { supabase: typeof import("@/integrations/supabase/client.server").supabaseAdmin; userId: string }) {
     const { supabase, userId } = context;
     const { data: client, error: clientError } = await supabase.from("clients").select("id, service_tier").eq("user_id", userId).maybeSingle();
     if (clientError) throw new Error(clientError.message);

@@ -71,7 +71,10 @@ export function ClientPovBanner() {
   useEffect(() => {
     const id = pov?.id;
     if (!id) return;
-    return () => { qc.removeQueries({ queryKey: ["pov-crew", id] }); };
+    return () => {
+      qc.removeQueries({ queryKey: ["pov-crew", id] });
+      for (const prefix of ["membership-agreement", "legal-status", "legal-history"]) qc.removeQueries({ queryKey: [prefix, "pov", id] });
+    };
   }, [qc, pov?.id]);
 
   const exit = (why: string = "exit") => {
