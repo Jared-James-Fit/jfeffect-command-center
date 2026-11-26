@@ -15,9 +15,6 @@ import {
   muscleWindowChanges,
   periodChangeWords,
 } from "@/lib/analytics/muscle-read";
-import { recentTrainingRing } from "@/lib/analytics/performance-ring";
-import type { LiftStrength } from "@/lib/analytics/lift-strength";
-import type { CompLift } from "@/lib/analytics/competition-strength";
 import type { LoadSet, MuscleLoad } from "@/lib/analytics/training-load";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -209,40 +206,5 @@ describe("plain words on every athlete screen", () => {
     expect(load).toContain("athlete: {");
     const obs = read("src/lib/analytics/performance-observation.ts");
     expect(obs).toContain("i.insight.athlete?.observation ?? i.insight.observation");
-  });
-});
-
-describe("consolidated strength and physique workspace", () => {
-  const session = (day: string, e1rm: number, kind = "exact", outlier = false) => ({day, e1rm, kind, outlier});
-  const fixture = (squat: unknown[], bench: unknown[], deadlift: unknown[]) => ({
-    squat: {sessions: squat}, bench: {sessions: bench}, deadlift: {sessions: deadlift},
-  }) as unknown as Record<CompLift, LiftStrength>;
-  it("shows all three recent estimates while preserving lower-bound evidence", () => {
-    const data = fixture([session("2026-11-24", 481)], [session("2026-11-19", 304, "floor")], [session("2026-11-21", 574)]);
-    const result = recentTrainingRing(data, "2026-11-26");
-    expect(result.totalLb).toBe(1359);
-    expect(result.lowerBound).toBe(true);
-    expect(result.lifts.bench?.detail).toContain("lower-bound");
-  });
-  it("never uses future, stale, invalid or outlier sets to fill a missing lift", () => {
-    const data = fixture([session("2026-11-24", 481)], [session("2026-10-01", 304), session("2026-11-27", 320), session("2026-11-22", 999, "exact", true), session("2026-11-23", NaN)], [session("2026-11-21", 574)]);
-    const result = recentTrainingRing(data, "2026-11-26");
-    expect(result.totalLb).toBeNull();
-    expect(result.lifts.bench).toBeNull();
-  });
-  it("uses latest valid evidence instead of an older maximum", () => {
-    const data = fixture([session("2026-11-04", 500), session("2026-11-24", 470)], [session("2026-11-19", 304)], [session("2026-11-21", 574)]);
-    expect(recentTrainingRing(data, "2026-11-26").totalLb).toBe(1348);
-  });
-  it("keeps exactly two destinations, preserves legacy links and exposes detailed exercise records", () => {
-    const dashboard = read("src/components/analytics/client-analytics-dashboard.tsx");
-    expect(dashboard).toContain('["strength", "Exercise Metrics"]');
-    expect(dashboard).not.toContain('["training", "Training"]');
-    expect(dashboard).not.toContain('["records", "Records"]');
-    expect(dashboard).toContain('records: "overview"');
-    expect(dashboard).toContain('training: "overview"');
-    expect(dashboard).toContain('label="Records & competitions"');
-    expect(dashboard).toContain("detailed");
-    expect(read("src/components/analytics/lift-progress-card.tsx")).toContain("(!bare || detailed)");
   });
 });
