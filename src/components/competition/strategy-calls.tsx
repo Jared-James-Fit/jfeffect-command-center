@@ -114,7 +114,7 @@ export function StrategyCalls({
     onSuccess: (_r, x) => {
       void qc.invalidateQueries({ queryKey: ["competition-assessment", assessmentId] });
       void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
-      toast.success(x.use === "engine" ? "Back to the engine's number" : "Using Cleo's call");
+      toast.success(x.use === "engine" ? "Original value restored" : "Using suggested adjustment");
     },
     onError: (e: any) => toast.error(e?.message ?? "That didn't work"),
   });
@@ -123,8 +123,8 @@ export function StrategyCalls({
   return (
     <div className="space-y-4" data-strategy-calls>
       {review.length ? (
-        <section>
-          <h4 className="text-[14px] font-semibold">Cleo on the engine's baseline</h4>
+        <details className="rounded-xl border border-border p-3">
+          <summary className="cursor-pointer text-[14px] font-medium">How Cleo reviewed the data</summary>
           <ul className="mt-1.5 space-y-1.5 text-[14px]">
             {review.map((r, i) => (
               <li key={i} className="flex gap-2">
@@ -151,15 +151,14 @@ export function StrategyCalls({
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
 
       {passed.length ? (
         <section>
-          <h4 className="text-[14px] font-semibold">Cleo's calls</h4>
+          <h4 className="text-[14px] font-semibold">Suggested adjustments</h4>
           <p className="text-[12px] text-muted-foreground">
-            Each one cites the evidence it rests on and passed the checks (increments, bounds,
-            order). The plan below is rebuilt with the ones you keep.
+            Compare the original and suggested values. Keep or revert changes before release.
           </p>
           <ul className="mt-2 space-y-2">
             {passed.map((c) => {
@@ -196,22 +195,21 @@ export function StrategyCalls({
                     </span>
                   </div>
                   <p className="mt-1">{splitRefs(p.text, known).text}</p>
-                  <p className="mt-1 text-[13px] text-muted-foreground">
-                    {splitRefs(p.reason, known).text}
-                  </p>
+
                   <button
                     type="button"
                     className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted-foreground"
                     onClick={() => setOpen(open === p.id ? null : p.id)}
                     aria-expanded={open === p.id}
                   >
-                    Evidence: {p.evidence.join(", ")}
+                    Reason and supporting evidence
                     <ChevronDown
                       className={cn("h-3 w-3 transition-transform", open === p.id && "rotate-180")}
                     />
                   </button>
                   {open === p.id ? (
                     <ul className="mt-1 space-y-1 rounded-lg bg-muted/50 p-2 text-[12px]">
+                      <li className="text-[13px]">{splitRefs(p.reason, known).text}</li>
                       {p.evidence.map((id) => (
                         <li key={id}>
                           <span className="font-mono text-muted-foreground">{id}</span>{" "}
@@ -230,7 +228,7 @@ export function StrategyCalls({
                           onClick={() => m.mutate({ proposalId: p.id, use: "engine" })}
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          Use the engine's {c.before} kg
+                          Keep original {c.before} kg
                         </Button>
                       ) : (
                         <Button
@@ -255,7 +253,7 @@ export function StrategyCalls({
       {setAside.length ? (
         <details className="rounded-xl border border-border p-3 text-[13px]">
           <summary className="cursor-pointer font-medium">
-            {setAside.length} call{setAside.length === 1 ? "" : "s"} the checks set aside
+            {setAside.length} alternative{setAside.length === 1 ? "" : "s"} not recommended
           </summary>
           <ul className="mt-2 space-y-2">
             {setAside.map((c) => (
