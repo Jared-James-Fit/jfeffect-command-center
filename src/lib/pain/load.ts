@@ -21,7 +21,7 @@ const REPORT_COLS_BASE =
   "id, client_id, feedback_id, checkin_id, day_id, reported_on, reported_at, source, region, side, severity, trigger, exercise_name, feel, impact, same_issue, change, continues_id, note";
 /** With the spot, 0–10 and when it hurts (20270430091000_pain_sites.sql); the base set while that isn't in yet. */
 const REPORT_COLS_SITES = `${REPORT_COLS_BASE}, site, score, timing`;
-/** With a general symptom too (20270603090000_whole_body_symptoms.sql). */
+/** With a general symptom too (20270603120000_whole_body_symptoms.sql). */
 const REPORT_COLS = `${REPORT_COLS_SITES}, symptom`;
 
 /** Did the read fail only because a newer column isn't in this database yet? */

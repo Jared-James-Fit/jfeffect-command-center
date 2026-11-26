@@ -159,7 +159,7 @@ describe("reports: only the questions that matter, and nothing made up", () => {
   });
 
   it("the database takes every feel and symptom the app writes", () => {
-    const sql = readFileSync("supabase/migrations/20270603090000_whole_body_symptoms.sql", "utf8");
+    const sql = readFileSync("supabase/migrations/20270603120000_whole_body_symptoms.sql", "utf8");
     for (const f of FEEL_KEYS) expect(sql).toContain(`'${f}'`);
     for (const g of GENERAL_SYMPTOMS) expect(sql).toContain(`'${g.key}'`);
     for (const r of PAIN_REGIONS) expect(sql).toContain(`'${r.key}'`);
