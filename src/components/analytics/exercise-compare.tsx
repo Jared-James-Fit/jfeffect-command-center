@@ -8,10 +8,10 @@ type Period={id:string;name:string;start:string;end:string};
 const style="min-h-10 w-full rounded-lg border border-border bg-background px-2 text-xs";
 const day=(p:LiftHistoryPoint)=>p.date.slice(0,10);
 export function ExerciseCompare({name,points,unit,periods=[]}:{name:string;points:LiftHistoryPoint[];unit:Unit;periods?:Period[]}){
-  const [open,setOpen]=useState(false),[a,setA]=useState("recent"),[b,setB]=useState("prior"),[metric,setMetric]=useState<"single"|"estimated"|"rep">("rep"),[reps,setReps]=useState(5);
+  const [open,setOpen]=useState(false),[a,setA]=useState("recent"),[b,setB]=useState("prior"),[metric,setMetric]=useState<"single"|"estimated"|"rep">("rep"),[reps,setReps]=useState(()=>points.find(p=>p.reps>0&&p.load>0)?.reps??5);
   const [as,setAs]=useState(""),[ae,setAe]=useState(""),[bs,setBs]=useState(""),[be,setBe]=useState("");
   const choices=useMemo(()=>{
-    const days=points.map(day).filter(Boolean).sort();
+    const days=points.map(day).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))).sort();
     const end=days[days.length-1];if(!end)return [];
     const back=(n:number)=>new Date(Date.parse(end)-n*86400000).toISOString().slice(0,10);
     return [{id:"recent",name:"Latest 28 days",start:back(27),end},{id:"prior",name:"Previous 28 days",start:back(55),end:back(28)},...periods];
@@ -25,7 +25,7 @@ export function ExerciseCompare({name,points,unit,periods=[]}:{name:string;point
       if(value!=null&&(!best||value>best.value))best={value,source:p};
     }return best;
   };
-  const x=read(A),y=read(B),max=Math.max(x?.value??0,y?.value??0,1);
+  const x=open?read(A):null,y=open?read(B):null,max=Math.max(x?.value??0,y?.value??0,1);
   return <><button type="button" className="min-h-10 text-xs font-medium underline-offset-2 hover:underline" onClick={()=>setOpen(true)}>Compare exercise ›</button>
     <Sheet open={open} onOpenChange={setOpen}><SheetContent side="bottom" swipeToClose className="max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4"><SheetTitle>{name} · Compare</SheetTitle><SheetDescription>Compare best performances of the same exercise in two periods.</SheetDescription>
     <select aria-label="Metric" value={metric} onChange={e=>setMetric(e.target.value as typeof metric)} className={style}><option value="rep">Same-rep best</option><option value="single">Actual single</option><option value="estimated">Comparable e1RM</option></select>
