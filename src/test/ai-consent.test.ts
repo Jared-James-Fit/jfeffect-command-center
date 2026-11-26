@@ -121,9 +121,7 @@ describe("AI consent is asked in place, never by a popup (Nov 25 2026)", () => {
   it("only a tick or a tap on Allow saves a yes; nothing is pre-ticked", () => {
     expect(ui).toContain("onClick={() => void answer(true)}");
     expect(ui).not.toMatch(/useEffect\([\s\S]{0,300}(answer|set|saveAiConsent)\(true/);
-    for (const p of ["src/components/join/activate-page.tsx", "src/components/coaching-agreement/agreement-sign-flow.tsx"]) {
-      expect(src(p), p).toContain("const [aiAllowed, setAiAllowed] = useState(false);");
-    }
+    expect(src("src/components/join/activate-page.tsx")).toContain("const [aiAllowed, setAiAllowed] = useState(false);");
   });
 
   it("is never asked of staff or in View as client", () => {
@@ -131,7 +129,7 @@ describe("AI consent is asked in place, never by a popup (Nov 25 2026)", () => {
     expect(ui).toMatch(/needsYes: askable &&/);
   });
 
-  it("sits in the Terms / agreement flows as its own unticked, optional box", () => {
+  it("is offered at signup, never repeated at agreement signing", () => {
     const activate = src("src/components/join/activate-page.tsx");
     expect(activate).toContain("<AiConsentCheckbox");
     // agreeing to the Terms never waits on it
@@ -139,8 +137,9 @@ describe("AI consent is asked in place, never by a popup (Nov 25 2026)", () => {
     expect(activate).not.toMatch(/if \(!aiAllowed\)/);
     expect(activate).toContain("if (!signErr) await recordAiConsentChoice(aiAllowed);");
     const sign = src("src/components/coaching-agreement/agreement-sign-flow.tsx");
-    expect(sign).toContain("<AiConsentCheckbox");
-    expect(sign).toContain("recordAiConsentChoice(aiAllowed, aiConsent.row)");
+    expect(sign).not.toContain("AiConsentCheckbox");
+    expect(sign).not.toContain("recordAiConsentChoice");
+    expect(sign).not.toContain("useMyAiConsent");
     // the old onboarding cards are gone (one place to ask, not four)
     for (const p of ["src/components/member/member-setup-wizard.tsx", "src/components/client-goals/GoalsSetupFlow.tsx", "src/components/portal/setup-checklist-banner.tsx"]) {
       expect(src(p), p).not.toContain("AiConsent");
@@ -199,7 +198,7 @@ describe("the documents say the same thing", () => {
 
   it("the Coaching Agreement no longer makes AI tools part of signing", async () => {
     const { AGREEMENT_CONTENT_JSON, AGREEMENT_VERSION } = await import("@/lib/coaching-agreement/content");
-    expect(AGREEMENT_VERSION).toBe("3.1");
+    expect(AGREEMENT_VERSION).toBe("3.2");
     const content = JSON.parse(AGREEMENT_CONTENT_JSON);
     const health = content.acknowledgements.find((a: any) => a.id === "health").text as string;
     expect(health).toContain("Sending it to AI tools is a separate, optional choice.");

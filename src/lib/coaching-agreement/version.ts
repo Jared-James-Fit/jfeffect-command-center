@@ -3,7 +3,7 @@
  * that only compares versions (the status rules and the launch popup, which load on every
  * signed-in page) doesn't pull the whole text into the app's main bundle.
  */
-export const AGREEMENT_VERSION = "3.1";
+export const AGREEMENT_VERSION = "3.2";
 
 /**
  * Clients whose latest signed version is below this must sign again. Raise it only
@@ -42,6 +42,8 @@ export const AGREEMENT_VERSION = "3.1";
  * outside AI services (OpenAI, Google) is a separate permission (src/lib/ai-consent), never part of
  * signing, so the required privacy acknowledgement no longer consents to AI tools and the privacy
  * section says how that permission is given and withdrawn. Nothing else changes; nobody re-signs.
+ *
+ * 3.2 removes the duplicate AI permission from signing; no change to consent scope or re-signing.
  *
  * This must stay "2.0" (the database view coaching_agreement_resign_below_version() says the
  * same, and a test checks it).
