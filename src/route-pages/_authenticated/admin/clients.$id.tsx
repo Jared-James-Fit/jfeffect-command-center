@@ -1958,8 +1958,8 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   const steps: Step[] = [
     { label: "Account access", state: form.portal_access_disabled || form.needs_admin_help ? "Needs review" : signedIn ? "Completed" : access.stage === "setup_expired" || (!invite && !form.user_id) ? "Not sent" : "Awaiting client", tab: "account" },
   ];
-  if (!coaching && memberSetup?.applies) steps.push({ label: "Membership setup", state: memberSetup.missing.length ? "Awaiting client" : "Completed", tab: "info" });
-  if (!coaching && memberSetupUnknown) steps.push({ label: "Membership setup", state: "Check status", tab: "account" });
+  if (!coaching && !scope.ready && memberSetup?.applies) steps.push({ label: "Membership setup", state: memberSetup.missing.length ? "Awaiting client" : "Completed", tab: "info" });
+  if (!coaching && !scope.ready && memberSetupUnknown && !memberSetup?.applies) steps.push({ label: "Membership setup", state: "Check status", tab: "account" });
   if (coaching) {
     const a = agreement.data;
     steps.push({ label: "Coaching agreement", state: !a ? "Check status" : a.state.state !== "needs_signature" ? "Completed" : !form.user_id ? "Not sent" : a.resignRequestedAt ? "Awaiting client" : "Not sent", tab: "documents" });
@@ -1975,7 +1975,7 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
     }
   }
   if (scope.membership?.applicable) {
-    steps.push({ label: scope.membership.free ? "Training setup" : "Membership setup", state: scope.membership.complete ? "Completed" : "Awaiting client", tab: "account" });
+    steps.push({ label: scope.membership.free ? "Training setup" : "Membership setup", state: scope.membership.complete ? "Completed" : "Awaiting client", tab: "info" });
   }
   if (!coaching && scope.requirements?.basicInfo) {
     steps.push({ label: "Basic information", state: isBasicInfoComplete(form) ? "Completed" : "Awaiting client", tab: "info" });
