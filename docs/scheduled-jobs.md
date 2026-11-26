@@ -8,10 +8,10 @@ Exception: `payment-reminder-sms` uses its own Vault secret (`payment_reminder_h
 
 | Job | Schedule | Calls |
 |---|---|---|
-| appointment-reminders-tick | every 5 min | appointment-reminders (appointment texts, PT session evening-before texts, PT session → Google Calendar sync) |
+| appointment-reminders-tick | every 5 min (:04, :09, …) | appointment-reminders (appointment texts, PT session evening-before texts, PT session → Google Calendar sync) |
 | birthday-notifications-hourly | :05 hourly | birthday-notifications (+ held pushes, 8am digest, monthly recap) |
 | jf-cleanup-pending-signups-hourly | hourly | cleanup-pending-signups |
-| lift-archive-tick-2m | every 2 min | lift-archive-tick |
+| lift-archive-tick-2m | every 2 min while a lift video waits to be copied | lift-archive-tick |
 | media-archive-nightly | 03:15 | media-archive (no-op while auto-archive is off) |
 | nutrition-status-tick | 08:00 | nutrition-tick |
 | nutrition-roadmap-tick | 13:17 UTC (8:17 Winnipeg) | nutrition-roadmap-tick: every roadmap (coaching clients with a goal or a plan, and anyone with a roadmap) read against the day's data; status and next check-in kept; a reforecast proposed only for a changed goal, 14+ days off plan or 2 missed check-ins; a self-coached athlete's due check-in pushed once (every 2 days at most); the coach pushed only for a change to approve or a real risk (every 3 days at most, never a first draft). `{ clientId }` reads one athlete |
@@ -22,9 +22,27 @@ Exception: `payment-reminder-sms` uses its own Vault secret (`payment_reminder_h
 | meet-checklist-reminders | 14:11 UTC daily (9:11 Winnipeg) | meet-checklist-reminders (push only, each client's own calendar day: 2 weeks out if the meet checklist isn't sent, 2–3 days out while something's open, the day before for must-haves) |
 | openipf-tick | every minute | SQL only: `openipf_tick()` sends the next OpenIPF lookups (8 a minute at most), reads their answers into suggestions, closes finished searches, and wakes `openipf-notify` (at most every 15 min) when matches or new meets are ready to tell; costs nothing while the queue is empty |
 | openipf-monthly-scan | 15:41 UTC on the 1st (10:41 Winnipeg) | SQL only: `_openipf_scan_start(NULL, NULL, NULL)` looks up every current coaching client and alumni record with no OpenIPF profile linked (never a free member); the tick does the rest |
-| sms-unread-reminders | every 10 min | sms-reminders |
+| sms-unread-reminders | every 10 min (:08, :18, …) | sms-reminders |
+| ai-health-tick | every 5 min (:02, :07, …) | ai-health-tick (AI provider health, alerts, recovery; its hourly parts run at :02) |
+| training-roadmap-tick | every 5 min (:03, :08, …) while a roadmap waits | training-roadmap-tick |
 | payment-setup-reminders / payment-reminder-sms | :07/:37, :12/:42 | see payment-links-and-reminders.md |
 | scheduled-jobs-health | :23/:53 | SQL only (below) |
+
+## Taking turns
+The app's server runs requests in a shared worker, and several landing in the same second can run
+it out of memory, which kills every request in it (Cloudflare 1102). So a job that calls a hook:
+- asks the database first and calls only when there's work (`select net.http_post(...) where exists (...)`),
+  like program-intel-tick, lift-archive-tick-2m and training-roadmap-tick;
+- and, when it has to call every time, takes a minute of its own (`2-59/5`, `8-59/10`), never the
+  :00 / :x0 / quarter-hour minutes the every-5 and every-15 jobs already share. At most two
+  always-on calls start in any minute (20270531090000_cron_hooks_spread_out.sql).
+
+To see when calls start together:
+
+    select date_trunc('minute', d.start_time) m, string_agg(j.jobname, ', ')
+      from cron.job_run_details d join cron.job j using (jobid)
+     where d.start_time > now() - interval '1 hour' and d.return_message like '1 row%'
+     group by 1 having count(*) > 2 order by 1;
 
 ## Is it working?
 `cron.job_run_details` says "succeeded" as soon as an HTTP call is queued, even if the app
