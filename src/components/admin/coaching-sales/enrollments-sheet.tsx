@@ -16,7 +16,8 @@ import {
   type AdminPackage,
   type Enrollment,
 } from "@/lib/coaching-packages/packages.functions";
-import { priceLabel } from "@/lib/coaching-packages/packages";
+import { priceLabel, toPublic } from "@/lib/coaching-packages/packages";
+import { PackageCard } from "@/components/sales/coaching-packages";
 
 export const enrollmentsKey = (o: { packageId?: string; clientId?: string }) => ["coaching-package-enrollments", o.packageId ?? null, o.clientId ?? null] as const;
 
@@ -177,6 +178,10 @@ export function EnrollForm({
               </option>
             ))}
           </select>
+          {chosen && <div className="mt-3">
+            <PackageCard pkg={toPublic(chosen)} preview compact />
+            <p className="mt-2 text-xs text-muted-foreground">Catalogue inclusions and advertised price. Your client's actual agreed price and billing remain separate.</p>
+          </div>}
           {!active.length && <p className="mt-1 text-[13px] text-muted-foreground">Only an active package can take clients.</p>}
         </div>
       )}

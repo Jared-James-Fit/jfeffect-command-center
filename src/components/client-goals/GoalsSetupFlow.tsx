@@ -41,6 +41,7 @@ type Props = {
   onComplete?: () => void;
   /** Render compact in a sheet (skip the full progress header). */
   compact?: boolean;
+  nutritionOnly?: boolean;
 };
 
 const STEPS = [
@@ -54,7 +55,9 @@ const STEPS = [
   "Final notes",
 ] as const;
 
-export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
+export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = false }: Props) {
+  const steps = nutritionOnly ? [STEPS[5], STEPS[7]] : STEPS;
+  const activeStepIndex = (index: number) => nutritionOnly ? (index === 0 ? 5 : 7) : index;
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const saveGoalsSetup = useServerFn(saveGoalsSetupFn);
@@ -163,6 +166,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
     const merged: any = { ...local, ...(extra ?? {}) };
     const out: Record<string, unknown> = {};
     for (const key of EDITABLE_GOALS_FIELDS) {
+      if (nutritionOnly && !(key.startsWith("nutrition_") || ["food_restrictions_has", "food_restrictions_details", "cooking_skill", "food_dislikes", "final_notes"].includes(key))) continue;
       if (!(key in merged)) continue;
       let v: any = merged[key];
       if (typeof v === "string") {
@@ -176,7 +180,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
   const upsert = useMutation({
     mutationFn: async (patch: Partial<ClientGoalsSetupRow> & { completed?: boolean }) => {
-      const days = trainingDays.length && !sameDays(trainingDays, scheduleBaseRef.current) ? trainingDays : undefined;
+      const days = !nutritionOnly && trainingDays.length && !sameDays(trainingDays, scheduleBaseRef.current) ? trainingDays : undefined;
       const res = await saveGoalsSetup({ data: { clientId, patch, trainingDays: days } });
       if (days) scheduleBaseRef.current = days;
       return res;
@@ -205,7 +209,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
       setSaveFailed(null);
       setStepSaveFailed(null);
       await upsert.mutateAsync(buildPatch(extra) as any);
-      setStep((s) => Math.min(STEPS.length - 1, s + 1));
+      setStep((s) => Math.min(steps.length - 1, s + 1));
     } catch (e: any) {
       // Don't trap the user — answers persist locally and will retry.
       setStepSaveFailed(
@@ -214,7 +218,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
           : "We couldn't save your latest changes — they're saved on this device.",
       );
       toast.error("Couldn't save right now — your answers are kept on this device.");
-      setStep((s) => Math.min(STEPS.length - 1, s + 1));
+      setStep((s) => Math.min(steps.length - 1, s + 1));
     }
   };
 
@@ -232,6 +236,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
   const finish = async () => {
     if (upsert.isPending) return; // dedupe double-taps
+    if (nutritionOnly && !local.nutrition_goal) { toast.error("Choose your nutrition goal first"); setStep(0); return; }
     setSaveFailed(null);
     setStepSaveFailed(null);
     try {
@@ -259,7 +264,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
     );
   }
 
-  const pct = Math.round(((step + 1) / STEPS.length) * 100);
+  const pct = Math.round(((step + 1) / steps.length) * 100);
 
   return (
     <div className="space-y-4">
@@ -267,17 +272,17 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold uppercase tracking-wide text-muted-foreground">
-              Step {step + 1} of {STEPS.length}
+              Step {step + 1} of {steps.length}
             </span>
-            <span className="text-muted-foreground">{STEPS[step]}</span>
+            <span className="text-muted-foreground">{steps[step]}</span>
           </div>
           <Progress value={pct} />
         </div>
       )}
 
       <Card className="p-4 sm:p-5">
-        {step === 0 && <GoalsStep value={local} setField={setField} />}
-        {step === 1 && (
+        {activeStepIndex(step) === 0 && <GoalsStep value={local} setField={setField} />}
+        {activeStepIndex(step) === 1 && (
           <AvailabilityStep
             value={local}
             setField={setField}
@@ -286,14 +291,14 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
             scheduled={scheduleBaseRef.current.length > 0}
           />
         )}
-        {step === 2 && <ExperienceStep value={local} setField={setField} />}
-        {step === 3 && (
+        {activeStepIndex(step) === 2 && <ExperienceStep value={local} setField={setField} />}
+        {activeStepIndex(step) === 3 && (
           <LifestyleStep clientId={clientId} requireEmployment={!row?.completed_at} onReady={setLifestyleReady} onSkip={() => void saveAndAdvance()} />
         )}
-        {step === 4 && <EquipmentStep value={local} setField={setField} />}
-        {step === 5 && <NutritionStep value={local} setField={setField} />}
-        {step === 6 && <InjuriesStep value={local} setField={setField} />}
-        {step === 7 && <FinalStep value={local} setField={setField} />}
+        {activeStepIndex(step) === 4 && <EquipmentStep value={local} setField={setField} />}
+        {activeStepIndex(step) === 5 && <NutritionStep value={local} setField={setField} />}
+        {activeStepIndex(step) === 6 && <InjuriesStep value={local} setField={setField} />}
+        {activeStepIndex(step) === 7 && <FinalStep value={local} setField={setField} />}
       </Card>
 
       {saveFailed && (
@@ -365,8 +370,8 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
             <Button variant="outline" onClick={saveAndExit} disabled={upsert.isPending}>
               Save & continue later
             </Button>
-            {step < STEPS.length - 1 ? (
-              <Button onClick={() => saveAndAdvance()} disabled={upsert.isPending || (STEPS[step] === "Work & lifestyle" && !lifestyleReady)}>
+            {step < steps.length - 1 ? (
+              <Button onClick={() => saveAndAdvance()} disabled={upsert.isPending || (steps[step] === "Work & lifestyle" && !lifestyleReady)}>
                 {upsert.isPending ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving</> : <>Next <ChevronRight className="ml-1 h-4 w-4" /></>}
               </Button>
             ) : (

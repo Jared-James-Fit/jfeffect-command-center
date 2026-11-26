@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { listCoachingPackages, enrollClientInPackage } from "@/lib/coaching-packages/packages.functions";
+import { PackageCard } from "@/components/sales/coaching-packages";
+import { PACKAGES_PAGE_URL, toPublic } from "@/lib/coaching-packages/packages";
 import { useNavigate } from "@tanstack/react-router";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -29,6 +33,12 @@ export function AddClientDialog({
   const [email, setEmail] = useState("");
   const [coachingType, setCoachingType] = useState("Online Coaching");
   const [sendNow, setSendNow] = useState(true);
+  const [packageId, setPackageId] = useState("");
+  const listPackages = useServerFn(listCoachingPackages);
+  const enroll = useServerFn(enrollClientInPackage);
+  const packages = useQuery({ queryKey: ["coaching-packages-admin"], queryFn: () => listPackages(), enabled: open });
+  const activePackages = (packages.data?.packages ?? []).filter((p) => p.status === "active" && p.kind === "subscription");
+  const selectedPackage = activePackages.find((p) => p.id === packageId);
   const [busy, setBusy] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const textFn = useServerFn(sendAuthLinkBySms);
@@ -36,8 +46,22 @@ export function AddClientDialog({
   const submit = async () => {
     const full_name = name.trim();
     if (!full_name) return toast.error("Name is required");
+    if (packageId && !selectedPackage) return toast.error("That package is no longer available. Select it again.");
     setBusy(true);
     try {
+      // Reuse the existing identity rather than opening a second account for another service.
+      if (email.trim()) {
+        const escaped = email.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+        const existing = await supabase.from("clients").select("id").ilike("email", escaped).limit(2);
+        if (existing.error) throw existing.error;
+        if (existing.data?.length) {
+          if (existing.data.length > 1) return toast.error("More than one record uses this email. Review those accounts before creating a new one.");
+          toast.message("This account already exists. Change its services from the existing profile.");
+          onOpenChange(false);
+          navigate({ to: "/admin/clients/$id", params: { id: existing.data[0].id } });
+          return;
+        }
+      }
       const { data, error } = await supabase
         .from("clients")
         .insert({
@@ -50,6 +74,20 @@ export function AddClientDialog({
         .select("id")
         .single();
       if (error) throw error;
+      // Enrollment records the selected package only; the existing sales and
+      // plan-change engine handles billing. A failed enrollment leaves the
+      // newly created account recoverable, rather than inviting the wrong plan.
+      if (selectedPackage && data?.id) {
+        try {
+          await enroll({ data: { clientId: data.id, packageId: selectedPackage.id, startsOn: new Date().toLocaleDateString("en-CA", { timeZone: "America/Winnipeg" }) } });
+        } catch (e: any) {
+          toast.error(`Account created, but the package was not set: ${e?.message ?? "unknown error"}. No setup link sent.`);
+          onOpenChange(false);
+          onCreated?.();
+          navigate({ to: "/admin/clients/$id", params: { id: data.id } });
+          return;
+        }
+      }
       // Their setup link goes out right away: a text (read within minutes) and/or
       // the email. One link, good for 14 days until they've signed in (setup-invite.ts).
       const sent: string[] = [];
@@ -81,7 +119,7 @@ export function AddClientDialog({
         toast.success("Client created. Text or copy their setup link from their profile.");
       }
       onOpenChange(false);
-      setName(""); setEmail(""); setPhone("");
+      setName(""); setEmail(""); setPhone(""); setPackageId("");
       onCreated?.();
       if (data?.id) navigate({ to: "/admin/clients/$id", params: { id: data.id } });
     } catch (e: any) {
@@ -93,7 +131,7 @@ export function AddClientDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[90dvh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Client</DialogTitle>
         </DialogHeader>
@@ -118,6 +156,22 @@ export function AddClientDialog({
                 {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Service package <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground underline">Compare</a>
+            </div>
+            <Select value={packageId || "none"} onValueChange={(v) => setPackageId(v === "none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Choose a package" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Set later / custom</SelectItem>
+                {activePackages.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {packages.isError && <p className="text-xs text-muted-foreground">Catalogue unavailable. You can set the package from their profile later.</p>}
+            {selectedPackage && <PackageCard pkg={toPublic(selectedPackage)} preview compact />}
+            <p className="text-xs text-muted-foreground">Setting a package does not charge the client. Billing is confirmed separately.</p>
           </div>
           <label className="flex min-h-10 cursor-pointer items-center gap-3 text-sm">
             <Checkbox checked={sendNow} onCheckedChange={(v) => setSendNow(v === true)} />

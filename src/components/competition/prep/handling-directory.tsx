@@ -7,7 +7,7 @@
  * Competition tab on that meet. Handling is a service on the athlete's
  * permanent account, so the account itself stays where it is in its own list.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
@@ -17,12 +17,21 @@ import { HANDLING_FILTERS, HANDLING_WORD, PAYMENT_WORD, matchesFilter, type Hand
 import { cn } from "@/lib/utils";
 import { dayWords } from "./prep-ui";
 
-export function HandlingDirectory() {
+export function HandlingDirectory({ search = "" }: { search?: string }) {
   const read = useServerFn(listHandlingFn);
   const q = useQuery({ queryKey: ["competition-handling-list"], queryFn: () => read({ data: { limit: 200 } }), staleTime: 60_000 });
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("jf:handling-directory-open");
+      if (stored === "true" || stored === "false") setOpen(stored === "true");
+    } catch { /* Private browsing: use the default. */ }
+  }, []);
   const [filter, setFilter] = useState<HandlingStatus | "active">("active");
-  const rows = (q.data?.rows ?? []) as any[];
+  const needle = search.trim().toLowerCase();
+  const rows = useMemo(() => ((q.data?.rows ?? []) as any[])
+    .filter((r) => !needle || [r.athlete, r.meet].some((v) => String(v ?? "").toLowerCase().includes(needle)))
+    .sort((a, b) => String(a.meetDate ?? "9999").localeCompare(String(b.meetDate ?? "9999"))), [q.data, needle]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const f of HANDLING_FILTERS) c[f.key] = rows.filter((r) => matchesFilter(r.status, f.key)).length;
@@ -30,21 +39,26 @@ export function HandlingDirectory() {
   }, [rows]);
   if (!rows.length) return null;
   const shown = rows.filter((r) => matchesFilter(r.status, filter));
+  const expanded = !!needle || (open ?? counts.active > 0);
   const summary = (["invited", "onboarding", "preparing", "ready"] as const)
     .filter((k) => counts[k])
     .map((k) => `${counts[k]} ${HANDLING_WORD[k].toLowerCase()}`)
     .join(" · ");
   return (
     <section className="rounded-2xl border border-border bg-card" data-handling-directory>
-      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+      <button type="button" aria-expanded={expanded} onClick={() => {
+        const next = !expanded;
+        setOpen(next);
+        try { window.localStorage.setItem("jf:handling-directory-open", String(next)); } catch { /* optional */ }
+      }} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <Trophy className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
           <span className="text-[14.5px] font-medium">Competition handling</span>
           <span className="block truncate text-[12.5px] text-muted-foreground">{summary || "Nothing active"}</span>
         </span>
-        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
       </button>
-      {open ? (
+      {expanded ? (
         <div className="border-t border-border px-2 pb-2">
           <div className="flex gap-1 overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {HANDLING_FILTERS.filter((f) => f.key === "active" || counts[f.key] > 0 || f.key === filter).map((f) => (

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { downloadFiles, saveFiles } from "@/lib/file-share";
 import { listCoachingPackages } from "@/lib/coaching-packages/packages.functions";
-import { SITE, pricingText, shareLink, toPublic, type PublicPackage } from "@/lib/coaching-packages/packages";
+import { packageComparisonLink, pricingText, shareLink, toPublic, type PublicPackage } from "@/lib/coaching-packages/packages";
 import {
   CARD_SIZES,
   canvasPdf,
@@ -189,15 +189,15 @@ export function ShareCards({ initialSlugs }: { initialSlugs: string[] | null }) 
         <Button
           variant="ghost"
           className="w-full"
-          disabled={!pkgs.length || draft}
+          disabled={!pkgs.length || draft || (layout === "compare" && pkgs.some((p) => !p.listed))}
           onClick={() =>
             void copy(
-              layout === "single" && pkgs[0] ? shareLink(pkgs[0], "dm") : `${SITE}/coaching#pricing`,
+              layout === "single" && pkgs[0] ? shareLink(pkgs[0], "dm") : packageComparisonLink(pkgs.map((p) => p.slug)),
               "Link copied",
             )
           }
         >
-          <Link2 className="mr-1.5 h-4 w-4" /> Copy {layout === "single" ? "application" : "pricing page"} link
+          <Link2 className="mr-1.5 h-4 w-4" /> Copy {layout === "single" ? "application" : "comparison"} link
         </Button>
       </div>
     </div>

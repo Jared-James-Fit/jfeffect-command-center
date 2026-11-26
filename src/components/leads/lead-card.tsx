@@ -10,6 +10,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { Check, Copy, Instagram, Loader2, MessageSquare, MoreHorizontal, Phone, RefreshCw } from "lucide-react";
+import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -254,6 +255,13 @@ export function LeadCard({ app, reply, focused = false }: { app: LeadApplication
             <DropdownMenuItem onSelect={() => act("not_a_fit", "Set aside")}>Not a fit</DropdownMenuItem>
             {stage.label !== "New" && <DropdownMenuItem onSelect={() => act("reopen", "Back to new")}>Back to new</DropdownMenuItem>}
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer">Present services &amp; packages</a>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={async () => {
+              if (await copyText(PACKAGES_PAGE_URL)) toast.success("Packages link copied");
+              else toast.error("Couldn't copy the link. Open packages to share it.");
+            }}>Copy packages link</DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link to="/admin/forms" search={{ tab: "applications" } as any}>Full application</Link>
             </DropdownMenuItem>

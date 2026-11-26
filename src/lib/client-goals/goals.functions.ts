@@ -187,7 +187,7 @@ export const requestGoalsUpdateFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCoachOrAdmin(context, data.clientId);
     // Make sure a row exists so the banner condition works in the portal.
-    await context.supabase
+    const { error } = await context.supabase
       .from("client_goals_setup")
       .upsert(
         {
@@ -198,6 +198,7 @@ export const requestGoalsUpdateFn = createServerFn({ method: "POST" })
         } as any,
         { onConflict: "client_id" },
       );
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -249,4 +250,18 @@ export const getClientGoalsSetupFn = createServerFn({ method: "GET" })
       .eq("client_id", data.clientId)
       .maybeSingle();
     return { goals: goals ?? null };
+  });
+
+/** Read only the active package scope, with the same client-access check as goals saves. */
+export const getGoalsServiceScopeFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => clientIdInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertClientOwnerOrCoachOrAdmin(context, data.clientId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: enrollment, error } = await (supabaseAdmin as any).from("coaching_package_enrollments")
+      .select("coaching_packages!inner(slug)").eq("client_id", data.clientId)
+      .eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)).maybeSingle();
+    if (error) throw new Error("Could not read service scope");
+    return { nutritionOnly: enrollment?.coaching_packages?.slug === "nutrition" };
   });

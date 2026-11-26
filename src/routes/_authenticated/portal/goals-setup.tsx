@@ -1,3 +1,4 @@
+import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -39,13 +40,14 @@ function PortalGoalsSetupPage() {
     },
   });
 
+  const scope = useGoalsServiceScope(client?.id);
   const { data: setup } = useQuery({
     queryKey: ["client-goals-setup", client?.id],
     enabled: !!client?.id,
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("client_goals_setup")
-        .select("update_requested_at, update_request_message, completed_at")
+        .select("*")
         .eq("client_id", client!.id)
         .maybeSingle();
       return data;
@@ -80,7 +82,7 @@ function PortalGoalsSetupPage() {
     <div className="space-y-4 p-3 sm:p-4">
       <PageHeader
         title="Profile & Goals"
-        subtitle="Your goals, training setup, and coaching information. Your coach sees this to build your program."
+        subtitle={scope.nutritionOnly ? "Your nutrition goals and preferences, shared with your coach." : "Your goals, training setup, and coaching information. Your coach sees this to build your program."}
       />
 
       {setup?.update_requested_at && (
@@ -112,10 +114,12 @@ function PortalGoalsSetupPage() {
         </div>
       )}
 
-      <GoalsSetupFlow
+      {scope.ready ? <GoalsSetupFlow
+        key={`${client.id}:${scope.nutritionOnly}`}
+        nutritionOnly={scope.nutritionOnly}
         clientId={client.id}
         onComplete={() => toast.success("Thanks — your coach will see your updates.")}
-      />
+      /> : <Card className="p-4 text-sm text-muted-foreground">{scope.error ? "Could not load your service. Refresh to try again." : "Loading your setup…"}</Card>}
 
       <div className="pt-2 text-center">
         <Link to="/portal" className="text-xs text-muted-foreground underline-offset-2 hover:underline">

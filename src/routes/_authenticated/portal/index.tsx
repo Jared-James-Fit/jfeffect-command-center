@@ -1,3 +1,4 @@
+import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { HomeSectionLabel } from "@/components/portal/home-section-label";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -153,13 +154,14 @@ function PortalHome() {
     },
   });
 
+  const scope = useGoalsServiceScope(coaching ? client?.id : null);
   const [goalsSetupPromptOpen, setGoalsSetupPromptOpen] = useState(false);
 
   // Prompt incomplete clients once per app launch (not on every visit to Home),
   // and only once nothing else is open: it waits for any other popup or sheet to
   // close first. Closing never marks Goals & Setup complete, so it comes back on
   // the next launch; the setup checklist keeps its row in between.
-  const goalsIncomplete = goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null);
+  const goalsIncomplete = scope.ready && goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null, scope.nutritionOnly);
   const promptClientId = client?.id ?? null;
   useEffect(() => {
     if (!promptClientId || !coaching || !goalsIncomplete || goalsPromptShownFor.has(promptClientId)) return;
@@ -196,7 +198,7 @@ function PortalHome() {
       {/* Background gates / popups — keep wired exactly as before. */}
       {client?.id && coaching && (
         <Dialog
-          open={goalsSetupPromptOpen && !isGoalsSetupComplete(goalsSetup ?? null)}
+          open={goalsSetupPromptOpen && goalsIncomplete}
           onOpenChange={setGoalsSetupPromptOpen}
         >
           <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-4 sm:p-6">
@@ -206,10 +208,10 @@ function PortalHome() {
               </div>
               <DialogTitle>Finish your Goals & Setup</DialogTitle>
               <DialogDescription>
-                Complete the remaining coaching details so your program, nutrition and recommendations can be tailored to you. You can close this for now, but it will remind you again next time you load the app until setup is complete.
+                {scope.nutritionOnly ? "Complete your nutrition preferences so your coach can tailor your nutrition." : "Complete the remaining coaching details so your program, nutrition and recommendations can be tailored to you."} You can close this for now and finish later.
               </DialogDescription>
             </DialogHeader>
-            <GoalsSetupFlow clientId={client.id} />
+            <GoalsSetupFlow key={`${client.id}:${scope.nutritionOnly}`} clientId={client.id} nutritionOnly={scope.nutritionOnly} />
           </DialogContent>
         </Dialog>
       )}

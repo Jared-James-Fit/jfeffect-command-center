@@ -69,6 +69,23 @@ export type PublicPackage = {
 };
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The focused public package presentation uses the existing coaching route. */
+export const PACKAGES_PAGE_URL = "https://jfeffect.com/coaching?view=packages";
+
+/** Share only public catalogue slugs, never negotiated terms or private client data. */
+export function packageComparisonLink(slugs: readonly string[] = []): string {
+  const valid = [...new Set(slugs.filter((slug) => SLUG_RE.test(slug) && slug.length <= 60))].slice(0, 12);
+  return valid.length ? `${PACKAGES_PAGE_URL}&plans=${encodeURIComponent(valid.join(","))}` : PACKAGES_PAGE_URL;
+}
+
+/** Fail closed for a selection that no longer exists; never include unlisted packages. */
+export function comparisonPackages<T extends PublicPackage>(rows: readonly T[], plans?: string): T[] {
+  const listed = listedPackages(rows);
+  if (!plans) return listed;
+  const wanted = new Set(plans.split(",").filter((slug) => SLUG_RE.test(slug) && slug.length <= 60).slice(0, 12));
+  return listed.filter((p) => wanted.has(p.slug));
+}
 export const LIMITS = {
   name: 60,
   tagline: 120,
