@@ -72,3 +72,9 @@ describe("client workspace tabs", () => {
     expect(tabValues).not.toContain("messages");
   });
 });
+
+import { memberWorkspaceTab } from "@/lib/member-workspace-routing";
+it("preserves legacy member links in the shared workspace", () => {
+  expect(["summary", "subscription", "access", "setup", "sms", "notes"].map(memberWorkspaceTab)).toEqual(["summary", "purchases", "account", "info", "account", "notes"]);
+  expect(memberWorkspaceTab("constructor")).toBe("summary");
+});
