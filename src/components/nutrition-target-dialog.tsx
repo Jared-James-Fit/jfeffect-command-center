@@ -542,7 +542,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             clientId={historyClient}
             days={days}
             references={references}
-            historyUnavailable={historyQ.isError || revisionsQ.isError}
+            historyUnavailable={historyQ.isError || revisionsQ.isError || scheduledQ.isError}
+            historyLoading={historyQ.isLoading || revisionsQ.isLoading || scheduledQ.isLoading}
+            currentId={form.id}
             anchor={form.start_date > todayLocalISO() ? form.start_date : undefined}
           />}
           <Accordion type="single" collapsible defaultValue={!initial && !prefill && !copyFrom ? "paste" : undefined} className="rounded-xl border border-border">

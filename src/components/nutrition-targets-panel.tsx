@@ -263,7 +263,8 @@ export function NutritionTargetsPanel({
             clientId={clientId}
             days={plan.nutrition_target_days ?? []}
             references={comparisonReferences}
-            historyUnavailable={revisions.isError}
+            historyUnavailable={revisions.isError || scheduledQ.isError}
+            historyLoading={revisions.isLoading || scheduledQ.isLoading}
             currentId={plan.id}
             showCleo={!cleoEntry}
             anchor={plan.start_date && plan.start_date > todayLocalISO() ? plan.start_date : undefined}

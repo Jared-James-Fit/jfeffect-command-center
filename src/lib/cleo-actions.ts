@@ -47,6 +47,15 @@ const dayChange = rxSchema.extend({
 
 export const CLEO_ACTION_PARAMS = {
   update_meet_from_attachment: meetIntakeParams,
+  approve_goal_target: z.object({
+    client_id: uuid,
+    goal_id: uuid,
+    expected_version: z.number().int().positive(),
+    value: z.number().positive().max(3000),
+    unit: z.enum(["kg", "lb"]),
+    client_facing: z.boolean().describe("Whether the client may see the approved target and receive the existing reviewed update. Preserve the existing visibility for approved goals; make new approvals private unless the coach requests sharing."),
+  }),
+  recover_meeting_goals: z.object({ client_id: uuid, session_id: uuid }),
   update_client_identity: z.object({
     client_id: uuid,
     first_name: z.string().trim().min(1).max(100).optional(),
@@ -200,6 +209,8 @@ export function isCleoActionKind(v: unknown): v is CleoActionKind {
 
 /** Card heading and the tool description Cleo sees. */
 export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: string }> = {
+  approve_goal_target: { title: "Review goal target", tool: "Approve or edit an EXISTING measurable goal through the coach's goal ledger. First read goals for exact client, goal ID, version and source; read meetings for discussion if requested. Provide the precise weight and explicit unit, never infer a missing unit or choose an arbitrary end of a range; ask the coach if ambiguous. Preserve an approved goal's current visibility unless explicitly changed; keep new approvals private unless sharing is requested. This is a goal target, NOT a confirmed platform attempt. Nothing changes until approved." },
+  recover_meeting_goals: { title: "Recover meeting goals", tool: "Read an existing completed meeting's saved analysis again to recover missing goal proposals. First use meetings to get its exact client and session ID. Creates proposals only, never approves or changes attempts." },
   update_client_identity: { title: "Update client name", tool: "Actually update a client's profile identity (first and last name, or preferred name). Use when staff ask to correct a name, including from a client competition document. Read the selected client's file and the named source first; for a saved competition file use competition_file_evidence and supply its source_id and exact supporting source_quote. Never infer a missing surname or guess a client ID. For a full name supply both verified name parts, preserving the preferred nickname unless explicitly asked to change it. If name parts or identity are ambiguous, ask. Do not use for login email, password, permissions or account status." },
   update_meet_from_attachment: { title: "Update competition logistics", tool: "Update the existing competition record from a schedule attachment. First resolve the exact client and competition using competition_intake_matches. Never guess an ID, never use a coach note instead, omit uncertain fields, and flag conflicting existing values before confirming. Times are local 24-hour HH:MM. If multiple accounts or meets match, ask the coach to choose." },
   create_task: { title: "Add a task", tool: "Add a task to the team board." },
@@ -251,6 +262,8 @@ export type ActionRule = {
 };
 
 export const CLEO_ACTION_RULES: Record<CleoActionKind, ActionRule> = {
+  approve_goal_target: { need: "client", approvable: true },
+  recover_meeting_goals: { need: "client", approvable: true },
   update_client_identity: { need: "client", approvable: true },
   update_meet_from_attachment: { need: "client", approvable: true },
   create_task: { need: "tasks", approvable: false },

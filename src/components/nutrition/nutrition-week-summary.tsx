@@ -26,12 +26,13 @@ type Props = {
   showCleo?: boolean;
   currentId?: string | null;
   historyUnavailable?: boolean;
+  historyLoading?: boolean;
 };
 
 const number = (v: number | null | undefined) => v == null ? "—" : Math.round(v).toLocaleString();
 const difference = (a: number | null, b: number | null) => a == null || b == null ? "—" : (a > b ? "+" : "") + number(a - b);
 
-export function NutritionWeekSummary({ clientId, days, references, anchor, onReuse, showCleo = false, currentId, historyUnavailable = false }: Props) {
+export function NutritionWeekSummary({ clientId, days, references, anchor, onReuse, showCleo = false, currentId, historyUnavailable = false, historyLoading = false }: Props) {
   const [selected, setSelected] = useState("");
   const [detail, setDetail] = useState(0);
   const [showMeals, setShowMeals] = useState(false);
@@ -121,13 +122,15 @@ export function NutritionWeekSummary({ clientId, days, references, anchor, onReu
         {ref && <><p className="text-muted-foreground">{referenceLabel(ref)}{ref.revision_source ? " · " + (ref.revision_source === "cleo" ? "Cleo-assisted" : ref.revision_source === "undo" ? "Undo" : "Coach edit") : ""}</p>
           <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,0.65fr))] gap-x-1 gap-y-1.5 tabular-nums">
             <span className="text-muted-foreground">kcal/day</span><span className="text-right text-muted-foreground">Before</span><span className="text-right text-muted-foreground">Now</span><span className="text-right text-muted-foreground">Change</span>
-            {changes.map(({current,prior}, i) => <div className="contents" key={`${current.day_label ?? "unassigned"}-${i}`}><span className="min-w-0 break-words">{current.day_label ?? "Unassigned"}</span><span className="text-right">{number(prior?.calories)}</span><span className="text-right font-medium">{number(current.calories)}</span><span className="text-right font-medium">{difference(current.calories ?? null, prior?.calories ?? null)}</span></div>)}
+            {changes.map(({current,prior}, i) => <div className="contents" key={String(current.day_label ?? "unassigned") + i}><span className="min-w-0 break-words">{current.day_label || "Unassigned day"}</span><span className="text-right">{number(prior?.calories)}</span><span className="text-right font-medium">{number(current.calories)}</span><span className="text-right font-medium">{difference(current.calories ?? null, prior?.calories ?? null)}</span></div>)}
             {(ref.nutrition_target_days ?? []).filter((p) => !changes.some((c) => c.prior === p)).map((p, i) => <div key={p.day_label + i} className="contents"><span>{p.day_label} (removed)</span><span className="text-right">{number(p.calories)}</span><span className="text-right">—</span><span className="text-right">—</span></div>)}
           </div>
+          {compareOpen && <details className="rounded-md border border-border p-2"><summary className="cursor-pointer font-medium">Macros and meals by day type</summary><div className="mt-2 space-y-3">{changes.map(({current,prior},i) => <div key={String(current.day_label ?? "unassigned") + i} className="space-y-1"><p className="font-medium">{current.day_label || "Unassigned day"}</p><div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,0.7fr))] gap-1 tabular-nums"><span/><span className="text-right text-muted-foreground">Before</span><span className="text-right text-muted-foreground">Now</span><span className="text-right text-muted-foreground">Change</span>{(["protein","carbs","fats","fibre","steps"] as const).map(key=><div className="contents" key={key}><span className="capitalize">{key}{key==="steps"?"":" (g)"}</span><span className="text-right">{number(prior?.[key])}</span><span className="text-right">{number(current[key])}</span><span className="text-right">{difference(current[key]??null,prior?.[key]??null)}</span></div>)}</div><details><summary className="cursor-pointer text-muted-foreground">Meal plan</summary><div className="mt-1 grid gap-2 sm:grid-cols-2">{[{label:"Before",notes:prior?.notes},{label:"Now",notes:current.notes}].map(side=><div key={side.label} className="min-w-0 rounded border border-border p-2"><p className="font-medium">{side.label}</p><p className="whitespace-pre-wrap break-words text-muted-foreground">{side.notes||"No saved meals."}</p></div>)}</div></details></div>)}</div></details>}
           {ref.scheduled_reference && <p className="text-muted-foreground">Future draft · not published or followed yet.</p>}
-          {ref.revision_partial && <p className="text-muted-foreground">Recovered day targets and meals; other plan settings were not recorded in this older edit.</p>}
+          {ref.revision_partial && <p className="text-muted-foreground">Saved targets and meals only. Other historical plan settings were not recorded.</p>}
         </>}
       </div>}
+      {historyLoading && <p className="text-xs text-muted-foreground">Reading saved edits…</p>}
       {historyUnavailable && <p className="text-xs text-warning">Saved revision history is unavailable.</p>}
       <PlanEventTimeline clientId={clientId} onPick={(m) => { setMilestone(m); setSelected(""); setShowMeals(false); setCompareOpen(true); }} renderMilestone={(m) => {
         const matches = plansOnDate(references.filter((p) => !p.revision_of), m.date, (p) => ({ start: p.start_date, end: p.end_date }));
