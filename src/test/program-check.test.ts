@@ -189,3 +189,29 @@ describe("a block's type is read from its sets, not its words alone (Nov 24 2026
     expect(inferBlockType({ name: "Phase 1", weeks })).toBe("hypertrophy");
   });
 });
+
+describe("a % of their estimated max or competition PR", () => {
+  const withRows = (rows: any[], has: (name: string, family: string | null, basis: string) => boolean): CheckInput => {
+    const p = program();
+    (p.blocks[0].weeks[1] as any).days[1].rows = rows;
+    p.athlete = { ...p.athlete!, hasMax: has };
+    return p;
+  };
+
+  it("is flagged only when it shows no weight and has no RPE to go by", () => {
+    const rows = [
+      row("dl", { percentage: 60, percentage_basis: "est_1rm", rpe: null }),
+      row("bp", { percentage: 85, percentage_basis: "comp_pr", rpe: null }),
+      row("sq", { percentage: 70, percentage_basis: "est_1rm", rpe: "6" }),
+    ];
+    const none = programCompleteness(withRows(rows, (_n, _f, b) => b !== "est_1rm" && b !== "comp_pr"));
+    const maxes = none.items.find((i) => i.key === "maxes")!;
+    expect(maxes.gaps.map((g) => g.text)).toEqual([
+      "Competition Deadlift: no estimated max to plan from yet, and no RPE to go by, so the athlete sees no weight",
+      "Competition Bench: no competition result on file, so the athlete sees no weight",
+    ]);
+    // the squat at 70% Est. 1RM @ RPE 6 goes by its RPE until there's an estimate: no flag
+    const ready = programCompleteness(withRows(rows, () => true));
+    expect(ready.items.find((i) => i.key === "maxes")!.gaps).toEqual([]);
+  });
+});

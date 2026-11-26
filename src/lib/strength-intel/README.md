@@ -62,9 +62,17 @@ real logs (`scripts/strength-intel/replay.ts`) showing it behaves better.
 - **History**: every add, change and removal of a max is kept by a trigger
   (`pl_client_max_history`), with Restore.
 
+- **A change mid-block is asked about** (`max-change.ts`, `MaxChangeQuestion`):
+  saving or deleting a max that a running block's untouched % sets read shows
+  which blocks and workouts it moves (the logger's own `computeRowLoad`, before
+  and after), with "Use the new numbers there too" or "Keep the block on the old
+  numbers" (`keepBlockOnRow`, a row for that block only).
+
 A workout's planned % is read from the references as they stood the day before
 its date (`strengthRefsAsOf`); a finished workout keeps the reference it was
-planned from. Nothing here rewrites a future session.
+planned from, its maxes included (`maxesAsOf` over
+`pl_client_max_changes_since`, from Nov 26 2026 on). Nothing here rewrites a
+future session.
 
 ## Tests
 

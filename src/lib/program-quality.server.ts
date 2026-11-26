@@ -194,7 +194,7 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
 
   // the athlete: builder read (session limit, equipment, pain, style), weight management, cardio, maxes
   const { loadBuilderAthlete } = await import("@/lib/builder-athlete");
-  const [athlete, wm, maxes] = await Promise.all([
+  const [athlete, wm, maxes, strengthRefs] = await Promise.all([
     best(() => loadBuilderAthlete(clientId, today, sb), null as any),
     best(async () => (await import("@/lib/weight-management/load.server")).loadWeightManagement(sb, clientId), null as any),
     best(async () => {
@@ -202,6 +202,12 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
       if (error) throw error;
       return (data ?? []) as any[];
     }, [] as any[]),
+    // what a % of their estimated max or competition PR reads (the logger's own references)
+    best(async () => {
+      const { fetchStrengthIntel } = await import("@/lib/strength-intel/read");
+      const { planningRefs } = await import("@/lib/strength-intel/planning");
+      return planningRefs(await fetchStrengthIntel(sb, clientId));
+    }, null as any),
   ]);
   const maxIndexFor = (blockId: string | null) => buildMaxIndex(maxes.filter((m: any) => m.block_id == null || m.block_id === blockId));
   const firstLive = structure[0]?.id ?? null;
@@ -219,7 +225,12 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
       pain: athlete?.pain ?? [],
       needsDates: false,
       hasMax: (name, family, basis) => {
-        const out = computeRowLoad({ exerciseName: name, basis: basis as any, percentage: 100, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: index, family: family as any, ownCompetition: !!family && /competition/i.test(name) });
+        const fam = (family as "squat" | "bench" | "deadlift" | null) ?? null;
+        const loggedE1rmKg = fam ? (strengthRefs?.e1rm?.[fam]?.kg ?? null) : null;
+        const compPrKg = fam ? (strengthRefs?.compPr?.[fam]?.kg ?? null) : null;
+        // with no strength read, a % of an estimate or PR isn't judged here (never a false flag)
+        if (!strengthRefs && (basis === "est_1rm" || basis === "comp_pr")) return true;
+        const out = computeRowLoad({ exerciseName: name, basis: basis as any, percentage: 100, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: index, family: family as any, ownCompetition: !!family && /competition/i.test(name), loggedE1rmKg, compPrKg });
         return out.status !== "no-max";
       },
     },

@@ -66,7 +66,7 @@ export type CheckAthlete = {
   sessionLimit?: SessionLimit | null;
   equipment?: { items: EquipmentItem[]; confidence: "confirmed" | "inferred" | "stated" | "unknown" } | null;
   pain?: PainPlace[];
-  /** A % of a max shows a weight only when that max is on file. */
+  /** A % shows a weight only when what it reads is there: a max on file (1RM, TM), or the strength read's estimate or competition PR (est_1rm, comp_pr). */
   hasMax?: (exerciseName: string, family: string | null, basis: string) => boolean;
   /** A live client program: its workouts need dates. */
   needsDates?: boolean;
@@ -114,6 +114,19 @@ function competitionFamily(r: any, ex: Map<string, CheckExercise>): "squat" | "b
 }
 
 const MAX_BASES = new Set(["training_max", "1rm"]);
+/** A % of their estimated max or competition PR: a weight only when the strength read has one; with an RPE the set falls back to it. */
+const READ_BASES = new Set(["est_1rm", "comp_pr"]);
+const blankEffort = (r: any) => (r?.rpe == null || String(r.rpe).trim() === "") && (r?.rir == null || String(r.rir).trim() === "");
+/** A % set that shows the athlete no weight and has nothing else to go by. */
+function pctShowsNothing(r: any, hasMax: (n: string, f: string | null, b: string) => boolean, name: string, family: string | null): string | null {
+  const basis = String(r?.percentage_basis ?? "");
+  if (r?.percentage == null || r.percentage === "") return null;
+  if (MAX_BASES.has(basis)) return hasMax(name, family, basis) ? null : `no ${basis === "1rm" ? "1RM" : "training max"} on file`;
+  if (READ_BASES.has(basis) && blankEffort(r) && !hasMax(name, family, basis)) {
+    return basis === "comp_pr" ? "no competition result on file" : "no estimated max to plan from yet, and no RPE to go by";
+  }
+  return null;
+}
 
 /** Live weeks: those with at least one workout not already trained. */
 function eachDay(input: CheckInput, fn: (d: CheckDay, at: Loc, w: CheckWeek, b: CheckBlock) => void) {
@@ -182,10 +195,12 @@ export function programCompleteness(input: CheckInput): Completeness {
     const pct: CompletenessGap[] = [];
     let pctRows = 0;
     eachDay(input, (d, at) => rows(d).forEach((r, ri) => {
-      if (!MAX_BASES.has(String(r?.percentage_basis ?? "")) || r?.percentage == null || r.percentage === "") return;
+      const basis = String(r?.percentage_basis ?? "");
+      if ((!MAX_BASES.has(basis) && !READ_BASES.has(basis)) || r?.percentage == null || r.percentage === "") return;
       pctRows++;
       const name = exName(r, ex);
-      if (!input.athlete!.hasMax!(name, competitionFamily(r, ex), String(r.percentage_basis))) pct.push({ text: `${name}: no ${r.percentage_basis === "1rm" ? "1RM" : "training max"} on file, so the athlete sees no weight`, at: { ...at, row: ri }, fix: "maxes" });
+      const why = pctShowsNothing(r, input.athlete!.hasMax!, name, competitionFamily(r, ex));
+      if (why) pct.push({ text: `${name}: ${why}, so the athlete sees no weight`, at: { ...at, row: ri }, fix: "maxes" });
     }));
     if (pctRows) items.push(item("maxes", "Maxes for % prescriptions", 5, (pctRows - pct.length) / pctRows, pct.length ? `${dedupeGaps(pct).length} lift${dedupeGaps(pct).length === 1 ? "" : "s"} prescribed by % with no max on file` : "Every % has a max to read", dedupeGaps(pct)));
   }
@@ -567,9 +582,9 @@ export function programCheck(input: CheckInput, depth: "quick" | "deep"): CheckF
   if (input.kind === "client" && input.athlete?.hasMax) {
     const noMax = new Map<string, Loc[]>();
     eachDay(input, (d, at) => rows(d).forEach((r, ri) => {
-      if (locked(at) || !MAX_BASES.has(String(r?.percentage_basis ?? "")) || r?.percentage == null || r.percentage === "") return;
+      if (locked(at)) return;
       const n = exName(r, ex);
-      if (input.athlete!.hasMax!(n, competitionFamily(r, ex), String(r.percentage_basis))) return;
+      if (!pctShowsNothing(r, input.athlete!.hasMax!, n, competitionFamily(r, ex))) return;
       noMax.set(n, [...(noMax.get(n) ?? []), { ...at, row: ri }]);
     }));
     if (noMax.size) out.push({ id: "warning:maxes", level: "warning", area: "maxes", title: `${noMax.size} lift${noMax.size === 1 ? " is" : "s are"} prescribed by % with no max on file`, detail: `${[...noMax.keys()].join(", ")}: the athlete sees no weight until a max is added.`, at: [...noMax.values()].flat() });

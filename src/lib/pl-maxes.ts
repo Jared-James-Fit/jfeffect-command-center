@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { roundLoad } from "@/lib/pl-programs";
 import { competitionMax, plannedLoadLabel, type LiftFamily } from "@/lib/workouts/load-reference";
+import { maxesAsOf, type MaxChange } from "@/lib/strength-intel/max-history";
+import type { UpcomingPercentRow } from "@/lib/strength-intel/max-change";
 
 const db = supabase as any;
 
@@ -102,6 +104,35 @@ export async function listClientMaxes(
     .order("lift");
   if (error) throw error;
   return (data ?? []) as ClientMaxRow[];
+}
+
+/**
+ * A finished workout's maxes as they stood when it was done (maxesAsOf): the
+ * changes made since are read through `pl_client_max_changes_since` (the
+ * athlete, their coach or an admin; only the numbers a load is worked out
+ * from) and undone, so a max raised after the block never re-prices the
+ * block's past % loads. The maxes themselves throw on error like
+ * listClientMaxes; changes that can't be read leave them as they are.
+ */
+export async function listClientMaxesAsOf(
+  clientId: string,
+  blockId: string | null | undefined,
+  at: string,
+): Promise<ClientMaxRow[]> {
+  const current = await listClientMaxes(clientId, blockId);
+  const { data, error } = await db.rpc("pl_client_max_changes_since", { _client_id: clientId, _since: at });
+  // the changes can't be read: the maxes as they are (what every workout read before history was kept)
+  if (error) return current;
+  const asOf = maxesAsOf(current, (data ?? []) as MaxChange[], at) as ClientMaxRow[];
+  // a max removed since comes back only in the scope this read covers
+  return asOf.filter((m) => (blockId ? !m.block_id || m.block_id === blockId : !m.block_id));
+}
+
+/** The % sets on a client's running blocks that nothing has touched (staff only; max-change.ts reads them). */
+export async function listUpcomingPercentRows(clientId: string): Promise<UpcomingPercentRow[]> {
+  const { data, error } = await db.rpc("pl_upcoming_percent_rows", { _client_id: clientId });
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []) as UpcomingPercentRow[];
 }
 
 /**
