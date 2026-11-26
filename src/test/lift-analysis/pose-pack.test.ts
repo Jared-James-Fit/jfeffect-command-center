@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   packPose,
+  poseBarSeries,
   poseSummary,
   poseWindowFor,
   storedPoseCovers,
@@ -79,10 +80,20 @@ describe("pose window", () => {
 
   it("reads the clip from its start when there's no set window", () => {
     expect(poseWindowFor(null, 42)).toEqual({ start: 0, end: 42, whole: true, duration: 42 });
-    expect(poseWindowFor({ window: null }, 200)).toEqual({ start: 0, end: 90, whole: true, duration: 200 });
+    expect(poseWindowFor({ window: null }, 200)).toEqual({
+      start: 0,
+      end: 90,
+      whole: true,
+      duration: 200,
+    });
     expect(poseWindowFor(undefined)).toEqual({ start: 0, end: 90, whole: true, duration: null });
     // a missing start or end is no window (as the database reads it), never 0
-    expect(poseWindowFor({ window: { start: null as never, end: 8 } }, 20)).toEqual({ start: 0, end: 20, whole: true, duration: 20 });
+    expect(poseWindowFor({ window: { start: null as never, end: 8 } }, 20)).toEqual({
+      start: 0,
+      end: 20,
+      whole: true,
+      duration: 20,
+    });
   });
 
   it("uses a stored read only while it covers what Technique would read", () => {
@@ -105,6 +116,18 @@ describe("pose window", () => {
   });
 });
 
+describe("bar hint for the body read", () => {
+  const series = { t: [0, 1], x: [0.4, 0.4], y: [0.3, 0.6] };
+  it("tells the lifter by the bar from a side or turned read, never a front-on stack's path", () => {
+    expect(poseBarSeries({ series, plate: { view: "side" } })).toEqual(series);
+    expect(poseBarSeries({ series, plate: { view: "turned" } })).toEqual(series);
+    // a front-on read follows the plate stack at the end of the bar, outside the lifter's outline
+    expect(poseBarSeries({ series, plate: { view: "front" } })).toBeNull();
+    expect(poseBarSeries({ series: { t: [], x: [], y: [] } })).toBeNull();
+    expect(poseBarSeries(null)).toBeNull();
+  });
+});
+
 describe("pose summary and admin words", () => {
   it("keeps what was seen, rounded, never the metric definitions", () => {
     const s = poseSummary({
@@ -115,22 +138,53 @@ describe("pose summary and admin words", () => {
       coverage: 0.91234,
       angles: true,
       rows: [{ key: "depth", label: "Depth", unit: "°", hint: "" }],
-      reps: [{ n: 1, at: { start: 1.234, turn: 2.345, end: 3.456 }, m: { depth: 4.567, kneeBottom: null } }],
+      reps: [
+        {
+          n: 1,
+          at: { start: 1.234, turn: 2.345, end: 3.456 },
+          m: { depth: 4.567, kneeBottom: null },
+        },
+      ],
       observations: [{ id: "x", text: "Hips rose first on rep 3.", t: 9.876, rep: 3 }],
       limits: [],
     });
     expect(s).not.toHaveProperty("rows");
     expect(s.coverage).toBe(0.912);
-    expect(s.reps[0]).toEqual({ n: 1, at: { start: 1.2, turn: 2.3, end: 3.5 }, m: { depth: 4.6, kneeBottom: null } });
+    expect(s.reps[0]).toEqual({
+      n: 1,
+      at: { start: 1.2, turn: 2.3, end: 3.5 },
+      m: { depth: 4.6, kneeBottom: null },
+    });
     expect(s.observations[0].t).toBe(9.9);
   });
 
   it("says where a body read stands in words", () => {
-    const base = { attempts: 1, available_at: null, found: 172, frames: 281, view: "side", error: null, why: null, compute_ms: 24000, observations: 2 };
+    const base = {
+      attempts: 1,
+      available_at: null,
+      found: 172,
+      frames: 281,
+      view: "side",
+      error: null,
+      why: null,
+      compute_ms: 24000,
+      observations: 2,
+    };
     expect(poseWords(null)).toBeNull();
-    expect(poseWords({ ...base, status: "done" })?.text).toBe("Body read: 172 of 281 frames, side view, 2 observations");
+    expect(poseWords({ ...base, status: "done" })?.text).toBe(
+      "Body read: 172 of 281 frames, side view, 2 observations",
+    );
     expect(poseWords({ ...base, status: "no_body" })?.text).toMatch(/no one found/);
-    expect(poseWords({ ...base, status: "failed", error: "The body read took too long." })?.text).toMatch(/failed: The body read took too long/);
-    expect(poseWords({ ...base, status: "queued", available_at: new Date(Date.now() + 600_000).toISOString(), error: "x" })?.text).toMatch(/trying again/);
+    expect(
+      poseWords({ ...base, status: "failed", error: "The body read took too long." })?.text,
+    ).toMatch(/failed: The body read took too long/);
+    expect(
+      poseWords({
+        ...base,
+        status: "queued",
+        available_at: new Date(Date.now() + 600_000).toISOString(),
+        error: "x",
+      })?.text,
+    ).toMatch(/trying again/);
   });
 });

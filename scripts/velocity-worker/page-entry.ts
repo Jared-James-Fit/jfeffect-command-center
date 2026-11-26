@@ -12,7 +12,10 @@ import { valueAt } from "../../src/components/lift-analysis/overlay-draw";
 
 // the bar's read (the same wrapper as the validation harness's entry.ts; defined here, since the
 // app's package.json marks every module side-effect free and a bare import of it would be dropped)
-(window as unknown as { analyze: unknown }).analyze = async (url: string, opts: Record<string, unknown> = {}) => {
+(window as unknown as { analyze: unknown }).analyze = async (
+  url: string,
+  opts: Record<string, unknown> = {},
+) => {
   const t0 = performance.now();
   const stages: Record<string, number> = {};
   const res = await analyzeVideo({
@@ -30,7 +33,10 @@ import { valueAt } from "../../src/components/lift-analysis/overlay-draw";
 
 (window as unknown as { readBody: unknown }).readBody = async (
   url: string,
-  opts: { window: { start: number; end: number }; series?: { t: number[]; x: (number | null)[]; y: (number | null)[] } | null },
+  opts: {
+    window: { start: number; end: number };
+    series?: { t: number[]; x: (number | null)[]; y: (number | null)[] } | null;
+  },
 ) => {
   const t0 = performance.now();
   const S = opts.series;

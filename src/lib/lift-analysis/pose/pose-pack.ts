@@ -34,7 +34,8 @@ export type PackedPose = {
 };
 
 function toBase64(bytes: Uint8Array): string {
-  if (typeof Buffer !== "undefined") return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
+  if (typeof Buffer !== "undefined")
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
   let s = "";
   const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) {
@@ -157,6 +158,27 @@ export function poseWindowFor(
   return { start: 0, end, whole: true, duration: durationS && durationS > 0 ? durationS : null };
 }
 
+export type BarSeries = { t: number[]; x: (number | null)[]; y: (number | null)[] };
+
+/**
+ * Where the bar is, for telling the lifter from anyone else in the frame
+ * (runPose `barAt`): the bar read's own path, except from a front-on read,
+ * whose path follows the plate stack at the end of the bar, outside the
+ * lifter's outline, so the lifter would never be "at the bar" (pure).
+ */
+export function poseBarSeries(
+  analysis:
+    | { series?: Partial<BarSeries> | null; plate?: { view?: string | null } | null }
+    | null
+    | undefined,
+): BarSeries | null {
+  const S = analysis?.series;
+  if (!S || !Array.isArray(S.t) || !S.t.length || !Array.isArray(S.x) || !Array.isArray(S.y))
+    return null;
+  if (analysis?.plate?.view === "front") return null;
+  return { t: S.t, x: S.x, y: S.y };
+}
+
 /** Slack (s) a stored read may fall short of the window by and still be used. */
 const COVER_SLACK_S = 0.3;
 
@@ -172,18 +194,26 @@ export function storedPoseCovers(
   if (!stored || !(stored.end > stored.start)) return false;
   const want = poseWindowFor(analysis);
   if (want.whole) {
-    const end = stored.duration && stored.duration > 0 ? Math.min(POSE_WHOLE_S, stored.duration) : POSE_WHOLE_S;
+    const end =
+      stored.duration && stored.duration > 0
+        ? Math.min(POSE_WHOLE_S, stored.duration)
+        : POSE_WHOLE_S;
     return stored.start <= 0.05 && (stored.whole || stored.end >= end - COVER_SLACK_S);
   }
-  const end = stored.duration && stored.duration > 0 ? Math.min(want.end, stored.duration) : want.end;
+  const end =
+    stored.duration && stored.duration > 0 ? Math.min(want.end, stored.duration) : want.end;
   return stored.start <= want.start + COVER_SLACK_S && stored.end >= end - COVER_SLACK_S;
 }
 
 /** What's kept of a technique read beside the track: what was seen, never the definitions. */
-export type PoseSummary = Pick<TechniqueRead, "lift" | "view" | "side" | "facing" | "coverage" | "angles" | "reps" | "observations" | "limits">;
+export type PoseSummary = Pick<
+  TechniqueRead,
+  "lift" | "view" | "side" | "facing" | "coverage" | "angles" | "reps" | "observations" | "limits"
+>;
 
 export function poseSummary(read: TechniqueRead): PoseSummary {
-  const round = (n: number | null) => (n == null || !Number.isFinite(n) ? null : Math.round(n * 10) / 10);
+  const round = (n: number | null) =>
+    n == null || !Number.isFinite(n) ? null : Math.round(n * 10) / 10;
   return {
     lift: read.lift,
     view: read.view,
@@ -196,7 +226,12 @@ export function poseSummary(read: TechniqueRead): PoseSummary {
       at: { start: round(r.at.start)!, turn: round(r.at.turn)!, end: round(r.at.end)! },
       m: Object.fromEntries(Object.entries(r.m).map(([k, v]) => [k, round(v)])),
     })),
-    observations: read.observations.map((o) => ({ id: o.id, text: o.text, t: round(o.t), rep: o.rep })),
+    observations: read.observations.map((o) => ({
+      id: o.id,
+      text: o.text,
+      t: round(o.t),
+      rep: o.rep,
+    })),
     limits: read.limits,
   };
 }

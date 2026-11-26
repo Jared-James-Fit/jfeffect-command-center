@@ -16,7 +16,10 @@ export type StoredPose = {
   updated_at: string;
 };
 
-export const storedPoseKey = (setVideoId: string | null | undefined) => ["lift-analysis-pose", setVideoId ?? ""];
+export const storedPoseKey = (setVideoId: string | null | undefined) => [
+  "lift-analysis-pose",
+  setVideoId ?? "",
+];
 
 export function useStoredPose(setVideoId: string | null | undefined, enabled = true) {
   return useQuery({
@@ -25,12 +28,15 @@ export function useStoredPose(setVideoId: string | null | undefined, enabled = t
     staleTime: 60_000,
     queryFn: async (): Promise<StoredPose | null> => {
       const { data, error } = await (supabase.from as any)("pl_set_video_poses")
-        .select("status, window_start, window_end, window_whole, clip_seconds, track, engine, updated_at")
+        .select(
+          "status, window_start, window_end, window_whole, clip_seconds, track, engine, updated_at",
+        )
         .eq("set_video_id", setVideoId)
         .maybeSingle();
       if (error) {
         // a database without the table yet reads as nothing stored (Technique reads on the device as before)
-        if (/pl_set_video_poses|does not exist|schema cache/i.test(String(error.message ?? ""))) return null;
+        if (/pl_set_video_poses|does not exist|schema cache/i.test(String(error.message ?? "")))
+          return null;
         throw error;
       }
       if (!data) return null;
@@ -43,7 +49,13 @@ export function useStoredPose(setVideoId: string | null | undefined, enabled = t
               duration: data.clip_seconds != null ? Number(data.clip_seconds) : null,
             }
           : null;
-      return { status: data.status, window: w, track: data.track, engine: data.engine, updated_at: data.updated_at };
+      return {
+        status: data.status,
+        window: w,
+        track: data.track,
+        engine: data.engine,
+        updated_at: data.updated_at,
+      };
     },
   });
 }

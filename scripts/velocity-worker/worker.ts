@@ -23,23 +23,44 @@
  *   DRY_JOBS=<file>     test locally: jobs from a JSON file (url may be a local path), every
  *                       hook call printed instead of sent
  */
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { decode } from "../lift-analysis/decode";
-import { POSE_ENGINE, poseSummary, poseWindowFor, unpackPose } from "../../src/lib/lift-analysis/pose/pose-pack";
+import {
+  POSE_ENGINE,
+  poseBarSeries,
+  poseSummary,
+  poseWindowFor,
+  unpackPose,
+} from "../../src/lib/lift-analysis/pose/pose-pack";
 import { nearSide, smoothTrack, viewOf } from "../../src/lib/lift-analysis/pose/skeleton";
 import { readTechnique } from "../../src/lib/lift-analysis/pose/technique";
 import type { LiftAnalysis } from "../../src/lib/lift-analysis/analyze";
 import { circleSeeds, estimateRead, everyNth } from "../../src/lib/lift-analysis/estimate";
 import { guideLift, movementOf, repDirection } from "../../src/lib/lift-analysis/exercise";
-import { fallbackOf, reasonWords, wouldLog, type WorkerJob } from "../../src/lib/lift-analysis/worker-plan";
+import {
+  fallbackOf,
+  reasonWords,
+  wouldLog,
+  type WorkerJob,
+} from "../../src/lib/lift-analysis/worker-plan";
 import { startBrowser, type BrowserReader } from "./browser";
 
-const HOOK = process.env.VELOCITY_HOOK_URL ?? "https://jfeffect.com/api/public/hooks/velocity-worker";
+const HOOK =
+  process.env.VELOCITY_HOOK_URL ?? "https://jfeffect.com/api/public/hooks/velocity-worker";
 const AUDIENCE = "jfeffect-velocity-worker";
 const RUN_MS = Number(process.env.RUN_MINUTES ?? 25) * 60_000;
 const ONCE = process.env.ONCE === "1";
@@ -66,9 +87,13 @@ async function oidc(): Promise<string> {
   return body.value;
 }
 
-const DRY = process.env.DRY_JOBS ? (JSON.parse(readFileSync(process.env.DRY_JOBS, "utf8")) as WorkerJob[]) : null;
+const DRY = process.env.DRY_JOBS
+  ? (JSON.parse(readFileSync(process.env.DRY_JOBS, "utf8")) as WorkerJob[])
+  : null;
 /** Test locally: body jobs from a JSON file (url may be a local path, analysis inline). */
-const DRY_POSE = process.env.DRY_POSE_JOBS ? (JSON.parse(readFileSync(process.env.DRY_POSE_JOBS, "utf8")) as PoseJob[]) : null;
+const DRY_POSE = process.env.DRY_POSE_JOBS
+  ? (JSON.parse(readFileSync(process.env.DRY_POSE_JOBS, "utf8")) as PoseJob[])
+  : null;
 
 /** A set video whose body is waiting to be read, from the hook's pose_claim. */
 type PoseJob = {
@@ -90,22 +115,49 @@ async function hook(action: string, payload: Record<string, unknown> = {}): Prom
     if (action === "claim") return { jobs: (DRY ?? []).splice(0, 1) };
     if (action === "pose_claim") {
       const jobs = (DRY_POSE ?? []).splice(0, 1);
-      for (const j of jobs) if ((j.analysis as unknown) === "@commit") j.analysis = (dryReads.get(j.set_video_id) ?? null) as never;
+      for (const j of jobs)
+        if ((j.analysis as unknown) === "@commit")
+          j.analysis = (dryReads.get(j.set_video_id) ?? null) as never;
       return { jobs };
     }
     if (action === "pose_commit") {
       const p = payload.pose as any;
-      console.log(JSON.stringify({ pose_commit: payload.set_video_id, status: p?.status, why: p?.why, frames: p?.frames,
-        found: p?.found, view: p?.view, side: p?.side, window: p?.window, reps: p?.summary?.reps?.length,
-        observations: p?.summary?.observations?.map((o: any) => o.text), bytes: p?.track?.f?.length, ms: p?.compute_ms }));
+      console.log(
+        JSON.stringify({
+          pose_commit: payload.set_video_id,
+          status: p?.status,
+          why: p?.why,
+          frames: p?.frames,
+          found: p?.found,
+          view: p?.view,
+          side: p?.side,
+          window: p?.window,
+          reps: p?.summary?.reps?.length,
+          observations: p?.summary?.observations?.map((o: any) => o.text),
+          bytes: p?.track?.f?.length,
+          ms: p?.compute_ms,
+        }),
+      );
       return { ok: true };
     }
     if (action === "commit") {
       const r = payload.result as any;
       dryReads.set(String(payload.set_video_id), r);
-      console.log(JSON.stringify({ commit: payload.set_video_id, outcome: payload.outcome, message: payload.message,
-        engine: r?.engine, status: r?.status ?? "done", reps: r?.reps?.length, view: r?.plate?.view,
-        accepted: r?.velocity?.accepted, value: r?.velocity?.value, tier: r?.velocity?.tier, ms: payload.compute_ms }));
+      console.log(
+        JSON.stringify({
+          commit: payload.set_video_id,
+          outcome: payload.outcome,
+          message: payload.message,
+          engine: r?.engine,
+          status: r?.status ?? "done",
+          reps: r?.reps?.length,
+          view: r?.plate?.view,
+          accepted: r?.velocity?.accepted,
+          value: r?.velocity?.value,
+          tier: r?.velocity?.tier,
+          ms: payload.compute_ms,
+        }),
+      );
       return { ok: true, logged: !!r?.velocity?.accepted };
     }
     if (action !== "heartbeat") console.log(JSON.stringify({ action, ...payload }));
@@ -125,7 +177,8 @@ async function hook(action: string, payload: Record<string, unknown> = {}): Prom
       } catch {
         body = { error: "non_json", status: res.status };
       }
-      if (res.status === 401) throw Object.assign(new Error(`unauthorized: ${body?.why ?? ""}`), { fatal: true });
+      if (res.status === 401)
+        throw Object.assign(new Error(`unauthorized: ${body?.why ?? ""}`), { fatal: true });
       if (!res.ok) throw new Error(`hook ${action} ${res.status} ${body?.error ?? ""}`);
       return body;
     } catch (e: any) {
@@ -155,12 +208,35 @@ function keepClip(id: string, from: string, dir: string) {
 function normalise(src: string, out: string) {
   // the picture as shown (rotation applied), H.264 at most 1920 px long, a keyframe every second,
   // every frame kept at its own time
-  const vf = "scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))':flags=lanczos,format=yuv420p";
+  const vf =
+    "scale='if(gte(iw,ih),min(1920,iw),-2)':'if(gte(iw,ih),-2,min(1920,ih))':flags=lanczos,format=yuv420p";
   execFileSync(
     "ffmpeg",
-    ["-v", "error", "-y", "-i", src, "-map", "0:v:0", "-an", "-vf", vf, "-c:v", "libx264", "-preset", "veryfast",
-      "-crf", "16", "-force_key_frames", "expr:gte(t,n_forced*1)", "-fps_mode", "passthrough",
-      "-movflags", "+faststart", out],
+    [
+      "-v",
+      "error",
+      "-y",
+      "-i",
+      src,
+      "-map",
+      "0:v:0",
+      "-an",
+      "-vf",
+      vf,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "16",
+      "-force_key_frames",
+      "expr:gte(t,n_forced*1)",
+      "-fps_mode",
+      "passthrough",
+      "-movflags",
+      "+faststart",
+      out,
+    ],
     { stdio: ["ignore", "ignore", "pipe"], timeout: 10 * 60_000 },
   );
 }
@@ -168,24 +244,34 @@ function normalise(src: string, out: string) {
 async function processJob(job: WorkerJob, reader: BrowserReader, dir: string) {
   const t0 = Date.now();
   const beat = (stage: string) =>
-    hook("heartbeat", { set_video_id: job.set_video_id, lease_id: job.lease_id, stage }).catch(() => undefined);
+    hook("heartbeat", { set_video_id: job.set_video_id, lease_id: job.lease_id, stage }).catch(
+      () => undefined,
+    );
   const timer = setInterval(() => void beat("reading"), 60_000);
   const src = join(dir, "source");
   const clip = join(dir, "clip.mp4");
+  let normalised = false;
   try {
     await beat("downloading");
     if (DRY && job.url.startsWith("/")) copyFileSync(job.url, src);
     else {
       const res = await fetch(job.url);
-      if (!res.ok || !res.body) throw Object.assign(new Error(`download ${res.status}`), { retry: true });
+      if (!res.ok || !res.body)
+        throw Object.assign(new Error(`download ${res.status}`), { retry: true });
       await pipeline(Readable.fromWeb(res.body as any), createWriteStream(src));
     }
-    if (statSync(src).size > MAX_DOWNLOAD) throw Object.assign(new Error("The video is too large to read."), { retry: false });
+    if (statSync(src).size > MAX_DOWNLOAD)
+      throw Object.assign(new Error("The video is too large to read."), { retry: false });
     await beat("preparing");
     try {
       normalise(src, clip);
+      normalised = true;
     } catch {
-      throw Object.assign(new Error("The video couldn't be decoded."), { retry: false, unreadable: true });
+      rmSync(clip, { force: true });
+      throw Object.assign(new Error("The video couldn't be decoded."), {
+        retry: false,
+        unreadable: true,
+      });
     }
     const ex = job.exercise_name;
     const dirHint = repDirection(ex) ?? undefined;
@@ -216,7 +302,9 @@ async function processJob(job: WorkerJob, reader: BrowserReader, dir: string) {
       { analysis: phone.ok ? phone.analysis : null, why: phone.ok ? null : phone.why },
       {
         analysis: est.ok ? est.analysis : est.best,
-        why: est.ok ? ["reps_differ"] : est.tried.flatMap((t) => t.why).concat(est.why === "disagree" ? ["disagree"] : []),
+        why: est.ok
+          ? ["reps_differ"]
+          : est.tried.flatMap((t) => t.why).concat(est.why === "disagree" ? ["disagree"] : []),
       },
     );
     return await finish(job, fb.result, fb.outcome.outcome, fb.outcome.message, t0);
@@ -242,11 +330,19 @@ async function processJob(job: WorkerJob, reader: BrowserReader, dir: string) {
   } finally {
     clearInterval(timer);
     rmSync(src, { force: true });
-    if (existsSync(clip)) keepClip(job.set_video_id, clip, dir);
+    // only a whole working copy is kept for the body read (a timed-out ffmpeg leaves a short one)
+    if (normalised && existsSync(clip)) keepClip(job.set_video_id, clip, dir);
+    else rmSync(clip, { force: true });
   }
 }
 
-async function finish(job: WorkerJob, result: unknown, outcome: string, message: string, t0: number) {
+async function finish(
+  job: WorkerJob,
+  result: unknown,
+  outcome: string,
+  message: string,
+  t0: number,
+) {
   const r = await hook("commit", {
     set_video_id: job.set_video_id,
     lease_id: job.lease_id,
@@ -256,17 +352,23 @@ async function finish(job: WorkerJob, result: unknown, outcome: string, message:
     message,
   });
   const secs = Math.round((Date.now() - t0) / 1000);
-  log(`read in ${secs}s: ${r?.logged ? `logged (${outcome})` : r?.kept ? "kept a newer read" : outcome}`);
+  log(
+    `read in ${secs}s: ${r?.logged ? `logged (${outcome})` : r?.kept ? "kept a newer read" : outcome}`,
+  );
   return r?.logged ? "logged" : outcome;
 }
 
 /* ── a body read ───────────────────────────────────────────────────────────── */
 function clipSeconds(file: string): number | null {
   try {
-    const out = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file], {
-      encoding: "utf8",
-      timeout: 60_000,
-    });
+    const out = execFileSync(
+      "ffprobe",
+      ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+      },
+    );
     const s = Number(out.trim());
     return Number.isFinite(s) && s > 0 ? s : null;
   } catch {
@@ -277,7 +379,9 @@ function clipSeconds(file: string): number | null {
 async function processPoseJob(job: PoseJob, reader: BrowserReader, dir: string) {
   const t0 = Date.now();
   const beat = () =>
-    hook("pose_heartbeat", { set_video_id: job.set_video_id, lease_id: job.lease_id }).catch(() => undefined);
+    hook("pose_heartbeat", { set_video_id: job.set_video_id, lease_id: job.lease_id }).catch(
+      () => undefined,
+    );
   const timer = setInterval(() => void beat(), 60_000);
   const src = join(dir, "pose-source");
   const fresh = join(dir, "pose-clip.mp4");
@@ -287,21 +391,32 @@ async function processPoseJob(job: PoseJob, reader: BrowserReader, dir: string) 
       if (DRY_POSE && job.url.startsWith("/")) copyFileSync(job.url, src);
       else {
         const res = await fetch(job.url);
-        if (!res.ok || !res.body) throw Object.assign(new Error(`download ${res.status}`), { retry: true });
+        if (!res.ok || !res.body)
+          throw Object.assign(new Error(`download ${res.status}`), { retry: true });
         await pipeline(Readable.fromWeb(res.body as any), createWriteStream(src));
       }
-      if (statSync(src).size > MAX_DOWNLOAD) throw Object.assign(new Error("The video is too large to read."), { retry: false });
+      if (statSync(src).size > MAX_DOWNLOAD)
+        throw Object.assign(new Error("The video is too large to read."), { retry: false });
       try {
         normalise(src, fresh);
       } catch {
         throw Object.assign(new Error("The video couldn't be decoded."), { retry: false });
       }
     }
-    const duration = clipSeconds(clip) ?? (job.duration_s && job.duration_s > 0 ? job.duration_s : null);
+    const duration =
+      clipSeconds(clip) ?? (job.duration_s && job.duration_s > 0 ? job.duration_s : null);
     const a = job.analysis && typeof job.analysis === "object" ? job.analysis : null;
     const win = poseWindowFor(a, duration);
-    const series = a?.series && Array.isArray(a.series.t) ? { t: a.series.t, x: a.series.x, y: a.series.y } : null;
-    const body = await reader.readBody(clip, { window: { start: win.start, end: win.end }, series });
+    const series = poseBarSeries(a);
+    let body = await reader.readBody(clip, { window: { start: win.start, end: win.end }, series });
+    // nobody "at the bar": the bar's path may not be on the lifter (a plate seen past them); read without it
+    if (!body.ok && body.why === "no_body" && series) {
+      await beat();
+      body = await reader.readBody(clip, {
+        window: { start: win.start, end: win.end },
+        series: null,
+      });
+    }
     const base = {
       engine: POSE_ENGINE,
       window: win,
@@ -318,12 +433,19 @@ async function processPoseJob(job: PoseJob, reader: BrowserReader, dir: string) 
         log(`body read in ${Math.round((Date.now() - t0) / 1000)}s: no body found`);
         return "pose_no_body";
       }
-      throw Object.assign(new Error(body.why === "timeout" ? "The body read took too long." : "The body couldn't be read."), {
-        retry: body.why !== "unreadable",
-      });
+      // a browser that crashed, a slow runner, a decoder that failed once: tried again (three tries in all)
+      throw Object.assign(
+        new Error(
+          body.why === "timeout" ? "The body read took too long." : "The body couldn't be read.",
+        ),
+        {
+          retry: true,
+        },
+      );
     }
     const track = unpackPose(body.packed);
-    if (!track) throw Object.assign(new Error("The body read couldn't be packed."), { retry: false });
+    if (!track)
+      throw Object.assign(new Error("The body read couldn't be packed."), { retry: false });
     const smooth = smoothTrack(track);
     let summary: unknown = null;
     if (a && Array.isArray(a.reps) && a.reps.length && a.series) {
@@ -352,11 +474,15 @@ async function processPoseJob(job: PoseJob, reader: BrowserReader, dir: string) 
         compute_ms: Date.now() - t0,
       },
     });
-    log(`body read in ${Math.round((Date.now() - t0) / 1000)}s: ${body.found} of ${body.frames} frames`);
+    log(
+      `body read in ${Math.round((Date.now() - t0) / 1000)}s: ${body.found} of ${body.frames} frames`,
+    );
     return "pose_done";
   } catch (e: any) {
     const retry = e?.retry !== false;
-    log(`body read failed (${retry ? "will retry" : "final"}): ${String(e?.message ?? e).slice(0, 120)}`);
+    log(
+      `body read failed (${retry ? "will retry" : "final"}): ${String(e?.message ?? e).slice(0, 120)}`,
+    );
     await hook("pose_fail", {
       set_video_id: job.set_video_id,
       lease_id: job.lease_id,
@@ -391,7 +517,9 @@ async function main() {
         }
         continue;
       }
-      const poses = (await hook("pose_claim", { max: 1 }).catch(() => ({ jobs: [] }))) as { jobs: PoseJob[] };
+      const poses = (await hook("pose_claim", { max: 1 }).catch(() => ({ jobs: [] }))) as {
+        jobs: PoseJob[];
+      };
       if (poses?.jobs?.length) {
         reader ??= await startBrowser();
         for (const job of poses.jobs) {

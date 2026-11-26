@@ -66,7 +66,7 @@ import { canvasToPng, grabFrame, renderAnnotatedClip } from "@/lib/lift-analysis
 import { runPose, type PoseProgress } from "@/lib/lift-analysis/pose/pose-run";
 import { nearSide, smoothTrack, viewOf, type PoseTrack } from "@/lib/lift-analysis/pose/skeleton";
 import { readTechnique, type TechniqueRead } from "@/lib/lift-analysis/pose/technique";
-import { storedPoseCovers, unpackPose } from "@/lib/lift-analysis/pose/pose-pack";
+import { poseBarSeries, storedPoseCovers, unpackPose } from "@/lib/lift-analysis/pose/pose-pack";
 import { useStoredPose } from "@/lib/lift-analysis/pose/pose-queries";
 import { isViewingAsClient } from "@/lib/pov-guard";
 import { cn } from "@/lib/utils";
@@ -156,39 +156,47 @@ export function useTechnique(input: {
     const win = analysis
       ? { start: Math.max(0, analysis.window.start - 0.5), end: analysis.window.end + 0.5 }
       : { start: 0, end: 90 };
-    const barAt = analysis
+    // the bar's path tells the lifter from anyone else, except a front-on read's, which follows the
+    // plate stack past the lifter's outline (poseBarSeries); nobody found with it, read again without
+    const S = poseBarSeries(analysis);
+    const barAt = S
       ? (t: number) => {
-          const S = analysis.series;
           const x = valueAt(S.t, S.x, t);
           const y = valueAt(S.t, S.y, t);
           return x != null && y != null ? { fx: x, fy: y } : null;
         }
       : undefined;
-    void runPose({
-      source: src,
-      window: win,
-      barAt,
-      signal: c.signal,
-      onProgress: setProgress,
-      onPartial: setRaw,
-    }).then((res) => {
-      if (c.signal.aborted) return;
-      setProgress(null);
-      if (res.ok) {
-        setRaw(res.track);
-        setStatus("done");
-        return;
-      }
-      if (res.why === "cancelled") return setStatus("idle");
-      setFailure(
-        res.why === "no_body"
-          ? "No one was found in this video. The whole body needs to be in the frame, side-on."
-          : res.why === "model_failed"
-            ? "The body model couldn't load. Check the connection and try again."
-            : "This video couldn't be read on this device.",
-      );
-      setStatus("failed");
-    });
+    const read = (bar: typeof barAt) =>
+      runPose({
+        source: src,
+        window: win,
+        barAt: bar,
+        signal: c.signal,
+        onProgress: setProgress,
+        onPartial: setRaw,
+      });
+    void read(barAt)
+      .then((res) =>
+        !res.ok && res.why === "no_body" && barAt && !c.signal.aborted ? read(undefined) : res,
+      )
+      .then((res) => {
+        if (c.signal.aborted) return;
+        setProgress(null);
+        if (res.ok) {
+          setRaw(res.track);
+          setStatus("done");
+          return;
+        }
+        if (res.why === "cancelled") return setStatus("idle");
+        setFailure(
+          res.why === "no_body"
+            ? "No one was found in this video. The whole body needs to be in the frame, side-on."
+            : res.why === "model_failed"
+              ? "The body model couldn't load. Check the connection and try again."
+              : "This video couldn't be read on this device.",
+        );
+        setStatus("failed");
+      });
   }, [src, analysis]);
 
   const cancel = useCallback(() => {
@@ -215,7 +223,9 @@ export function useTechnique(input: {
         }
       }
       if (stored.status === "no_body") {
-        setFailure("No one was found in this video. The whole body needs to be in the frame, side-on.");
+        setFailure(
+          "No one was found in this video. The whole body needs to be in the frame, side-on.",
+        );
         setStatus("failed");
         return;
       }

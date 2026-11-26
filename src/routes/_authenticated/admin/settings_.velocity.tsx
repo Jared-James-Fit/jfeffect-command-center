@@ -25,7 +25,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_authenticated/admin/settings_/velocity")({ component: VelocityDiagnostics });
+export const Route = createFileRoute("/_authenticated/admin/settings_/velocity")({
+  component: VelocityDiagnostics,
+});
 
 type Job = {
   set_video_id: string;
@@ -92,11 +94,14 @@ type Overview = {
 };
 
 /** Where a job stands, in one word, for the filter (pure). */
-export function jobBucket(j: Pick<Job, "status" | "enabled" | "available_at" | "set" | "analysis">): string {
+export function jobBucket(
+  j: Pick<Job, "status" | "enabled" | "available_at" | "set" | "analysis">,
+): string {
   if (!j.enabled) return "off";
   if (j.set?.from_this_video && j.set.velocity != null) return "logged";
   if (j.status === "running") return "reading";
-  if (j.status === "queued") return j.available_at && Date.parse(j.available_at) > Date.now() ? "retrying" : "waiting";
+  if (j.status === "queued")
+    return j.available_at && Date.parse(j.available_at) > Date.now() ? "retrying" : "waiting";
   if (j.status === "failed") return "failed";
   if (j.status === "cancelled") return "removed";
   return "no_speed";
@@ -108,16 +113,21 @@ export function poseWords(p: Job["pose"]): { text: string; tone: string } | null
   if (p.status === "done") {
     const seen = p.frames ? `${p.found ?? 0} of ${p.frames} frames` : "read";
     const view = p.view && p.view !== "unknown" ? `, ${p.view} view` : "";
-    const obs = p.observations ? `, ${p.observations} observation${p.observations === 1 ? "" : "s"}` : "";
+    const obs = p.observations
+      ? `, ${p.observations} observation${p.observations === 1 ? "" : "s"}`
+      : "";
     return { text: `Body read: ${seen}${view}${obs}`, tone: "text-muted-foreground" };
   }
-  if (p.status === "no_body") return { text: "Body read: no one found in the frame", tone: "text-warning" };
-  if (p.status === "running") return { text: "Body read: reading on the server", tone: "text-muted-foreground" };
+  if (p.status === "no_body")
+    return { text: "Body read: no one found in the frame", tone: "text-warning" };
+  if (p.status === "running")
+    return { text: "Body read: reading on the server", tone: "text-muted-foreground" };
   if (p.status === "queued")
     return p.available_at && Date.parse(p.available_at) > Date.now()
       ? { text: `Body read: trying again${p.error ? ` (${p.error})` : ""}`, tone: "text-warning" }
       : { text: "Body read: waiting", tone: "text-muted-foreground" };
-  if (p.status === "failed") return { text: `Body read failed${p.error ? `: ${p.error}` : ""}`, tone: "text-destructive" };
+  if (p.status === "failed")
+    return { text: `Body read failed${p.error ? `: ${p.error}` : ""}`, tone: "text-destructive" };
   return null;
 }
 
@@ -168,7 +178,9 @@ function VelocityDiagnostics() {
   const overview = useQuery({
     queryKey: ["velocity-admin-overview"],
     queryFn: async (): Promise<Overview> => {
-      const { data, error } = await (supabase.rpc as any)("velocity_admin_overview", { _limit: 300 });
+      const { data, error } = await (supabase.rpc as any)("velocity_admin_overview", {
+        _limit: 300,
+      });
       if (error) throw error;
       const o = (data ?? {}) as Overview;
       return {
@@ -184,12 +196,20 @@ function VelocityDiagnostics() {
 
   const requeue = useMutation({
     mutationFn: async (video: string) => {
-      const { data, error } = await (supabase.rpc as any)("velocity_admin_requeue", { _video: video });
+      const { data, error } = await (supabase.rpc as any)("velocity_admin_requeue", {
+        _video: video,
+      });
       if (error) throw error;
       return String(data ?? "");
     },
     onSuccess: (r) => {
-      toast.success(r === "queued" ? "Queued to read again" : r === "running" ? "It's being read now" : "Kept: a person's read or a speed on the set");
+      toast.success(
+        r === "queued"
+          ? "Queued to read again"
+          : r === "running"
+            ? "It's being read now"
+            : "Kept: a person's read or a speed on the set",
+      );
       void qc.invalidateQueries({ queryKey: ["velocity-admin-overview"] });
     },
     onError: () => toast.error("Couldn't queue it"),
@@ -202,7 +222,13 @@ function VelocityDiagnostics() {
       return String(data ?? "");
     },
     onSuccess: (r) => {
-      toast.success(r === "running" ? "It's being read now" : r === "removed" ? "The video was removed" : "Body queued to read again");
+      toast.success(
+        r === "running"
+          ? "It's being read now"
+          : r === "removed"
+            ? "The video was removed"
+            : "Body queued to read again",
+      );
       void qc.invalidateQueries({ queryKey: ["velocity-admin-overview"] });
     },
     onError: () => toast.error("Couldn't queue it"),
@@ -282,31 +308,37 @@ function Body({
           Body reads (joints for Technique): {o.pose_counts.done ?? 0} done
           {bodiesWaiting ? ` · ${bodiesWaiting} waiting` : ""}
           {o.pose_counts.no_body ? ` · ${o.pose_counts.no_body} with no one in frame` : ""}
-          {o.pose_counts.failed ? ` · ${o.pose_counts.failed} failed` : ""}. Read after each video's bar speed.
+          {o.pose_counts.failed ? ` · ${o.pose_counts.failed} failed` : ""}. Read after each video's
+          bar speed.
         </p>
         {stale && (
           <p className="mt-2 text-sm text-destructive">
-            Videos are waiting and the reader hasn't checked in. Check the "Velocity worker" workflow on GitHub (Actions).
+            Videos are waiting and the reader hasn't checked in. Check the "Velocity worker"
+            workflow on GitHub (Actions).
           </p>
         )}
       </Card>
 
       <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Filter">
-        {BUCKETS.filter((b) => b.key === "all" || (counts[b.key] ?? 0) > 0 || bucket === b.key).map((b) => (
-          <button
-            key={b.key}
-            type="button"
-            role="tab"
-            aria-selected={bucket === b.key}
-            onClick={() => setBucket(b.key)}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1.5 text-sm",
-              bucket === b.key ? "border-foreground bg-foreground text-background" : "border-border text-foreground",
-            )}
-          >
-            {b.label} <span className="tabular-nums opacity-70">{counts[b.key] ?? 0}</span>
-          </button>
-        ))}
+        {BUCKETS.filter((b) => b.key === "all" || (counts[b.key] ?? 0) > 0 || bucket === b.key).map(
+          (b) => (
+            <button
+              key={b.key}
+              type="button"
+              role="tab"
+              aria-selected={bucket === b.key}
+              onClick={() => setBucket(b.key)}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1.5 text-sm",
+                bucket === b.key
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border text-foreground",
+              )}
+            >
+              {b.label} <span className="tabular-nums opacity-70">{counts[b.key] ?? 0}</span>
+            </button>
+          ),
+        )}
       </div>
 
       {shown.length === 0 ? (
@@ -352,11 +384,18 @@ function JobRow({
   const detail =
     b === "reading"
       ? `${j.worker === "server" ? "On the server" : "On a phone"}${j.stage ? ` · ${j.stage}` : ""}${j.heartbeat_at ? ` · ${ago(j.heartbeat_at)}` : ""}`
-      : j.error ?? (a?.why && b !== "logged" ? a.why.replace(/_/g, " ") : null);
-  const speed = j.set?.from_this_video && j.set.velocity != null ? j.set.velocity : a?.accepted ? a.set_mcv : null;
-  const requeueable = canRequeue && b !== "reading" && b !== "logged" && b !== "removed" && a?.source !== "tap";
+      : (j.error ?? (a?.why && b !== "logged" ? a.why.replace(/_/g, " ") : null));
+  const speed =
+    j.set?.from_this_video && j.set.velocity != null
+      ? j.set.velocity
+      : a?.accepted
+        ? a.set_mcv
+        : null;
+  const requeueable =
+    canRequeue && b !== "reading" && b !== "logged" && b !== "removed" && a?.source !== "tap";
   const body = poseWords(j.pose);
-  const poseRequeueable = canRequeue && !!j.pose && (j.pose.status === "failed" || j.pose.status === "no_body");
+  const poseRequeueable =
+    canRequeue && !!j.pose && (j.pose.status === "failed" || j.pose.status === "no_body");
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -368,13 +407,19 @@ function JobRow({
           ) : (
             <span className="font-medium">{j.athlete || "Client"}</span>
           )}
-          <span className="text-muted-foreground"> · {j.exercise}{j.set_index > 0 ? ` · Set ${j.set_index}` : ""}</span>
+          <span className="text-muted-foreground">
+            {" "}
+            · {j.exercise}
+            {j.set_index > 0 ? ` · Set ${j.set_index}` : ""}
+          </span>
         </p>
         <p className="mt-0.5 text-sm">
           <span className={cn("font-medium", BUCKET_TONE[b])}>{BUCKET_WORD[b] ?? b}</span>
           {speed != null && <span className="tabular-nums"> · {speed.toFixed(2)} m/s</span>}
           {a?.reps != null && <span className="text-muted-foreground"> · {a.reps} reps seen</span>}
-          {j.set?.reps != null && <span className="text-muted-foreground"> · {j.set.reps} logged</span>}
+          {j.set?.reps != null && (
+            <span className="text-muted-foreground"> · {j.set.reps} logged</span>
+          )}
         </p>
         {detail && <p className="mt-0.5 text-sm text-muted-foreground">{detail}</p>}
         {body && <p className={cn("mt-0.5 text-sm", body.tone)}>{body.text}</p>}
@@ -389,13 +434,24 @@ function JobRow({
       {(requeueable || poseRequeueable) && (
         <div className="flex shrink-0 flex-col items-end gap-2">
           {requeueable && (
-            <Button variant="outline" size="sm" loading={busy} onClick={() => onRequeue(j.set_video_id)} aria-label="Read again">
+            <Button
+              variant="outline"
+              size="sm"
+              loading={busy}
+              onClick={() => onRequeue(j.set_video_id)}
+              aria-label="Read again"
+            >
               <RotateCcw className="h-4 w-4" />
               Read again
             </Button>
           )}
           {poseRequeueable && (
-            <Button variant="ghost" size="sm" loading={poseBusy} onClick={() => onRequeuePose(j.set_video_id)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={poseBusy}
+              onClick={() => onRequeuePose(j.set_video_id)}
+            >
               Read body again
             </Button>
           )}

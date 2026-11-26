@@ -27,7 +27,8 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
         } catch {
           return Response.json({ error: "auth_unavailable" }, { status: 503 });
         }
-        if (!auth.ok) return Response.json({ error: "unauthorized", why: auth.why }, { status: 401 });
+        if (!auth.ok)
+          return Response.json({ error: "unauthorized", why: auth.why }, { status: 401 });
         const text = await request.text();
         if (text.length > MAX_BODY) return Response.json({ error: "too_large" }, { status: 413 });
         let body: Record<string, any>;
@@ -38,14 +39,21 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
         }
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const db = supabaseAdmin as any;
-        const video = typeof body.set_video_id === "string" && UUID.test(body.set_video_id) ? body.set_video_id : null;
-        const lease = typeof body.lease_id === "string" && UUID.test(body.lease_id) ? body.lease_id : null;
+        const video =
+          typeof body.set_video_id === "string" && UUID.test(body.set_video_id)
+            ? body.set_video_id
+            : null;
+        const lease =
+          typeof body.lease_id === "string" && UUID.test(body.lease_id) ? body.lease_id : null;
         try {
           switch (body.action) {
             case "claim": {
               const max = Math.max(1, Math.min(5, Number(body.max) || 1));
               const worker = `gh:${auth.claims.run_id ?? ""}`;
-              const { data, error } = await db.rpc("velocity_worker_claim", { _limit: max, _worker: worker });
+              const { data, error } = await db.rpc("velocity_worker_claim", {
+                _limit: max,
+                _worker: worker,
+              });
               if (error) throw error;
               const jobs = Array.isArray(data) ? data : [];
               const out = [];
@@ -78,7 +86,13 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
             }
             case "commit": {
               const result = body.result;
-              if (!video || !lease || !result || typeof result !== "object" || Array.isArray(result))
+              if (
+                !video ||
+                !lease ||
+                !result ||
+                typeof result !== "object" ||
+                Array.isArray(result)
+              )
                 return Response.json({ error: "bad_request" }, { status: 400 });
               if (!["done", "needs_tap", "failed"].includes(String(result.status ?? "done")))
                 return Response.json({ error: "bad_result" }, { status: 400 });
@@ -107,7 +121,10 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
             case "pose_claim": {
               const max = Math.max(1, Math.min(5, Number(body.max) || 1));
               const worker = `gh:${auth.claims.run_id ?? ""}`;
-              const { data, error } = await db.rpc("pose_worker_claim", { _limit: max, _worker: worker });
+              const { data, error } = await db.rpc("pose_worker_claim", {
+                _limit: max,
+                _worker: worker,
+              });
               if (error) throw error;
               const jobs = Array.isArray(data) ? data : [];
               const out = [];
@@ -130,7 +147,10 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
             }
             case "pose_heartbeat": {
               if (!video || !lease) return Response.json({ error: "bad_request" }, { status: 400 });
-              const { data, error } = await db.rpc("pose_worker_heartbeat", { _video: video, _lease: lease });
+              const { data, error } = await db.rpc("pose_worker_heartbeat", {
+                _video: video,
+                _lease: lease,
+              });
               if (error) throw error;
               return Response.json({ ok: !!data });
             }
@@ -140,7 +160,11 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
                 return Response.json({ error: "bad_request" }, { status: 400 });
               if (!["done", "no_body"].includes(String(pose.status ?? "")))
                 return Response.json({ error: "bad_result" }, { status: 400 });
-              const { data, error } = await db.rpc("pose_worker_commit", { _video: video, _lease: lease, _pose: pose });
+              const { data, error } = await db.rpc("pose_worker_commit", {
+                _video: video,
+                _lease: lease,
+                _pose: pose,
+              });
               if (error) throw error;
               return Response.json(data ?? { ok: false });
             }
@@ -159,7 +183,10 @@ export const Route = createFileRoute("/api/public/hooks/velocity-worker")({
               return Response.json({ error: "unknown_action" }, { status: 400 });
           }
         } catch (e: any) {
-          return Response.json({ error: "server", message: String(e?.message ?? e).slice(0, 200) }, { status: 500 });
+          return Response.json(
+            { error: "server", message: String(e?.message ?? e).slice(0, 200) },
+            { status: 500 },
+          );
         }
       },
     },
