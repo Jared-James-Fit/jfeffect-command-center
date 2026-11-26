@@ -141,7 +141,7 @@ export const createCompetitionFn = createServerFn({ method: "POST" })
       .select("id")
       .eq("client_id", data.clientId)
       .eq("status", "upcoming")
-      .eq("internal_test", false)
+      .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
       .eq("is_primary", true)
       .limit(1);
     const f = data.fields;
@@ -1003,7 +1003,7 @@ export const getMyCompetitionsFn = createServerFn({ method: "POST" })
       )
       .eq("client_id", clientId)
       .in("status", ["upcoming", "completed"])
-      .eq("internal_test", false)
+      .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
       .order("meet_date", { ascending: false })
       .limit(20);
     const ids = (comps ?? []).map((c: any) => c.id);
