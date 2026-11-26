@@ -407,7 +407,7 @@ export function MemberSetupWizard({
                 {preview ? "Next" : "Save & continue"}
               </Button>
             ) : (
-              <Button disabled={busy || !canAdvance} onClick={() => saveStep()}>
+              <Button disabled={busy || (!preview && !canAdvance)} onClick={() => saveStep()}>
                 <CheckCircle2 className="mr-2 h-4 w-4" /> {preview ? "Close preview" : "Finish setup"}
               </Button>
             )}
