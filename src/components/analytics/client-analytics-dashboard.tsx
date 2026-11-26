@@ -1164,7 +1164,6 @@ export function ClientAnalyticsDashboard({
                 <Card className="p-4" data-training-muscles>
                   <SectionTitle
                     title="Muscle training map"
-                    sub="See which muscles you've trained the most."
                   />
                   <SectionErrorBoundary label="Muscle training map">
                     <MuscleMap
@@ -1220,6 +1219,7 @@ export function ClientAnalyticsDashboard({
                     </SectionErrorBoundary>
                   </MoreDetail>
                 )}
+                <MoreDetail label="Training consistency">
                 <section aria-label="Consistency">
                   <SectionTitle
                     title="How often you train"
@@ -1227,6 +1227,7 @@ export function ClientAnalyticsDashboard({
                   />
                   <ConsistencyBlock c={consistency} loading={trainingLoad.planLoading} />
                 </section>
+                </MoreDetail>
                 {patterns.length > 0 && (
                   <MoreDetail label="Recovery patterns">
                   <section aria-label="Recovery patterns">
@@ -1371,50 +1372,15 @@ export function ClientAnalyticsDashboard({
   );
 }
 
-/** Four areas as one row of equal tabs: always all on screen, never a sideways scroll. */
-function AnalyticsTabs({
-  view,
-  onChange,
-}: {
-  view: AnalyticsView;
-  onChange: (v: AnalyticsView) => void;
-}) {
-  return (
-    <div
-      className="relative -mx-4 border-b border-border px-4 md:mx-0 md:px-0"
-      data-analytics-tabs-wrap
-    >
-      <div
-        role="tablist"
-        aria-label="Analytics sections"
-        className="grid grid-cols-4"
-        data-analytics-tabs
-      >
-        {ANALYTICS_VIEWS.map(([v, label]) => (
-          <button
-            key={v}
-            type="button"
-            role="tab"
-            aria-selected={view === v}
-            onClick={() => onChange(v)}
-            className={cn(
-              "relative h-11 min-w-0 text-[15px] font-medium transition-colors",
-              view === v ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-            data-analytics-tab={v}
-          >
-            {label}
-            {view === v && (
-              <span
-                aria-hidden
-                className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-foreground"
-              />
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+/** One compact destination selector; existing routes and deep links remain valid. */
+function AnalyticsTabs({view,onChange}:{view:AnalyticsView;onChange:(v:AnalyticsView)=>void}) {
+  return <div className="flex items-center justify-between gap-2 border-b border-border pb-3" data-analytics-tabs-wrap>
+    <span className="text-xs font-medium text-muted-foreground">Analytics</span>
+    <select aria-label="Analytics section" value={view} onChange={e=>onChange(e.target.value as AnalyticsView)}
+      className="min-h-10 min-w-[9rem] rounded-lg border border-border bg-background px-3 text-sm font-medium" data-analytics-section-select>
+      {ANALYTICS_VIEWS.map(([v,label])=><option key={v} value={v}>{label}</option>)}
+    </select>
+  </div>;
 }
 
 function AnalyticsEmptyPreview() {
