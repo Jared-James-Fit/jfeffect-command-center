@@ -19,6 +19,7 @@ import {
 import { movementAccent } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
+import { StrengthReference } from "@/components/strength-intel/strength-reference";
 
 const DEFAULT_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
 const MORE_LIFTS = [
@@ -253,6 +254,9 @@ export function BlockMaxesDialog({
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : (
           <div className="space-y-2">
+            <div className="empty:hidden">
+              <StrengthReference clientId={clientId} blockId={blockId} />
+            </div>
             {/* Quick main-lift unit selector */}
             <div className="rounded-md border border-primary/30 bg-primary/5 p-2.5 space-y-2">
               <div className="flex items-center gap-2">

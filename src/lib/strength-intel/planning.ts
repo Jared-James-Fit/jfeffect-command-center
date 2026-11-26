@@ -130,6 +130,15 @@ function refFrom(c: CurrentStrength, metric: PlanningMetric, style: DeadliftStyl
 
 const STYLE_NAME: Record<DeadliftStyle, string> = { sumo: "sumo", conventional: "conventional" };
 
+/**
+ * A lift's current estimate as a reference whether or not a program would
+ * plan from it on its own: what the coach pins when they choose to (the maxes
+ * panel says why it isn't used by itself, `notPlannable`).
+ */
+export function currentRef(l: LiftIntel | null | undefined): PlanningRef | null {
+  return l?.current ? refFrom(l.current, "current", l.style, l.calibration.premium) : null;
+}
+
 export function planningRefs(intel: StrengthIntel): StrengthRefs {
   const refs: StrengthRefs = { e1rm: {}, compPr: {}, variations: {}, why: {} };
   for (const fam of ["squat", "bench", "deadlift"] as LiftFamily[]) {

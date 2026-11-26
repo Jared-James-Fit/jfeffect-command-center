@@ -269,7 +269,7 @@ export async function loadLiftEvidence(sb: Db, clientId: string, today: string):
       [] as any[],
     ),
   ]);
-  const strengths = liftStrengths(sets, meetsFromRows(meetRows), today);
+  const strengths = liftStrengths(sets, meetsWithDetail(meetRows), today);
   const out = {} as Record<Lift, LiftEvidence>;
   for (const lift of LIFTS) out[lift] = liftEvidenceOf(lift, strengths[lift], today);
   return out;
