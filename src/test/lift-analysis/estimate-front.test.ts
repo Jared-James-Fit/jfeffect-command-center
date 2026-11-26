@@ -5,7 +5,7 @@
  * is the ruler (450 mm at any yaw), so the speed is an estimate and labelled one.
  */
 import { describe, expect, it } from "vitest";
-import { BLEND_FROM, estimateRead, plateSize } from "@/lib/lift-analysis/estimate";
+import { BLEND_FROM, candidatesDisagree, estimateRead, plateSize } from "@/lib/lift-analysis/estimate";
 import { movementOf } from "@/lib/lift-analysis/exercise";
 import type { Frame } from "@/lib/lift-analysis/image";
 import { interp, squatSet, trajectory, type Scene } from "./synthetic";
@@ -113,5 +113,29 @@ describe("the plate's size from its two measurements", () => {
     const m = plateSize(motion(36), null, seed).ext!;
     expect(m.b).toBe(36);
     expect(m.a).toBeCloseTo(15 * (36 / 18), 6);
+  });
+});
+
+describe("candidates that each read the set", () => {
+  const one = (v: number) => ({ accepted: true, range: { lo: v, hi: v } });
+  // a blended stack: its speed anywhere between what its edges (low) and its motion (high) say
+  const between = (lo: number, hi: number) => ({ accepted: true, range: { lo, hi } });
+
+  it("agree when one stack was read right and the other's size lies between its two measurements", () => {
+    // the true plate 27 px: the left stack read 27 by motion; the right read 23 by motion, 27 by edges
+    const k = 15;
+    expect(candidatesDisagree([one(k / 27), between(k / 27, k / 23)])).toBe(false);
+  });
+
+  it("refuse when one stack's scale is off past anything its own measurements allow", () => {
+    expect(candidatesDisagree([one(0.5), one(0.6)])).toBe(true);
+    expect(candidatesDisagree([one(0.5), between(0.58, 0.64)])).toBe(true);
+    // within 12 %: one bar read twice
+    expect(candidatesDisagree([one(0.5), one(0.54)])).toBe(false);
+  });
+
+  it("only counts candidates that read the set", () => {
+    expect(candidatesDisagree([one(0.5), { accepted: false, range: { lo: 0.9, hi: 0.9 } }])).toBe(false);
+    expect(candidatesDisagree([one(0.5)])).toBe(false);
   });
 });

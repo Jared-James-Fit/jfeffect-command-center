@@ -200,7 +200,7 @@ BEGIN
        AND p.attempts < 3 AND p.available_at <= now()
        AND (p.status = 'queued' OR (p.status = 'running' AND p.lease_until < now()))
      -- the newest uploads first, so a set filmed today never waits behind the backfill of old ones
-     ORDER BY p.created_at DESC
+     ORDER BY s.created_at DESC
      LIMIT greatest(1, least(coalesce(_limit, 1), 5))
      FOR UPDATE OF p SKIP LOCKED
   ), claimed AS (

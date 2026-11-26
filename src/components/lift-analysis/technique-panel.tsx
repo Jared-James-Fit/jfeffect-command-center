@@ -253,11 +253,13 @@ export function useTechnique(input: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, src, storedSettled, storedTrack]);
 
-  // the server finished while the phone was still reading: its read takes over (the same model, done)
+  // the server finished while the phone was still reading, or after the phone couldn't: its read takes
+  // over (the same model, done); a read the phone finished itself is kept
   useEffect(() => {
-    if (!active || !storedTrack || fromServer || status !== "running") return;
+    if (!active || !storedTrack || fromServer || (status !== "running" && status !== "failed")) return;
     ctrl.current?.abort();
     setProgress(null);
+    setFailure("");
     setRaw(storedTrack);
     setFromServer(true);
     setStatus("done");

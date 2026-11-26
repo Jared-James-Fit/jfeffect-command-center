@@ -741,10 +741,11 @@ export type EstimateTry = {
   accepted: boolean;
   value: number | null;
   /**
-   * The value on the motion-measured scale, for the agreement check: a blended size is a per-candidate
-   * choice, so comparing blended with motion-only values would split one bar's candidates by √ratio
+   * The speeds this candidate's read allows, for the agreement check (speed ∝ 1 / plate height): a
+   * blended size lies somewhere between its two measurements, so its speed is anywhere from the edges'
+   * (low) to motion's (high); one measured size is its own value at both ends.
    */
-  agree?: number | null;
+  range?: { lo: number; hi: number } | null;
   why: string[];
 };
 
@@ -875,6 +876,25 @@ export function plateSize(
   };
 }
 
+/**
+ * Whether candidates that each read the set disagree (pure): two whose speed ranges (EstimateTry.range)
+ * are further apart than ESTIMATE_AGREE of their median. A blended candidate's range covers both of its
+ * measurements, so a stack read short by one measurement never refuses one read right by the other, and
+ * a scale truly off on one candidate (outside anything its own measurements allow) still does.
+ */
+export function candidatesDisagree(tried: Pick<EstimateTry, "accepted" | "range">[]): boolean {
+  const rs = tried.filter((t) => t.accepted && t.range).map((t) => t.range!);
+  if (rs.length < 2) return false;
+  const mid = median(rs.map((r) => Math.sqrt(r.lo * r.hi)));
+  if (!(mid > 0)) return false;
+  for (let i = 0; i < rs.length; i++)
+    for (let k = i + 1; k < rs.length; k++) {
+      const gap = Math.max(0, rs[k].lo - rs[i].hi, rs[i].lo - rs[k].hi);
+      if (gap / mid > ESTIMATE_AGREE) return true;
+    }
+  return false;
+}
+
 export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateResult {
   const tried: EstimateTry[] = [];
   if (frames.length < 10) return { ok: false, why: "no_candidates", tried, best: null };
@@ -924,8 +944,10 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     const complete = a.reps.filter((r) => r.complete).length;
     const ok = !why.length;
     // speed ∝ 1 / plate height: undo the blend for the comparison between candidates
-    const agree = ok && a.velocity.value != null ? a.velocity.value * (blend && motion ? ext!.b / motion.b : 1) : null;
-    tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: ok ? a.velocity.value : null, agree, why });
+    const v = ok ? a.velocity.value : null;
+    const range =
+      v != null ? (blend && motion && prof ? { lo: (v * ext!.b) / prof.b, hi: (v * ext!.b) / motion.b } : { lo: v, hi: v }) : null;
+    tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: v, range, why });
     const exact = opts.expectedReps != null && complete === opts.expectedReps ? 1 : 0;
     const score = (ok ? 10 : 0) + exact * 2 + a.quality.tracked + (a.units === "mm" ? Math.max(0, 1 - a.calibration.relErr * 5) : 0);
     if (ok && (!best || score > best.score)) best = { a, score };
@@ -934,9 +956,7 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
   const chosen = best as { a: LiftAnalysis; score: number } | null;
   if (!chosen) return { ok: false, why: "no_read", tried, best: (bestAny as { a: LiftAnalysis } | null)?.a ?? null };
   // two candidates that each read the set must agree, or neither is trusted (a scale off on one of them)
-  // compared on one scale (motion's), as before blending: a scale off on one candidate still shows
-  const values = tried.filter((t) => t.accepted && t.agree != null).map((t) => t.agree as number);
-  if (values.length >= 2 && (Math.max(...values) - Math.min(...values)) / median(values) > ESTIMATE_AGREE)
+  if (candidatesDisagree(tried))
     return { ok: false, why: "disagree", tried, best: chosen.a };
   const a = chosen.a;
   // a read made this way is an estimate, whatever its margin
