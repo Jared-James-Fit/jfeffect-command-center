@@ -1,6 +1,6 @@
 import { COMP_LIFTS, COMP_LIFT_LABEL, type CompLift, type MeetResult } from "./competition-strength";
 import { TYPICAL_SHARE } from "./sbd-split";
-import { type RingLifts, ringTotal, officialClass } from "./performance-ring";
+import { type RingLifts, officialClass } from "./performance-ring";
 import { LB_PER_KG } from "./units";
 
 export type PerformanceVersion = { key: string; label: string; kind: "projected" | "official" | "actual" | "estimated"; lifts: RingLifts; totalLb: number | null; start?: string; end?: string; bodyweightKg?: number | null; category?: string | null };
