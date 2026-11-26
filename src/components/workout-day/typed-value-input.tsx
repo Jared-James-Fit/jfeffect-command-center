@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { validateSetField } from "@/lib/set-input-cascade";
+import { feedback } from "@/lib/feedback";
 
 /**
  * Reps / RPE / RIR entry for the set logger — the cell IS the input, same
@@ -11,6 +12,8 @@ import { validateSetField } from "@/lib/set-input-cascade";
  *    restores the stored value otherwise (a blank draft never wipes a value);
  *  - Done on an empty box clears the field (RPE is optional).
  * One draft, one commit path: no per-keystroke saves or cascades.
+ * A changed value confirmed is felt and heard as one quiet tick (never a
+ * keystroke); a value that won't do, a soft warning.
  */
 export function TypedValueInput({
   value,
@@ -62,11 +65,14 @@ export function TypedValueInput({
     committingRef.current = true;
     inputRef.current?.blur();
     close();
-    if (next !== value) onCommit(next);
+    if (next !== value) {
+      if (next !== "") feedback("confirm");
+      onCommit(next);
+    }
   };
   const submit = () => {
     const res = validateSetField(kind, typed);
-    if (!res.ok) { setError(res.error); return; }
+    if (!res.ok) { setError(res.error); feedback("warning"); return; }
     commit(res.value);
   };
   const onBlur = () => {

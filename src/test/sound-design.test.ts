@@ -52,7 +52,7 @@ function fakeContext() {
 
 describe("sounds: synthesized, nothing downloaded", () => {
   it("every short sound schedules and stays short", () => {
-    for (const name of ["tick", "set", "exercise", "pr", "timer", "milestone", "message", "sent", "notify", "success", "celebrate", "reply", "error"] as const) {
+    for (const name of ["tick", "confirm", "set", "exercise", "pr", "timer", "rest", "upload", "workout", "milestone", "message", "sent", "notify", "success", "celebrate", "reply", "error", "warning"] as const) {
       const f = fakeContext();
       scheduleAppSound(f.c, f.c.destination, 0, name);
       expect(f.nodes()).toBeGreaterThan(1);
@@ -123,14 +123,17 @@ describe("where the sounds play", () => {
     expect(recap).toContain("stopStingRef.current();");
     expect(recap).toContain("<SoundToggleButton");
   });
-  it("logging: one sound per completed-set increase, brighter on the last set; PRs sparkle", () => {
+  it("logging: one sound per completed-set increase (each set once, while fresh), its chime on the last set; genuine PRs celebrate", () => {
     // through feedback(): each moment's sound and its haptic together (feedback.ts)
-    expect(wdv).toContain('feedback(completedSetCount >= setCount ? "exercise" : "set");');
-    expect(wdv).toContain('feedback("pr");');
+    expect(wdv).toContain('const moment = feedback(completedSetCount >= setCount ? "exercise" : "set", {');
+    expect(wdv).toContain("key: `${row.id}:${newestCompleted.set_index}:${newestCompleted.completed_at}`,");
+    // the rest starts with a set that's really new, never with a refetch's replay
+    expect(wdv).toContain("if (moment && restAuto && restOrder && effectiveRest && effectiveRest > 0)");
+    expect(wdv).toContain("if (readonly || !existing?.completed_at || !genuinePr) return;");
     expect(wdv).not.toContain("playUiSound");
   });
-  it("rest over chimes (iPhone web can't vibrate); Workout Tools has the sounds switch", () => {
-    expect(readFileSync("src/components/workout-day/RestTimerButton.tsx", "utf8")).toContain('feedback("timer");');
+  it("rest over is two gentle bells, once per rest (iPhone web can't vibrate); Workout Tools has the sounds switch", () => {
+    expect(readFileSync("src/components/workout-day/RestTimerButton.tsx", "utf8")).toContain('feedback("rest", { key: `${scopeKey}:${mine.startedAt}:${mine.endsAt}`, at: mine.endsAt });');
     expect(readFileSync("src/components/workout-tools/workout-tools.tsx", "utf8")).toContain("<SoundsRow />");
   });
   it("the music code is fetched lazily and warmed in idle time", () => {

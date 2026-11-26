@@ -75,3 +75,12 @@ export function toastFeedback(kind: ToastKind): "complete" | "warning" | "error"
   if (kind === "error") return "error";
   return null;
 }
+
+/**
+ * Whether a toast's feedback is heard as well as felt: only a failure (the
+ * soft low warning, feedback.ts), since a success already has its pill and
+ * a heads-up its haptic. The sound's own spacing keeps a run of errors to one.
+ */
+export function toastSound(kind: ToastKind): boolean {
+  return kind === "error";
+}

@@ -90,6 +90,7 @@ import {
   type OutboxMeta,
   type OutboxRecord,
 } from "@/lib/set-videos/outbox";
+import { feedback } from "@/lib/feedback";
 
 const BUCKET = "message-attachments" as const;
 const CONTEXT = "coach" as const;
@@ -580,6 +581,9 @@ async function runJob(id: string) {
     // a clip filmed in the app and not saved to the phone yet: a reload can fetch it from storage now
     linkFilmed(job.userId, id, res.id);
     if (!res.existed) {
+      // a genuinely finished upload (on the set, in the coach's chat): its "da-ding" and success tap,
+      // once per clip, before the toast so the toast's lighter tap folds into it
+      feedback("upload", { key: id });
       toast.success(`${setTitle(job.setIndex)} video sent to your coach`);
       if (res.message_id) void notifyCoach(res.message_id);
     }
