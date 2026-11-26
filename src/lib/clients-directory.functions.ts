@@ -12,6 +12,8 @@ import {
 } from "@/lib/clients-directory-filters";
 import type { ExemptKind, RosterStatus } from "@/lib/coaching-agreement/rules";
 import { readClientFor, rpcRead } from "@/lib/permissions.server";
+import { NUTRITION_PACKAGE_SLUG, organizeDirectoryServices } from "@/lib/clients-directory-services";
+import { readWholeDirectory } from "@/lib/clients-directory-starred";
 
 export type { DirectoryCounts };
 
@@ -30,6 +32,7 @@ export type DirectoryNextAction = {
 
 export type DirectoryRow = {
   id: string;
+  service_kind?: "nutrition";
   full_name: string | null;
   email: string | null;
   profile_picture_url: string | null;
@@ -94,10 +97,12 @@ export type DirectoryResult = {
   rows: DirectoryRow[];
   total: number;
   counts: DirectoryCounts;
+  nutritionRows?: DirectoryRow[];
 };
 
 const InputSchema = z.object({
   search: z.string().optional().default(""),
+  separateNutrition: z.boolean().optional().default(false),
   // The filters picked; `match` says whether a client needs any of them or all of them.
   flags: z
     .array(z.enum(DIRECTORY_FILTER_KEYS))
@@ -129,6 +134,33 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
     const { db, viewOnly } = await readClientFor(context as any);
     const call = (fn: string, args: Record<string, unknown>) =>
       viewOnly ? rpcRead(db, fn, args) : context.supabase.rpc(fn as any, args as any);
+    // Only the exact active Nutrition Coaching enrollment changes scope. Read
+    // through the caller's RLS, never a service-role query. No specialty clients:
+    // the existing paginated directory continues on its unchanged fast path.
+    const specialty = await db.from("coaching_package_enrollments")
+      .select("client_id, coaching_packages!inner(slug)")
+      .eq("status", "active")
+      .eq("coaching_packages.slug", NUTRITION_PACKAGE_SLUG)
+      .lte("starts_on", new Date().toISOString().slice(0, 10))
+      .limit(1000);
+    const nutritionIds = new Set<string>((specialty.data ?? []).map((r: { client_id: string }) => r.client_id));
+    if (!specialty.error && nutritionIds.size > 0 && nutritionIds.size < 1000) {
+      const all = await readWholeDirectory<DirectoryRow, DirectoryCounts>(async (page, size) => {
+        const result = await call("admin_clients_directory", {
+          p_search: data.search || null, p_coaching_type: data.coachingType, p_coach_id: data.coachId ?? null,
+          p_sort: data.sort, p_limit: size, p_offset: (page - 1) * size,
+          p_lifecycle: data.lifecycle, p_flags: [], p_match: "any",
+        });
+        if (result.error) throw new Error(result.error.message);
+        const payload = (result.data ?? {}) as any;
+        return { rows: (payload.rows ?? []) as DirectoryRow[], total: Number(payload.total ?? 0), counts: { ...emptyCounts(), ...payload.counts } };
+      });
+      // Do not silently publish a partial list if the existing directory cap is reached.
+      if (all.rows.length === all.total && all.rows.some((r) => nutritionIds.has(r.id))) {
+        return organizeDirectoryServices(all.rows, nutritionIds, data);
+      }
+    }
+
     const { data: rpc, error } = await call(
       "admin_clients_directory",
       {
