@@ -140,7 +140,7 @@ export async function loadWorkspace(sb: Db, clientId: string, competitionId: str
       "id, name, meet_date, meet_end_date, status, is_primary, level, federation, weight_class, live, prep_id",
     )
     .eq("client_id", clientId)
-    .eq("internal_test", false)
+    .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
     .order("meet_date", { ascending: false });
   if (error) throw new Error(error.message);
   const list = (comps ?? []) as any[];
@@ -280,7 +280,7 @@ export async function loadOverview(sb: Db, clientIds: string[] | null) {
     .from("competitions")
     .select("id, client_id, name, meet_date, meet_end_date, status, is_primary, level, live, watch")
     .in("status", ["upcoming", "completed"])
-    .eq("internal_test", false)
+    .or("internal_test.eq.false,name.not.ilike.Validation rehearsal:*")
     .gte("meet_date", today.slice(0, 4) + "-01-01")
     .order("meet_date")
     .limit(300);
