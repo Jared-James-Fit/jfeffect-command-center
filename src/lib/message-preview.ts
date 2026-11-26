@@ -23,6 +23,7 @@ export function messagePreviewText(body: string | null | undefined, attachments:
   if (first?.kind === "cardio_plan") return "Your cardio plan";
   if (first?.kind === "autopilot_update") return String(first.title ?? "Your plan has been updated");
   if (first?.kind === "gif") return "GIF";
+  if (first?.kind === "sticker") return "Sticker";
   if (first?.kind === "sound") return "🔊 Sound";
   const images = list.filter((a) => a?.type === "image").length;
   const videos = list.filter((a) => a?.type === "video").length;

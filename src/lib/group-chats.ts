@@ -35,7 +35,7 @@ export type GroupAttachment = {
   storage_path?: string;
   duration?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "community_post";
+  kind?: "sound" | "gif" | "sticker" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "community_post";
   fallback_emoji?: string;
   post_id?: string;
   reply?: boolean;

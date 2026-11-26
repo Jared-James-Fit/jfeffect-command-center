@@ -36,6 +36,7 @@ type FormState = {
   tags: string;
   media_url: string;
   media_type: string;
+  kind: "gif" | "sticker";
   is_featured: boolean;
   active: boolean;
 };
@@ -43,7 +44,7 @@ type FormState = {
 function emptyForm(): FormState {
   return {
     title: "", category: "Hype", tags: "",
-    media_url: "", media_type: "image/gif",
+    media_url: "", media_type: "image/gif", kind: "gif",
     is_featured: false, active: true,
   };
 }
@@ -71,6 +72,7 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
       tags: editing.tags.split(",").map((t) => t.trim()).filter(Boolean),
       media_url: editing.media_url.trim(),
       media_type: editing.media_type,
+      kind: editing.kind,
       is_featured: editing.is_featured,
       active: editing.active,
     };
@@ -79,6 +81,7 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
       else await createGif(payload);
       qc.invalidateQueries({ queryKey: ["admin-chat-gifs"] });
       qc.invalidateQueries({ queryKey: ["chat-gifs"] });
+      qc.invalidateQueries({ queryKey: ["media-library"] });
       setEditing(null);
       toast.success("Saved");
     } catch (e: any) {
@@ -92,6 +95,7 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
       await deleteGif(g.id);
       qc.invalidateQueries({ queryKey: ["admin-chat-gifs"] });
       qc.invalidateQueries({ queryKey: ["chat-gifs"] });
+      qc.invalidateQueries({ queryKey: ["media-library"] });
       toast.success("Deleted");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete");
@@ -103,6 +107,7 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
       await updateGif(g.id, { archived: !g.archived });
       qc.invalidateQueries({ queryKey: ["admin-chat-gifs"] });
       qc.invalidateQueries({ queryKey: ["chat-gifs"] });
+      qc.invalidateQueries({ queryKey: ["media-library"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }
@@ -153,14 +158,14 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
                 {g.is_featured && <Star className="h-3 w-3 shrink-0 fill-warning text-warning" />}
               </div>
               <div className="text-[10px] text-muted-foreground">
-                {g.category}{g.archived && " · Archived"}{!g.active && " · Inactive"}
+                {g.kind === "sticker" ? "Sticker · " : ""}{g.category}{g.archived && " · Archived"}{!g.active && " · Inactive"}
               </div>
               <div className="flex items-center gap-1 pt-1">
                 <Button size="sm" variant="ghost" className="h-7 px-2"
                   onClick={() => setEditing({
                     id: g.id, title: g.title, category: g.category,
                     tags: g.tags.join(", "), media_url: g.media_url,
-                    media_type: g.media_type, is_featured: g.is_featured, active: g.active,
+                    media_type: g.media_type, kind: g.kind === "sticker" ? "sticker" : "gif", is_featured: g.is_featured, active: g.active,
                   })}
                 >
                   <Pencil className="h-3 w-3" />
@@ -190,6 +195,16 @@ export function ChatGifsPage({ embedded = false }: { embedded?: boolean } = {}) 
               <div className="grid gap-1.5">
                 <Label>Title</Label>
                 <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Shows as</Label>
+                <Select value={editing.kind} onValueChange={(v) => setEditing({ ...editing, kind: v === "sticker" ? "sticker" : "gif" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gif">GIF</SelectItem>
+                    <SelectItem value="sticker">Sticker (transparent .webp / .png / .gif)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-1.5">
                 <Label>Category</Label>

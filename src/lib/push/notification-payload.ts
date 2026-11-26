@@ -97,6 +97,7 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   // a marked frame of a set video (a film note): opens the clip on that frame
   if (atts.some((a) => (a as { film_note?: unknown }).film_note)) return `sent${you} a note on a lift video`;
   if (kinds.has("gif")) return `sent${you} a GIF`;
+  if (kinds.has("sticker")) return `sent${you} a sticker`;
   if (kinds.has("sound")) return `sent${you} a sound`;
   // Auto-detected links ride along with ordinary text, so they don't count.
   const media = atts.filter((a) => a.type && a.type !== "link" && a.type !== "youtube" && a.type !== "drive" && a.type !== "sheets");

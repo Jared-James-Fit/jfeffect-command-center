@@ -596,8 +596,8 @@ export type NewComment = {
   threadId?: string | null;
   replyTo?: string | null;
   media?: PickedMedia | null;
-  /** A GIF from the library instead of a photo. */
-  gif?: { url: string; thumb: string | null } | null;
+  /** A GIF or sticker from the picker instead of a photo (its provider's own link). */
+  gif?: { url: string; thumb: string | null; kind?: "gif" | "sticker"; width?: number | null; height?: number | null } | null;
   /** A recorded voice memo instead of a photo. */
   voice?: { blob: Blob; duration: number; url: string } | null;
   userId: string;
@@ -615,14 +615,15 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
         const up = await uploadPicked(c.media, c.userId, c.onProgress);
         media = { path: up.media_path, thumb: up.media_thumb_path, type: up.media_type, width: up.media_width, height: up.media_height };
       } else if (c.gif) {
-        media = { path: c.gif.url, thumb: c.gif.thumb, type: "gif", width: null, height: null };
+        media = { path: c.gif.url, thumb: c.gif.thumb, type: c.gif.kind ?? "gif", width: c.gif.width ?? null, height: c.gif.height ?? null };
       } else if (c.voice) {
         const path = await uploadVoiceMemo(c.voice.blob, c.userId, c.onProgress);
         media = { path, thumb: null, type: "audio", width: null, height: null, duration: Math.round(c.voice.duration * 10) / 10 };
       }
       const { data, error } = await withCrewRules(() => db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media }));
       if (error) {
-        if (media) await removeCommunityFiles([media.path, media.thumb]);
+        // only our own uploads are tidied up: a GIF / sticker is a provider's link
+        if (media && media.type !== "gif" && media.type !== "sticker") await removeCommunityFiles([media.path, media.thumb]);
         throw error;
       }
       if (viewerIsCoach && !postIsMine) fireAppEvent("community_coach_recognition", postId);
@@ -644,7 +645,7 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
         media: c.media
           ? { path: "", thumb: null, type: c.media.kind, width: c.media.width, height: c.media.height }
           : c.gif
-            ? { path: c.gif.url, thumb: c.gif.thumb, type: "gif", width: null, height: null }
+            ? { path: c.gif.url, thumb: c.gif.thumb, type: c.gif.kind ?? "gif", width: c.gif.width ?? null, height: c.gif.height ?? null }
             : c.voice
               ? { path: "", thumb: null, type: "audio", width: null, height: null, duration: c.voice.duration }
               : null,
@@ -808,8 +809,8 @@ export function usePinComment(postId: string) {
 
 /** Signed URLs for every photo / video thumbnail in a thread, in one storage call. */
 export function useCommentMediaUrls(comments: CommunityComment[]) {
-  // a photo's thumb (or itself), a GIF's link, a voice memo's file
-  const paths = comments.map((c) => (c.media ? (c.media.type === "audio" || c.media.type === "gif" ? c.media.path : c.media.thumb ?? (c.media.type === "image" ? c.media.path : null)) : null)).filter((p): p is string => !!p);
+  // a photo's thumb (or itself), a voice memo's file (GIFs / stickers draw from their own link)
+  const paths = comments.map((c) => (c.media && c.media.type !== "gif" && c.media.type !== "sticker" ? (c.media.type === "audio" ? c.media.path : c.media.thumb ?? (c.media.type === "image" ? c.media.path : null)) : null)).filter((p): p is string => !!p);
   const key = paths.join("|");
   return useQuery({
     queryKey: ["community-media-urls", key],
