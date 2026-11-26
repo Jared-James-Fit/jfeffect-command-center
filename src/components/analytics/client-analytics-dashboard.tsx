@@ -91,7 +91,7 @@ import {
   RecoveryPatternList,
   type Kpi,
 } from "@/components/analytics/overview-pieces";
-import { Change, SectionTitle, Segmented, LB_PER_KG } from "@/components/analytics/viz";
+import { Change, SectionTitle, LB_PER_KG } from "@/components/analytics/viz";
 
 export type Unit = "lb" | "kg";
 
@@ -385,7 +385,7 @@ export function ClientAnalyticsDashboard({
     compSessions12w,
     hasMeet: !!nextMeetDate,
   });
-  const competition = useCompetitionData(clientId, hasPowerlifting);
+  const competition = useCompetitionData(clientId, hasPowerlifting || profile === "powerlifting" || view === "records");
   const meets = useMemo(() => competition.data?.meets ?? [], [competition.data]);
   // the training phases the strength read judges lower sessions in (a volume block's
   // tired sets aren't lost strength): the athlete's blocks, by their type or their words
@@ -714,7 +714,7 @@ export function ClientAnalyticsDashboard({
   const bodyweightHistory = useQuery({
     queryKey: clientBodyweightQueryKey(clientId),
     queryFn: () => loadClientBodyweight(clientId),
-    enabled: !!clientId && !hideBodyweight && (view === "overview" || view === "records" || view === "training"),
+    enabled: !!clientId && !hideBodyweight && (view === "overview" || view === "records" || view === "training" || view === "strength"),
     staleTime: 60_000,
   });
 
@@ -966,7 +966,7 @@ export function ClientAnalyticsDashboard({
                           results={allResults as any[]}
                           bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []}
                           hideBodyweight={hideBodyweight}
-                          periods={blocks.map(b=>({id:"block:"+b.id,name:b.name,start:b.start,end:b.end})).filter(b=>!!b.start&&!!b.end)}
+                          periods={blocks.map(b=>({id:"block:"+b.id,name:b.name,start:b.start,end:b.end<today?b.end:today})).filter(b=>!!b.start&&!!b.end&&b.start<=b.end)}
                           sex={competition.data?.sex ?? null}
                           today={today}
                           unit={displayUnit}
