@@ -478,3 +478,19 @@ export const answerShareFn = createServerFn({ method: "POST" })
     await s.answerQuestion(sb, q, data, { userId: null, role: row.role });
     return { ok: true };
   });
+
+/** Apply only a selected, still-current field from a private meet source. */
+export const applyMeetFileFactFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ competitionId: uuid, factId: uuid, before: z.string().max(200).nullable() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = await admin();
+    const { data: c } = await sb.from("competitions").select("client_id").eq("id", data.competitionId).maybeSingle();
+    if (!c) throw new Error("Competition not found");
+    await reach(context, c.client_id);
+    const { error } = await sb.rpc("apply_competition_file_fact", { _actor: context.userId, _competition: data.competitionId, _fact: data.factId, _before: data.before });
+    if (error) throw new Error(error.message);
+    const { applySchedule } = await import("@/lib/competition/worker.server");
+    await applySchedule(sb, data.competitionId);
+    return { ok: true };
+  });
