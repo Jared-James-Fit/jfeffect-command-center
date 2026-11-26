@@ -9,7 +9,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import type { MyCommunitySettings } from "@/lib/community-discover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import {
   FEED_PAGE_SIZE,
   FIRST_FEED_PAGE,
@@ -45,7 +46,6 @@ import {
   postSlides,
   planDetail,
   pickLockInSession,
-  seenAs,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
@@ -71,26 +71,21 @@ export const communityKeys = {
 /* ---- feed ----------------------------------------------------------- */
 
 /**
- * The client a coach is previewing ("View as client"), or null: the crew
- * loads as the coach, so posts are shown as this person sees them (seenAs).
- * "" = a client with no account yet (nothing is theirs).
+ * The target user in an explicit account view, or null for normal sessions.
+ * "" means the target has no linked login; never fall back to staff data.
  */
 export function usePovViewer(): string | null {
   const { user } = useAuth();
   const { client } = useClientImpersonation();
-  if (!client || !user || client.user_id === user.id) return null;
+  if (!client || !user) return null;
   return client.user_id ?? "";
 }
 
 export function useCommunityFeed(authorUserId: string | null = null) {
-  const pov = usePovViewer();
-  const asClient = useCallback(
-    (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
-    [pov],
-  );
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    select: pov === null ? undefined : asClient,
-    queryKey: communityKeys.feed(authorUserId),
+    queryKey: pov.key(communityKeys.feed(authorUserId)),
+    enabled: pov.ready,
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -98,7 +93,7 @@ export function useCommunityFeed(authorUserId: string | null = null) {
       // Unused arguments are left out (they default to null), so the call is
       // all plain values and a view-only login can make it as a read.
       // A profile's grid loads whole rows of three; the feed, a few posts at a time.
-      const { data, error } = await db.rpc("community_feed", {
+      const { data, error } = await pov.read("feed", "community_feed", {
         _limit: authorUserId ? (pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE) : pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
         ...(authorUserId ? { _author_user_id: authorUserId } : {}),
@@ -121,27 +116,22 @@ export function useCommunityFeed(authorUserId: string | null = null) {
  * order (useCommunityFeed).
  */
 export function useRankedFeed(enabled = true, following: { follows: string } | null = null) {
-  const pov = usePovViewer();
-  const asClient = useCallback(
-    (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
-    [pov],
-  );
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    select: pov === null ? undefined : asClient,
     // Following (the Crew bar's tab) is the same feed narrowed on the server (`_following`), its own
     // pages under the crew feed's key, read again when who you follow changes (`follows`)
-    queryKey: following
+    queryKey: pov.key(following
       ? ([...communityKeys.feed(null), "ranked", "following", following.follows] as const)
-      : ([...communityKeys.feed(null), "ranked"] as const),
-    enabled,
+      : ([...communityKeys.feed(null), "ranked"] as const)),
+    enabled: enabled && pov.ready,
     initialPageParam: null as FeedCursor | null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       // the crew feed sends no `_following`, so it reads exactly as it always has
       const only = following ? { _following: true } : {};
-      const { data, error } = await db.rpc(
-        "community_feed_ranked",
+      const { data, error } = await pov.read(
+        "ranked", "community_feed_ranked",
         pageParam ? { _limit: FEED_PAGE_SIZE, _cursor: pageParam, ...only } : { _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor(), ...only },
       );
       if (error) throw error;
@@ -258,13 +248,16 @@ export function useCrewGoal(enabled = true, opts: { fresh?: boolean } = {}) {
 /** Vote on a post's poll (or switch, or take it back with null): the bars move at once. */
 export function useVotePoll(post: CommunityPost) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (optionId: string | null) => {
+      if (isPov) throw new Error("Poll voting is read-only in POV.");
       const { data, error } = await db.rpc("community_poll_vote", { _post_id: post.id, _option_id: optionId });
       if (error) throw error;
       return data as CommunityPoll | null;
     },
     onMutate: async (optionId) => {
+      if (isPov) return undefined;
       await qc.cancelQueries({ queryKey: ["community-feed"] });
       const snapshot = qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] });
       const detail = qc.getQueryData(communityKeys.post(post.id));
@@ -293,6 +286,7 @@ function myCachedAuthor(qc: ReturnType<typeof useQueryClient>): CommunityAuthor 
 
 export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     // One post's likes go to the server one at a time, in the order tapped: a quick
     // like · unlike · like can never land out of order and leave the server on the
@@ -300,6 +294,7 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
     scope: { id: `community-react:${post.id}` },
     // `next` = the reaction to end up with (null removes it).
     mutationFn: async (next: ReactionKey | null) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { error } = await db.rpc("community_react", { _post_id: post.id, _emoji: next });
       if (error) throw error;
       // "Your coach saw your training" from the coach; otherwise the author hears about it (grouped, rate limited).
@@ -307,6 +302,7 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       if (next && !post.is_mine) fireAppEvent("community_activity", post.id);
     },
     onMutate: async (next) => {
+      if (isPov) return undefined;
       // Stop a refresh that would paint over the like, but never a next page being
       // read while they scroll (cancelling it lost the page under their thumb).
       await qc.cancelQueries({
@@ -346,12 +342,13 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
 
 /** A post's Activity (views, likes, shares, reposts and who), for the person who posted it. */
 export function usePostActivity(postId: string | null) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: ["community-post-activity", postId],
-    enabled: !!postId,
+    queryKey: pov.key(["community-post-activity", postId]),
+    enabled: !!postId && pov.ready,
     staleTime: 15_000,
     queryFn: async (): Promise<PostActivity> => {
-      const { data, error } = await db.rpc("community_post_activity", { _post_id: postId });
+      const { data, error } = await pov.read("post_activity", "community_post_activity", { _post_id: postId });
       if (error) throw error;
       return data as PostActivity;
     },
@@ -362,12 +359,12 @@ export function usePostActivity(postId: string | null) {
 export type PostLiker = { author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string };
 
 /** Who liked a post (community_post_reactors: you, people you follow, then newest; the same people the post's "Liked by" names). */
-function postReactorsQuery(postId: string | null) {
+function postReactorsQuery(postId: string | null, pov: ReturnType<typeof usePovCrewRead>) {
   return {
-    queryKey: communityKeys.reactors(postId),
+    queryKey: pov.key(communityKeys.reactors(postId)),
     staleTime: 15_000,
     queryFn: async (): Promise<PostLiker[]> => {
-      const { data, error } = await db.rpc("community_post_reactors", { _post_id: postId });
+      const { data, error } = await pov.read("reactors", "community_post_reactors", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as any;
     },
@@ -375,13 +372,15 @@ function postReactorsQuery(postId: string | null) {
 }
 
 export function usePostReactors(postId: string | null) {
-  return useQuery({ ...postReactorsQuery(postId), enabled: !!postId });
+  const pov = usePovCrewRead();
+  return useQuery({ ...postReactorsQuery(postId, pov), enabled: !!postId && pov.ready });
 }
 
 /** Start loading the Likes as the finger lands, so the sheet opens with its names (a tap's click comes ~100 ms later). */
 export function usePrefetchPostReactors() {
   const qc = useQueryClient();
-  return useCallback((postId: string) => void qc.prefetchQuery(postReactorsQuery(postId)), [qc]);
+  const pov = usePovCrewRead();
+  return useCallback((postId: string) => { if (pov.ready) void qc.prefetchQuery(postReactorsQuery(postId, pov)); }, [qc, pov]);
 }
 
 /* ---- birthday posts (coach reviews, then they go out) ------------------ */
@@ -491,10 +490,17 @@ const HINTS_KEY = ["community-hints"] as const;
 
 /** The tips this account has already got. Kept on the account, so a tip doesn't come back on another device. */
 export function useHintsSeen() {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: HINTS_KEY,
+    queryKey: pov.key(HINTS_KEY),
+    enabled: pov.ready,
     staleTime: Infinity,
     queryFn: async (): Promise<string[]> => {
+      if (pov.isPov) {
+        const { data, error } = await pov.read("hints", "");
+        if (error) throw error;
+        return (data ?? []) as string[];
+      }
       const { data, error } = await db.from("community_hints_seen").select("hint");
       if (error) throw error;
       return ((data ?? []) as { hint: string }[]).map((r) => r.hint);
@@ -505,8 +511,10 @@ export function useHintsSeen() {
 /** Mark a tip as got (once; it disappears straight away). */
 export function useMarkHintSeen() {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useCallback(
     (hint: string) => {
+      if (isPov) return;
       const cur = qc.getQueryData<string[]>(HINTS_KEY);
       if (cur?.includes(hint)) return;
       qc.setQueryData<string[]>(HINTS_KEY, [...(cur ?? []), hint]);
@@ -517,7 +525,7 @@ export function useMarkHintSeen() {
           if (error) console.warn("[community] couldn't save tip", error);
         });
     },
-    [qc],
+    [qc, isPov],
   );
 }
 
@@ -528,12 +536,13 @@ function setComments(qc: ReturnType<typeof useQueryClient>, postId: string, fn: 
 }
 
 export function useComments(postId: string, enabled: boolean) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: communityKeys.comments(postId),
-    enabled,
+    queryKey: pov.key(communityKeys.comments(postId)),
+    enabled: enabled && pov.ready,
     staleTime: 15_000,
     queryFn: async (): Promise<CommunityComment[]> => {
-      const { data, error } = await db.rpc("community_comments", { _post_id: postId });
+      const { data, error } = await pov.read("comments", "community_comments", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as CommunityComment[];
     },
@@ -621,8 +630,10 @@ export type NewComment = {
 /** Post a comment or reply (words, a photo / video, or both). Shows instantly, uploads in the background. */
 export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine: boolean) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (c: NewComment): Promise<CommunityComment> => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       let media: { path: string; thumb: string | null; type: string; width: number | null; height: number | null; duration?: number } | null = null;
       if (c.media) {
         const up = await uploadPicked(c.media, c.userId, c.onProgress);
@@ -645,6 +656,7 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
       return data as CommunityComment;
     },
     onMutate: async (c) => {
+      if (isPov) return undefined;
       // the comment appears now: its tap lands with it
       feedback("comment");
       await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
@@ -1125,17 +1137,16 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
  * opened from Activity or a link paints at once.
  */
 export function usePostDetail(postId: string | null, opts: { placeholder?: CommunityPost | null } = {}) {
-  const pov = usePovViewer();
-  const asClient = useCallback((d: CommunityPostDetail | null) => (d ? seenAs(d, pov) : d), [pov]);
-  const placeholder = opts.placeholder && opts.placeholder.id === postId ? (opts.placeholder as CommunityPostDetail) : undefined;
+  const pov = usePovCrewRead();
+  // Staff feed placeholders must not appear in a client view.
+  const placeholder = !pov.isPov && opts.placeholder && opts.placeholder.id === postId ? (opts.placeholder as CommunityPostDetail) : undefined;
   return useQuery({
-    select: pov === null ? undefined : asClient,
-    queryKey: communityKeys.post(postId),
-    enabled: !!postId,
+    queryKey: pov.key(communityKeys.post(postId)),
+    enabled: !!postId && pov.ready,
     staleTime: 30_000,
     placeholderData: placeholder,
     queryFn: async (): Promise<CommunityPostDetail | null> => {
-      const { data, error } = await db.rpc("community_post", { _post_id: postId });
+      const { data, error } = await pov.read("post", "community_post", { _post_id: postId });
       if (error) throw error;
       return (data ?? null) as CommunityPostDetail | null;
     },
@@ -1143,12 +1154,13 @@ export function usePostDetail(postId: string | null, opts: { placeholder?: Commu
 }
 
 export function useCommunityProfile(userId: string | null) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: communityKeys.profile(userId),
-    enabled: !!userId,
+    queryKey: pov.key(communityKeys.profile(userId)),
+    enabled: !!userId && pov.ready,
     staleTime: 60_000,
     queryFn: async (): Promise<CommunityProfile | null> => {
-      const { data, error } = await db.rpc("community_profile", { _user_id: userId });
+      const { data, error } = await pov.read("profile", "community_profile", { _user_id: userId });
       if (error) throw error;
       return (data ?? null) as CommunityProfile | null;
     },
@@ -1157,9 +1169,9 @@ export function useCommunityProfile(userId: string | null) {
 
 /** Your id in the community (a coach's admin login maps to their community account). */
 export function useMyCommunityId(): string | null {
-  const { user } = useAuth();
-  const { data } = useCommunityProfile(user?.id ?? null);
-  return data?.author.user_id ?? user?.id ?? null;
+  const userId = usePortalUserId();
+  const { data } = useCommunityProfile(userId ?? null);
+  return data?.author.user_id ?? userId ?? null;
 }
 
 /** Take yourself off a post someone named you in (no longer a collaborator, name no longer a link). */
@@ -1422,12 +1434,13 @@ export function useArchivePost() {
 
 /** Your archived posts, newest archived first. */
 export function useMyArchived(enabled: boolean) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: ["community-archived"],
-    enabled,
+    queryKey: pov.key(["community-archived"]),
+    enabled: enabled && pov.ready,
     staleTime: 15_000,
     queryFn: async (): Promise<CommunityPost[]> => {
-      const { data, error } = await db.rpc("community_my_archived");
+      const { data, error } = await pov.read("archived", "community_my_archived");
       if (error) throw error;
       return (data ?? []) as CommunityPost[];
     },
@@ -1515,12 +1528,13 @@ export function usePublicSessionTitle(by: { dayId?: string | null; completionId?
 
 /** Your community switches and public details: Pulse, view privately, suggest my account, @username, training, gym. */
 export function useMyCommunitySettings(enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: ["community-my-settings"],
-    enabled,
+    queryKey: pov.key(["community-my-settings"]),
+    enabled: enabled && pov.ready,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<MyCommunitySettings> => {
-      const { data, error } = await db.rpc("community_my_settings");
+      const { data, error } = await pov.read("my_settings", "community_my_settings");
       if (error) throw error;
       // automatic stories are off unless they switched them on (20270407090000)
       return (data ?? { auto_share_workouts: false, private_views: false }) as MyCommunitySettings;
@@ -1565,13 +1579,14 @@ export function useSetCommunityAvatar(userId: string | null) {
 /* ---- "new posts" badge (server-side seen state) --------------------- */
 
 export function useCommunityActivity(enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: communityKeys.activity,
-    enabled,
+    queryKey: pov.key(communityKeys.activity),
+    enabled: enabled && pov.ready,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     queryFn: async (): Promise<CommunityActivity> => {
-      const { data, error } = await db.rpc("community_activity");
+      const { data, error } = await pov.read("activity", "community_activity");
       if (error) throw error;
       return (data ?? { enabled: false, unseen: 0, seen_at: null }) as CommunityActivity;
     },

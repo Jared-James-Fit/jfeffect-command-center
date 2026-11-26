@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
 import { CloseFriendsButton, FollowButton, FollowCounts, FollowRequestBanner, FollowRequestsButton, FollowsYouTag } from "@/components/community/follow-button";
@@ -18,7 +18,7 @@ import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useCrewPhotoPicker } from "@/components/community/crew-photo-picker";
 import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { RepostsGrid, SavedView } from "@/components/community/saved-view";
-import { isWorkoutCard, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, isWorkoutCard, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls } from "@/lib/community.queries";
 import { StoryAvatar, StoryHostContext, useStoryRing } from "@/components/community/story-ring";
 import { storyGroupFor, storyRings } from "@/lib/story-ring";
@@ -36,7 +36,8 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   const { data: profile, isLoading } = profileQ;
   // coaches follow a private account straight away (no request), so it acts public for them
   const { role } = useAuth();
-  const viewerIsStaff = role === "admin" || role === "coach";
+  const { isImpersonating } = useClientImpersonation();
+  const viewerIsStaff = (role === "admin" || role === "coach") && !isImpersonating;
   const feed = useCommunityFeed(userId);
   // a block (either way) shows no grid: the server already sends none, so no "Nothing shared yet" either
   const blocked = !!profile?.blocked;
@@ -71,7 +72,6 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   const posts = showArchived ? archivedQ.data ?? [] : shown;
   const { data: urls } = usePostMediaUrls(posts);
   const [editing, setEditing] = useState(false);
-  const { isImpersonating } = useClientImpersonation();
   // Instagram: follow someone and people close to them slide in under their profile
   const { data: follows } = useFollowState(!!profile && !profile.is_me);
   const fl = followLabel(follows, profile?.author.user_id ?? userId);
@@ -108,7 +108,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
     );
   }
 
-  const tabs = profileTabs({ isMe: profile.is_me && !isImpersonating, reposts: profile.reposts ?? 0, archived: profile.archived ?? 0, current: tab, blocked });
+  const tabs = profileTabs({ isMe: profile.is_me, reposts: profile.reposts ?? 0, archived: profile.archived ?? 0, current: tab, blocked });
   const since = trainingSinceLabel(profile.training_since);
   const meta = [`${profile.posts} ${profile.posts === 1 ? "post" : "posts"}`, since].filter(Boolean).join(" · ");
 
@@ -127,7 +127,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
                 <button
                   type="button"
                   disabled={photo.pending}
-                  onClick={photo.open}
+                  onClick={isImpersonating ? () => toast.message(PREVIEW_ONLY_MESSAGE) : photo.open}
                   className="block rounded-full"
                   aria-label="Add a Crew picture"
                 >
@@ -141,7 +141,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
               <button
                 type="button"
                 disabled={photo.pending}
-                onClick={photo.open}
+                onClick={isImpersonating ? () => toast.message(PREVIEW_ONLY_MESSAGE) : photo.open}
                 data-profile-photo-change
                 aria-label={profile.author.avatar_url ? "Change your Crew picture" : "Add a Crew picture"}
                 className="absolute bottom-0.5 right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2 after:content-[''] active:scale-95"
@@ -151,7 +151,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             )}
           </div>
           {profile.is_me && !profile.author.avatar_url && <span className="text-[11px] font-bold text-primary">Add photo</span>}
-          {profile.is_me && photo.element}
+          {profile.is_me && !isImpersonating && photo.element}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -188,8 +188,8 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
       <div className="mt-3">
         {profile.bio ? (
           <p className="whitespace-pre-line text-[14px] leading-snug">{profile.bio}</p>
-        ) : profile.is_me && !isImpersonating ? (
-          <button type="button" className="text-[13px] font-bold text-primary" onClick={() => setEditing(true)}>
+        ) : profile.is_me ? (
+          <button type="button" className="text-[13px] font-bold text-primary" onClick={() => isImpersonating ? toast.message(PREVIEW_ONLY_MESSAGE) : setEditing(true)}>
             + Add a short bio
           </button>
         ) : null}
@@ -198,15 +198,13 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
 
       {/* Instagram's row: full-width actions under the bio */}
       {profile.is_me ? (
-        !isImpersonating && (
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => setEditing(true)} className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-muted px-3 text-[13px] font-bold active:bg-muted/70" data-edit-profile>
+            <button type="button" onClick={() => isImpersonating ? toast.message(PREVIEW_ONLY_MESSAGE) : setEditing(true)} className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-muted px-3 text-[13px] font-bold active:bg-muted/70" data-edit-profile>
               Edit profile
             </button>
             {!profile.author.is_coach && <FollowRequestsButton onOpen={onOpenPerson} className="h-9 flex-1 justify-center text-[13px]" />}
             {!profile.author.is_coach && <CloseFriendsButton className="h-9 flex-1 justify-center text-[13px]" />}
           </div>
-        )
       ) : profile.blocked_by_me ? (
         <div className="mt-3 flex gap-2">
           <BlockButton author={profile.author} blocked className="h-9 flex-1" />
@@ -322,8 +320,8 @@ export function profileTabs({ isMe, reposts, archived, current, blocked }: { isM
 
 /** Your photo, small, for the You tab: a ring on it while you're there (Instagram's profile tab). */
 export function MyTabPhoto({ active = false, size = 22 }: { active?: boolean; size?: number }) {
-  const { user } = useAuth();
-  const { data: me } = useCommunityProfile(user?.id ?? null);
+  const userId = usePortalUserId();
+  const { data: me } = useCommunityProfile(userId ?? null);
   return (
     <span className={cn("shrink-0 rounded-full", active ? "ring-[1.5px] ring-foreground ring-offset-1 ring-offset-background" : "ring-1 ring-border")} aria-hidden>
       <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={size} expandable={false} />

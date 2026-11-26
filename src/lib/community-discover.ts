@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import { supabase } from "@/integrations/supabase/client";
 import type { CommunityAuthor } from "@/lib/community";
 import { share } from "@/platform/share";
@@ -110,12 +111,13 @@ export const discoverKeys = {
 
 /** People to follow, best first. With a context person: people close to them (after you follow someone). */
 export function useSuggestions(context: string | null = null, enabled = true, limit = 12) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: [...discoverKeys.suggestions(context), limit],
-    enabled,
+    queryKey: pov.key([...discoverKeys.suggestions(context), limit]),
+    enabled: enabled && pov.ready,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<DiscoverPerson[]> => {
-      const { data, error } = await db.rpc("community_suggestions", { _context: context, _limit: limit });
+      const { data, error } = await pov.read("suggestions", "community_suggestions", { _context: context, _limit: limit });
       if (error) throw error;
       return (data ?? []) as DiscoverPerson[];
     },
@@ -129,13 +131,14 @@ export function searchTerm(q: string): string {
 
 export function usePeopleSearch(q: string) {
   const term = searchTerm(q);
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: discoverKeys.search(term),
-    enabled: term.length > 0,
+    queryKey: pov.key(discoverKeys.search(term)),
+    enabled: term.length > 0 && pov.ready,
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
+    placeholderData: pov.isPov ? undefined : (prev) => prev,
     queryFn: async (): Promise<DiscoverPerson[]> => {
-      const { data, error } = await db.rpc("community_people_search", { _q: term, _limit: 20 });
+      const { data, error } = await pov.read("people_search", "community_people_search", { _q: term, _limit: 20 });
       if (error) throw error;
       return (data ?? []) as DiscoverPerson[];
     },
@@ -144,12 +147,13 @@ export function usePeopleSearch(q: string) {
 
 /** Everyone who follows you that you don't follow back, newest first (its own section in Find athletes). */
 export function useFollowBack(enabled = true) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: discoverKeys.followBack,
-    enabled,
+    queryKey: pov.key(discoverKeys.followBack),
+    enabled: enabled && pov.ready,
     staleTime: 60_000,
     queryFn: async (): Promise<DiscoverPerson[]> => {
-      const { data, error } = await db.rpc("community_follow_back", { _limit: 30 });
+      const { data, error } = await pov.read("follow_back", "community_follow_back", { _limit: 30 });
       if (error) throw error;
       return (data ?? []) as DiscoverPerson[];
     },
