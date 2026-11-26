@@ -207,6 +207,8 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
   const program = await import("@/lib/cleo-program.server");
   if (program.isProgramKind(kind)) return program.describeProgramAction(db, kind, p, businessToday());
   switch (kind) {
+    case "update_meet_from_attachment":
+      throw new Error("A source attachment is required.");
     case "create_task":
       return `Add "${p.title}" to the team board${p.due_date ? `, due ${p.due_date}` : ""}.${p.notes ? `\nNotes: ${p.notes}` : ""}`;
     case "complete_task": {
@@ -274,6 +276,8 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
       case "send_message":
       case "schedule_message":
         return { href: `/admin/communication?tab=messages&client=${p.client_id}`, label: "Open the chat" };
+      case "update_meet_from_attachment":
+        return { href: `/admin/competition/${p.competition_id}`, label: "Open competition" };
       case "add_client_note":
         return client(p.client_id, "notes", "Open their notes");
       case "mark_check_ins_reviewed":
@@ -326,7 +330,7 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
 }
 
 /** A new card. Returns what Cleo should tell the person. */
-export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoActionKind, raw: unknown) {
+export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoActionKind, raw: unknown, source?: { path: string; name: string }) {
   // Who may ask comes first: nothing is looked up (least of all with the service role) for a card that isn't theirs.
   const route = routeFor(kind, caller);
   if (route === "not_allowed") throw new Error(notAllowedReason(kind, "the owner"));
@@ -334,13 +338,29 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
   const admin = await service();
   // A request the owner will approve runs as this person: their client, checked now and again when it runs.
   if (route === "ask_owner") await assertRequesterReaches(admin, actor.userId, await targetClientOf(admin, kind, params));
-  const summary = await describeAction(actor.db, kind, params);
+  let intakeMeta: Record<string, unknown> = {};
+  let summary: string;
+  if (kind === "update_meet_from_attachment") {
+    const p = CLEO_ACTION_PARAMS.update_meet_from_attachment.parse(raw);
+    await assertRequesterReaches(admin, actor.userId, p.client_id);
+    if (!source || !source.path.startsWith(`${actor.userId}/`)) throw new Error("Attach the original schedule first.");
+    const { data: attachment, error: attError } = await admin.from("summer_attachments").select("path, message_id").eq("path", source.path).eq("user_id", actor.userId).maybeSingle();
+    if (attError || !attachment?.message_id) throw new Error("The original attachment is not available.");
+    const { data: row, error } = await admin.from("competitions").select("*").eq("id", p.competition_id).eq("client_id", p.client_id).maybeSingle();
+    if (error || !row) throw new Error("That competition does not belong to this client.");
+    const { logisticsBefore, logisticsChanges } = await import("@/lib/competition/attachment-intake");
+    const before = logisticsBefore(row, p.fields);
+    intakeMeta = { _meet_before: before, _meet_source: source };
+    summary = [`Update ${clientLabel(await client(admin, p.client_id))}'s ${row.name} (${row.meet_date}).`, ...logisticsChanges(before, p.fields), `Source: ${source.name}`, `Extraction confidence: ${p.confidence}${p.confidence !== "high" ? " — needs review" : ""}`, "Confirm to apply the listed changes; cancel to keep current values."].join("\n");
+  } else {
+    summary = await describeAction(actor.db, kind, params);
+  }
   const permission = actionPermission(kind, params);
   // Kept with the params (the schema drops unknown keys when it runs).
   const link = await actionLink(actor.db, kind, params);
   const { data, error } = await admin
     .from("cleo_actions")
-    .insert({ requested_by: actor.userId, kind, params: { ...params, ...(link ? { _link: link } : {}) }, summary, permission, status: "proposed" })
+    .insert({ requested_by: actor.userId, kind, params: { ...params, ...intakeMeta, ...(link ? { _link: link } : {}) }, summary, permission, status: "proposed" })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
@@ -356,6 +376,15 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
   const p: any = CLEO_ACTION_PARAMS[kind].parse(raw);
   // Defense in depth: request-bound kinds would act as whoever tapped Approve.
   if (actor.asRequester && !CLEO_ACTION_RULES[kind].approvable) throw new Error("Only the owner can do this one himself.");
+  if (kind === "update_meet_from_attachment") {
+    const meta = raw as { _meet_before?: Record<string, unknown>; _meet_source?: { path: string; name: string } };
+    if (!meta._meet_before || !meta._meet_source) throw new Error("The reviewed source is missing. Ask Cleo for a new card.");
+    const admin = await service();
+    await assertRequesterReaches(admin, actor.userId, p.client_id);
+    const { error } = await admin.rpc("cleo_apply_meet_intake", { _requester: actor.userId, _client: p.client_id, _competition: p.competition_id, _before: meta._meet_before, _patch: p.fields, _source_path: meta._meet_source.path, _source_name: meta._meet_source.name, _confidence: p.confidence, _evidence: p.evidence });
+    if (error) throw new Error(error.message);
+    return "Competition logistics updated and source recorded in the meet history.";
+  }
   const senderRole: "admin" | "coach" = actor.asRequester?.role ?? "admin";
   if (kind === "restore_program_version") {
     const { restoreVersion } = await import("@/lib/cleo-history.server");
