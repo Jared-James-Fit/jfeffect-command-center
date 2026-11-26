@@ -153,7 +153,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
 
   // Fresh portal mounts and actual foreground transitions are app openings.
   useEffect(() => {
-    if (!reminderOnly || isImpersonating) return;
+    if (!reminderOnly) return;
     let wasHidden = document.visibilityState === "hidden";
     const onVisibility = () => {
       if (document.visibilityState === "hidden") { wasHidden = true; return; }
@@ -164,10 +164,10 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [reminderOnly, isImpersonating]);
+  }, [reminderOnly]);
 
   useEffect(() => {
-    if (!reminderOnly || isImpersonating || !needsReminder) { setReminderOpen(false); return; }
+    if (!reminderOnly || !needsReminder) { setReminderOpen(false); return; }
     if (reminderOpen) { shownLaunch.current = launch; return; }
     if (setupRoute || shownLaunch.current === launch) return;
     let timer: number;
@@ -181,7 +181,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
     };
     timer = window.setTimeout(attempt, 1500);
     return () => window.clearTimeout(timer);
-  }, [reminderOnly, isImpersonating, needsReminder, setupRoute, launch, reminderOpen]);
+  }, [reminderOnly, needsReminder, setupRoute, launch, reminderOpen]);
   if (!clientId || !userId) return null;
   if (failed) return reminderOnly ? null : <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
   if (!ready) return null;
@@ -190,7 +190,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
 
   const stepSurfaces = <>{camera.element}{memberEnabled && <MemberSetupWizard key={clientId} open={memberOpen} onClose={() => setMemberOpen(false)} />}<SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} preview={isImpersonating} onOpenChange={(o) => { if (!o) setOpenStep(null); }} /></>;
   if (reminderOnly) {
-    if (isImpersonating || !needsReminder) return null;
+    if (!needsReminder) return null;
     const next = open.find(i => i.key !== "agreement")!;
     const dismiss = () => setReminderOpen(false);
     const action = next.onClick ?? (next.sheet ? () => setOpenStep(next.sheet!) : undefined);
