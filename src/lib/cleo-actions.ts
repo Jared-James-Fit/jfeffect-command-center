@@ -10,6 +10,7 @@
  * coaching) is never offered to them at all.
  */
 import { z } from "zod";
+import { meetIntakeParams } from "@/lib/competition/attachment-intake";
 import type { Permission } from "@/lib/permissions";
 import { WEEKDAYS, rxSchema } from "@/lib/cleo-program";
 
@@ -45,6 +46,7 @@ const dayChange = rxSchema.extend({
 });
 
 export const CLEO_ACTION_PARAMS = {
+  update_meet_from_attachment: meetIntakeParams,
   create_task: z.object({
     title: z.string().trim().min(1).max(200),
     notes: z.string().trim().max(2000).optional(),
@@ -189,6 +191,7 @@ export function isCleoActionKind(v: unknown): v is CleoActionKind {
 
 /** Card heading and the tool description Cleo sees. */
 export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: string }> = {
+  update_meet_from_attachment: { title: "Update competition logistics", tool: "Update the existing competition record from a schedule attachment. First resolve the exact client and competition using competition_intake_matches. Never guess an ID, never use a coach note instead, omit uncertain fields, and flag conflicting existing values before confirming. Times are local 24-hour HH:MM. If multiple accounts or meets match, ask the coach to choose." },
   create_task: { title: "Add a task", tool: "Add a task to the team board." },
   complete_task: { title: "Complete a task", tool: "Mark a task on the team board done (task ids are in OPEN TASKS)." },
   send_message: { title: "Send a message", tool: "Send a client a message in their coach thread now, from the coach account. Write it in the coach's voice, ready to send." },
@@ -238,6 +241,7 @@ export type ActionRule = {
 };
 
 export const CLEO_ACTION_RULES: Record<CleoActionKind, ActionRule> = {
+  update_meet_from_attachment: { need: "client", approvable: true },
   create_task: { need: "tasks", approvable: false },
   complete_task: { need: "tasks", approvable: false },
   send_message: { need: "client", approvable: true },

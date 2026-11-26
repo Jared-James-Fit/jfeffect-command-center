@@ -41,6 +41,8 @@ export type CompetitionFormValues = {
   lifting_start: string | null;
   weigh_in_at: string | null;
   flight: string | null;
+  session_label?: string | null;
+  equipment_event?: string | null;
   release_policy: "approve_all" | "auto_routine";
   rules: FederationRules;
 };
@@ -75,6 +77,8 @@ export function emptyCompetition(
     lifting_start: null,
     weigh_in_at: null,
     flight: null,
+    session_label: null,
+    equipment_event: null,
     release_policy: "approve_all",
     rules: rulesFor(prefill.federation ?? null),
     ...prefill,
@@ -243,15 +247,8 @@ export function CompetitionForm({
             </div>
           </Field>
 
-          <button
-            type="button"
-            className="text-[13px] font-medium text-muted-foreground underline-offset-2 hover:underline"
-            onClick={() => setMore((m) => !m)}
-          >
-            {more ? "Fewer details" : "More details: schedule, rules, release"}
-          </button>
-          {more ? (
-            <div className="space-y-4">
+          <div className="space-y-3 rounded-xl border border-border p-3" data-meet-logistics>
+            <h3 className="text-sm font-medium">Meet-day logistics</h3>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Division">
                   <Input
@@ -267,7 +264,15 @@ export function CompetitionForm({
                   />
                 </Field>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Session">
+                  <Input value={v.session_label ?? ""} onChange={(e) => set("session_label", txt(e.target.value))} placeholder="Session 2" maxLength={40} />
+                </Field>
+                <Field label="Equipment / event">
+                  <Input value={v.equipment_event ?? ""} onChange={(e) => set("equipment_event", txt(e.target.value))} placeholder="Unequipped (3 Lift)" maxLength={100} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <Field label="Weigh-in">
                   <Input
                     type="time"
@@ -290,6 +295,16 @@ export function CompetitionForm({
                   />
                 </Field>
               </div>
+          </div>
+          <button
+            type="button"
+            className="text-[13px] font-medium text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setMore((m) => !m)}
+          >
+            {more ? "Fewer details" : "More details: rules, release"}
+          </button>
+          {more ? (
+            <div className="space-y-4">
               <Field label="Objective notes">
                 <Textarea
                   rows={2}

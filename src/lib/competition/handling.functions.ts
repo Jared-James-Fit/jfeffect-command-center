@@ -595,7 +595,7 @@ export const getMyMeetFn = createServerFn({ method: "POST" })
       self,
       today: prep.today,
       tz: prep.tz,
-      competition: pick(prep.competition, ["id", "name", "meet_date", "meet_end_date", "federation", "division", "weight_class", "location", "status", "registration", "lifting_start", "weigh_in_at", "flight", "flights_in_session", "lifters_per_flight", "timezone", "sport", "session_label", "rules", "schedule", "results"]),
+      competition: pick(prep.competition, ["id", "name", "meet_date", "meet_end_date", "federation", "division", "weight_class", "location", "status", "registration", "lifting_start", "weigh_in_at", "flight", "flights_in_session", "lifters_per_flight", "timezone", "sport", "session_label", "equipment_event", "rules", "schedule", "results"]),
       client: prep.client,
       contact: { phone: me?.phone ?? null },
       info: prep.info,

@@ -55,6 +55,8 @@ export type CompetitionFacts = {
   liftingStart: string | null;
   weighInAt: string | null;
   flight: string | null;
+  sessionLabel?: string | null;
+  equipmentEvent?: string | null;
   location: string | null;
   rules: FederationRules;
   /** the athlete's own stated goal total, when they gave one (the competition form) */

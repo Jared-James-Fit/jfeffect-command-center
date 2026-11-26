@@ -101,7 +101,7 @@ export const firstOf = (c: any) =>
 /* The read                                                           */
 
 const COMP_COLS =
-  "id, client_id, prep_id, name, meet_date, meet_end_date, federation, division, weight_class, location, level, objective, status, registration, lifting_start, weigh_in_at, flight, weigh_in_kg, rules, sport, timezone, session_label, flights_in_session, lifters_per_flight, platforms, lot_number, schedule, checklist, athlete_info, athlete_info_at, athlete_info_changes, prep_reminders, internal_test, results, target_total_kg";
+  "id, client_id, prep_id, name, meet_date, meet_end_date, federation, division, weight_class, location, level, objective, status, registration, lifting_start, weigh_in_at, flight, weigh_in_kg, rules, sport, timezone, session_label, equipment_event, flights_in_session, lifters_per_flight, platforms, lot_number, schedule, checklist, athlete_info, athlete_info_at, athlete_info_changes, prep_reminders, internal_test, results, target_total_kg";
 export const PLAN_COLS =
   "id, competition_id, client_id, version, source, status, based_on, plan, summary, created_by, created_at, approved_at, approved_by, athlete_confirmed_at, decided_at, decision_note";
 

@@ -56,7 +56,7 @@ async function reachAssessment(context: any, id: string) {
 
 const uuid = z.string().uuid();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
+const hhmm = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const kgNum = z.number().min(20).max(1500);
 const OBJECTIVES = [
   "win",
@@ -90,6 +90,8 @@ const fields = z.object({
   lifting_start: hhmm.nullable().optional(),
   weigh_in_at: hhmm.nullable().optional(),
   flight: z.string().trim().max(40).nullable().optional(),
+  session_label: z.string().trim().max(40).nullable().optional(),
+  equipment_event: z.string().trim().max(100).nullable().optional(),
   weigh_in_kg: z.number().min(25).max(300).nullable().optional(),
   release_policy: z.enum(["approve_all", "auto_routine"]).optional(),
   rules: z.record(z.string(), z.unknown()).optional(),
@@ -993,7 +995,7 @@ export const getMyCompetitionsFn = createServerFn({ method: "POST" })
     const { data: comps } = await sb
       .from("competitions")
       .select(
-        "id, name, meet_date, meet_end_date, location, federation, weight_class, division, status, is_primary, results, lifting_start, weigh_in_at, flight",
+        "id, name, meet_date, meet_end_date, location, federation, weight_class, division, status, is_primary, results, lifting_start, weigh_in_at, flight, session_label, equipment_event",
       )
       .eq("client_id", clientId)
       .in("status", ["upcoming", "completed"])

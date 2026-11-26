@@ -248,6 +248,29 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
 
+    competition_intake_matches: tool({
+      description: "Find the exact client and existing competition for an attachment. Search by full name, then select a client id only when unambiguous. Return all visible matching accounts and their meets. Never choose between ambiguous names without asking the coach.",
+      inputSchema: z.object({ name: z.string().trim().min(2).max(160), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
+      execute: safe("competition matches", async ({ name, date }) => {
+        const clean = name.replace(/[%_\\]/g, "");
+        if (clean.length < 2) return "No safe name to match.";
+        const result = await db.from("clients").select("id, full_name, preferred_name, first_name, last_name, email").ilike("full_name", clean).limit(30);
+        if (result.error) throw new Error(result.error.message);
+        const matches = result.data ?? [];
+        if (!matches.length) return "No exact visible account matches. Ask the coach to identify the athlete.";
+        const lines = [matches.length > 1 ? "Multiple matching accounts: ask the coach which one; do not choose." : "One matching account:"];
+        for (const c of matches) {
+          lines.push(`${clientName(c)} (${c.id})${c.email ? ` | ${c.email}` : ""}`);
+          let q = db.from("competitions").select("id, name, meet_date, division, weight_class, location, session_label, flight, weigh_in_at, lifting_start, equipment_event").eq("client_id", c.id);
+          if (date) q = q.eq("meet_date", date);
+          const { data, error } = await q.order("meet_date", { ascending: false }).limit(20);
+          if (error) throw new Error(error.message);
+          for (const row of data ?? []) lines.push(JSON.stringify(row));
+        }
+        return lines.join("\n");
+      }),
+    }),
+
     client_file: tool({
       description:
         "A client's file: status, plan, dates, goals, injuries, coach notes, training/nutrition/lifestyle notes, body weight goal, lifting unit, maxes on file and recent pinned notes. Use first when asked about a specific client.",
