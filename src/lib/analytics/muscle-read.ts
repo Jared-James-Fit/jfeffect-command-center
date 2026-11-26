@@ -244,7 +244,7 @@ export function buildMuscleRead(input: {
   const weeks = Math.max(1, input.weeks);
   const enoughData = !input.partial && input.weeks >= 2 && input.sets.length >= 20;
   const counted = (ss: LoadSet[]) => ss.filter((s) => s.day && s.reps > 0 && patternOf(s) !== null);
-  const periodSets = counted(input.sets).filter(s=>s.day <= (input.today ?? input.end));
+  const periodSets = counted(input.sets).filter(s=>s.day>=input.start&&s.day<=input.end&&s.day <= (input.today ?? input.end));
   const planned = new Map<FineMuscle,number>();
   const effort = new Map<FineMuscle,{sum:number;n:number}>();
   for(const p of input.plan??[]){if(!p.day||p.day<input.start||p.day>input.end||p.day>(input.today??input.end)||!(Number(p.sets)>0)||patternOf(p)===null)continue;for(const [m,w] of muscleCredits(p))planned.set(m,(planned.get(m)??0)+Number(p.sets)*(w>=1?1:credit));}
