@@ -14,7 +14,7 @@ import {
   setRestAutoStart,
   startRestTimer,
 } from "@/lib/rest-timer-store";
-import { offersSetup, suggestKind } from "@/lib/equipment/equipment";
+import { suggestKind } from "@/lib/equipment/equipment";
 import { boxLabel, boxStep } from "@/components/workout-day/set-keyboard-bar";
 import { RestLine } from "@/components/workout-day/RestTimerButton";
 
@@ -128,22 +128,15 @@ describe("the rest line over the sets", () => {
 });
 
 describe("the setup line under the name", () => {
-  it("offers a setup where settings change the lift, never on dumbbells or a bench", () => {
-    expect(offersSetup({ name: "Competition Squat", equipment: "Barbell" })).toBe(true);
-    expect(offersSetup({ name: "Leg Press", equipment: "Machine" })).toBe(true);
-    expect(offersSetup({ name: "Seated Cable Row", equipment: "Cable" })).toBe(true);
-    expect(offersSetup({ name: "Bulgarian Split Squat", equipment: "Dumbbell" })).toBe(false);
-    expect(offersSetup({ name: "Incline Dumbbell Press", equipment: "Dumbbell" })).toBe(false);
-    expect(offersSetup({ name: "Lateral Raise", equipment: "Dumbbell" })).toBe(false);
-  });
   it("a dumbbell or kettlebell lift is never read as a rack lift", () => {
     expect(suggestKind({ name: "Bulgarian Split Squat", equipment: "Dumbbell" })).toBeNull();
     expect(suggestKind({ name: "Goblet Squat", equipment: "Kettlebell" })).toBeNull();
     expect(suggestKind({ name: "Barbell Split Squat", equipment: "Barbell" })).toBe("rack");
   });
-  it("is shown empty only on a live card before its first set", () => {
+  it("is on every card someone can change it on, whatever the exercise (Nov 26 2026); never required to log", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain('cardSetup.mode === "live" && completedSetCount === 0 && offersSetup(');
+    expect(wdv).toContain('cardSetup.summary || cardSetup.photo || cardSetup.mode !== "view"');
+    expect(wdv).not.toContain("offersSetup(");
   });
 });
 
