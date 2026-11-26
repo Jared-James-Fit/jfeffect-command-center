@@ -137,9 +137,10 @@ async function notifyDirect(
   for (const m of members) {
     const uid = m.user_id;
     if (!uid || uid === senderId || shut.has(uid)) continue;
+    const { data: recipientIsStaff } = await admin.rpc("is_coach_or_admin", { _user_id: uid });
     const n = buildNotificationPayload({
       kind: "direct_message",
-      role: "client",
+      role: recipientIsStaff ? "admin" : "client",
       recipientUserId: uid,
       sourceId: msg.id,
       displayName: (author as any)?.name ?? null,
