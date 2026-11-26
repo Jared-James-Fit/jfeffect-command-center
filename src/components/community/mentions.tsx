@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, type RefObject } from "react";
 import { X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge } from "@/components/community/post-card";
 import { cn } from "@/lib/utils";
 import { mentionQuery, splitMentions, suggestMentions, withHandles, type CommunityAuthor, type CommunityMention } from "@/lib/community";
 import { useCommunityMembers } from "@/lib/community.queries";
+import { NameMarks } from "@/components/name-marks";
 
 /** A caption with the people it tags as their @username, tappable (bold, like Instagram). */
 export function MentionText({ text, mentions, onOpen }: { text: string; mentions?: CommunityMention[] | null; onOpen?: (a: CommunityAuthor) => void }) {
@@ -116,7 +116,7 @@ export function MentionSuggestBar({
         >
           <UserAvatar src={a.avatar_url} name={a.name} size={26} expandable={false} />
           {a.name}
-          {a.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          <NameMarks person={a as any} userId={(a as any).user_id} size={13} onDark={dark} />
           {a.username && <span className={cn("font-semibold", dark ? "text-white/60" : "text-muted-foreground")}>@{a.username}</span>}
         </button>
       ))}
@@ -164,7 +164,7 @@ export function CollaboratorsSheet({
               <UserAvatar src={a.avatar_url} name={a.name} size={40} expandable={false} />
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-[15px] font-bold">{a.name}</span>
-                {a.is_coach && <CoachBadge />}
+                <NameMarks person={a as any} userId={(a as any).user_id} />
               </span>
             </button>
           ))}

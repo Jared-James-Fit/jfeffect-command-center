@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { NameMarks } from "@/components/name-marks";
 import { format } from "date-fns";
 import { ArrowLeft, ChevronDown, ChevronRight, Scale } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -302,7 +303,7 @@ function BoardRow({ row: r, finalWeek, move, onOpen }: { row: Row; finalWeek: bo
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("truncate text-[14px]", r.is_me ? "font-semibold" : "font-medium")}>{r.is_me ? "You" : r.display_name}</span>
-          {r.is_coach && <CoachTag />}
+          {r.is_coach ? <CoachTag /> : <NameMarks userId={r.client_id} size={13} />}
         </span>
         {finalWeek && <RowBoost row={r} />}
       </span>
