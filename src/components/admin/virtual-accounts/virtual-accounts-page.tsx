@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, Heart, History, Loader2, Pencil, Plus, Power, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Heart, History, Hourglass, Loader2, Pencil, Plus, Power, RefreshCw, Trash2, UserPlus, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,15 +17,18 @@ import { cn } from "@/lib/utils";
 import { STARTER_PERSONAS } from "@/lib/virtual-accounts/personas";
 import { foldName } from "@/lib/virtual-accounts/names";
 import { NameFields, errorWords, useNameDraft } from "@/components/admin/virtual-accounts/name-editor";
+import { fullName, likeStateWords, rolloutStatusWords } from "@/lib/virtual-accounts/rollout";
 import {
   addVirtualAccountFn,
   clearVirtualLikesFn,
   createStarterVirtualAccountsFn,
   renameVirtualAccountFn,
   listVirtualAccountsFn,
+  setVirtualRolloutFn,
   setVirtualSettingsFn,
   updateVirtualAccountFn,
   virtualActivityFn,
+  type RolloutState,
   type VirtualAccount,
   type VirtualSettings,
 } from "@/lib/virtual-accounts/virtual-accounts.functions";
@@ -62,9 +65,12 @@ export function VirtualAccountsPage() {
   });
   const setSettings = useMutation({
     mutationFn: (patch: Partial<VirtualSettings>) => settingsFn({ data: patch }),
-    onSuccess: (s) => {
+    onSuccess: (s, patch) => {
       qc.setQueryData(KEY, (prev: any) => (prev ? { ...prev, settings: s } : prev));
-      toast.success(s.automation_enabled ? "Automated likes are on" : "Automated likes are off");
+      void refresh();
+      if ("automation_enabled" in patch) toast.success(s.automation_enabled ? "Automated likes are on" : "Automated likes are off");
+      else if ("rollout_enabled" in patch) toast.success(s.rollout_enabled ? "Gradual start is on" : "Gradual start is off");
+      else toast.success("Saved");
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
   });
@@ -134,6 +140,8 @@ export function VirtualAccountsPage() {
           </li>
         </ul>
       </Card>
+
+      <RolloutCard accounts={data.accounts} settings={s} rollout={data.rollout} canEdit={canEdit} onSettings={(p) => setSettings.mutate(p)} onChanged={refresh} />
 
       {canEdit && (
         <div className="grid gap-2 sm:grid-cols-2">
@@ -229,8 +237,8 @@ function VirtualRow({ a, canEdit, onChanged }: { a: VirtualAccount; canEdit: boo
             </div>
           )}
           {a.bio && <p className="mt-1 text-sm">{a.bio}</p>}
-          <div className="mt-1 text-xs text-muted-foreground">
-            {a.likes_24h} like{a.likes_24h === 1 ? "" : "s"} today · {a.likes_total} in all · {a.followers} follower{a.followers === 1 ? "" : "s"}
+          <div className="mt-1 text-xs text-muted-foreground" data-virtual-like-state>
+            {likeStateWords(a)} · {a.likes_24h} like{a.likes_24h === 1 ? "" : "s"} today · {a.likes_total} in all · {a.followers} follower{a.followers === 1 ? "" : "s"}
           </div>
         </div>
       </div>
@@ -329,6 +337,116 @@ function ActivityLog({ userId }: { userId: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The gradual start: queued accounts start liking one at a time, the next only after the gap
+ * (days), a like since the last start, and in the daytime, so new names show up the way new
+ * members do. The queue can be reordered, emptied or filled here; switching an account's likes on
+ * by hand starts it now.
+ */
+function RolloutCard({
+  accounts,
+  settings: s,
+  rollout,
+  canEdit,
+  onSettings,
+  onChanged,
+}: {
+  accounts: VirtualAccount[];
+  settings: VirtualSettings;
+  rollout: RolloutState | null;
+  canEdit: boolean;
+  onSettings: (patch: Partial<VirtualSettings>) => void;
+  onChanged: () => void;
+}) {
+  const fn = useServerFn(setVirtualRolloutFn);
+  const queue = accounts
+    .filter((a) => a.active && !a.likes_enabled && a.rollout_position != null)
+    .sort((x, y) => (x.rollout_position ?? 0) - (y.rollout_position ?? 0));
+  const waiting = accounts.filter((a) => a.active && !a.likes_enabled && a.rollout_position == null);
+  const liking = accounts.filter((a) => a.active && a.likes_enabled).length;
+  const save = useMutation({
+    mutationFn: (order: string[]) => fn({ data: { order } }),
+    onSuccess: () => onChanged(),
+    onError: (e: unknown) => toast.error(errorWords(e, "Couldn't save the queue")),
+  });
+  const ids = queue.map((a) => a.user_id);
+  const move = (i: number, d: -1 | 1) => {
+    const next = [...ids];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    save.mutate(next);
+  };
+  return (
+    <Card className="space-y-3 p-4" data-virtual-rollout>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+          <Hourglass className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold">Gradual start</div>
+          <p className="text-sm text-muted-foreground">
+            {liking} liking · {queue.length} in the queue. The next one starts once {s.rollout_gap_days} day{s.rollout_gap_days === 1 ? "" : "s"} have
+            passed since the last, there's been a like since then, and it's daytime.
+          </p>
+        </div>
+        <Switch
+          checked={s.rollout_enabled}
+          disabled={!canEdit}
+          onCheckedChange={(v) => onSettings({ rollout_enabled: v })}
+          aria-label="Gradual start"
+          data-virtual-rollout-switch
+        />
+      </div>
+      <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm" data-virtual-rollout-status>
+        {rolloutStatusWords(rollout, accounts, s)}
+      </p>
+      <label className="flex min-h-11 items-center justify-between gap-3 rounded-lg border px-3 text-sm">
+        Days between starts, at least
+        <select
+          className="h-9 rounded-md border bg-background px-2"
+          value={s.rollout_gap_days}
+          disabled={!canEdit}
+          onChange={(e) => onSettings({ rollout_gap_days: Number(e.target.value) })}
+          aria-label="Days between starts"
+        >
+          {[1, 2, 3, 4, 5, 7, 10, 14].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      {queue.length > 0 && (
+        <ol className="space-y-1" data-virtual-rollout-queue>
+          {queue.map((a, i) => (
+            <li key={a.user_id} className="flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm">
+              <span className="w-6 shrink-0 text-xs text-muted-foreground">#{i + 1}</span>
+              <span className="min-w-0 flex-1 truncate">{fullName(a)}</span>
+              {canEdit && (
+                <span className="flex shrink-0 items-center">
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={i === 0 || save.isPending} onClick={() => move(i, -1)} aria-label={`Move ${fullName(a)} up`}>
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={i === queue.length - 1 || save.isPending} onClick={() => move(i, 1)} aria-label={`Move ${fullName(a)} down`}>
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={save.isPending} onClick={() => save.mutate(ids.filter((x) => x !== a.user_id))} aria-label={`Take ${fullName(a)} out of the queue`}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      {canEdit && waiting.length > 0 && (
+        <Button variant="outline" className="h-11 w-full" disabled={save.isPending} onClick={() => save.mutate([...ids, ...waiting.map((a) => a.user_id)])} data-virtual-rollout-queue-rest>
+          Add {waiting.length} not liking yet to the queue
+        </Button>
+      )}
+    </Card>
   );
 }
 

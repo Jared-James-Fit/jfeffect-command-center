@@ -37,6 +37,10 @@ export type VirtualAccount = {
   name_set_at: string | null;
   /** What's wrong with the name now (a member who joined since goes by it, say), else null. Never fixed on its own. */
   name_problem: string | null;
+  /** When it started liking (switched on by hand or by the gradual start), else null. */
+  likes_started_at: string | null;
+  /** Its place in the gradual start's queue (1 = next), else null. */
+  rollout_position: number | null;
 };
 
 /** A generated name: never a placeholder, a member's, a famous person's or another virtual account's. */
@@ -61,17 +65,39 @@ export type VirtualSettings = {
   max_post_age_hours: number;
   min_post_age_minutes: number;
   include_coach_posts: boolean;
+  /** The gradual start: queued accounts start one at a time. */
+  rollout_enabled: boolean;
+  /** At least this many days between one account starting and the next. */
+  rollout_gap_days: number;
+};
+
+/** When the next queued account starts, or why it's waiting (the tick's own rule). */
+export type RolloutState = {
+  enabled: boolean;
+  gap_days: number;
+  next_user_id: string | null;
+  queued: number;
+  last_started_at: string | null;
+  /** The gap has passed after this. */
+  due_after: string | null;
+  /** No automated like since the last start yet: the next one waits for real activity. */
+  needs_like: boolean;
 };
 
 export const listVirtualAccountsFn = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ accounts: VirtualAccount[]; settings: VirtualSettings }> => {
+  .handler(async ({ context }): Promise<{ accounts: VirtualAccount[]; settings: VirtualSettings; rollout: RolloutState | null }> => {
     const { db, viewOnly } = await readClientFor(context as any);
     const call = (fn: string) => (viewOnly ? rpcRead(db, fn, {}) : (context.supabase as any).rpc(fn));
-    const [a, s] = await Promise.all([call("admin_virtual_accounts"), call("admin_virtual_settings")]);
+    const [a, s, r] = await Promise.all([call("admin_virtual_accounts"), call("admin_virtual_settings"), call("admin_virtual_rollout_state")]);
     if (a.error) throw new Error(a.error.message);
     if (s.error) throw new Error(s.error.message);
-    return { accounts: (a.data ?? []) as VirtualAccount[], settings: s.data as VirtualSettings };
+    return {
+      accounts: (a.data ?? []) as VirtualAccount[],
+      settings: s.data as VirtualSettings,
+      // the rollout read is extra: an older database without it still lists the accounts
+      rollout: r.error ? null : (r.data as RolloutState),
+    };
   });
 
 export const virtualActivityFn = createServerFn({ method: "GET" })
@@ -166,6 +192,8 @@ export const setVirtualSettingsFn = createServerFn({ method: "POST" })
         max_post_age_hours: z.number().int().min(6).max(96),
         min_post_age_minutes: z.number().int().min(5).max(240),
         include_coach_posts: z.boolean(),
+        rollout_enabled: z.boolean(),
+        rollout_gap_days: z.number().int().min(1).max(14),
       })
       .partial()
       .parse(i),
@@ -174,6 +202,16 @@ export const setVirtualSettingsFn = createServerFn({ method: "POST" })
     const { data: s, error } = await (context.supabase as any).rpc("admin_virtual_settings_set", { _patch: data });
     if (error) throw new Error(error.message);
     return s as VirtualSettings;
+  });
+
+/** The gradual start's queue: these accounts, in this order; any other account not liking yet leaves it. */
+export const setVirtualRolloutFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ order: z.array(z.string().uuid()).max(100) }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { error } = await (context.supabase as any).rpc("admin_virtual_rollout_set", { _order: data.order });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
   });
 
 const genderSchema = z.enum(["f", "m"]).nullable().optional();
