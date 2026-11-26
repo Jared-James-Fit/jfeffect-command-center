@@ -231,7 +231,9 @@ export function ClientAnalyticsDashboard({
     if (typeof window !== "undefined" && window.location.hash === "#recovery") return "overview";
     return viewFromSearch(initialView) ?? "overview";
   });
-  const [recordsOpen,setRecordsOpen]=useState(false);
+  const [recordsOpen,setRecordsOpen]=useState(initialView==="records");
+  const [trainingDetailsOpen,setTrainingDetailsOpen]=useState(()=>typeof window!=="undefined"&&window.location.hash==="#recovery");
+  const [recoveryDetailsOpen,setRecoveryDetailsOpen]=useState(()=>typeof window!=="undefined"&&window.location.hash==="#recovery");
   const [recordSection,setRecordSection]=useState<"gym"|"competitions"|"lifetime">("gym");
   const changeView = (v: AnalyticsView) => {
     const next = viewFromSearch(v) ?? "overview";
@@ -397,7 +399,7 @@ export function ClientAnalyticsDashboard({
     compSessions12w,
     hasMeet: !!nextMeetDate,
   });
-  const competition = useCompetitionData(clientId, hasPowerlifting || profile === "powerlifting" || view === "records");
+  const competition = useCompetitionData(clientId, hasPowerlifting || profile === "powerlifting" || recordsOpen);
   const meets = useMemo(() => competition.data?.meets ?? [], [competition.data]);
   // the training phases the strength read judges lower sessions in (a volume block's
   // tired sets aren't lost strength): the athlete's blocks, by their type or their words
@@ -1068,7 +1070,7 @@ export function ClientAnalyticsDashboard({
                 <div id="analytics-records" className="scroll-mt-20">
                   <MoreDetail label="Records & competitions" open={recordsOpen} onOpenChange={setRecordsOpen}>
                     <SectionErrorBoundary label="Records">
-                      <RecordsView key={recordSection} initialSection={recordSection} lifetime={lifetime} records={records} byExercise={byExercise} meets={meets} unit={displayUnit} bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []} sex={competition.data?.sex ?? null} results={allResults as any[]} today={today} />
+                      <RecordsView initialSection={recordSection} onSectionChange={setRecordSection} lifetime={lifetime} records={records} byExercise={byExercise} meets={meets} unit={displayUnit} bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []} sex={competition.data?.sex ?? null} results={allResults as any[]} today={today} />
                     </SectionErrorBoundary>
                   </MoreDetail>
                 </div>
@@ -1168,7 +1170,7 @@ export function ClientAnalyticsDashboard({
                 )}
 
                 </MoreDetail>
-                <MoreDetail label="Training & recovery details">
+                <MoreDetail label="Training & recovery details" open={trainingDetailsOpen} onOpenChange={setTrainingDetailsOpen}>
                 {hasSbdInPeriod && (
                   <MoreDetail label="Squat, bench and deadlift workload">
                     <SectionTitle
@@ -1244,7 +1246,7 @@ export function ClientAnalyticsDashboard({
                     rangeLabel={filter.short}
                   />
                 </SectionErrorBoundary>
-                <MoreDetail label="More: workouts, sleep, bodyweight and cardio">
+                <MoreDetail label="Workouts, sleep, bodyweight & cardio" open={recoveryDetailsOpen} onOpenChange={setRecoveryDetailsOpen}>
                   <section aria-label="Recent workouts">
                     <SectionTitle
                       title="Recent workouts"
