@@ -17,7 +17,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { cleanReports, legacyColumns, painReportsSchema } from "@/lib/pain/report";
+import { cleanReports, legacyColumns, painReportsSchema, reportsForOlderSchema } from "@/lib/pain/report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   completenessPatch,
@@ -1140,11 +1140,14 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       // pain_reports follows the review: what it sends now (none from an older
       // app, whose pain_area is then read as stored), nothing once pain is off
       const savePainReports = async (feedbackId: string) => {
-        const { error: painError } = await writer.rpc("pain_reports_save" as any, {
-          _feedback_id: feedbackId,
-          _checkin_id: null,
-          _reports: painReports,
-        } as any);
+        const save = (reports: typeof painReports) =>
+          writer.rpc("pain_reports_save" as any, { _feedback_id: feedbackId, _checkin_id: null, _reports: reports } as any);
+        let { error: painError } = await save(painReports);
+        // a database that doesn't take the whole body yet (20270603090000 not applied): keep what
+        // it can store; the rest is still in pain_area's text, never lost
+        if (painError && (painError as any).code && ["23514", "23502"].includes((painError as any).code)) {
+          ({ error: painError } = await save(reportsForOlderSchema(painReports)));
+        }
         if (painError) throw painError;
       };
       const { data: existing } = await writer

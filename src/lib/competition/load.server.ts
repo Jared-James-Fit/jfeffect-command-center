@@ -654,14 +654,15 @@ export async function loadCompetitionContext(
 
   const pain = ((painMap?.flagged ?? []) as any[]).map((a) => ({
     place: a.label as string,
-    lift: liftForPlace(a.label ?? a.region ?? ""),
+    lift: a.cls === "general" ? null : liftForPlace(a.label ?? a.region ?? ""),
     worse: a.trend === "worse",
     score: a.latest?.score ?? null,
+    general: a.cls === "general",
   }));
   // current pain in uploaded notes (the latest word on each place), when the app's own reports don't already have it
   for (const r of E.currentRisks(intelFacts, today))
     if (!pain.some((p) => p.place.toLowerCase() === r.place.toLowerCase()))
-      pain.push({ place: r.place, lift: r.lift, worse: r.worse, score: null });
+      pain.push({ place: r.place, lift: r.lift, worse: r.worse, score: null, general: false });
   const recoveryFlags = checkins.filter((c: any) => {
     const f = c.answers?.recovery_flags;
     return Array.isArray(f) && f.some((x: string) => /sleep|stress|energy/i.test(x));

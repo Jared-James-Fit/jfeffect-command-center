@@ -7,7 +7,8 @@ import { regionFromName, regionOf, type PainSide } from "@/lib/pain/regions";
 import { cleanReports, severityFromScore, severityLevel, severityOf, type Change, type PainReportInput, type Severity } from "@/lib/pain/report";
 import { siteOf } from "@/lib/pain/sites";
 import type { FollowUp, PainEntry } from "@/lib/pain/history";
-import type { DescribedDetail, DescribedPlace } from "@/lib/pain/describe";
+import type { DescribedDetail, DescribedPlace, SafetyQuestion } from "@/lib/pain/describe";
+import { symptomClass, limitsTraining } from "@/lib/pain/symptoms";
 
 export type PainPick = Omit<PainReportInput, "severity"> & {
   uid: string;
@@ -23,15 +24,15 @@ export type PainPick = Omit<PainReportInput, "severity"> & {
 let seq = 0;
 const uid = () => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-export type PainPlace = { region: string; side: PainSide | null; site?: string | null };
+export type PainPlace = { region: string; side: PainSide | null; site?: string | null; symptom?: PainPick["symptom"] };
 
-export function newPick(region: string, side: PainSide | null, site: string | null = null): PainPick {
-  return { uid: uid(), region, side, site, severity: null, score: null, timing: [], feel: [], open: region === "other" };
+export function newPick(region: string, side: PainSide | null, site: string | null = null, symptom: PainPick["symptom"] = null): PainPick {
+  return { uid: uid(), region, side, site, symptom, severity: null, score: null, timing: [], feel: [], open: region === "other" };
 }
 
-/** The same place: region, side and spot. */
+/** The same place: region, side, spot and (for a general symptom) which one. */
 export function samePlace(p: PainPlace, q: PainPlace): boolean {
-  return p.region === q.region && (p.side ?? null) === (q.side ?? null) && (p.site ?? null) === (q.site ?? null);
+  return p.region === q.region && (p.side ?? null) === (q.side ?? null) && (p.site ?? null) === (q.site ?? null) && (p.symptom ?? null) === (q.symptom ?? null);
 }
 
 /**
@@ -42,10 +43,10 @@ export function samePlace(p: PainPlace, q: PainPlace): boolean {
  */
 export function addPick(picks: PainPick[], place: PainPlace): { picks: PainPick[]; uid: string } {
   const site = siteOf(place.site);
-  const norm: PainPlace = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null };
+  const norm: PainPlace = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null, symptom: place.symptom ?? null };
   const found = picks.find((p) => samePlace(p, norm));
   if (found) return { picks, uid: found.uid };
-  const p = newPick(norm.region, norm.side, norm.site ?? null);
+  const p = newPick(norm.region, norm.side, norm.site ?? null, norm.symptom ?? null);
   return { picks: [...picks, p], uid: p.uid };
 }
 
@@ -98,11 +99,22 @@ export function answerFollowUp(p: PainPick, choice: Change | "new", prior: Follo
   };
 }
 
-/** The picks to send (places rated 0–10, a band, or "not sure"; the review won't finish with one unanswered). */
+/**
+ * Does how bad (0–10) change what happens with this place? Only for pain, a
+ * joint or tendon, or numbness (it decides the safety notice, recovery's cap
+ * and whether the coach is asked to look). Soreness, tightness, tired muscles
+ * and a general symptom are kept without one: never a question that changes
+ * nothing (Nov 26 2026).
+ */
+export function needsRating(p: Pick<PainPick, "region" | "site" | "feel" | "timing" | "symptom">): boolean {
+  return limitsTraining(symptomClass({ ...p, score: null, severity: null }));
+}
+
+/** The picks to send (rated 0–10, a band, "not sure", or a kind that needs no rating; the review won't finish with one unanswered). */
 export function picksToReports(picks: PainPick[]): PainReportInput[] {
   return cleanReports(
     picks
-      .filter((p) => p.severity || typeof p.score === "number" || p.unsure)
+      .filter((p) => p.severity || typeof p.score === "number" || p.unsure || !needsRating(p))
       .map(({ uid: _uid, open: _open, unsure: _unsure, scoreSaid: _said, ...p }) => ({
         ...p,
         severity: typeof p.score === "number" ? severityFromScore(p.score) : p.severity ?? null,
@@ -115,9 +127,19 @@ export function unrated(p: Pick<PainPick, "score" | "severity">): boolean {
   return typeof p.score !== "number" && !p.severity;
 }
 
-/** A place still waiting for how bad: no number and not "not sure". */
-export function needsScore(p: Pick<PainPick, "score" | "severity" | "unsure">): boolean {
+/** No number yet and not "not sure" (a said number may fill it). */
+function scoreOpen(p: Pick<PainPick, "score" | "severity" | "unsure">): boolean {
   return unrated(p) && !p.unsure;
+}
+
+/**
+ * A place still waiting for how bad: no number, not "not sure", and a kind
+ * where the number matters (needsRating). Older callers that pass only the
+ * rating get the plain answer.
+ */
+export function needsScore(p: Pick<PainPick, "score" | "severity" | "unsure"> & Partial<Pick<PainPick, "region" | "site" | "feel" | "timing" | "symptom">>): boolean {
+  if (!scoreOpen(p)) return false;
+  return p.region == null ? true : needsRating(p as PainPick);
 }
 
 export type PickGap = "where" | "side" | "score";
@@ -155,8 +177,8 @@ export function picksFromEntries(entries: PainEntry[], feedbackId: string): Pain
       site: e.site,
       severity: e.severity,
       score: e.score,
-      // a stored place with neither was answered "not sure"
-      unsure: e.score == null && !e.severity,
+      // a stored place with neither was answered "not sure" (unless it's a kind that needs no rating)
+      unsure: e.score == null && !e.severity && needsRating({ region: e.region, site: e.site, feel: e.feel, timing: e.timing, symptom: (e.symptom ?? null) as PainPick["symptom"] }),
       timing: e.timing,
       trigger: e.trigger,
       exerciseName: e.exerciseName,
@@ -166,6 +188,7 @@ export function picksFromEntries(entries: PainEntry[], feedbackId: string): Pain
       change: e.change,
       continuesId: e.continuesId,
       note: e.note,
+      symptom: (e.symptom ?? null) as PainPick["symptom"],
     }));
 }
 
@@ -321,11 +344,14 @@ export function matchingPicks(picks: PainPick[], d: DescribedPlace): PainPick[] 
   if (d.region === "other") return [];
   const site = siteOf(d.site);
   const side = site?.midline ? null : d.side ?? null;
-  const same = picks.filter((p) => p.region === d.region && (p.site ?? null) === (d.site ?? null) && (p.side ?? null) === side);
+  const symptom = d.symptom ?? null;
+  // a general symptom is its own thing: a headache is never the same as pain behind the eyes said apart
+  const same = picks.filter((p) => p.region === d.region && (p.site ?? null) === (d.site ?? null) && (p.side ?? null) === side && (p.symptom ?? null) === symptom);
   if (same.length) return same;
   return picks.filter(
     (p) =>
       p.region === d.region &&
+      (p.symptom ?? null) === symptom &&
       ((p.site ?? null) === (d.site ?? null) || p.site == null || d.site == null) &&
       (p.side == null || side == null || p.side === side) &&
       !differs(p, d),
@@ -335,7 +361,7 @@ export function matchingPicks(picks: PainPick[], d: DescribedPlace): PainPick[] 
 function fill(p: PainPick, d: { score: number | null; feel: PainPick["feel"]; timing: PainPick["timing"]; exerciseName: string | null; exerciseId: string | null; impact: PainPick["impact"]; note: string }, opts: { score: boolean }): Partial<PainPick> {
   const patch: Partial<PainPick> = {};
   // a number they said fills an empty place, or replaces one they said before (never one they tapped)
-  if (opts.score && d.score != null && (needsScore(p) || p.unsure || p.scoreSaid)) Object.assign(patch, scorePatch(d.score), { scoreSaid: true });
+  if (opts.score && d.score != null && (scoreOpen(p) || p.unsure || p.scoreSaid)) Object.assign(patch, scorePatch(d.score), { scoreSaid: true });
   const feel = [...new Set([...(p.feel ?? []), ...(d.feel ?? [])])];
   if (feel.length !== (p.feel ?? []).length) patch.feel = feel;
   const timing = [...new Set([...(p.timing ?? []), ...(d.timing ?? [])])];
@@ -362,25 +388,25 @@ function fill(p: PainPick, d: { score: number | null; feel: PainPick["feel"]; ti
 export function applyDescribed(
   picks: PainPick[],
   places: DescribedPlace[],
-  prior?: (place: { region: string; side: PainSide | null; site: string | null }) => FollowUp | null,
+  prior?: (place: { region: string; side: PainSide | null; site: string | null; symptom?: string | null }) => FollowUp | null,
 ): { picks: PainPick[]; uids: string[] } {
   let next = picks;
   const uids: string[] = [];
   for (const d of places) {
     let targets = matchingPicks(next, d);
     if (!targets.length) {
-      const res = addPick(next, { region: d.region, side: d.side, site: d.site });
+      const res = addPick(next, { region: d.region, side: d.side, site: d.site, symptom: d.symptom ?? null });
       next = res.picks;
       targets = next.filter((p) => p.uid === res.uid);
     }
     for (const p of targets) {
-      const patch = fill(p, d, { score: targets.length === 1 || needsScore(p) });
+      const patch = fill(p, d, { score: targets.length === 1 || scoreOpen(p) });
       // more exact: a spot for a place that had none, a side for one that had none (never one that's already picked)
       const site = siteOf(d.site);
       const exactSite = targets.length === 1 && p.site == null && site ? site.key : null;
       const exactSide = targets.length === 1 && p.side == null && d.side && !site?.midline ? d.side : null;
       if (exactSite || exactSide) {
-        const want = { region: p.region, site: exactSite ?? p.site ?? null, side: exactSide ?? p.side ?? null };
+        const want = { region: p.region, site: exactSite ?? p.site ?? null, side: exactSide ?? p.side ?? null, symptom: p.symptom ?? null };
         if (!next.some((q) => q.uid !== p.uid && samePlace(q, want))) {
           if (exactSite) patch.site = exactSite;
           if (exactSide) patch.side = exactSide;
@@ -388,7 +414,7 @@ export function applyDescribed(
       }
       if (d.change && p.sameIssue == null && prior) {
         const merged = { ...p, ...patch };
-        const f = prior({ region: merged.region, side: merged.side ?? null, site: merged.site ?? null });
+        const f = prior({ region: merged.region, side: merged.side ?? null, site: merged.site ?? null, symptom: merged.symptom ?? null });
         if (f) Object.assign(patch, answerFollowUp(merged, d.change, f));
       }
       next = updatePick(next, p.uid, patch);
@@ -418,13 +444,39 @@ export function replacePlace(picks: PainPick[], id: string, place: PainPlace): {
   const p = picks.find((x) => x.uid === id);
   if (!p) return addPick(picks, place);
   const site = siteOf(place.site);
-  const norm = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null };
+  // a symptom picked from the list is that symptom; a headache keeps its symptom when it moves around the head; a body place has none
+  const symptom = place.symptom !== undefined ? place.symptom ?? null : p?.symptom && ["head", "face", "general"].includes(place.region) ? p.symptom : null;
+  const norm = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null, symptom };
   const other = picks.find((x) => x.uid !== id && samePlace(x, norm));
   // "since last time" was asked about the old place
   const moved: Partial<PainPick> = { ...norm, sameIssue: null, change: null, continuesId: null };
   if (other) {
-    const merged = fill(other, { score: pickScore(p), feel: p.feel, timing: p.timing, exerciseName: p.exerciseName ?? null, exerciseId: p.exerciseId ?? null, impact: p.impact ?? null, note: p.note ?? "" }, { score: needsScore(other) });
+    const merged = fill(other, { score: pickScore(p), feel: p.feel, timing: p.timing, exerciseName: p.exerciseName ?? null, exerciseId: p.exerciseId ?? null, impact: p.impact ?? null, note: p.note ?? "" }, { score: scoreOpen(other) });
     return { picks: updatePick(picks.filter((x) => x.uid !== id), other.uid, merged), uid: other.uid };
   }
   return { picks: updatePick(picks, id, moved), uid: id };
+}
+
+/** A place's key as the safety questions name it (describe.ts `describedKey`). */
+const safetyKey = (p: Pick<PainPick, "region" | "site" | "side" | "symptom">) => `${p.region}:${p.site ?? ""}:${p.side ?? ""}:${p.symptom ?? ""}`;
+
+/**
+ * A yes to a safety question (describe.ts `safetyQuestions`), on the review's
+ * places: weakness, a sudden onset or the groin / bladder question added to
+ * the places it was about; fainting added as its own symptom. A no changes
+ * nothing.
+ */
+export function applySafetyAnswer(picks: PainPick[], q: SafetyQuestion): PainPick[] {
+  if (q.id === "fainted") {
+    if (picks.some((p) => p.symptom === "fainted")) return picks;
+    return [...picks, { ...newPick("general", null, null, "fainted"), open: false, note: "Said yes to fainting or nearly fainting." }];
+  }
+  const on = new Set(q.keys);
+  const feel: NonNullable<PainPick["feel"]>[number] = q.id === "sudden" ? "sudden" : q.id === "weak" ? "weak" : "numb";
+  return picks.map((p) => {
+    if (!on.has(safetyKey(p))) return p;
+    const next: PainPick = { ...p, feel: (p.feel ?? []).includes(feel) ? p.feel : [...(p.feel ?? []), feel] };
+    if (q.id === "cauda") next.note = `${p.note ? `${p.note} ` : ""}Said yes to numbness in the groin or bladder or bowel changes.`.slice(0, 300);
+    return next;
+  });
 }

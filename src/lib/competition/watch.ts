@@ -38,7 +38,7 @@ export type WatchInput = {
   bodyweightTrendPerWeek: number | null;
   classLimit: number | null;
   /** places with pain that needs a look, mapped to what they load */
-  pain: Array<{ place: string; lift: Lift | null; worse: boolean; score: number | null }>;
+  pain: Array<{ place: string; lift: Lift | null; worse: boolean; score: number | null; /** a general symptom (a headache, dizziness): never "pain on a lift" */ general?: boolean }>;
   /** recent check-ins flagging poor sleep, energy or recovery (of the last three) */
   recoveryFlags: number;
   /** planned workouts done in the last four weeks, as a share (null: none planned) */
@@ -112,7 +112,9 @@ export function watchList(x: WatchInput): WatchItem[] {
       area: "pain",
       lift: p.lift,
       severity,
-      text: `${p.place} pain${p.worse ? " getting worse" : ""}${p.score != null ? ` (${p.score}/10)` : ""}${p.lift ? `: it loads the ${p.lift}` : ""}`,
+      text: p.general
+        ? `${p.place} reported${p.worse ? ", getting worse" : ""}: a symptom, not tied to a lift`
+        : `${p.place} pain${p.worse ? " getting worse" : ""}${p.score != null ? ` (${p.score}/10)` : ""}${p.lift ? `: it loads the ${p.lift}` : ""}`,
     });
   }
   if (x.recoveryFlags >= 2)
@@ -168,8 +170,13 @@ export function watchList(x: WatchInput): WatchItem[] {
 /** Which competition lift a pain place loads (null: none in particular). */
 export function liftForPlace(place: string): Lift | null {
   const p = place.toLowerCase();
+  // the head, face, jaw and general symptoms (a headache, dizziness) load no lift
+  if (/headache|dizz|nause|stomach|breath|heart|faint|sick|unwell|exhaust|head|face|jaw|eye|temple|skull/.test(p)) return null;
+  // grip: fingers, the thumb and the hand hold the deadlift
+  if (/finger|thumb|palm|knuckle|pinky|hand|grip/.test(p)) return "deadlift";
+  if (/rib/.test(p)) return "bench";
   if (/shoulder|pec|chest|elbow|wrist|tricep/.test(p)) return "bench";
-  if (/knee|quad|patell|adductor|groin/.test(p)) return "squat";
+  if (/knee|quad|patell|adductor|groin|foot|feet|toe|heel|arch|ankle|achilles|pelvis/.test(p)) return "squat";
   if (/hamstring|lower back|low back|lumbar|si joint|glute/.test(p)) return "deadlift";
   if (/hip|back/.test(p)) return "squat";
   return null;

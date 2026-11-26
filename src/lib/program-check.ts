@@ -357,6 +357,7 @@ const PAIN_LOADS: Record<string, MovementPattern[]> = {
   neck: ["shrug", "vertical_press"],
   upper_back: ["shrug", "horizontal_pull"],
   shoulder_blade: ["horizontal_pull", "vertical_pull", "horizontal_press"],
+  ribs: ["horizontal_press", "hinge", "squat", "horizontal_pull"],
 };
 
 export function programCheck(input: CheckInput, depth: "quick" | "deep"): CheckFinding[] {

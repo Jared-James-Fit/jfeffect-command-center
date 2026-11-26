@@ -13,8 +13,25 @@
  *    fatigue, the session's RPE), a device's sleep, a recent energy rating,
  *    cardio in the last two days, this week's load against their usual, and
  *    how long since they last trained;
- *  - pain: structured pain reports and a check-out's pain flag. A pain flag is
- *    always listed and caps the score; a high score never hides one.
+ *  - what the athlete reported (pain_reports), each read for its kind
+ *    (pain/symptoms.ts) and handled once, never twice:
+ *      · pain, joint or tendon discomfort and numbness or tingling on a muscle
+ *        today's workout uses cap the score (a high score never hides one) and
+ *        are always listed;
+ *      · training soreness, tightness and tired muscles confirm the fatigue the
+ *        log already estimates: the muscle reads at least "moderate", never a
+ *        second penalty on top of the same training;
+ *      · a general symptom (a headache, dizziness, nausea, feeling unwell) is
+ *        never put on a muscle or counted as fatigue: it's listed apart and
+ *        changes the status, never the number.
+ *    A check-out's pain flag with no report behind it is still a flag.
+ *
+ * Audit (Nov 26 2026): a check-out's "how recovered" and "fatigued" are one
+ * subjective read (one factor, recovered first); a very hard session lowers
+ * the score only when its sets weren't rated (rated sets already carry their
+ * effort into each muscle); a heavy week counts half when today's muscles
+ * already carry that work; how much of today's workout has history
+ * (`coverage`) and what wasn't on file (`missing`) set the confidence.
  *
  * Each muscle's fatigue is measured against the athlete's OWN typical session
  * for that muscle (the median dose on the days they trained it), never a
@@ -28,6 +45,9 @@
 import { muscleCredits, FINE_MUSCLES, type FineMuscle } from "@/lib/analytics/training-load";
 import { sleepBucketHours, sleepBucketLabel, type SleepBucket } from "@/lib/analytics/recovery-score";
 import { muscleOfSite } from "@/lib/body3d/muscle-sites";
+import { confirmsFatigue, generalLabel, generalOf, generalSymptomsIn, limitsTraining, symptomClass, type SymptomClass } from "@/lib/pain/symptoms";
+import { NON_TRAINING_REGIONS, areaLabel } from "@/lib/pain/regions";
+import { siteLabel } from "@/lib/pain/sites";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -52,6 +72,14 @@ export const PAIN_CAP = 60;
 export const SEVERE_PAIN_CAP = 45;
 /** Pain reported within this many days is active. */
 export const PAIN_ACTIVE_DAYS = 14;
+/** Soreness, tightness or tired muscles reported within this many days confirm fatigue. */
+export const REPORTED_FATIGUE_DAYS = 3;
+/** A general symptom (a headache, dizziness…) is today's news for this many days. */
+export const GENERAL_ACTIVE_DAYS = 2;
+/** A reported soreness reads at least this much fatigue (just inside "moderate"). */
+export const REPORTED_RATIO = 0.4;
+/** Under this share of today's workout on muscles with history: low confidence. */
+export const LOW_COVERAGE = 0.5;
 /** No training for this long: nothing to recover from, so no score. */
 export const BREAK_DAYS = 14;
 
@@ -102,6 +130,11 @@ export type PainReportInput = {
   /** 0–10 */
   score: number | null;
   severity: string | null;
+  /** what it feels like and when (pain/report.ts), for its kind */
+  feel?: string[] | null;
+  timing?: string[] | null;
+  /** a general symptom (pain/symptoms.ts) */
+  symptom?: string | null;
 };
 
 export type CardioInput = { day: string; minutes: number | null; rpe: number | null };
@@ -136,14 +169,16 @@ export type MuscleRecovery = {
   sets72h: number;
   /** the exercise that put the most fatigue on it, when it carries some */
   mainExercise: string | null;
-  /** a pain flag sits on this muscle */
+  /** a pain flag sits on this muscle (pain, a joint or tendon, numbness: what limits training) */
   pain: boolean;
+  /** soreness, tightness or tired muscles they reported on it in the last few days (confirms the estimate) */
+  reported: SymptomClass | null;
   /** today's workout leans on it (share of today's planned work, 0–1) */
   todayShare: number;
 };
 
 export type RecoveryFactor = {
-  key: "muscles" | "sleep" | "feel" | "fatigue" | "session" | "cardio" | "energy" | "load" | "rest" | "pain";
+  key: "muscles" | "sleep" | "feel" | "fatigue" | "session" | "cardio" | "energy" | "load" | "rest" | "pain" | "symptoms" | "reported";
   label: string;
   detail: string;
   /** points it moved the score (negative = lower); 0 for a cap or a note */
@@ -159,6 +194,13 @@ export type PainFlag = {
   muscles: FineMuscle[];
   /** on a muscle today's workout uses, or a place that can't be tied to a muscle */
   relevant: boolean;
+  /** what kind of symptom it is (pain/symptoms.ts) */
+  cls: SymptomClass;
+  /** where it is, for the body (a general symptom has no place) */
+  region: string;
+  site: string | null;
+  side: "L" | "R" | null;
+  symptom: string | null;
 };
 
 export type TodayRecovery = {
@@ -175,9 +217,21 @@ export type TodayRecovery = {
   /** today's muscles, most-used first */
   relevant: FineMuscle[];
   factors: RecoveryFactor[];
+  /** what limits training (pain, joint or tendon, numbness), most relevant first */
   pain: PainFlag[];
+  /** soreness, tightness and tired muscles they reported (they confirm fatigue, never cap) */
+  reported: PainFlag[];
+  /** general symptoms (a headache, dizziness, nausea…): listed apart, never on a muscle */
+  general: PainFlag[];
   /** the score was capped by a pain flag */
   painCapped: boolean;
+  /** the score from fatigue and what was logged, before any pain cap (null with no score) */
+  uncapped: number | null;
+  /** share of today's planned work on muscles with training history (1 on a rest day with data) */
+  coverage: number;
+  confidence: "high" | "medium" | "low";
+  /** what wasn't on file that would have made it surer */
+  missing: string[];
   observation: string | null;
 };
 
@@ -233,6 +287,13 @@ export const REGION_MUSCLES: Record<string, FineMuscle[]> = {
   shin: ["Calves"],
   calf: ["Calves"],
   ankle_foot: ["Calves"],
+  // ribs brace every lift: no one muscle, so a rib symptom is read as relevant to any workout
+  ribs: [],
+  // never trained: a symptom here is never on a muscle
+  head: [],
+  face: [],
+  jaw: [],
+  general: [],
 };
 
 const REGION_WORD: Record<string, string> = {
@@ -242,10 +303,23 @@ const REGION_WORD: Record<string, string> = {
   quad: "quad", hamstring: "hamstring", knee: "knee", shin: "shin", calf: "calf", ankle_foot: "ankle / foot",
 };
 
+/** "L" / "R" as stored ("left" / "right" from older callers). */
+function sideOf(s: string | null | undefined): "L" | "R" | null {
+  const t = (s ?? "").toLowerCase();
+  return t === "l" || t === "left" ? "L" : t === "r" || t === "right" ? "R" : null;
+}
+
 function painPlace(p: PainReportInput): string {
-  const side = p.side === "left" ? "Left " : p.side === "right" ? "Right " : "";
+  const gen = generalOf(p.symptom);
+  if (gen) return gen.label;
+  const side = sideOf(p.side);
+  if (p.site && !REGION_WORD[p.site]) {
+    const label = siteLabel(p.site, side);
+    if (label !== p.site) return label;
+  }
+  if (!REGION_WORD[p.region] && p.region !== "other") return areaLabel(p.region, side);
   const word = REGION_WORD[p.region] ?? (p.region === "other" ? "pain" : p.region.replace(/_/g, " "));
-  const s = `${side}${word}`;
+  const s = `${side === "L" ? "Left " : side === "R" ? "Right " : ""}${word}`;
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -340,47 +414,87 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
   if (planTotal > 0) for (const [m, v] of planShares) planShares.set(m, v / planTotal);
   const scope: TodayRecovery["scope"] = planTotal > 0 ? "workout" : "general";
 
-  // ── pain ────────────────────────────────────────────────────────────
+  // ── what they reported, each by its kind ────────────────────────────
   const pain: PainFlag[] = [];
+  const reported: PainFlag[] = [];
+  const general: PainFlag[] = [];
   const latestByPlace = new Map<string, PainReportInput>();
   for (const p of input.pain ?? []) {
     const age = daysBetween(p.day, today);
     if (age < 0 || age > PAIN_ACTIVE_DAYS) continue;
-    const key = `${p.region}:${p.side ?? ""}:${p.site ?? ""}`;
+    const key = `${p.region}:${sideOf(p.side) ?? ""}:${p.site ?? ""}:${p.symptom ?? ""}`;
     const prev = latestByPlace.get(key);
     if (!prev || p.day > prev.day) latestByPlace.set(key, p);
   }
   for (const p of latestByPlace.values()) {
+    const cls = symptomClass({ region: p.region, site: p.site, feel: p.feel ?? [], score: p.score, severity: p.severity, timing: p.timing ?? [], symptom: p.symptom });
+    const age = daysBetween(p.day, today);
+    const side = sideOf(p.side);
     const site = muscleOfSite(p.site);
-    const muscles = site ? [site] : REGION_MUSCLES[p.region] ?? [];
+    const nonTraining = cls === "general" || NON_TRAINING_REGIONS.has(p.region);
+    const muscles = nonTraining ? [] : site ? [site] : REGION_MUSCLES[p.region] ?? [];
     const severe = (p.score ?? 0) >= 7 || p.severity === "severe";
-    pain.push({
+    const flag: PainFlag = {
       day: p.day,
       label: painPlace(p),
       score: p.score,
       severe,
       muscles,
-      relevant: muscles.length === 0 || scope === "general" || muscles.some((m) => planShares.has(m)),
-    });
+      // the head, face or jaw (and a general symptom) never touch a lift's muscles
+      relevant: !nonTraining && (muscles.length === 0 || scope === "general" || muscles.some((m) => planShares.has(m))),
+      cls,
+      region: p.region,
+      site: p.site,
+      side,
+      symptom: p.symptom ?? null,
+    };
+    if (cls === "general") {
+      if (age <= GENERAL_ACTIVE_DAYS) general.push({ ...flag, relevant: false });
+    } else if (confirmsFatigue(cls)) {
+      if (age <= REPORTED_FATIGUE_DAYS) reported.push(flag);
+    } else if (limitsTraining(cls)) {
+      // pain in the head, face or jaw is listed, never capped by a muscle it isn't on
+      pain.push(flag);
+    }
   }
   // a check-out's pain flag with no structured report behind it is still a flag
   const recentCheckoutPain = checkouts.find(
     (c) => c.pain && now - Date.parse(c.at) <= 7 * DAY,
   );
-  if (recentCheckoutPain && !pain.some((p) => daysBetween(p.day, localDayOf(Date.parse(recentCheckoutPain.at))) === 0)) {
+  const allReported = [...pain, ...reported, ...general];
+  if (recentCheckoutPain && !allReported.some((p) => daysBetween(p.day, localDayOf(Date.parse(recentCheckoutPain.at))) === 0)) {
     const day = localDayOf(Date.parse(recentCheckoutPain.at));
     const level = recentCheckoutPain.painLevel ?? null;
-    pain.push({
-      day,
-      label: recentCheckoutPain.painArea?.trim() ? `Pain (${recentCheckoutPain.painArea.trim()})` : "Pain at your check-out",
-      score: level,
-      severe: (level ?? 0) >= 7,
-      muscles: [],
-      relevant: true,
-    });
+    const area = recentCheckoutPain.painArea?.trim() ?? "";
+    const symptoms = area ? generalSymptomsIn(area) : [];
+    // "Headache" typed as the check-out's area is a general symptom, not pain on a muscle
+    if (symptoms.length && area.split(",").every((part) => generalSymptomsIn(part).length > 0)) {
+      for (const k of symptoms)
+        if (daysBetween(day, today) <= GENERAL_ACTIVE_DAYS)
+          general.push({ day, label: generalLabel(k) ?? area, score: level, severe: (level ?? 0) >= 7, muscles: [], relevant: false, cls: "general", region: generalOf(k)!.region, site: null, side: null, symptom: k });
+    } else {
+      pain.push({
+        day,
+        label: area ? `Pain (${area})` : "Pain at your check-out",
+        score: level,
+        severe: (level ?? 0) >= 7,
+        muscles: [],
+        relevant: true,
+        cls: "pain",
+        region: "other",
+        site: null,
+        side: null,
+        symptom: null,
+      });
+    }
   }
-  pain.sort((a, b) => Number(b.relevant) - Number(a.relevant) || Number(b.severe) - Number(a.severe) || (b.day < a.day ? -1 : 1));
+  const order = (a: PainFlag, b: PainFlag) => Number(b.relevant) - Number(a.relevant) || Number(b.severe) - Number(a.severe) || (b.day < a.day ? -1 : 1);
+  pain.sort(order);
+  reported.sort(order);
+  general.sort((a, b) => (b.day < a.day ? -1 : 1));
   const painMuscles = new Set(pain.flatMap((p) => p.muscles));
+  const reportedOn = new Map<FineMuscle, SymptomClass>();
+  for (const r of reported) for (const m of r.muscles) if (!reportedOn.has(m)) reportedOn.set(m, r.cls);
 
   // ── each muscle against its own typical session ─────────────────────
   const muscles = {} as Record<FineMuscle, MuscleRecovery>;
@@ -388,12 +502,15 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
     const doses = [...(doseByDay.get(m)?.values() ?? [])];
     const lastMs = last.get(m);
     const share = planShares.get(m) ?? 0;
+    const said = reportedOn.get(m) ?? null;
     if (!doses.length || lastMs == null) {
-      muscles[m] = { muscle: m, state: "none", ratio: 0, lastTrained: null, hoursSince: null, sets72h: 0, mainExercise: null, pain: painMuscles.has(m), todayShare: share };
+      // no log for it: what they reported is all there is, and it reads as moderate
+      muscles[m] = { muscle: m, state: said ? "moderate" : "none", ratio: said ? REPORTED_RATIO : 0, lastTrained: null, hoursSince: null, sets72h: 0, mainExercise: null, pain: painMuscles.has(m), reported: said, todayShare: share };
       continue;
     }
     const baseline = Math.max(3, median(doses));
-    const ratio = (fatigue.get(m) ?? 0) / baseline;
+    // soreness they reported is the same fatigue the log estimates: the higher of the two, never both
+    const ratio = Math.max((fatigue.get(m) ?? 0) / baseline, said ? REPORTED_RATIO : 0);
     const ex = topExercise.get(m);
     const main = ex && ratio >= RECOVERED_BELOW ? [...ex.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null : null;
     muscles[m] = {
@@ -405,6 +522,7 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
       sets72h: Math.round((sets72.get(m) ?? 0) * 10) / 10,
       mainExercise: main,
       pain: painMuscles.has(m),
+      reported: said,
       todayShare: r2(share),
     };
   }
@@ -419,8 +537,11 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
     muscles,
     relevant,
     pain,
+    reported,
+    general,
     scope,
   };
+  const generalNote = general[0] ? `${general.length > 1 ? `${general[0].label} and ${general.length - 1} more` : general[0].label} reported ${whenWords(general[0].day, today)}: not counted as muscle fatigue.` : null;
   const none = (reason: TodayRecovery["reason"], status: string): TodayRecovery => ({
     ...base,
     score: null,
@@ -430,7 +551,11 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
     reason,
     factors,
     painCapped: false,
-    observation: pain[0] ? `${pain[0].label} flagged ${whenWords(pain[0].day, today)}${pain[0].score != null ? ` (${pain[0].score}/10)` : ""}.` : null,
+    uncapped: null,
+    coverage: 0,
+    confidence: "low",
+    missing: [],
+    observation: pain[0] ? `${pain[0].label} flagged ${whenWords(pain[0].day, today)}${pain[0].score != null ? ` (${pain[0].score}/10)` : ""}.` : generalNote,
   });
 
   // ── enough to say something? ────────────────────────────────────────
@@ -443,15 +568,19 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
   // the muscles today's workout uses, weighted by how much it uses them
   let wSum = 0;
   let mSum = 0;
+  let planCovered = 0;
   for (const m of relevant) {
     const mr = muscles[m];
     if (mr.state === "none") continue;
     const w = scope === "workout" ? planShares.get(m) ?? 0 : 1;
     if (w <= 0) continue;
     wSum += w;
+    if (scope === "workout") planCovered += w;
     mSum += w * (100 - Math.min(65, 55 * mr.ratio));
   }
   if (wSum === 0) return none("no_muscle_data", "Not enough data yet");
+  // how much of today's workout the score can speak for
+  const coverage = scope === "workout" ? Math.min(1, planCovered) : 1;
   const muscleScore = mSum / wSum;
   let score = muscleScore;
   const tired = relevant.filter((m) => muscles[m].state === "elevated");
@@ -466,6 +595,16 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
     effect: Math.round(muscleScore - 100),
     kind: "estimated",
   });
+  // what they reported is part of the muscles' read above (never a second number), said so here
+  const saidOnToday = reported.filter((r) => r.relevant);
+  if (saidOnToday.length)
+    factors.push({
+      key: "reported",
+      label: "What you reported",
+      detail: `${saidOnToday.map((r) => `${r.label} (${r.cls === "fatigue" ? "tired" : r.cls === "tightness" ? "tight" : "sore"})`).join(", ")}: counted in your muscles' fatigue, not twice`,
+      effect: 0,
+      kind: "logged",
+    });
 
   let measured = false;
   // sleep: a device's night first, else the last check-out's (it's the night before that workout)
@@ -491,6 +630,7 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
 
   if (freshCheckout) {
     const ageH = (now - Date.parse(freshCheckout.at)) / HOUR;
+    // "how recovered" and "fatigued" are one read of how they felt: recovered first, never both
     if (freshCheckout.recovery != null && ageH <= 48) {
       const e = Math.round((clamp(freshCheckout.recovery, 1, 5) - 3) * 4);
       score += e;
@@ -498,13 +638,18 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
       factors.push({ key: "feel", label: "How recovered you felt", detail: `${freshCheckout.recovery}/5 at your last check-out`, effect: e, kind: "logged" });
     }
     const feel = (freshCheckout.fatigueFeel ?? "").toLowerCase();
-    if (ageH <= 48 && (feel.includes("fatig") || feel.includes("tired") || feel.includes("fresh"))) {
+    if (ageH <= 48 && freshCheckout.recovery == null && (feel.includes("fatig") || feel.includes("tired") || feel.includes("fresh"))) {
       const e = feel.includes("fresh") ? 3 : -5;
       score += e;
       measured = true;
       factors.push({ key: "fatigue", label: "Fatigue", detail: feel.includes("fresh") ? "You felt fresh" : "You felt fatigued", effect: e, kind: "logged" });
     }
-    if (freshCheckout.sessionRpe != null && freshCheckout.sessionRpe >= 9 && ageH <= 48) {
+    // a very hard session: its rated sets already carry their effort into each muscle, so it
+    // counts only when that session's sets weren't rated
+    const coMs = Date.parse(freshCheckout.at);
+    const sessionSets = sets.filter((x) => Math.abs(x.ms - coMs) <= 12 * HOUR);
+    const rated = sessionSets.filter((x) => x.rpe != null).length;
+    if (freshCheckout.sessionRpe != null && freshCheckout.sessionRpe >= 9 && ageH <= 48 && (!sessionSets.length || rated / sessionSets.length < 0.5)) {
       score -= 4;
       factors.push({ key: "session", label: "Last workout", detail: `A very hard session (RPE ${freshCheckout.sessionRpe})`, effect: -4, kind: "logged" });
     }
@@ -541,7 +686,9 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
   const weeksBefore = new Set([...trainingDays].filter((d) => { const a = daysBetween(d, today); return a >= 7 && a < 35; }).map((d) => Math.floor(daysBetween(d, today) / 7))).size;
   if (before > 0 && weeksBefore >= 3 && week / before > 1.2) {
     const pct = Math.round((week / before - 1) * 100);
-    const e = week / before > 1.4 ? -6 : -3;
+    // the last few days of that week are already in today's muscles: half, so it isn't counted twice
+    const full = week / before > 1.4 ? -6 : -3;
+    const e = tired.length ? Math.round(full / 2) : full;
     score += e;
     factors.push({ key: "load", label: "This week's training", detail: `${pct}% above your usual week`, effect: e, kind: "estimated" });
   }
@@ -553,6 +700,14 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
   }
 
   score = Math.round(clamp(score, 5, 100));
+  const uncapped = score;
+
+  // what wasn't on file, and how sure this is
+  const missing: string[] = [];
+  if (!freshCheckout) missing.push("No check-out in the last 3 days");
+  if (!factors.some((f) => f.key === "sleep")) missing.push("No sleep logged for last night");
+  if (coverage < 1) missing.push(`${Math.round((1 - coverage) * 100)}% of today's workout trains muscles with no recent history`);
+  const confidence: TodayRecovery["confidence"] = coverage < LOW_COVERAGE ? "low" : measured && coverage >= 0.8 ? "high" : "medium";
 
   // pain: always listed, and it caps the score when it touches today's training
   let painCapped = false;
@@ -567,11 +722,14 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
   }
 
   const band: TodayRecovery["band"] = score >= READY_FROM ? "recovered" : score >= MODERATE_FROM ? "moderate" : "elevated";
+  if (general.length)
+    factors.push({ key: "symptoms", label: "Symptoms reported", detail: `${general.map((g) => g.label).join(", ")}: listed apart, not counted as fatigue`, effect: 0, kind: "logged" });
   const status =
     relevantPain.length ? "Pain flagged"
-      : band === "recovered" ? (scope === "workout" ? "Recovered for today" : "Recovered")
-        : band === "moderate" ? "Some fatigue"
-          : "High fatigue";
+      : general.length ? "Symptoms reported"
+        : band === "recovered" ? (scope === "workout" ? "Recovered for today" : "Recovered")
+          : band === "moderate" ? "Some fatigue"
+            : "High fatigue";
 
   return {
     ...base,
@@ -582,7 +740,11 @@ export function buildTodayRecovery(input: TodayRecoveryInput): TodayRecovery {
     reason: "ok",
     factors,
     painCapped,
-    observation: observationFor({ muscles, relevant, planShares, pain, factors, scope, today }),
+    uncapped,
+    coverage: r2(coverage),
+    confidence,
+    missing,
+    observation: observationFor({ muscles, relevant, planShares, pain, general, reported, factors, scope, today }),
   };
 }
 
@@ -592,12 +754,16 @@ function observationFor(x: {
   relevant: FineMuscle[];
   planShares: Map<FineMuscle, number>;
   pain: PainFlag[];
+  general: PainFlag[];
+  reported: PainFlag[];
   factors: RecoveryFactor[];
   scope: "workout" | "general";
   today: string;
 }): string | null {
   const p = x.pain[0];
   if (p) return `${p.label} flagged ${whenWords(p.day, x.today)}${p.score != null ? ` (${p.score}/10)` : ""}${p.relevant ? ", counted in today's score" : ""}.`;
+  const g = x.general[0];
+  if (g) return `${x.general.length > 1 ? `${g.label} and ${x.general.length - 1} more` : g.label} reported ${whenWords(g.day, x.today)}: not counted as muscle fatigue.`;
   const tired = x.relevant.filter((m) => x.muscles[m].state === "elevated");
   if (tired.length) {
     const m = x.muscles[tired[0]];

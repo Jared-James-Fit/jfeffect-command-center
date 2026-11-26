@@ -23,7 +23,11 @@
  * typing and the body map need no permission (the reader runs on the phone).
  *
  * A severe place, tingling or numbness, a pop or swelling shows the safety
- * notice (safety.ts). That's the only advice the athlete sees here.
+ * notice (safety.ts). That's the only advice the athlete sees here. The only
+ * questions asked beyond a side and how bad are the safety ones a report
+ * turns on (describe.ts `safetyQuestions`: weakness with numbness, the groin
+ * and bladder with low-back numbness, a sudden headache, fainting with
+ * dizziness), one Yes / No each, never one already answered by what they said.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -39,11 +43,12 @@ import { VoiceTimer, VoiceWaveform } from "@/components/voice/voice-waveform";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
 import { useMyAiConsent } from "@/components/ai-consent/ai-consent";
 import { readPainDescriptionFn, transcribePainVoiceFn } from "@/lib/pain/describe.functions";
-import { describePain, DESCRIBE_MAX_CHARS, type DescribeResult, type Unclear } from "@/lib/pain/describe";
+import { describePain, mergeDescribed, safetyQuestions, DESCRIBE_MAX_CHARS, type DescribeResult, type SafetyQuestion, type Unclear } from "@/lib/pain/describe";
 import { followUpFor } from "@/lib/pain/history";
 import { placeLabel } from "@/lib/pain/report";
 import { regionOf, type PainSide } from "@/lib/pain/regions";
-import { addPick, applyDescribed, applyDetail, mirrorOf, replacePlace, type PainPick } from "@/lib/pain/picks";
+import { addPick, applyDescribed, applyDetail, applySafetyAnswer, mirrorOf, replacePlace, type PainPick } from "@/lib/pain/picks";
+import type { GeneralSymptom } from "@/lib/pain/symptoms";
 import { CLIENT_SAFETY_NOTICE, needsSafetyNotice, URGENT_SIGNS } from "@/lib/pain/safety";
 
 export type PainContext = PainMapContext & { recentExercises?: { id: string | null; name: string }[] };
@@ -94,7 +99,11 @@ export function PainReporter({ picks, onChange, ctx }: { picks: PainPick[]; onCh
   };
 
   const prior = useMemo(
-    () => (ctx ? (pl: { region: string; side: PainSide | null; site: string | null }) => followUpFor(ctx.entries, pl.region, pl.side, { today: ctx.today, feedbackId: ctx.feedbackId, site: pl.site }) : undefined),
+    () =>
+      ctx
+        ? (pl: { region: string; side: PainSide | null; site: string | null; symptom?: string | null }) =>
+            followUpFor(ctx.entries, pl.region, pl.side, { today: ctx.today, feedbackId: ctx.feedbackId, site: pl.site, symptom: pl.symptom })
+        : undefined,
     [ctx],
   );
 
@@ -147,13 +156,17 @@ export function PainReporter({ picks, onChange, ctx }: { picks: PainPick[]; onCh
       const t = words.trim().slice(0, DESCRIBE_MAX_CHARS);
       if (t.length < 2) return false;
       const local = describePain(t, { exercises });
-      if (local.places.length || local.unclear.length || local.detail) return use(local, t);
       const mayAsk = !consent.askable || consent.state === "granted";
-      if (!mayAsk || t.length < 3) return use(local, t);
+      // the server reads it only for what the phone couldn't: nothing placed, or part of it
+      // ("my knee is sore and something in my gizmo hurts") the phone has no words for
+      const placedHere = local.places.length > 0 || local.unclear.length > 0 || (!!local.detail && picksRef.current.length > 0);
+      if ((placedHere && !local.leftover?.length) || !mayAsk || t.length < 3) return use(local, t);
       setReading(true);
       try {
         const r = await readFn({ data: { text: t, exercises: exercises.slice(0, 80) } });
-        return use(r.ok ? { places: r.places, unclear: r.unclear } : local, t);
+        // what the server found is added to what the phone read, never swapped for it
+        const merged = r.ok ? mergeDescribed(local, { places: r.places, unclear: r.unclear }) : local;
+        return use(merged.places.length || merged.unclear.length ? merged : local, t);
       } catch {
         return use(local, t);
       } finally {
@@ -239,7 +252,7 @@ export function PainReporter({ picks, onChange, ctx }: { picks: PainPick[]; onCh
     toast(`${mirror ? `${placeLabel({ ...p, side: null })} (both sides)` : placeLabel(p)} removed`, { action: { label: "Undo", onClick: () => change(before) }, duration: 5000 });
   };
 
-  const pickFromMap = (place: { region: string; side: PainSide | null; site: string | null }) => {
+  const pickFromMap = (place: { region: string; side: PainSide | null; site: string | null; symptom?: GeneralSymptom | null }) => {
     const before = picksRef.current;
     const res = map.replaceUid ? replacePlace(before, map.replaceUid, place) : addPick(before, place);
     if (res.picks !== before) change(res.picks);
@@ -261,8 +274,18 @@ export function PainReporter({ picks, onChange, ctx }: { picks: PainPick[]; onCh
     flash(res.uids);
   };
 
-  const safety = needsSafetyNotice(picks.map((p) => ({ region: p.region, side: p.side ?? null, severity: p.severity, score: p.score, feel: p.feel, trigger: p.trigger, timing: p.timing })));
+  const safety = needsSafetyNotice(picks.map((p) => ({ region: p.region, side: p.side ?? null, severity: p.severity, score: p.score, feel: p.feel, trigger: p.trigger, timing: p.timing, symptom: p.symptom })));
   const hasPlaces = picks.length > 0;
+  // the safety questions the places turn on, until they're answered (a no is remembered, a yes changes the place)
+  const [answered, setAnswered] = useState<string[]>([]);
+  const questions = safetyQuestions(picks.map((p) => ({ region: p.region, site: p.site ?? null, side: p.side ?? null, symptom: p.symptom ?? null, feel: p.feel ?? [] }))).filter(
+    (q) => !answered.includes(`${q.id}:${q.keys.join(",")}`),
+  );
+  const answerSafety = (q: SafetyQuestion, yes: boolean) => {
+    feedback("tap");
+    setAnswered((a) => [...a, `${q.id}:${q.keys.join(",")}`]);
+    if (yes) change(applySafetyAnswer(picksRef.current, q));
+  };
   const consentLine = askConsent && consent.askable && consent.state !== "granted";
 
   const micButton = (size: "lg" | "md") => (
@@ -477,6 +500,20 @@ export function PainReporter({ picks, onChange, ctx }: { picks: PainPick[]; onCh
               />
             ))}
           </ul>
+
+          {questions.map((q) => (
+            <div key={q.id} className="space-y-2 rounded-xl border border-warning/50 p-3" data-pain-safety-q={q.id}>
+              <p className="text-[14px] font-semibold leading-snug">{q.text}</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => answerSafety(q, true)} className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-foreground text-[14px] font-semibold text-background" data-pain-safety-yes>
+                  Yes
+                </button>
+                <button type="button" onClick={() => answerSafety(q, false)} className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-muted text-[14px] font-semibold" data-pain-safety-no>
+                  No
+                </button>
+              </div>
+            </div>
+          ))}
 
           {unclear.map((u) => (
             <div key={u.word} className="space-y-2 rounded-xl border border-warning/50 p-3" data-pain-unclear={u.word}>

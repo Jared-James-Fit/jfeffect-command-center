@@ -15,13 +15,15 @@ import { cn } from "@/lib/utils";
 import { feedback } from "@/lib/feedback";
 import { noAutofill } from "@/lib/no-autofill";
 import { PlaceThumb } from "@/components/pain/place-thumb";
-import { CHANGES, FEELS, FEEL_CHOICES, FEEL_SIGNS, IMPACTS, NOTE_MAX, TIMINGS, placeLabel, type Feel, type Timing } from "@/lib/pain/report";
+import { CHANGES, FEELS, FEEL_CHOICES, FEEL_SIGNS, HEAD_FEEL_CHOICES, HEAD_SIGNS, IMPACTS, NOTE_MAX, TIMINGS, placeLabel, type Feel, type Timing } from "@/lib/pain/report";
+import { classShort, generalOf, symptomClass } from "@/lib/pain/symptoms";
 import { followUpFor, shortDay, type PainEntry } from "@/lib/pain/history";
 import { siteAnatomy, siteOf } from "@/lib/pain/sites";
 import { regionOf } from "@/lib/pain/regions";
 import {
   answerFollowUp,
   mirrorOf,
+  needsRating,
   pickGaps,
   pickScore,
   pickSided,
@@ -188,9 +190,15 @@ export function PainEntryRow({
   const training = timing.some((t) => t === "during" || t === "after" || t === "movement");
   const [otherOpen, setOtherOpen] = useState(!!pick.exerciseName && !ctx?.exercises.some((x) => x.name === pick.exerciseName));
   const prior = useMemo(
-    () => (ctx ? followUpFor(ctx.entries, pick.region, pick.side ?? null, { today: ctx.today, feedbackId: ctx.feedbackId, site: pick.site }) : null),
-    [ctx, pick.region, pick.side, pick.site],
+    () => (ctx ? followUpFor(ctx.entries, pick.region, pick.side ?? null, { today: ctx.today, feedbackId: ctx.feedbackId, site: pick.site, symptom: pick.symptom }) : null),
+    [ctx, pick.region, pick.side, pick.site, pick.symptom],
   );
+  // what kind of thing this is (symptoms.ts) decides what's worth asking: how bad only when it changes
+  // what happens next, what it feels like only where there's somewhere to feel it
+  const general = generalOf(pick.symptom);
+  const head = !!general || pick.region === "head" || pick.region === "face" || pick.region === "jaw";
+  const rateOptional = !needsRating(pick);
+  const kind = symptomClass(pick);
   // no side said: the last time this place came up, its side (a hint, never picked for them)
   const sideHint = useMemo(() => {
     if (!sided || pick.side || !ctx) return null;
@@ -215,14 +223,15 @@ export function PainEntryRow({
   const setUnsure = (who: PainPick) => onChange(updatePaired(picks, who.uid, unsurePatch()));
   const badge = (p: PainPick) => {
     const s = pickScore(p);
-    return s != null ? `${s}/10` : p.unsure ? "Unsure" : null;
+    return s != null ? `${s}/10` : p.unsure ? "Unsure" : !needsRating(p) ? classShort(symptomClass(p)) : null;
   };
   const scoreText = both ? [pick, mirror!].sort((a) => (a.side === "L" ? -1 : 1)).map((p) => `${p.side === "L" ? "L" : "R"} ${badge(p) ?? "?"}`).join(" · ") : badge(pick);
 
   return (
     <li
       className={cn("rounded-xl border bg-background transition-colors", gaps.length ? "border-warning/60" : "border-border", flash && "jf-pain-flash")}
-      data-pain-place={`${pick.site ?? pick.region}:${pick.side ?? "-"}`}
+      data-pain-place={`${pick.symptom ?? pick.site ?? pick.region}:${pick.side ?? "-"}`}
+      data-pain-kind={kind}
       data-pain-gaps={gaps.join(" ") || undefined}
     >
       <div className="flex items-center gap-3 p-2.5">
@@ -285,7 +294,7 @@ export function PainEntryRow({
               </div>
             ) : (
               <div className="space-y-1.5" data-pain-gap={gaps.includes("score") ? "score" : undefined}>
-                <Label>How bad is it?</Label>
+                <Label>{rateOptional ? "How bad is it? (optional)" : "How bad is it?"}</Label>
                 <ScorePicker value={score} unsure={!!pick.unsure} onScore={(n) => setScore(pick, n)} onUnsure={() => setUnsure(pick)} label={`${name}: how bad, 1 to 10`} />
               </div>
             ))}
@@ -307,10 +316,11 @@ export function PainEntryRow({
                 </div>
               )}
 
+              {(!general || general.key === "headache") && (
               <div className="space-y-1.5">
                 <Label>What does it feel like?</Label>
                 <div className="flex flex-wrap gap-1.5">
-                  {[...FEEL_CHOICES, ...((pick.feel ?? []).includes("pinch") ? (["pinch"] as Feel[]) : []), ...FEEL_SIGNS].map((f) => {
+                  {[...(head ? HEAD_FEEL_CHOICES : FEEL_CHOICES), ...((pick.feel ?? []).includes("pinch") ? (["pinch"] as Feel[]) : []), ...(head ? HEAD_SIGNS : FEEL_SIGNS)].map((f) => {
                     const on = (pick.feel ?? []).includes(f);
                     return (
                       <button key={f} type="button" className={chip(on)} aria-pressed={on} onClick={() => toggleFeel(f)} data-pain-feel={f}>
@@ -321,8 +331,10 @@ export function PainEntryRow({
                 </div>
               </div>
 
+              )}
+
               <div className="space-y-1.5">
-                <Label>When does it hurt?</Label>
+                <Label>{general ? "When did it happen?" : "When does it hurt?"}</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {TIMINGS.map((t) => {
                     const on = timing.includes(t.v);
@@ -411,7 +423,7 @@ export function PainEntryRow({
               )}
 
               <div className="flex items-center justify-between">
-                {pick.region !== "other" ? (
+                {pick.region !== "other" && pick.region !== "general" ? (
                   <button type="button" onClick={onChangeSpot} className="inline-flex h-9 items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground" data-pain-change-spot>
                     <MapPin className="h-3.5 w-3.5" aria-hidden /> Change spot on the body
                   </button>

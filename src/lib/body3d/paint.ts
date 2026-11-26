@@ -4,10 +4,70 @@
  * fallback to show. Skin everywhere, each trained muscle in its colour, fine
  * dark lines between muscles so the anatomy reads, and the picked muscle
  * lifted with a light edge.
+ *
+ * What the athlete reported (Nov 26 2026) is drawn over that, never mixed
+ * into it, so nobody reads a symptom as fatigue or the other way round:
+ * fatigue is a solid colour per muscle (an estimate from the log); a reported
+ * symptom is a hatch with an outline on the exact spot, anywhere on the body
+ * (the head, a finger, the ball of the foot), in its own colour: pain, a joint
+ * or numbness in rose, a headache in blue, soreness or tightness they
+ * reported as a dotted outline (it confirms fatigue, it isn't a new problem).
  */
-import { atlasView, type AtlasView, type ViewKey } from "@/lib/pain/anatomy/atlas";
+import { atlasView, type AtlasPart, type AtlasView, type ViewKey } from "@/lib/pain/anatomy/atlas";
 import { muscleOfSite } from "@/lib/body3d/muscle-sites";
+import { siteCovers } from "@/lib/pain/sites";
 import type { FineMuscle } from "@/lib/analytics/training-load";
+
+/** A reported symptom to draw: where, and which of the three looks it takes. */
+export type BodyMark = {
+  region: string;
+  site: string | null;
+  side: "L" | "R" | null;
+  tone: "limit" | "general" | "reported";
+};
+
+export const MARK_COLORS: Record<"light" | "dark", Record<BodyMark["tone"], string>> = {
+  light: { limit: "#e11d48", general: "#2563eb", reported: "#111317" },
+  dark: { limit: "#fb7185", general: "#60a5fa", reported: "#ffffff" },
+};
+
+/** Does a part show this mark? The spot (or a spot its group covers), else the whole region; a side only where the view has sides. */
+export function partShowsMark(p: Pick<AtlasPart, "site" | "region" | "side">, m: BodyMark, sided: boolean): boolean {
+  if (!p.site) return false;
+  if (m.site) {
+    if (p.site !== m.site && !siteCovers(m.site).includes(p.site)) return false;
+  } else if (p.region !== m.region) return false;
+  if (!sided || m.side == null || p.side == null) return true;
+  return p.side === m.side;
+}
+
+function hatch(g: CanvasRenderingContext2D, color: string, dotted: boolean): CanvasPattern | null {
+  const t = document.createElement("canvas");
+  t.width = 8;
+  t.height = 8;
+  const c = t.getContext("2d");
+  if (!c) return null;
+  c.strokeStyle = color;
+  c.fillStyle = color;
+  if (dotted) {
+    c.globalAlpha = 0.7;
+    c.beginPath();
+    c.arc(4, 4, 1.1, 0, Math.PI * 2);
+    c.fill();
+  } else {
+    c.globalAlpha = 0.85;
+    c.lineWidth = 2.2;
+    c.beginPath();
+    c.moveTo(-2, 10);
+    c.lineTo(10, -2);
+    c.moveTo(-2, 2);
+    c.lineTo(2, -2);
+    c.moveTo(6, 10);
+    c.lineTo(10, 6);
+    c.stroke();
+  }
+  return g.createPattern(t, "repeat");
+}
 
 export type BodyTheme = { skin: string; line: string; tendon: string; pickEdge: string };
 export const BODY_THEME: Record<"light" | "dark", BodyTheme> = {
@@ -23,6 +83,8 @@ export function paintView(
   theme: BodyTheme,
   picked: FineMuscle | null,
   canvas?: HTMLCanvasElement,
+  marks: BodyMark[] = [],
+  dark = false,
 ): HTMLCanvasElement {
   const v: AtlasView = atlasView(key, "R");
   const c = canvas ?? document.createElement("canvas");
@@ -65,7 +127,35 @@ export function paintView(
       g.stroke(new Path2D(p.d));
     }
   }
+  if (marks.length) paintMarks(g, v, marks, dark);
   return c;
+}
+
+/** Reported symptoms over the colours: a hatch and an edge on each spot (the side view shows either side). */
+export function paintMarks(g: CanvasRenderingContext2D, v: AtlasView, marks: BodyMark[], dark: boolean) {
+  const palette = MARK_COLORS[dark ? "dark" : "light"];
+  // the most pressing look last, so it's on top
+  const order: BodyMark["tone"][] = ["reported", "general", "limit"];
+  for (const tone of order) {
+    const ms = marks.filter((m) => m.tone === tone);
+    if (!ms.length) continue;
+    const fill = hatch(g, palette[tone], tone === "reported");
+    for (const p of v.parts) {
+      // a deep part shows only when it's the very spot reported
+      if (p.deep && !ms.some((m) => m.site === p.site)) continue;
+      if (!ms.some((m) => partShowsMark(p, m, v.key !== "side"))) continue;
+      const path = new Path2D(p.d);
+      if (fill) {
+        g.fillStyle = fill;
+        g.fill(path);
+      }
+      g.lineWidth = tone === "reported" ? 1.6 : 2;
+      g.setLineDash(tone === "reported" ? [3, 2.5] : []);
+      g.strokeStyle = palette[tone];
+      g.stroke(path);
+      g.setLineDash([]);
+    }
+  }
 }
 
 /** The muscle under a point of one view (drawing coordinates), else the nearest within a few units. */

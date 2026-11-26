@@ -126,16 +126,18 @@ export async function loadHealthRecords(sb: any, clientId: string, opts: { forms
   // the structured pain history (body map reports and older ones read as stored)
   let painAreas: PainArea[] | null = null;
   try {
-    const [{ loadPainEntries }, { buildPainHistory, areaSummary }, { severityLevel }] = await Promise.all([
+    const [{ loadPainEntries }, { buildPainHistory, areaSummary }, { severityLevel }, { classLabel }] = await Promise.all([
       import("@/lib/pain/load"),
       import("@/lib/pain/history"),
       import("@/lib/pain/report"),
+      import("@/lib/pain/symptoms"),
     ]);
     const entries = (await loadPainEntries(sb, [clientId], { days: PAIN_WEEKS * 7 + 7 })).get(clientId) ?? [];
     const history = buildPainHistory(entries, today);
     painAreas = history.areas
       .filter((a) => a.status !== "quiet" && a.recentDays > 0)
-      .map((a) => ({ area: a.label.toLowerCase(), count: a.recentDays, last: a.last, worst: a.worstRecent ? severityLevel(a.worstRecent) : null, summary: areaSummary(a) }));
+      // each place says its kind (training soreness isn't an injury; a headache isn't from training)
+      .map((a) => ({ area: a.label.toLowerCase(), count: a.recentDays, last: a.last, worst: a.worstRecent ? severityLevel(a.worstRecent) : null, summary: `${classLabel(a.cls).toLowerCase()} · ${areaSummary(a)}` }));
   } catch {
     painAreas = null;
   }

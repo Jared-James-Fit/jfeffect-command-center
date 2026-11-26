@@ -12,12 +12,21 @@
 import { z } from "zod";
 import { PAIN_REGIONS, areaLabel, legacyAreaText, regionOf, type PainSide } from "@/lib/pain/regions";
 import { SITE_KEYS, siteLabel, siteOf } from "@/lib/pain/sites";
+import { GENERAL_SYMPTOMS, generalLabel, generalOf, type GeneralSymptom } from "@/lib/pain/symptoms";
+
+const GENERAL_SYMPTOM_KEYS = GENERAL_SYMPTOMS.map((g) => g.key) as [GeneralSymptom, ...GeneralSymptom[]];
 
 export type Severity = "mild" | "moderate" | "severe";
 export type Trigger = "training" | "exercise" | "daily" | "unsure";
 export type Impact = "none" | "modified" | "stopped";
 export type Change = "better" | "same" | "worse";
-export type Feel = "sore" | "tight" | "ache" | "sharp" | "pinch" | "numb" | "swollen" | "pop" | "burning" | "other";
+export type Feel =
+  | "sore" | "tight" | "ache" | "sharp" | "pinch" | "numb" | "swollen" | "pop" | "burning" | "other"
+  // Nov 26 2026: the whole body (symptoms.ts reads them)
+  | "fatigued" | "cramp" | "weak" | "pressure" | "throbbing" | "sudden";
+
+/** Every feel the database takes (the migration's CHECK lists the same). */
+export const FEEL_KEYS: readonly Feel[] = ["sore", "tight", "ache", "sharp", "pinch", "numb", "swollen", "pop", "burning", "other", "fatigued", "cramp", "weak", "pressure", "throbbing", "sudden"];
 /** When it hurts (the review asks; older reports said what set it off instead). */
 export type Timing = "during" | "after" | "rest" | "movement";
 
@@ -45,12 +54,22 @@ export const FEELS: { v: Feel; label: string }[] = [
   { v: "swollen", label: "Swollen" },
   { v: "pop", label: "Felt a pop" },
   { v: "other", label: "Something else" },
+  { v: "fatigued", label: "Heavy or tired" },
+  { v: "cramp", label: "Cramping" },
+  { v: "weak", label: "Weak" },
+  { v: "pressure", label: "Pressure" },
+  { v: "throbbing", label: "Throbbing" },
+  { v: "sudden", label: "Came on suddenly" },
 ];
 
 /** What the review offers for "What does it feel like?" (pinching stays readable from older reports). */
-export const FEEL_CHOICES: Feel[] = ["sore", "tight", "ache", "sharp", "burning", "numb", "other"];
+export const FEEL_CHOICES: Feel[] = ["sore", "tight", "fatigued", "ache", "sharp", "burning", "numb", "cramp", "other"];
+/** What it offers for a headache or a face (no muscle there to be tight or tired). */
+export const HEAD_FEEL_CHOICES: Feel[] = ["ache", "pressure", "throbbing", "sharp", "numb", "other"];
 /** Asked apart: they matter for safety (safety.ts), not for describing the pain. */
-export const FEEL_SIGNS: Feel[] = ["swollen", "pop"];
+export const FEEL_SIGNS: Feel[] = ["swollen", "pop", "weak"];
+/** A headache's own sign: one that came on suddenly and severely needs help now. */
+export const HEAD_SIGNS: Feel[] = ["sudden", "weak"];
 
 export const TIMINGS: { v: Timing; label: string }[] = [
   { v: "during", label: "During exercise" },
@@ -99,7 +118,7 @@ export type PainReportInput = {
   side: PainSide | null;
   /** The exact spot on the body map (sites.ts), or null for the region in general. */
   site?: string | null;
-  /** Null (with no score) when they said they're not sure how bad (Nov 26 2026). */
+  /** Null with no score: they said they're not sure how bad (Nov 26 2026), or a kind that needs no rating (symptoms.ts) that wasn't rated. */
   severity: Severity | null;
   /** 0–10 (the review from Nov 21 2026); older reports have only the severity. */
   score?: number | null;
@@ -115,6 +134,8 @@ export type PainReportInput = {
   /** The earlier report they said it's the same as. */
   continuesId?: string | null;
   note?: string | null;
+  /** A general symptom (symptoms.ts): a headache in the head, dizziness or nausea in no one place. */
+  symptom?: GeneralSymptom | null;
 };
 
 const REGION_SET = new Set(PAIN_REGIONS.map((r) => r.key));
@@ -123,19 +144,20 @@ export const painReportSchema = z.object({
   region: z.string().refine((r) => REGION_SET.has(r), "Unknown body area"),
   side: z.enum(["L", "R"]).nullable(),
   site: z.string().max(40).refine((s) => SITE_KEYS.has(s), "Unknown spot").nullable().optional(),
-  // null: "not sure how bad" (score null too); an older app always sends one
+  // null: "not sure how bad", or a kind that needs no rating (soreness, tightness, fatigue, a general symptom) that wasn't rated; an older app always sends one
   severity: z.enum(["mild", "moderate", "severe"]).nullable(),
   score: z.number().int().min(0).max(SCORE_MAX).nullable().optional(),
   timing: z.array(z.enum(["during", "after", "rest", "movement"])).max(4).optional(),
   trigger: z.enum(["training", "exercise", "daily", "unsure"]).nullable().optional(),
   exerciseId: z.string().uuid().nullable().optional(),
   exerciseName: z.string().max(120).nullable().optional(),
-  feel: z.array(z.enum(["sore", "tight", "ache", "sharp", "pinch", "numb", "swollen", "pop", "burning", "other"])).max(10).optional(),
+  feel: z.array(z.enum(FEEL_KEYS as [Feel, ...Feel[]])).max(16).optional(),
   impact: z.enum(["none", "modified", "stopped"]).nullable().optional(),
   sameIssue: z.boolean().nullable().optional(),
   change: z.enum(["better", "same", "worse"]).nullable().optional(),
   continuesId: z.string().uuid().nullable().optional(),
   note: z.string().max(NOTE_MAX).nullable().optional(),
+  symptom: z.enum(GENERAL_SYMPTOM_KEYS).nullable().optional(),
 });
 
 export const painReportsSchema = z.array(painReportSchema).max(MAX_AREAS);
@@ -162,7 +184,7 @@ export function severityRank(s: Severity | null | undefined): number {
   return s ? RANK[s] : 0;
 }
 
-/** The worst place, for the review's one pain_level (a place they weren't sure about counts as none). */
+/** The worst place, for the review's one pain_level (a place with no rating counts as none). */
 export function worstSeverity(reports: Pick<PainReportInput, "severity">[]): Severity | null {
   let worst: Severity | null = null;
   for (const r of reports) if (severityRank(r.severity) > severityRank(worst)) worst = r.severity;
@@ -182,6 +204,10 @@ export function cleanReports(reports: PainReportInput[]): PainReportInput[] {
   for (const r of reports) {
     const region = regionOf(r.region);
     if (!region) continue;
+    // a general symptom lives where it's drawn: a headache in the head, the rest nowhere
+    const gen = generalOf(r.symptom);
+    if (gen && !(gen.region === r.region || (gen.key === "headache" && (r.region === "face" || r.region === "general")))) continue;
+    if (r.region === "general" && !gen) continue;
     const s = siteOf(r.site);
     const site = s && s.region === r.region ? s.key : null;
     const side = site && s?.midline ? null : r.side === "L" || r.side === "R" ? r.side : null;
@@ -195,10 +221,11 @@ export function cleanReports(reports: PainReportInput[]): PainReportInput[] {
       : r.trigger ?? null;
     const exercise = trigger === "exercise";
     const same = r.sameIssue ?? null;
-    byPlace.set(`${r.region}:${side ?? ""}:${site ?? ""}`, {
+    byPlace.set(`${r.region}:${side ?? ""}:${site ?? ""}:${gen?.key ?? ""}`, {
       region: r.region,
       side,
       site,
+      symptom: gen?.key ?? null,
       severity: score != null ? severityFromScore(score) : r.severity ?? null,
       score,
       timing,
@@ -222,21 +249,43 @@ export function legacyColumns(reports: PainReportInput[]): { painArea: string | 
   // a place they weren't sure about has none, and with no rated place the review has none either
   const levels = reports.flatMap((r) => (typeof r.score === "number" ? [r.score] : r.severity ? [severityLevel(r.severity)] : []));
   const level = levels.length ? Math.max(1, ...levels) : null;
+  const places = reports.filter((r) => !generalOf(r.symptom));
+  const symptoms = [...new Set(reports.map((r) => generalLabel(r.symptom)).filter((x): x is string => !!x))];
+  const area = [legacyAreaText(places.map((r) => ({ region: r.region, side: r.side, note: r.note }))), ...symptoms].filter(Boolean).join(", ");
   return {
-    painArea: legacyAreaText(reports.map((r) => ({ region: r.region, side: r.side, note: r.note }))),
+    painArea: area || null,
     painLevel: level,
   };
 }
 
 /** The place in words: the spot when there is one ("Left side delt"), else the region ("Left shoulder"). */
-export function placeLabel(r: { region: string; side: PainSide | null; site?: string | null; note?: string | null }): string {
+export function placeLabel(r: { region: string; side: PainSide | null; site?: string | null; note?: string | null; symptom?: string | null }): string {
+  const gen = generalOf(r.symptom);
+  if (gen) {
+    // "Headache (behind the left eye)" when they said where; else just the symptom
+    if (gen.region === "head" && (r.site || r.side || r.region === "face")) return `${gen.label} (${(r.site && siteOf(r.site) ? siteLabel(r.site, r.side) : areaLabel(r.region, r.side)).toLowerCase()})`;
+    return gen.label;
+  }
+  if (r.region === "general") return "Whole body";
   if (r.region === "other" && r.note) return r.note.slice(0, 60);
   if (r.site && siteOf(r.site)) return siteLabel(r.site, r.side);
   return areaLabel(r.region, r.side);
 }
 
 /** "Left side delt · 6/10 · bench press" (or "· moderate" for an older report): one line per place for cards and the coach. */
-export function reportLine(r: { region: string; side: PainSide | null; site?: string | null; severity: Severity | null; score?: number | null; exerciseName?: string | null; note?: string | null }): string {
+export function reportLine(r: { region: string; side: PainSide | null; site?: string | null; severity: Severity | null; score?: number | null; exerciseName?: string | null; note?: string | null; symptom?: string | null }): string {
   const how = r.score != null ? `${r.score}/10` : severityLabel(r.severity)?.toLowerCase();
   return [placeLabel(r), how, r.exerciseName].filter(Boolean).join(" · ");
+}
+
+/** Regions the database took before the whole body (20270603090000). */
+const OLDER_REGIONS = new Set(["neck", "shoulder", "chest", "upper_arm", "elbow", "wrist_hand", "upper_back", "shoulder_blade", "mid_back", "low_back", "abs", "hip_groin", "glute", "quad", "hamstring", "knee", "shin", "calf", "ankle_foot", "other"]);
+
+/**
+ * The reports a database without the whole-body migration can store: its
+ * regions only, rated, no general symptom. Used only when a save is refused
+ * by that database's checks; everything else stays in pain_area's text.
+ */
+export function reportsForOlderSchema(reports: PainReportInput[]): PainReportInput[] {
+  return reports.filter((r) => OLDER_REGIONS.has(r.region) && !r.symptom && !!r.severity).map((r) => ({ ...r, symptom: null }));
 }

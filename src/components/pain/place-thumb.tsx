@@ -14,6 +14,8 @@ import type { PainSide } from "@/lib/pain/regions";
 export function PlaceThumb({ place, className }: { place: { region: string; side?: PainSide | null; site?: string | null }; className?: string }) {
   const art = useMemo(() => {
     if (place.region === "other") return null;
+    // A symptom that isn't in one place (dizziness, nausea): the whole body, nothing lit.
+    if (place.region === "general") return { view: atlasView("front", "R"), deep: false, box: { x: 40, y: 0, w: 320, h: 920 }, picked: new Set<string>(), areas: new Set<string>() };
     const side = place.side ?? null;
     const where = viewForPlace(place.site, place.region, side);
     const view = atlasView(where.view, where.facing);

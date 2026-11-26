@@ -8,7 +8,8 @@
  * Always drawn on a dark ground (the pain map is a dark screen whatever the
  * theme, like an anatomy atlas), so its colours are fixed here.
  */
-import { memo, useId } from "react";
+import { memo, useId, useMemo } from "react";
+import { expandPlaceKeys } from "@/lib/pain/sites";
 import type { AtlasPart, AtlasView } from "@/lib/pain/anatomy/atlas";
 import { VIEW_H, VIEW_W, type Box } from "@/lib/pain/anatomy/geometry";
 
@@ -54,8 +55,10 @@ type Props = {
   detail?: boolean;
 };
 
-function AnatomyFigureImpl({ view, deep = false, picked, pickedAreas, recent, box, className, pressed, detail = true }: Props) {
+function AnatomyFigureImpl({ view, deep = false, picked: pickedKeys, pickedAreas, recent, box, className, pressed, detail = true }: Props) {
   const uid = useId().replace(/:/g, "");
+  // a picked group ("Fingers", "Bottom of foot") lights every spot it covers
+  const picked = useMemo(() => (pickedKeys?.size ? expandPlaceKeys(pickedKeys) : pickedKeys), [pickedKeys]);
   const shade = `sh-${uid}`;
   const fib = (a: number) => `fb-${uid}-${a < 0 ? `m${-a}` : a}`;
   const vb = box ?? { x: 0, y: 0, w: VIEW_W, h: VIEW_H };

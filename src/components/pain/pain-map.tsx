@@ -29,6 +29,7 @@ import { PAIN_SITES, searchSites, siteLabel, siteOf } from "@/lib/pain/sites";
 import { placeLabel } from "@/lib/pain/report";
 import { type PainEntry } from "@/lib/pain/history";
 import { pickScore, recentSites, type PainPick } from "@/lib/pain/picks";
+import { GENERAL_SYMPTOMS, type GeneralSymptom } from "@/lib/pain/symptoms";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { viewForPlace, partForPlace } from "@/lib/pain/anatomy/place-view";
 
@@ -51,13 +52,27 @@ export { viewForPlace, partForPlace };
 
 // ── the list ────────────────────────────────────────────────────────────
 
-function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainSide | null; site: string | null }) => void }) {
+function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainSide | null; site: string | null; symptom?: GeneralSymptom | null }) => void }) {
   const [q, setQ] = useState("");
   const results = useMemo(() => searchSites(q), [q]);
   const byRegion = useMemo(() => {
     if (q.trim()) return null;
-    return PAIN_REGIONS.filter((r) => r.key !== "other").map((r) => ({ region: r, sites: PAIN_SITES.filter((s) => s.region === r.key) }));
+    return PAIN_REGIONS.filter((r) => r.key !== "other" && r.key !== "general").map((r) => ({ region: r, sites: PAIN_SITES.filter((s) => s.region === r.key) }));
   }, [q]);
+  // a symptom that isn't one place (a headache, dizziness, nausea…): found by name, or listed first
+  const symptoms = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return GENERAL_SYMPTOMS;
+    return GENERAL_SYMPTOMS.filter((g) => g.label.toLowerCase().includes(t) || g.key.includes(t) || g.words.test(t) || (t.length >= 4 && g.words.test(`${t}y`)));
+  }, [q]);
+  const symptomRow = (g: (typeof GENERAL_SYMPTOMS)[number]) => (
+    <div key={g.key} className="flex min-h-12 items-center gap-3 border-b border-white/[0.06] py-2" data-pain-list-symptom={g.key}>
+      <p className="min-w-0 flex-1 text-[15px] font-medium leading-tight">{g.label}</p>
+      <button type="button" onClick={() => onPick({ region: g.region, side: null, site: null, symptom: g.key })} className="inline-flex h-10 min-w-[4rem] items-center justify-center rounded-lg bg-muted px-3 text-[13px] font-semibold hover:bg-muted-foreground/25" aria-label={`Pick ${g.label.toLowerCase()}`}>
+        Pick
+      </button>
+    </div>
+  );
   const sideButtons = (label: string, region: string, site: string | null, sided: boolean, anat?: string | null) =>
     sided ? (
       <span className="flex shrink-0 gap-1.5">
@@ -95,7 +110,7 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search: knee, lats, rotator cuff…"
+            placeholder="Search: knee, thumb, headache…"
             aria-label="Search the body"
             {...noAutofill("pain-search")}
             autoCapitalize="off"
@@ -111,6 +126,12 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
         </label>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
+        {symptoms.length > 0 && (
+          <section className="pt-1" data-pain-list-symptoms>
+            <p className="pb-1 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">Not in one place</p>
+            {symptoms.map(symptomRow)}
+          </section>
+        )}
         {byRegion
           ? byRegion.map(({ region: r, sites }) => (
               <section key={r.key} className="pt-3">
@@ -124,7 +145,7 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
                 {sites.map(row)}
               </section>
             ))
-          : results.length
+          : results.length || symptoms.length
             ? results.map(row)
             : (
               <div className="space-y-3 py-8 text-center text-[14px] text-muted-foreground">
@@ -176,8 +197,8 @@ export function PainMap({
   ctx: PainMapContext | null;
   /** Open on this place ("Change spot"): the pick moves it. */
   focusUid?: string | null;
-  /** A spot or a whole area was picked: the map closes. */
-  onPick: (place: { region: string; side: PainSide | null; site: string | null }) => void;
+  /** A spot, a whole area or a general symptom (from the list) was picked: the map closes. */
+  onPick: (place: { region: string; side: PainSide | null; site: string | null; symptom?: GeneralSymptom | null }) => void;
 }) {
   const [viewKey, setViewKey] = useState<ViewKey>("front");
   const [facing, setFacing] = useState<SideFacing>("R");
