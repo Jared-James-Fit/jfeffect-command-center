@@ -32,10 +32,10 @@ export function reviewedSourceUnit(g: Pick<GoalRow, "id" | "version" | "client_u
 export function targetDifficulty(g: Pick<GoalRow, "feasibility" | "client_unit" | "client_value" | "client_value_max">, kg: number | null) {
   const f = g.feasibility;
   const projection = f?.projection;
-  if (kg == null || !Number.isFinite(kg) || kg <= 0) return { band: null, label: "No target", brief: "Enter a valid target to see its difficulty." };
+  if (kg == null || !Number.isFinite(kg) || kg <= 0) return { band: null, label: "No target", summary: "Enter a target", brief: "Enter a valid target to see its difficulty." };
   const options = APPROACHES.map(a => f?.approaches?.find(o => o.key === a.key)?.targetKg);
   if (!projection || !Number.isFinite(projection.expectedKg) || options.some(x => x == null || !Number.isFinite(x)) || options.some((x,i) => i > 0 && Number(x) <= Number(options[i-1]))) {
-    return { band: null, label: "Not rated", brief: "No usable forecast range yet. Review recent competition-style lifts before judging this target." };
+    return { band: null, label: "Not rated", summary: "Insufficient forecast data", brief: "No usable forecast range yet. Review recent competition-style lifts before judging this target." };
   }
   const anchors = Object.fromEntries(APPROACHES.map((a,i) => [a.key, options[i]])) as Record<ApproachKey, number>;
   const { band } = scoreAgainst(kg, anchors, "up");
@@ -52,5 +52,19 @@ export function targetDifficulty(g: Pick<GoalRow, "feasibility" | "client_unit" 
     extreme:"A reach beyond the normal forecast range.",
   };
   const confidence = f?.confidence === "low" ? "Limited evidence; rating is provisional." : advice[band];
-  return { band, label: APPROACH_LABEL[band], brief: `${dualLoadText(kg,"kg")} ${deltaText === "matches the forecast" ? deltaText : "is " + deltaText}${range ? " and " + (deltaText === "matches the forecast" ? "is " : "") + range : ""}. ${confidence}` };
+  const summary = (Math.abs(delta) < 0.05 ? "At forecast" : `${dualLoadText(Math.abs(delta), "kg")} ${delta > 0 ? "above" : "below"} forecast`) + (range ? " · " + range.replace("the discussed range", "discussed range") : "") + (f?.confidence === "low" ? " · Low confidence" : "");
+  return { band, label: APPROACH_LABEL[band], summary, brief: `${dualLoadText(kg,"kg")} ${deltaText === "matches the forecast" ? deltaText : "is " + deltaText}${range ? " and " + (deltaText === "matches the forecast" ? "is " : "") + range : ""}. ${confidence}` };
+}
+
+/** Each menu entry is judged at its actual rounded load, using this client's
+ * forecast rather than a generic description of the approach. */
+export function goalApproachOptions(g: Pick<GoalRow, "feasibility" | "client_unit" | "client_value" | "client_value_max">, increment: number) {
+  const seen = new Set<number>();
+  return (g.feasibility?.approaches ?? []).flatMap(a => {
+    const kg = nearestMeetTarget(a.targetKg, increment);
+    if (kg == null || seen.has(kg)) return [];
+    seen.add(kg);
+    const rating = targetDifficulty(g, kg);
+    return [{ key: a.key, kg, ...rating }];
+  });
 }

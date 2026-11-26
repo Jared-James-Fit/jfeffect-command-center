@@ -954,7 +954,7 @@ export type GoalsView = {
 /** One client's goals, read fresh when stale, with the waiting update and the recent history. */
 export async function goalsView(sb: Db, clientId: string, opts: { refresh?: boolean } = {}): Promise<GoalsView> {
   const goals0 = await readGoals(sb, clientId);
-  const stale = goals0.some((g) => OPEN_STATUSES.includes(g.status) && (!g.assessed_at || Date.now() - Date.parse(g.assessed_at) > 60 * 60_000));
+  const stale = goals0.some((g) => OPEN_STATUSES.includes(g.status) && (!g.assessed_at || Date.now() - Date.parse(g.assessed_at) > 60 * 60_000 || (g.feasibility?.projection?.source === "meet_forecast" && !g.data_hash?.startsWith("forecast-evidence-v2|"))));
   let goals = goals0;
   let loaded: LoadedGoalContext | null = null;
   if (stale || opts.refresh) {

@@ -156,6 +156,16 @@ describe("feasibility", () => {
     expect(scoreAgainst(140, anchors, "up").score).toBeLessThan(15);
   });
 
+
+  it("preserves exact lift forecast evidence and separates the approach preference", () => {
+    const original = ctx();
+    const c = ctx({ meets: { comp1: { ...original.meets.comp1, liftBasis: { squat: ["Training: 92.5 kg × 1 @ 7.5 on Nov 23", "Platform conversion assumed 1.0 (no past meets to calibrate)"] } } }, preferences: { comp1: ["Go for the top end"] } });
+    const f = assessGoal(spec({ competition_id: "comp1", deadline: "2026-12-05" }), c);
+    expect(f.projection?.basis).toContain("Training: 92.5 kg × 1 @ 7.5 on Nov 23");
+    expect(f.recommendationEvidence).toBe("Go for the top end");
+    expect(f.recommendedWhy).toContain("not a guaranteed lift");
+  });
+
   it("an athlete's stated thirds against the meet forecast: supported, with room above", () => {
     const f = assessGoal(spec({ client_kg: toKg(220, "lb"), client_kg_max: toKg(225, "lb"), competition_id: "comp1", deadline: "2026-12-05" }), ctx());
     expect(f.projection).toMatchObject({ expectedKg: 105, source: "meet_forecast" });
