@@ -14,6 +14,8 @@
  * private to their members (AGENTS.md). The coach thread is `messages`.
  */
 import { wellFormed } from "@/lib/well-formed";
+import { fetchStrengthIntel } from "@/lib/strength-intel/read";
+import { strengthText } from "@/lib/strength-intel/describe";
 import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
@@ -410,6 +412,23 @@ export function cleoReadTools(ctx: ToolCtx) {
         for (const r of (data?.load_records ?? []) as any[]) lines.push(`- ${dayIn(r.at, tz)} ${r.exercise_name}: heaviest ${kg(r.load_kg)} x ${r.reps} (${kind(r)} by load)`);
         for (const t of (data?.tonnage ?? []) as any[]) lines.push(`- ${dayIn(t.at, tz)} session tonnage ${kg(t.tonnage_kg)} (${kind(t)})`);
         return lines.length > 2 ? lines.join("\n") : `${clientName(c)} has no PRs in the last ${days} days (finished workouts only; training_log has every logged set).`;
+      }),
+    }),
+
+    strength: tool({
+      description:
+        "A client's squat, bench and deadlift as the app reads them (the one strength read every screen uses): competition PR, best in training, peak estimate, the current estimate with its confidence and what it rests on, the coach's reference maxes, sumo and conventional kept apart, what's been learned (platform premium, rep strength, back-off fatigue) and their barbell variations' own estimates. Use it before calling anything their max or planning a % load; never mix one number for another.",
+      inputSchema: z.object({ client_id: clientId }),
+      execute: safe("strength", async ({ client_id }) => {
+        const c = await clientRow(db, client_id);
+        const unit = liftUnit(c);
+        const [intel, maxes] = await Promise.all([
+          fetchStrengthIntel(db, client_id),
+          db.from("pl_client_maxes").select("lift, one_rm, training_max, estimated_1rm, unit, block_id, active").eq("client_id", client_id),
+        ]);
+        if (maxes.error) throw new Error(maxes.error.message);
+        const text = strengthText(intel, unit, (maxes.data ?? []) as any[]);
+        return text ? `${clientName(c)} strength (in ${unit}):\n${text}` : `${clientName(c)} has no squat, bench or deadlift history or meets on file yet.`;
       }),
     }),
 

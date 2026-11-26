@@ -87,7 +87,7 @@ describe("every set says what it can about a max, with its confidence", () => {
     expect(setEstimate({ load: 100, reps: 15, rpe: 9 })).toBeNull();
     // a hard set: the reps done plus the reps left; a lighter one: at most 2 left credited
     expect(setEstimate({ load: 335, reps: 5, rpe: 8 })!.e1rm).toBeCloseTo(413.2, 0);
-    expect(setEstimate({ load: 375, reps: 4, rpe: 6 })!.e1rm).toBeCloseTo(450, 0);
+    expect(setEstimate({ load: 375, reps: 4, rpe: 6 })!.e1rm).toBeCloseTo(448, 0);
   });
 
   it("a session is its most confident set, never a lighter one over a hard one", () => {
@@ -125,14 +125,22 @@ describe("the estimated-strength line", () => {
     expect(envelopeAt(env, "2026-10-30")!.state).toBe("stale");
   });
 
-  it("a lighter set that implies more than the line raises it (a lower bound above it is evidence)", () => {
+  it("a lighter set that implies more raises it halfway: low-RPE work contributes, it never sets a max alone", () => {
     const env = strengthEnvelope([sess("2026-10-26", 413), sess("2026-11-16", 450, "medium")]);
-    expect(envelopeAt(env, "2026-11-16")).toMatchObject({ value: 450, state: "raised" });
+    expect(envelopeAt(env, "2026-11-16")).toMatchObject({ value: 431.5, state: "raised" });
+    // a second one that agrees takes it most of the way, never past what they imply
+    const two = strengthEnvelope([
+      sess("2026-10-26", 413),
+      sess("2026-11-16", 450, "medium"),
+      sess("2026-11-20", 450, "medium"),
+    ]);
+    expect(envelopeAt(two, "2026-11-20")!.value).toBeGreaterThan(440);
+    expect(envelopeAt(two, "2026-11-20")!.value).toBeLessThan(450);
   });
 
   it("one hard session under the line is a fluctuation; it takes sustained lower hard sets to fall", () => {
-    const one = strengthEnvelope([sess("2026-09-01", 500), sess("2026-10-15", 470)]);
-    expect(envelopeAt(one, "2026-10-15")!.value).toBe(500);
+    const one = strengthEnvelope([sess("2026-09-01", 500), sess("2026-09-22", 470)]);
+    expect(envelopeAt(one, "2026-09-22")!.value).toBe(500);
     const two = strengthEnvelope([
       sess("2026-09-01", 500),
       sess("2026-10-15", 470),
@@ -144,20 +152,30 @@ describe("the estimated-strength line", () => {
     const at20 = envelopeAt(two, "2026-10-20")!.value;
     expect(at20).toBeLessThan(500);
     expect(at20).toBeGreaterThan(472);
-    expect(envelopeAt(two, "2026-11-17")!.value).toBe(473);
+    const settled = envelopeAt(two, "2026-11-17")!.value;
+    expect(settled).toBeGreaterThan(471);
+    expect(settled).toBeLessThan(474);
   });
 
-  it("never drops a meet max 20% in a month on two volume-block sets of 5 (Jared, Oct 2026)", () => {
+  it("never drops a meet max 20% in a month on volume-block sets of 5 (Jared, Oct 2026): they aren't comparable to a single", () => {
     // Commonwealth squat 518 lb; then 315x5 @7 and 335x5 @8 read ~400 on the RPE chart
-    const env = strengthEnvelope([
-      sess("2026-09-18", 518),
-      sess("2026-10-06", 399),
-      sess("2026-10-26", 413),
-      sess("2026-11-02", 400),
+    const fives = sessionEstimates([
+      { day: "2026-10-06", load: 315, reps: 5, rpe: 7 },
+      { day: "2026-10-26", load: 335, reps: 5, rpe: 8 },
+      { day: "2026-11-02", load: 325, reps: 5, rpe: 8 },
     ]);
-    const nov2 = envelopeAt(env, "2026-11-02")!;
-    expect(nov2.value).toBeGreaterThan(518 * (1 - MAX_FALL_PER_WEEK * 1.01));
-    expect(nov2.value).toBeLessThan(518);
+    const env = strengthEnvelope([sess("2026-09-18", 518), ...fives]);
+    expect(envelopeAt(env, "2026-11-02")!.value).toBe(518);
+    // a month and more of them, and it eases down, at most 1% a week
+    const more = sessionEstimates([
+      { day: "2026-10-06", load: 315, reps: 5, rpe: 7 },
+      { day: "2026-10-13", load: 320, reps: 5, rpe: 7.5 },
+      { day: "2026-10-26", load: 335, reps: 5, rpe: 8 },
+      { day: "2026-11-09", load: 325, reps: 5, rpe: 8 },
+    ]);
+    const after = envelopeAt(strengthEnvelope([sess("2026-09-18", 518), ...more]), "2026-11-09")!.value;
+    expect(after).toBeLessThan(518);
+    expect(after).toBeGreaterThan(518 * (1 - MAX_FALL_PER_WEEK * 0.5 * 5.2));
   });
 
   it("a meet's attempts typed into the app days later are the meet, never an RPE estimate over it", () => {
@@ -178,7 +196,11 @@ describe("the estimated-strength line", () => {
       meets,
       "2026-09-25",
     );
-    expect(envelopeAt(s.deadlift.envelope, "2026-09-25")!.value).toBeCloseTo(595.2, 0);
+    // the line reads the meet as training-day capacity: never the 655 the typed RPE says, never over the meet
+    const line = envelopeAt(s.deadlift.envelope, "2026-09-25")!.value;
+    expect(line).toBeLessThanOrEqual(595.2);
+    expect(line).toBeGreaterThan(595.2 / 1.03);
+    expect(s.deadlift.meets[0].lb).toBeCloseTo(595.2, 0);
     expect(s.deadlift.sessions.some((x) => x.day === "2026-09-21")).toBe(false);
     // a session days later at another weight, or a week and more later, is training
     expect(isMeetLog({ day: "2026-09-21", heaviest: 560 }, { day: "2026-09-18", lb: 595.2 })).toBe(
@@ -228,7 +250,9 @@ describe("the estimated-strength line", () => {
       "2026-10-10",
     );
     expect(s.squat.meets[0].lb).toBeCloseTo(463, 0);
-    expect(envelopeAt(s.bench.envelope, "2026-09-18")!.value).toBeCloseTo(330.7, 0);
+    // as lifted on the platform; the line is the training-day capacity it implies (a peak isn't every day)
+    expect(s.bench.meets[0].lb).toBeCloseTo(330.7, 0);
+    expect(envelopeAt(s.bench.envelope, "2026-09-18")!.value).toBeCloseTo(330.7 / 1.025, 0);
     expect(mainLift(s, "2026-09-25", "2026-10-10")).toBe("squat");
   });
 });

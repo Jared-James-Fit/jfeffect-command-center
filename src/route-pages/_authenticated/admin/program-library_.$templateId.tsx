@@ -95,6 +95,8 @@ import { Layers } from "lucide-react";
 import { createContext, useCallback, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { hasRpeCap, isMaxBasis, plannedLoadLabel, referenceFamily } from "@/lib/workouts/load-reference";
+import { strengthKgs, type StrengthRefs } from "@/lib/strength-intel/planning";
+import { fetchStrengthReadInputs, strengthDayFor, strengthRefsAsOf } from "@/lib/workouts/card-suggestion-reads";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton, BlockMaxesDialog } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
@@ -527,8 +529,10 @@ type MaxesCtx = {
   maxes: ClientMaxRow[];
   index: Map<string, ClientMaxRow>;
   refresh: () => void;
+  /** what a % of Est. 1RM, a competition PR or a variation's own e1RM reads (the one strength read) */
+  strengthRefs: StrengthRefs | null;
 };
-const MaxesContext = createContext<MaxesCtx>({ clientId: null, blockId: null, maxes: [], index: new Map(), refresh: () => {} });
+const MaxesContext = createContext<MaxesCtx>({ clientId: null, blockId: null, maxes: [], index: new Map(), refresh: () => {}, strengthRefs: null });
 export function useClientMaxesCtx() { return useContext(MaxesContext); }
 
 // ---- Phone layout (under 768px), set by StructureCanvas ----
@@ -1260,13 +1264,21 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
     enabled: !!clientId,
   });
+  // the same strength read the athlete's logger works a % out from (one read, cached under its key)
+  const strengthQuery = useQuery({
+    queryKey: ["logged-e1rm", "v3", clientId],
+    queryFn: () => fetchStrengthReadInputs(clientId as string),
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+  });
   const maxesCtx: MaxesCtx = useMemo(() => ({
     clientId: clientId ?? null,
     blockId: blockId ?? null,
     maxes: maxesQuery.data ?? [],
     index: buildMaxIndex(maxesQuery.data ?? []),
     refresh: () => maxesQuery.refetch(),
-  }), [clientId, blockId, maxesQuery.data]);
+    strengthRefs: strengthRefsAsOf(strengthQuery.data ?? null, strengthDayFor(null)),
+  }), [clientId, blockId, maxesQuery.data, strengthQuery.data]);
 
   const canSetMaxes = !!clientId && !!blockId;
   const tap = phone ? "h-10 w-10" : "h-8 w-8";
@@ -2015,7 +2027,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     _setActiveIdx(i);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeksData.length > 0]);
-  const { clientId: ctxClientId, blockId: ctxBlockId, index: ctxMaxesIndex } = useClientMaxesCtx();
+  const { clientId: ctxClientId, blockId: ctxBlockId, index: ctxMaxesIndex, strengthRefs: ctxStrengthRefs } = useClientMaxesCtx();
   // The Sheet's "= 150 kg" beside a % (a client's block, with a max on file):
   // the same computeRowLoad the card shows.
   const exMetaById = useMemo(() => new Map((exercises ?? []).map((e: any) => [e.id, e])), [exercises]);
@@ -2035,9 +2047,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
       maxesIndex: ctxMaxesIndex,
       family,
       ownCompetition: !!family && String(meta?.competition_lift_type ?? "").toLowerCase() === family,
+      ...strengthKgs(ctxStrengthRefs, row.percentage_basis, family, row.exercise_id ?? null),
     });
     return out.status === "ok" && out.load != null ? `= ${out.load} ${out.unit}` : out.status === "no-max" ? "no max" : null;
-  }, [ctxClientId, ctxMaxesIndex, exMetaById]);
+  }, [ctxClientId, ctxMaxesIndex, ctxStrengthRefs, exMetaById]);
   const weekStats = useMemo(() => {
     const names = new Map<string, string>((exercises as any[]).map((e: any) => [e.id, e.name]));
     return weeksData.map((w: any) => {
@@ -3116,7 +3129,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
   // What a back-off works out to from its top set's prescribed weight ("= 365 lb"),
   // rounded like the logger rounds it (backoffLoad). An RPE top set has no weight
   // to read until it's lifted, so its back-offs just say their %.
-  const { clientId: maxesClientId, index: dayMaxesIndex } = useClientMaxesCtx();
+  const { clientId: maxesClientId, index: dayMaxesIndex, strengthRefs: dayStrengthRefs } = useClientMaxesCtx();
   const linkedLoads = useMemo(() => {
     const out: (string | null)[] = rows.map(() => null);
     const unitOfLoad = (r: any): "kg" | "lb" =>
@@ -3139,6 +3152,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
           maxesIndex: dayMaxesIndex,
           family,
           ownCompetition: !!family && String(meta?.competition_lift_type ?? "").toLowerCase() === family,
+          ...strengthKgs(dayStrengthRefs, r.percentage_basis, family, r.exercise_id ?? null),
         });
         return c.status === "ok" && c.load != null ? c.load : null;
       }
@@ -3160,7 +3174,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, units, maxesClientId, dayMaxesIndex, exById]);
+  }, [rows, units, maxesClientId, dayMaxesIndex, dayStrengthRefs, exById]);
 
   // Day focus: track which day the coach is editing. Becomes active on any
   // click / focus inside the card. Switching to a different day automatically
@@ -3864,7 +3878,7 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
     });
   }, [dayKey]);
   const h = phone ? "h-11 text-base" : compact ? "h-8 text-sm" : "h-9 text-sm";
-  const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
+  const { clientId, blockId, index: maxesIndex, maxes, refresh, strengthRefs: rowStrengthRefs } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
   // Derive a clear "load mode" from the existing basis field.
   // NEW DEFAULT: an unset basis means NO suggested load (off-by-default).
@@ -3908,8 +3922,9 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
       maxesIndex,
       family: refFamily,
       ownCompetition,
+      ...strengthKgs(rowStrengthRefs, row.percentage_basis, refFamily, row.exercise_id ?? null),
     });
-  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, rowUnit, maxesIndex, refFamily, ownCompetition]);
+  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, rowUnit, maxesIndex, refFamily, ownCompetition, rowStrengthRefs]);
   const overrideCalculated = () => {
     if (!computed || computed.status !== "ok" || computed.load == null) return;
     // computed in this row's unit (computeRowLoad above): one column, the other cleared

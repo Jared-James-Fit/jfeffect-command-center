@@ -146,7 +146,7 @@ export async function programQualityFor(sb: any, clientId: string): Promise<{ qu
     if (!l.completed_at || String(l.completed_at).slice(0, 10) < since) continue;
     const r = rowById.get(l.row_id);
     if (!r) continue;
-    const coachLoad = (r.percentage != null && ["training_max", "1rm", "est_1rm"].includes(String(r.percentage_basis ?? ""))) || r.load_kg != null || r.load_lb != null;
+    const coachLoad = (r.percentage != null && ["training_max", "1rm", "est_1rm", "comp_pr", "var_e1rm"].includes(String(r.percentage_basis ?? ""))) || r.load_kg != null || r.load_lb != null;
     const target = rpeNum(r.rpe);
     const actual = l.actual_rpe_num != null ? Number(l.actual_rpe_num) : rpeNum(l.actual_rpe);
     if (!coachLoad || target == null || actual == null || !Number.isFinite(actual)) continue;

@@ -9,6 +9,8 @@
  * conversation's current proposal and stores the result. Nothing is written
  * to the program here.
  */
+import { fetchStrengthIntel } from "@/lib/strength-intel/read";
+import { strengthText } from "@/lib/strength-intel/describe";
 import { programGuideText } from "./program-guide";
 import { buildBrief, setupText } from "@/lib/program-intel/brief";
 import { buildGeneratorIntel } from "@/lib/program-intel/intelligence";
@@ -128,7 +130,10 @@ async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string
   } catch {
     conflicts = [];
   }
-  const b = buildBrief(intel, { setup, edited: [], conflicts, redistribution: null, budgetChars: BRIEF_CHARS, exclude: ["setup", "requirements"] });
+  // the one strength read in words (never a number of the brief's own); a read that fails never stops a turn
+  const strengthRead = await fetchStrengthIntel(admin, clientId).catch(() => null);
+  const strength = strengthRead ? strengthText(strengthRead, intel.ctx.unit, rec.maxes as any[]) || null : null;
+  const b = buildBrief(intel, { setup, edited: [], conflicts, redistribution: null, budgetChars: BRIEF_CHARS, exclude: ["setup", "requirements"], strength });
   const flags = conflicts.length ? `\n\n## Things the data flags\n${conflicts.map((c: any) => `- [${c.severity}] ${c.title}. ${c.detail}`).join("\n")}` : "";
   const text = `${b.text}${flags}\n\n## What the data recommends for their training (a reference, not a requirement)\n${setupText(setup)}`;
   const maxLifts = intel.history.lifts.filter((l: any) => l.maxOnFileKg != null).map((l: any) => String(l.lift).toLowerCase());

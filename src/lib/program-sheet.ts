@@ -29,6 +29,8 @@ const BASIS_WORD: Record<string, string> = {
   training_max: "TM",
   "1rm": "1RM",
   est_1rm: "e1RM",
+  comp_pr: "PR",
+  var_e1rm: "own e1RM",
   top_set: "top",
   prev_set: "prev",
   prev_week: "last week",
@@ -107,7 +109,7 @@ export function formatLoad(row: any): string {
 export function parseLoad(text: string, row: any): { patch: Record<string, any> } | { error: string } {
   const t = text.trim().toLowerCase().replace(/\s+/g, " ");
   if (!t) return { patch: { percentage_basis: "none", percentage: null, load_kg: null, load_lb: null, manual_override: false } };
-  const pct = t.match(/^(\d+(?:\.\d+)?)\s*%\s*(of\s*)?(tm|training max|1rm|1 rm|max|e1rm|est|estimated|top|top set|prev|prev set|previous|previous set|last week|prev week|previous week)?$/);
+  const pct = t.match(/^(\d+(?:\.\d+)?)\s*%\s*(of\s*)?(tm|training max|1rm|1 rm|max|own e1rm|own|e1rm|est|estimated|pr|comp pr|competition pr|meet pr|top|top set|prev|prev set|previous|previous set|last week|prev week|previous week)?$/);
   if (pct) {
     const n = Number(pct[1]);
     if (!(n > 0 && n <= 150)) return { error: "A percentage between 1 and 150" };
@@ -117,6 +119,8 @@ export function parseLoad(text: string, row: any): { patch: Record<string, any> 
       word == null ? keep
       : word.startsWith("tm") || word === "training max" ? "training_max"
       : word === "1rm" || word === "1 rm" || word === "max" ? "1rm"
+      : word.startsWith("own") ? "var_e1rm"
+      : word === "pr" || word.endsWith(" pr") ? "comp_pr"
       : word.startsWith("e") || word.startsWith("est") ? "est_1rm"
       : word.includes("week") ? "prev_week"
       : word.startsWith("prev") ? "prev_set"

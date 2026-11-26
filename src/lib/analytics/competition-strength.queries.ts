@@ -3,11 +3,11 @@
  * meet results, the coach's training maxes and the athlete's sex (for the
  * typical split), read with the viewer's own login (RLS decides).
  */
+import { meetsWithDetail } from "@/lib/strength-intel/read";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { compLiftFromName } from "@/lib/analytics/sbd-split";
 import {
-  meetsFromRows,
   type CompLift,
   type MeetResult,
 } from "@/lib/analytics/competition-strength";
@@ -46,7 +46,7 @@ async function loadCompetitionData(clientId: string): Promise<CompetitionData> {
   const athlete = athleteRes.data as { id: string; sex: string | null } | null;
   const { data: meetRows } = await supabase
     .from("athlete_powerlifting_results")
-    .select("squat_kg, bench_kg, deadlift_kg, total_kg, bodyweight_kg, meet_date, meet_name, sex")
+    .select("squat_kg, bench_kg, deadlift_kg, total_kg, bodyweight_kg, meet_date, meet_name, sex, equipment, attempts")
     .or(
       athlete ? `client_id.eq.${clientId},athlete_id.eq.${athlete.id}` : `client_id.eq.${clientId}`,
     )
@@ -67,7 +67,8 @@ async function loadCompetitionData(clientId: string): Promise<CompetitionData> {
     const s = String(v ?? "").toLowerCase();
     return s.startsWith("f") ? "female" : s.startsWith("m") ? "male" : null;
   };
-  const meets = meetsFromRows(meetRows ?? []);
+  // with equipment and attempts: an equipped meet never feeds a raw estimate, an opener with two misses says less
+  const meets = meetsWithDetail(meetRows ?? []);
   return {
     meets,
     trainingMaxes,

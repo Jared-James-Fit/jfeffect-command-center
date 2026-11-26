@@ -16,7 +16,7 @@ describe("Program Intelligence exports keep every record", () => {
     // the partly logged squat day: 2 working sets plus the warm-up
     expect(md).toContain("Actual: S0 60kg×5 @4 (warm-up), S1 150kg×5 @8, S2 150kg×5 @8");
     expect(md).toContain("Prescribed: 3×5 @RPE 7");
-    expect(md).toContain("**[FACT]** Competition Squat e1RM 177.5kg → 185kg (+4.3%)");
+    expect(md).toContain("**[FACT]** Competition Squat e1RM 178kg → 185kg (+3.9%)");
     expect(md).toContain("[MISSING DATA]");
     expect(md).toContain("data fingerprint " + report.dataHash);
     expect(md).toContain("nothing is truncated");
