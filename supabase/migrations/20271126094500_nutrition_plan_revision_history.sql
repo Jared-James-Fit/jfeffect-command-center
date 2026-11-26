@@ -174,3 +174,87 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.publish_nutrition_plan_atomic(uuid,jsonb,jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.publish_nutrition_plan_atomic(uuid,jsonb,jsonb) TO authenticated,service_role;
+
+-- Scheduled nutrition is separate from the live prescription. A coach reviews
+-- and explicitly activates it on/after the requested date; no silent publish.
+CREATE TABLE IF NOT EXISTS public.nutrition_scheduled_plans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  start_date date NOT NULL,
+  payload jsonb NOT NULL,
+  days jsonb NOT NULL,
+  state text NOT NULL DEFAULT 'scheduled' CHECK(state IN ('scheduled','activated','cancelled')),
+  baseline jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  activated_plan_id uuid,
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS nutrition_scheduled_client_idx ON public.nutrition_scheduled_plans(client_id,state,start_date);
+ALTER TABLE public.nutrition_scheduled_plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff read scheduled nutrition" ON public.nutrition_scheduled_plans;
+CREATE POLICY "Staff read scheduled nutrition" ON public.nutrition_scheduled_plans FOR SELECT TO authenticated
+ USING ((SELECT public.has_role((SELECT auth.uid()), 'admin')) OR client_id IN (SELECT public.coached_client_ids()));
+REVOKE ALL ON public.nutrition_scheduled_plans FROM PUBLIC,anon,authenticated;
+GRANT SELECT ON public.nutrition_scheduled_plans TO authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION public.manage_scheduled_nutrition(
+ _client_id uuid, _id uuid, _expected_updated_at timestamptz, _action text,
+ _payload jsonb DEFAULT NULL, _days jsonb DEFAULT NULL
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+ d public.nutrition_scheduled_plans%ROWTYPE;
+ live_snapshot jsonb;
+ local_today date;
+ start_on date;
+ result jsonb;
+ out_id uuid;
+BEGIN
+ IF coalesce(auth.role(),'') <> 'service_role' AND (
+  auth.uid() IS NULL OR NOT (coalesce(public.has_role(auth.uid(),'admin'),false)
+   OR EXISTS(SELECT 1 FROM public.coached_client_ids() c(id) WHERE c.id=_client_id))
+ ) THEN RAISE EXCEPTION 'Coach access required' USING ERRCODE='42501'; END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(_client_id::text,0));
+ SELECT (now() AT TIME ZONE coalesce(nullif(timezone,''),'America/Winnipeg'))::date INTO local_today
+ FROM public.clients WHERE id=_client_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Client not found'; END IF;
+ SELECT coalesce(jsonb_agg(jsonb_build_array(n.id,n.last_updated_at) ORDER BY n.id),'[]'::jsonb) INTO live_snapshot
+ FROM public.nutrition_targets n WHERE n.client_id=_client_id AND n.status<>'Archived';
+ IF _id IS NOT NULL THEN
+  SELECT * INTO d FROM public.nutrition_scheduled_plans WHERE id=_id AND client_id=_client_id FOR UPDATE;
+  IF NOT FOUND OR d.state<>'scheduled' THEN RAISE EXCEPTION 'Scheduled plan is no longer available'; END IF;
+  IF d.updated_at IS DISTINCT FROM _expected_updated_at THEN RAISE EXCEPTION 'Draft changed. Reopen it.' USING ERRCODE='40001'; END IF;
+ END IF;
+ IF _action='cancel' AND _id IS NOT NULL THEN
+  UPDATE public.nutrition_scheduled_plans SET state='cancelled',updated_at=clock_timestamp() WHERE id=_id;
+  RETURN jsonb_build_object('id',_id);
+ END IF;
+ IF _action NOT IN ('save','activate') OR jsonb_typeof(_payload) IS DISTINCT FROM 'object' OR jsonb_typeof(_days) IS DISTINCT FROM 'array'
+  OR jsonb_array_length(_days)>100 OR (_payload->>'client_id')::uuid IS DISTINCT FROM _client_id
+  THEN RAISE EXCEPTION 'Invalid scheduled plan'; END IF;
+ start_on := (_payload->>'start_date')::date;
+ IF start_on IS NULL OR (_payload->>'end_date')::date < start_on THEN RAISE EXCEPTION 'Check plan dates'; END IF;
+ IF _payload->>'status' IS DISTINCT FROM 'Active' THEN RAISE EXCEPTION 'Scheduled plan must be Active when published'; END IF;
+ IF _action='save' THEN
+  IF EXISTS(SELECT 1 FROM public.nutrition_scheduled_plans s WHERE s.client_id=_client_id AND s.state='scheduled'
+    AND s.start_date=start_on AND s.id IS DISTINCT FROM _id) THEN RAISE EXCEPTION 'A scheduled plan already starts on this date'; END IF;
+  IF _id IS NULL THEN
+   INSERT INTO public.nutrition_scheduled_plans(client_id,start_date,payload,days,baseline,created_by)
+   VALUES(_client_id,start_on,_payload,_days,live_snapshot,auth.uid()) RETURNING id INTO out_id;
+  ELSE
+   UPDATE public.nutrition_scheduled_plans SET start_date=start_on,payload=_payload,days=_days,baseline=live_snapshot,updated_at=clock_timestamp() WHERE id=_id;
+   out_id := _id;
+  END IF;
+  RETURN jsonb_build_object('id',out_id);
+ END IF;
+ IF _id IS NULL OR d.start_date>local_today OR start_on>local_today THEN RAISE EXCEPTION 'Scheduled plan is not due'; END IF;
+ IF d.baseline IS DISTINCT FROM live_snapshot THEN RAISE EXCEPTION 'Current plan changed since scheduling. Review the comparison, save draft, then reopen to publish'; END IF;
+ -- Never retroactively change the recorded timeline if approval is delayed.
+ IF (_payload->>'end_date')::date < local_today THEN RAISE EXCEPTION 'Review date has passed. Update the end date first'; END IF;
+ result := public.publish_nutrition_plan_atomic(_client_id,_payload || jsonb_build_object('start_date',local_today),_days);
+ UPDATE public.nutrition_scheduled_plans SET state='activated',activated_plan_id=(result->>'targetId')::uuid,updated_at=clock_timestamp() WHERE id=_id;
+ RETURN result;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.manage_scheduled_nutrition(uuid,uuid,timestamptz,text,jsonb,jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.manage_scheduled_nutrition(uuid,uuid,timestamptz,text,jsonb,jsonb) TO authenticated,service_role;
