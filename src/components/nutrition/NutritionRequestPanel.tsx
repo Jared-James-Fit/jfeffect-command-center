@@ -467,7 +467,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6" data-nutrition-update>
       <CardHeader
         icon={ClipboardList}
-        title="Nutrition update"
+        title="Nutrition check-in"
+        info="The client’s feedback form and plan created from it. Separate from edits to the live plan."
         chip={status ? <StatusChip tone={status.tone}>{status.label}</StatusChip> : null}
         actions={
           <DropdownMenu>
@@ -528,11 +529,11 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       ) : ready ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-            {[`${firstName} sent it ${shortDate(latest.submitted_at)}`, plan?.phase].filter(Boolean).join(" · ")}
+            {[`${firstName} submitted ${shortDate(latest.submitted_at)}`, plan?.phase].filter(Boolean).join(" · ")}
           </p>
           {published && (
             <Button variant="outline" size="sm" className="h-10 gap-1.5" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
-              {showDetails ? "Hide" : "Details"} <ChevronDown className={cn("h-4 w-4 transition", showDetails && "rotate-180")} />
+              {showDetails ? "Hide details" : "View check-in"} <ChevronDown className={cn("h-4 w-4 transition", showDetails && "rotate-180")} />
             </Button>
           )}
         </div>

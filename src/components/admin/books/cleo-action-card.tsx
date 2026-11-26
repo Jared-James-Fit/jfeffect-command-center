@@ -90,6 +90,9 @@ export function CleoActionCard({
             qc.invalidateQueries({ queryKey: ["clients"] }),
           ]);
         }
+        if (action.kind === "approve_goal_target" || action.kind === "recover_meeting_goals") {
+          await Promise.all([qc.invalidateQueries({ queryKey: ["client-goals"] }), qc.invalidateQueries({ queryKey: ["coaching-meetings"] }), qc.invalidateQueries({ queryKey: ["competition-workspace"] })]);
+        }
         toast.success(r.result ?? "Done", action.link && onOpen ? { action: { label: "Open", onClick: () => onOpen(action.link!.href) } } : undefined);
       }
       else if (r?.status === "failed") toast.error(r.error ?? "That didn't work");

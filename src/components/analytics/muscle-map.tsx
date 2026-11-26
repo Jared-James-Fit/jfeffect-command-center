@@ -215,7 +215,7 @@ export function MuscleMap({
   const rows = useMemo(() => new Map(read.rows.map((r) => [r.muscle, r])), [read]);
   const [picked, setPicked] = useState<FineMuscle | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const ranked = useMemo(() => [...baseRead.rows].filter(r=>r.period.total>0).sort((a,b)=>b.period.total-a.period.total), [baseRead]);
+  const ranked = useMemo(() => [...read.rows].filter(r=>r.period.total>0).sort((a,b)=>b.period.total-a.period.total), [read]);
   const hasComparison = read.rows.some(r=>r.period.before!=null);
   const colorOf = useCallback(
     (m: FineMuscle) => muscleColor(rows.get(m), mode, dark),
@@ -232,8 +232,8 @@ export function MuscleMap({
     <div data-muscle-map data-muscle-mode={mode}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <label className="text-xs text-muted-foreground" htmlFor="muscle-heatmap-reading">Heatmap</label>
-          <select id="muscle-heatmap-reading" aria-label="Muscle heatmap metric" value={mode}
+          <span className="sr-only">Heatmap</span>
+          <select aria-label="Muscle heatmap metric" value={mode}
             onChange={e=>setMode(e.target.value as MuscleMode)}
             className="min-h-10 min-w-0 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground"
             data-muscle-metric-select>
@@ -268,12 +268,13 @@ export function MuscleMap({
         <div className="mt-3 grid gap-4 md:grid-cols-[minmax(180px,0.85fr)_minmax(0,1.15fr)] md:items-center" data-muscle-workspace>
           <BodyView colorOf={colorOf} picked={picked} onPick={pickFromBody} dark={dark}
             heightClass="h-[320px] sm:h-[360px] md:h-[380px]" compactControls />
-          <div className="min-w-0 md:self-start">
+          <div className="min-w-0 space-y-2 md:self-start">
+            <select aria-label="Find a muscle" value={picked??""} onChange={e=>pickFromBody(e.target.value?e.target.value as FineMuscle:null)} className="min-h-10 w-full rounded-lg border border-border bg-background px-2 text-xs"><option value="">All muscles</option>{read.rows.map(r=><option key={r.muscle} value={r.muscle}>{r.muscle}</option>)}</select>
             {!phone && pickedRow ? (
               <MuscleDetail row={pickedRow} mode={mode} coached={coached} credit={credit} enough={read.enoughData}
                 onExercise={onExercise} onClear={()=>setPicked(null)} />
             ) : (
-              <MuscleOverview ranked={ranked} rows={baseRead.rows} onPick={pickFromBody} />
+              <MuscleOverview ranked={ranked} rows={read.rows} mode={mode} onPick={pickFromBody} />
             )}
           </div>
         </div>
@@ -320,24 +321,33 @@ export function MuscleMap({
 }
 
 /** Useful at first paint, without requiring an athlete to discover a muscle by trial and error. */
-function MuscleOverview({ranked,rows,onPick}:{ranked:MuscleReadRow[];rows:MuscleReadRow[];onPick:(m:FineMuscle)=>void}) {
+function MuscleOverview({ranked,rows,mode,onPick}:{ranked:MuscleReadRow[];rows:MuscleReadRow[];mode:MuscleMode;onPick:(m:FineMuscle)=>void}) {
   const low=rows.filter(r=>r.role==="prime"&&r.period.total>0).sort((a,b)=>a.period.total-b.period.total)[0];
   const zero=rows.filter(r=>r.role==="prime"&&r.period.total===0);
   const max=ranked[0]?.period.total??1;
+  const delta=(r:MuscleReadRow)=>r.period.before?r.period.total-r.period.before.total:0;
+  const changes=rows.filter(r=>r.period.before&&Math.abs(delta(r))>=.5).sort((a,b)=>Math.abs(delta(b))-Math.abs(delta(a)));
+  const planned=rows.filter(r=>r.targetSets!=null&&r.targetSets>0).sort((a,b)=>a.period.total/a.targetSets!-b.period.total/b.targetSets!);
+  const progress=rows.filter(r=>r.dev.status==="strength"||r.dev.status==="opportunity").sort((a,b)=>Number(b.dev.status==="opportunity")-Number(a.dev.status==="opportunity"));
+  const quick=mode==="change"?changes:mode==="fit"?(planned.length?planned:rows.filter(r=>r.fit.status==="gap"||r.fit.status==="look")):mode==="development"?progress:ranked;
+  const heading=mode==="change"?"Largest training changes":mode==="fit"?(planned.length?"Plan vs actual":"Training balance"):mode==="development"?"Exercise progress":"Training distribution";
+  const empty=mode==="change"?"No measurable differences with comparable logs.":mode==="fit"?"No specific plan gaps identified.":mode==="development"?"No clear progress or regression signal.":"No working sets logged in this period.";
   return <div className="space-y-3" data-muscle-overview>
     <div className="flex items-center justify-between gap-2">
-      <div><div className="text-sm font-semibold">Training distribution</div><div className="text-xs text-muted-foreground">Select a muscle for details</div></div>
-      <div className="text-right"><div className="text-lg font-semibold tabular-nums">{ranked.length}<span className="text-xs text-muted-foreground">/{rows.length}</span></div><div className="text-[11px] text-muted-foreground">Muscles trained</div></div>
+      <div className="text-sm font-semibold">{heading}</div>
+      {mode==="distribution"&&<div className="text-right"><div className="text-lg font-semibold tabular-nums">{ranked.length}<span className="text-xs text-muted-foreground">/{rows.length}</span></div><div className="text-[11px] text-muted-foreground">Muscles trained</div></div>}
     </div>
-    {ranked.length ? <div className="space-y-1">
-      {ranked.slice(0,3).map(r=><button type="button" onClick={()=>onPick(r.muscle)} key={r.muscle} className="block min-h-11 w-full rounded-lg px-2 py-1 text-left hover:bg-muted/40 focus-visible:outline focus-visible:outline-2">
-        <span className="flex items-center justify-between gap-2 text-xs"><span className="font-medium">{r.muscle}</span><span className="tabular-nums text-muted-foreground">{fmtSets(r.period.total)} sets ›</span></span>
-        <span className="mt-1.5 block h-1.5 rounded-full bg-muted"><span className="block h-full rounded-full bg-blue-400/80" style={{width:100*r.period.total/max+"%"}} /></span>
-      </button>)}
-      {low&&ranked.slice(0,3).every(r=>r.muscle!==low.muscle)&&<button type="button" onClick={()=>onPick(low.muscle)} className="flex min-h-10 w-full items-center justify-between gap-2 border-t border-border text-xs"><span className="text-muted-foreground">Least trained priority · {low.muscle}</span><span className="font-medium tabular-nums">{fmtSets(low.period.total)} sets ›</span></button>}
-      {zero.length>0&&<button type="button" onClick={()=>onPick(zero[0].muscle)} className="flex min-h-10 w-full items-center justify-between gap-2 border-t border-border text-xs"><span className="text-muted-foreground">No logged work · {zero[0].muscle}{zero.length>1?" +"+(zero.length-1)+" more":""}</span><span>›</span></button>}
-    </div>:<p className="text-xs text-muted-foreground">No working sets logged in this period.</p>}
-    <select aria-label="Find a muscle" value="" onChange={e=>{if(e.target.value)onPick(e.target.value as FineMuscle)}} className="min-h-10 w-full rounded-lg border border-border bg-background px-2 text-xs"><option value="">Find a muscle…</option>{rows.map(r=><option key={r.muscle} value={r.muscle}>{r.muscle}</option>)}</select>
+    {quick.length ? <div className="divide-y divide-border/60">
+      {quick.slice(0,3).map(r=>{
+        const value=mode==="change"?(delta(r)>0?"+":"")+fmtSets(delta(r))+" sets":mode==="fit"?(r.targetSets!=null&&r.targetSets>0?fmtSets(r.period.total)+" / "+fmtSets(r.targetSets)+" sets":FIT_SHORT[r.fit.status]):mode==="development"?DEV_SHORT[r.dev.status]:fmtSets(r.period.total)+" sets";
+        return <button type="button" onClick={()=>onPick(r.muscle)} key={r.muscle} className="block min-h-11 w-full rounded-lg px-2 py-2 text-left hover:bg-muted/40 focus-visible:outline focus-visible:outline-2">
+          <span className="flex items-center justify-between gap-2 text-xs"><span className="font-medium">{r.muscle}</span><span className="tabular-nums text-muted-foreground">{value} ›</span></span>
+          {mode==="distribution"&&<span className="mt-1.5 block h-1.5 rounded-full bg-muted"><span className="block h-full rounded-full bg-blue-400/80" style={{width:100*r.period.total/max+"%"}} /></span>}
+        </button>
+      })}
+      {mode==="distribution"&&low&&ranked.slice(0,3).every(r=>r.muscle!==low.muscle)&&<button type="button" onClick={()=>onPick(low.muscle)} className="flex min-h-10 w-full items-center justify-between gap-2 text-xs"><span className="text-muted-foreground">Least trained priority · {low.muscle}</span><span className="font-medium tabular-nums">{fmtSets(low.period.total)} sets ›</span></button>}
+      {mode==="distribution"&&zero.length>0&&<button type="button" onClick={()=>onPick(zero[0].muscle)} className="flex min-h-10 w-full items-center justify-between gap-2 text-xs"><span className="text-muted-foreground">No logged work · {zero[0].muscle}{zero.length>1?" +"+(zero.length-1)+" more":""}</span><span>›</span></button>}
+    </div>:<p className="text-xs text-muted-foreground">{empty}</p>}
   </div>;
 }
 

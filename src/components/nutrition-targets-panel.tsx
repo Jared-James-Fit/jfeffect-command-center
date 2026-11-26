@@ -1,3 +1,5 @@
+import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
+import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 import { useMemo, useState } from "react";
 import { ErrorState, OfflineState, SlowNote } from "@/components/loading";
 import { queryView } from "@/lib/loading/load-state";
@@ -81,10 +83,13 @@ export function NutritionTargetsPanel({
   // (a coach building a second plan over one that just didn't load).
   const plansState = queryView(plansQ as any).kind;
   const { current, previous } = splitPlans(targets);
+  const revisions = useQuery(nutritionRevisionQuery(clientId));
+  const references = orderPlanReferences(previous, revisions.data ?? []);
   const [reusing, setReusing] = useState<string | null>(null);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["nutrition-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["nutrition-plan-revisions", clientId] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     void invalidateGroceryList(qc, clientId);
   };
@@ -172,9 +177,9 @@ export function NutritionTargetsPanel({
   const d = plan ? deriveTarget(plan) : null;
   const chip =
     !d ? null
-    : d.state === "past-due" ? <StatusChip tone="attention">Update overdue</StatusChip>
-    : d.state === "due-today" ? <StatusChip tone="attention">Update due today</StatusChip>
-    : d.state === "ending-soon" ? <StatusChip tone="attention">Update due in {d.daysRemaining} {d.daysRemaining === 1 ? "day" : "days"}</StatusChip>
+    : d.state === "past-due" ? <StatusChip tone="attention">Review overdue</StatusChip>
+    : d.state === "due-today" ? <StatusChip tone="attention">Review due today</StatusChip>
+    : d.state === "ending-soon" ? <StatusChip tone="attention">Review due in {d.daysRemaining} {d.daysRemaining === 1 ? "day" : "days"}</StatusChip>
     : d.state === "upcoming" && plan.start_date ? <StatusChip>Starts {planDate(plan.start_date)}</StatusChip>
     : null;
 
@@ -183,6 +188,7 @@ export function NutritionTargetsPanel({
       <CardHeader
         icon={Apple}
         title="Current plan"
+        info="The live prescription. The review date is a check-in deadline, not an expiry; the plan stays active until replaced."
         chip={chip}
         actions={
           <DropdownMenu>
@@ -238,13 +244,14 @@ export function NutritionTargetsPanel({
               <p className="flex items-start gap-2 text-[13px]">
                 <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 {/* A plan past its date is still the client's plan: nothing takes it away but a new one. */}
-                <span>They keep this plan until you update it. The Nutrition Update asks them how it went.</span>
+                <span>This plan stays active. Request feedback before deciding whether to change it.</span>
               </p>
               <Button variant="outline" className="h-10 shrink-0 gap-1.5" disabled={requesting} onClick={() => sendRequest(plan)}>
-                <Send className="h-4 w-4" /> Send the update now
+                <Send className="h-4 w-4" /> Request nutrition check-in
               </Button>
             </div>
           )}
+          <NutritionWeekSummary key={clientId} clientId={clientId} days={plan.nutrition_target_days ?? []} references={references} historyUnavailable={revisions.isError} historyLoading={revisions.isLoading} currentId={plan.id} showCleo={!cleoEntry} />
           {/* A day at a time: its targets (the client's ring), then its meals. */}
           <PlanDaysView
             days={planViewDays(plan)}

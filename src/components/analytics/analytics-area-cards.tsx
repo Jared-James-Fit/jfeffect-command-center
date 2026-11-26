@@ -62,16 +62,22 @@ export function BlockVolumeList({ rows }: { rows: BlockVolumeRow[] }) {
 export function MoreDetail({
   label = "More detail",
   children,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   label?: string;
   children: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const toggle = () => { if (controlledOpen === undefined) setLocalOpen(!open); onOpenChange?.(!open); };
   return (
     <div data-more-detail>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-expanded={open}
         className="flex min-h-11 w-full items-center justify-between rounded-xl border border-border px-4 text-[14px] font-medium text-foreground transition hover:bg-muted/40"
       >

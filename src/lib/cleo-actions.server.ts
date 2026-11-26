@@ -233,6 +233,21 @@ function identitySummary(c: any, p: any) {
   return [`Update ${clientLabel(c)}'s profile name.`, ...lines].join("\n");
 }
 
+async function reviewedGoal(db: any, p: any) {
+  const { data: g, error } = await db.from("client_goals").select("*").eq("id", p.goal_id).eq("client_id", p.client_id).maybeSingle();
+  if (error || !g) throw new Error("That goal does not belong to this client or is unavailable.");
+  if (g.version !== p.expected_version || !["proposed", "active"].includes(g.status)) throw new Error("The goal changed since review. Ask Cleo for a new card.");
+  if (!["lift", "total", "bodyweight"].includes(g.kind)) throw new Error("This action needs a measurable goal.");
+  const { toKg } = await import("@/lib/goal-intel/types");
+  if (toKg(p.value, p.unit) > 1500) throw new Error("That weight is outside the supported range.");
+  return g;
+}
+async function reviewedMeeting(db: any, p: any) {
+  const { data: s, error } = await db.from("coaching_sessions").select("id, event, scheduled_at, created_at, updated_at, status, analysis_status").eq("id", p.session_id).eq("client_id", p.client_id).maybeSingle();
+  if (error || !s || s.status !== "done" || s.analysis_status !== "ready") throw new Error("That completed meeting's analysis is not available for this client.");
+  return s;
+}
+
 /** The card's words, from the database. Throws when the thing doesn't exist or can't be done. */
 export async function describeAction(db: any, kind: CleoActionKind, p: any): Promise<string> {
   if (kind === "restore_program_version") {
@@ -242,6 +257,18 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
   const program = await import("@/lib/cleo-program.server");
   if (program.isProgramKind(kind)) return program.describeProgramAction(db, kind, p, businessToday());
   switch (kind) {
+    case "approve_goal_target": {
+      const g = await reviewedGoal(db, p);
+      const { fmtClientTarget, toKg } = await import("@/lib/goal-intel/types");
+      const { dualLoadText } = await import("@/lib/dual-weight");
+      const before = g.approved_kg != null ? dualLoadText(Number(g.approved_kg), "kg") : "Not approved";
+      const discussed = fmtClientTarget(g) ?? "Not on file";
+      return [clientLabel(await client(db, p.client_id)) + " · " + g.title, "Discussed: " + discussed + (g.client_unit_source === "inferred" ? " (unit inferred)" : ""), "Approved target: " + before + " → " + dualLoadText(toKg(p.value, p.unit), "kg"), "Source: " + (g.source_kind ?? "On file") + (g.source_at ? " · " + g.source_at.slice(0, 10) : ""), "Visibility: " + (g.client_facing ? "client-visible" : "private") + " → " + (p.client_facing ? "client-visible; normal goal update review applies" : "private coaching target"), "This does not set platform attempts."].join("\n");
+    }
+    case "recover_meeting_goals": {
+      const s = await reviewedMeeting(db, p);
+      return "Re-read " + clientLabel(await client(db, p.client_id)) + "'s " + (s.event?.title ?? "meeting") + " (" + String(s.scheduled_at ?? s.created_at).slice(0,10) + "). Recover missing goal proposals for review; no targets will be approved.";
+    }
     case "update_client_identity": {
       const c = await client(db, p.client_id);
       return identitySummary(c, p);
@@ -315,6 +342,10 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
       case "send_message":
       case "schedule_message":
         return { href: `/admin/communication?tab=messages&client=${p.client_id}`, label: "Open the chat" };
+      case "approve_goal_target":
+        return client(p.client_id, "summary", "Review goals");
+      case "recover_meeting_goals":
+        return client(p.client_id, "meetings", "Open meetings");
       case "update_client_identity":
         return client(p.client_id, "info", "Open account info");
       case "update_meet_from_attachment":
@@ -410,6 +441,7 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
       summary += `\nSource: ${file.file_name ?? "Competition file"}`;
     }
   } else {
+    if (kind === "approve_goal_target" || kind === "recover_meeting_goals") await assertRequesterReaches(admin, actor.userId, (params as { client_id: string }).client_id);
     summary = await describeAction(actor.db, kind, params);
   }
   const permission = actionPermission(kind, params);
@@ -452,6 +484,24 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
   const sb = actor.supabase;
   const myCoachId = async () => (await sb.from("coaches").select("id").eq("user_id", actor.userId).maybeSingle()).data?.id ?? null;
   switch (kind) {
+    case "approve_goal_target": {
+      const admin = await service();
+      await assertRequesterReaches(admin, actor.userId, p.client_id);
+      await reviewedGoal(admin, p);
+      const { decideGoal } = await import("@/lib/goal-intel/goals.server");
+      const g = await decideGoal(admin, p.goal_id, { action: "approve", expectedVersion: p.expected_version, value: p.value, unit: p.unit, clientFacing: p.client_facing }, { userId: actor.userId, kind: "coach" });
+      const { dualLoadText } = await import("@/lib/dual-weight");
+      return g.title + ": approved " + dualLoadText(Number(g.approved_kg), "kg") + ". Goal history updated.";
+    }
+    case "recover_meeting_goals": {
+      const admin = await service();
+      await assertRequesterReaches(admin, actor.userId, p.client_id);
+      await reviewedMeeting(admin, p);
+      const { extractFromMeeting, assessClient } = await import("@/lib/goal-intel/goals.server");
+      const result = await extractFromMeeting(admin, p.session_id);
+      await assessClient(admin, p.client_id, { force: true });
+      return "Meeting checked: " + result.created + " new and " + result.updated + " updated goal proposals. No targets approved.";
+    }
     case "update_client_identity": {
       const before = (raw as { _identity_before?: Record<string, string | null> })._identity_before;
       if (!before || identityFields.some(key => !Object.prototype.hasOwnProperty.call(before, key))) throw new Error("The reviewed name is missing. Ask Cleo for a new card.");
