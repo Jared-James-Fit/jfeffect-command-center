@@ -127,16 +127,17 @@ export interface ClientAnalyticsDashboardProps {
 export type AnalyticsView = "overview" | "strength" | "training" | "records";
 export const ANALYTICS_VIEWS: Array<[AnalyticsView, string]> = [
   ["overview", "Overview"],
-  ["strength", "Strength"],
-  ["training", "Training"],
-  ["records", "Records"],
+  ["strength", "Exercise Metrics"],
 ];
 const LEGACY_VIEW: Record<string, AnalyticsView> = {
-  volume: "training",
-  consistency: "training",
-  recovery: "training",
+  training: "overview",
+  records: "overview",
+  volume: "overview",
+  consistency: "overview",
+  recovery: "overview",
   calendar: "overview",
-  lifetime: "records",
+  lifetime: "overview",
+  exercises: "strength",
 };
 export function viewFromSearch(v: string | null | undefined): AnalyticsView | undefined {
   if (!v) return undefined;
@@ -227,14 +228,23 @@ export function ClientAnalyticsDashboard({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [view, setView] = useState<AnalyticsView>(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#recovery") return "training";
-    return initialView ?? "overview";
+    if (typeof window !== "undefined" && window.location.hash === "#recovery") return "overview";
+    return viewFromSearch(initialView) ?? "overview";
   });
   const changeView = (v: AnalyticsView) => {
-    setView(v);
-    onViewChange?.(v);
-    if (typeof window !== "undefined")
-      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    const next = viewFromSearch(v) ?? "overview";
+    setView(next);
+    onViewChange?.(next);
+    if (typeof window !== "undefined") {
+      if (v === "training" || v === "records") {
+        window.requestAnimationFrame(() => {
+          const section = document.getElementById(v === "training" ? "analytics-muscles" : "analytics-records");
+          const details = section?.querySelector("details");
+          if (details) details.open = true;
+          section?.scrollIntoView({ block: "start" });
+        });
+      } else window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    }
   };
 
   const today = isoDay(new Date());
@@ -949,8 +959,7 @@ export function ClientAnalyticsDashboard({
                 <div
                   className={cn(
                     "grid gap-6",
-                    profile === "powerlifting" &&
-                      "lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]",
+                    profile === "powerlifting" && "grid-cols-1",
                   )}
                 >
                   {profile === "powerlifting" && (
@@ -975,6 +984,9 @@ export function ClientAnalyticsDashboard({
                       </SectionErrorBoundary>
                     </Card>
                   )}
+
+                </div>
+                <KpiStrip items={kpis.filter((k) => profile !== "powerlifting" || k.key !== "lift").slice(0, 3)} />
                   <MoreDetail label="Training calendar">
                     <SectionTitle
                       title="Training calendar"
@@ -992,8 +1004,6 @@ export function ClientAnalyticsDashboard({
                       />
                     </SectionErrorBoundary>
                   </MoreDetail>
-                </div>
-                <KpiStrip items={kpis.filter((k) => profile !== "powerlifting" || k.key !== "lift").slice(0, 3)} />
                 {observation && (
                   <MoreDetail label="Cleo’s insight"><SectionErrorBoundary label="Observation">
                     <CleoObservationCard
@@ -1048,7 +1058,7 @@ export function ClientAnalyticsDashboard({
 
                 <Card className="p-4">
                   <SectionTitle
-                    title="Exercise progress"
+                    title="Exercise metrics"
                     sub="Pick an exercise to see its progress. Each dot is your best set that day."
                   />
                   <SectionErrorBoundary label="Exercise progress">
@@ -1063,6 +1073,11 @@ export function ClientAnalyticsDashboard({
                     />
                   </SectionErrorBoundary>
                 </Card>
+              </div>
+            )}
+
+            {view === "overview" && (
+              <div className="space-y-6" id="analytics-muscles">
                 {hasPowerlifting && (
                   <MoreDetail label="Competition lift trends">
                     <SectionTitle
@@ -1156,11 +1171,7 @@ export function ClientAnalyticsDashboard({
                     </SectionErrorBoundary>
                   </MoreDetail>
                 )}
-              </div>
-            )}
 
-            {view === "training" && (
-              <div className="space-y-6" data-analytics-view="training">
                 <Card className="p-4" data-training-muscles>
                   <SectionTitle
                     title="Muscle training map"
@@ -1334,8 +1345,9 @@ export function ClientAnalyticsDashboard({
               </div>
             )}
 
-            {view === "records" && (
-              <div data-analytics-view="records">
+            {view === "overview" && (
+              <div id="analytics-records">
+                <MoreDetail label="Records & competitions">
                 <SectionErrorBoundary label="Records">
                   <RecordsView
                     lifetime={lifetime}
@@ -1349,6 +1361,7 @@ export function ClientAnalyticsDashboard({
                     today={today}
                   />
                 </SectionErrorBoundary>
+                </MoreDetail>
               </div>
             )}
           </>
@@ -1372,15 +1385,12 @@ export function ClientAnalyticsDashboard({
   );
 }
 
-/** One compact destination selector; existing routes and deep links remain valid. */
+/** Two destinations; historical URLs remain compatible. */
 function AnalyticsTabs({view,onChange}:{view:AnalyticsView;onChange:(v:AnalyticsView)=>void}) {
-  return <div className="flex items-center justify-between gap-2 border-b border-border pb-3" data-analytics-tabs-wrap>
-    <span className="text-xs font-medium text-muted-foreground">Analytics</span>
-    <select aria-label="Analytics section" value={view} onChange={e=>onChange(e.target.value as AnalyticsView)}
-      className="min-h-10 min-w-[9rem] rounded-lg border border-border bg-background px-3 text-sm font-medium" data-analytics-section-select>
-      {ANALYTICS_VIEWS.map(([v,label])=><option key={v} value={v}>{label}</option>)}
-    </select>
-  </div>;
+  return <nav aria-label="Analytics sections" className="grid grid-cols-2 border-b border-border" data-analytics-tabs-wrap>
+    {ANALYTICS_VIEWS.map(([v,label])=><button type="button" key={v} aria-current={view===v?"page":undefined} onClick={()=>onChange(v)}
+      className={cn("min-h-11 border-b-2 px-3 text-sm font-medium",view===v?"border-foreground text-foreground":"border-transparent text-muted-foreground")}>{label}</button>)}
+  </nav>;
 }
 
 function AnalyticsEmptyPreview() {
