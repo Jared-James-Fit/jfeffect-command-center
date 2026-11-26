@@ -105,7 +105,7 @@ export type MeetData = {
 
 export type AttemptPlanData = { opener: number | null; second: number | null; third: number | null };
 export type WarmupData = { rows: Array<{ kg: number | null; pct: number | null; reps: number }> };
-export type TextData = { text: string };
+export type TextData = { text: string; meetLogistics?: { field: string; value: string } };
 export type EquipmentData = {
   rackHeight?: string | null;
   safety?: string | null;
