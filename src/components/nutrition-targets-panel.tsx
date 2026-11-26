@@ -31,6 +31,7 @@ import { NutritionCleoEntry } from "@/components/nutrition/nutrition-cleo-dock";
 import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
+import { todayLocalISO } from "@/lib/today";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 
 export function NutritionTargetsPanel({
@@ -252,7 +253,7 @@ export function NutritionTargetsPanel({
             clientId={clientId}
             days={plan.nutrition_target_days ?? []}
             references={previous}
-            anchor={plan.start_date && plan.start_date > new Date().toISOString().slice(0, 10) ? plan.start_date : undefined}
+            anchor={plan.start_date && plan.start_date > todayLocalISO() ? plan.start_date : undefined}
             onReuse={(source) => { setEditing(null); setCopySource(source); setOpen(true); }}
           />
           {/* A day at a time: its targets (the client's ring), then its meals. */}
