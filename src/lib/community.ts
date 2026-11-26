@@ -147,6 +147,10 @@ export type CommunityAuthor = {
   title?: string | null;
   /** Their @username, without the @ (community_author). */
   username?: string | null;
+  /** Their membership badge, from what they actually have (null: staff, or hidden). */
+  badge?: "coaching" | "premium" | "member" | "free" | null;
+  /** A disclosed virtual Crew account run by JF Effect. */
+  virtual?: boolean | null;
 };
 
 export type CommunitySeries =

@@ -2,11 +2,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LiveAvatar, LivePill } from "@/components/live-indicator";
 import { cn } from "@/lib/utils";
 import { StoryAvatar } from "@/components/community/story-ring";
-import { CoachBadge } from "@/components/community/post-card";
 import { FollowButton } from "@/components/community/follow-button";
 import { communityIsoDow, trainedLabel, trainingSinceLabel, type CommunityAuthor, type CommunityMember } from "@/lib/community";
 import { useCommunityMembers, useCommunityProfile, useCrewGoal } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
+import { NameMarks } from "@/components/name-marks";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -112,7 +112,7 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-bold">{m.author.name}</span>
-          {m.author.is_coach && <CoachBadge />}
+          <NameMarks person={m.author} userId={m.author.user_id} />
           {m.live && <LivePill />}
           {/* the week, beside the name, so the line under it gets the full width */}
           {days.length > 0 && <span className="ml-auto shrink-0 pl-1 max-[359px]:hidden"><WeekDots days={days} today={today} /></span>}

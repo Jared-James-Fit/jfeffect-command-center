@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Aperture, Check, ChevronRight, Eye, Heart, MessageCircle, MoreHorizontal, Play, Plus, Send, Trophy, VolumeX, X } from "lucide-react";
+import { NameMarks } from "@/components/name-marks";
 import { storyLookLine, useStoryLooks } from "@/lib/story-looks";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -1081,6 +1082,7 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
         <div className="mt-2.5 flex h-10 items-center gap-2">
           <UserAvatar src={group.author.avatar_url} name={group.author.name} size={32} expandable={false} />
           <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : group.author.name.split(" ")[0]}</span>
+          {!group.mine && <NameMarks person={group.author as any} userId={group.author.user_id} size={13} onDark />}
           <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
         </div>
       </div>

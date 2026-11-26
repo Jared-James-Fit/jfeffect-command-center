@@ -6,18 +6,18 @@ import { RecentlyDeletedRow } from "@/components/account/recently-deleted";
 
 export const Route = createFileRoute("/_authenticated/admin/members/")({ component: MembersList });
 
-/** App members: the same list as Clients › Members (search, filters, View as, test member). */
+/** Member Management: every account that isn't a coaching client (the same list as Clients › Members). */
 function MembersList() {
   const { viewOnly } = useAuth();
   return (
     <div className="space-y-3">
       <PageHeader
         title="Members"
-        subtitle="Subscription and program-only members. Separate from coaching clients."
+        subtitle="Free, paid and program-only accounts. Coaching clients are under Clients."
         actions={viewOnly ? undefined : <NewMemberButton />}
       />
       <div className="space-y-3 p-3 sm:p-4 md:p-6">
-        <MembersDirectory returnTo="/admin/members" />
+        <MembersDirectory />
         <RecentlyDeletedRow />
       </div>
     </div>

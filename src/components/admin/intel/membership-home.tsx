@@ -148,7 +148,7 @@ export function MembershipHome() {
               </Button>
             }
           >
-            <MembersDirectory returnTo="/admin/membership" showTest={false} />
+            <MembersDirectory />
           </IntelSection>
         </>
       )}

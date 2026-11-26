@@ -346,6 +346,32 @@ async function jfSettings(supabase: any) {
   return data;
 }
 
+/**
+ * Stripe's subscription as it is now (the event's snapshot can be older than the last write:
+ * events arrive out of order). Falls back to the snapshot when Stripe can't be read.
+ */
+export async function currentSubscription(snapshot: any, apiKey: string | null | undefined): Promise<any> {
+  if (!snapshot?.id || !apiKey) return snapshot;
+  try {
+    const fresh: any = await stripeFetch(`/subscriptions/${snapshot.id}`, { apiKey });
+    return fresh?.id === snapshot.id ? fresh : snapshot;
+  } catch (e: any) {
+    console.warn("[stripe-webhook] couldn't read the subscription; using the event's copy", { sub: snapshot.id, message: e?.message });
+    return snapshot;
+  }
+}
+
+/** Is this invoice paid or void by now (a late payment_failed after a successful retry)? */
+export async function invoiceSettled(invoice: any, apiKey: string | null | undefined): Promise<boolean> {
+  if (!invoice?.id || !apiKey) return false;
+  try {
+    const fresh: any = await stripeFetch(`/invoices/${invoice.id}`, { apiKey });
+    return fresh?.status === "paid" || fresh?.status === "void";
+  } catch {
+    return false;
+  }
+}
+
 async function isJfMembershipSubscription(supabase: any, sub: any): Promise<boolean> {
   if (!sub) return false;
   if (sub.metadata?.kind === "jf_membership") return true;
@@ -496,18 +522,24 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         // ── Duplicate-event protection ──────────────────────────────────────
         // Stripe retries delivery on any non-2xx or timeout. We dedupe by
         // event.id so repeated retries can't double-process the same event.
+        // The claim is a lease: 'processing' until the handler finishes, and one a cut-off
+        // worker left behind (older than 10 minutes) is taken again by Stripe's retry
+        // (stripe_event_reclaim), so an event is never lost to a worker that died mid-handler.
         if (event?.id) {
           const { error: dupErr } = await supabase
             .from("processed_stripe_events")
-            .insert({ event_id: event.id, event_type: event.type ?? "unknown" });
+            .insert({ event_id: event.id, event_type: event.type ?? "unknown", status: "processing" } as any);
           if (dupErr) {
-            // 23505 = unique_violation → we've already processed this event.
+            // 23505 = unique_violation → already done, or still being handled by another worker.
             if ((dupErr as any).code === "23505") {
-              return Response.json({ received: true, duplicate: true });
+              const { data: reclaimed } = await (supabase as any).rpc("stripe_event_reclaim", { _event_id: event.id });
+              if (reclaimed !== true) return Response.json({ received: true, duplicate: true });
+              console.warn("[stripe-webhook] took back a stale claim", { eventId: event.id });
+            } else {
+              console.error("[stripe-webhook] dedupe insert failed", dupErr);
+              // Fail closed so Stripe retries rather than silently skipping.
+              return new Response("Dedupe store error", { status: 500 });
             }
-            console.error("[stripe-webhook] dedupe insert failed", dupErr);
-            // Fail closed so Stripe retries rather than silently skipping.
-            return new Response("Dedupe store error", { status: 500 });
           }
         }
 
@@ -788,6 +820,14 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Subscription updated (renewal, cancellation, past_due) ──────
             case "customer.subscription.updated": {
+              // Events can arrive out of order (an older .updated after a newer one, or after
+              // .deleted). Stripe's subscription as it is now is the truth, so every write below
+              // uses it, never the event's snapshot; an ended subscription is left to .deleted.
+              const obj = await currentSubscription(event.data?.object ?? {}, eventApiKey);
+              if (obj.status === "canceled") {
+                console.info("[stripe-webhook] subscription already ended; .deleted handles it", { sub: obj.id, eventId: event.id });
+                break;
+              }
               if (await isJfMembershipSubscription(supabase, obj)) {
                 const member = await findJfMemberBySub(supabase, obj);
                 if (member) await applyJfSubToMember(supabase, member, obj);
@@ -1046,7 +1086,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   const { data: pr } = await supabase
                     .from("purchase_records").select("*")
                     .eq("client_id", clientId)
-                    .in("payment_status", ["Active Subscription", "Pending Payment", "Payment Link Sent", "Unpaid"])
+                    // a one-time invoice never lands on a live subscription's sale
+                    .in("payment_status", invSubId
+                      ? ["Active Subscription", "Pending Payment", "Payment Link Sent", "Unpaid"]
+                      : ["Pending Payment", "Payment Link Sent", "Unpaid"])
                     .order("purchased_at", { ascending: false })
                     .limit(1).maybeSingle();
                   purchase = pr ?? null;
@@ -1061,22 +1104,33 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 );
               }
               if (purchase) {
+                const { saleHasEnded } = await import("@/lib/stripe-account-sync.server");
+                // A sale that ended (cancelled, refunded, voided) keeps its state; the payment is
+                // still recorded below. A one-time invoice is "Paid", never a subscription, and
+                // never moves a next billing date.
+                const endedSale = saleHasEnded(purchase);
                 await supabase.from("purchase_records").update({
-                  payment_status: "Active Subscription",
-                  // Fix 3: reactivate service_status on successful renewal (handles Overdue recovery)
-                  service_status: "Active",
+                  ...(endedSale
+                    ? {}
+                    : {
+                        payment_status: invSubId ? "Active Subscription" : "Paid",
+                        // Fix 3: reactivate service_status on successful renewal (handles Overdue recovery)
+                        service_status: "Active",
+                      }),
                   paid_at: now,
                   stripe_receipt_url: obj.hosted_invoice_url ?? purchase.stripe_receipt_url,
                   ...(invSubId ? { stripe_subscription_id: invSubId } : {}),
                   ...(obj.customer ? { stripe_customer_id: obj.customer } : {}),
-                  // Roll next_billing_date forward from the invoice line period end.
-                  ...(obj.lines?.data?.[0]?.period?.end
+                  // Roll next_billing_date forward from the invoice line period end (subscriptions only).
+                  ...(invSubId && !endedSale && obj.lines?.data?.[0]?.period?.end
                     ? { next_billing_date: new Date(obj.lines.data[0].period.end * 1000).toISOString().split("T")[0] }
                     : {}),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
-                await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                if (!endedSale) {
+                  await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                }
                 // A session package's auto-pay pays the client's packages in order: this
                 // payment goes to the oldest one still owed (its own, then the pay-later
                 // renewals after it), never onto a package that's already paid.
@@ -1261,6 +1315,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   console.info("[stripe-webhook] plan change charge failed; plan unchanged", { invoice: obj.id });
                   break;
                 }
+              }
+              // A retry may already have paid this invoice (events can arrive late): read it now,
+              // and never mark a sale overdue for an invoice that's paid or void.
+              if (await invoiceSettled(obj, eventApiKey)) {
+                console.info("[stripe-webhook] failed invoice is already settled; nothing to mark", { invoice: obj.id, eventId: event.id });
+                break;
               }
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_subscription_id: failedSubId,
@@ -1507,6 +1567,13 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           return new Response("Internal error", { status: 500 });
         }
 
+        if (event?.id) {
+          const { error: doneErr } = await supabase
+            .from("processed_stripe_events")
+            .update({ status: "done" } as any)
+            .eq("event_id", event.id);
+          if (doneErr) console.error("[stripe-webhook] could not mark the event done", doneErr);
+        }
         return Response.json({ received: true });
       },
     },
