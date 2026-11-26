@@ -61,6 +61,11 @@ describe("where the coach is", () => {
   it("a client's page, tab by tab", () => {
     expect(cleoPlaceFromLocation(`/admin/clients/${MARC}`, { tab: "nutrition" })).toEqual({ clientId: MARC, blockId: null, section: "nutrition" });
     expect(cleoPlaceFromLocation(`/admin/clients/${MARC}`, { tab: "cardio" }).section).toBe("cardio");
+    const contexts = { competition: "competition", meetings: "meetings", documents: "forms", sessions: "sessions", purchases: "billing", info: "details", "goals-setup": "goals", coaching: "coaching", notes: "notes", files: "documents", account: "account" };
+    for (const [tab, section] of Object.entries(contexts)) {
+      expect(cleoPlaceFromLocation(`/admin/clients/${MARC}`, { tab }).section).toBe(section);
+      expect(cleoPlaceFromLocation("/admin/clients", { clientId: MARC, clientTab: tab }).section).toBe(section);
+    }
     expect(cleoPlaceFromLocation(`/admin/clients/${MARC}`, { tab: "training" }).section).toBe("workouts");
     expect(cleoPlaceFromLocation(`/admin/clients/${MARC}`, {}).section).toBe("client");
     expect(cleoPlaceFromLocation(`/admin/clients/${MARC}/progress`, {}).section).toBe("analytics");

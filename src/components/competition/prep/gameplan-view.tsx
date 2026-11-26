@@ -18,7 +18,7 @@ export function Weight({ kg, className }: { kg: number | null | undefined; class
   if (kg == null) return <span className={cn("text-muted-foreground", className)}>–</span>;
   return (
     <span className={cn("tabular-nums", className)}>
-      <span className="font-semibold">{kg}</span>
+      <span className="font-semibold">{kg} kg</span>
       <span className="ml-1 text-[0.8em] text-muted-foreground">{toLb(kg)} lb</span>
     </span>
   );

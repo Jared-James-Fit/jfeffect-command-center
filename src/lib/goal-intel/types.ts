@@ -211,7 +211,7 @@ export function fmtWeight(kg: number | null | undefined, unit: Unit): string {
 /** The client's stated target as they said it ("220–225 lb"). */
 export function fmtClientTarget(g: Pick<GoalRow, "client_value" | "client_value_max" | "client_unit" | "client_text">): string | null {
   if (g.client_value == null) return g.client_text ?? null;
-  const u = g.client_unit ?? "kg";
+  const u = g.client_unit ?? "(unit unconfirmed)";
   const a = Number(g.client_value);
   const b = g.client_value_max != null ? Number(g.client_value_max) : null;
   const n = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));

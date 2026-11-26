@@ -190,6 +190,9 @@ export async function upsertCandidate(
   meta: CandidateMeta,
   loaded: Pick<LoadedGoalContext, "ctx"> | null,
 ): Promise<"created" | "updated" | "same" | "skipped"> {
+  // The ledger's identity is one final-result target per lift and competition.
+  // Openers/seconds remain meeting discussion, never replace the final target.
+  if (cand.kind === "lift" && (cand.timing === "opener" || cand.timing === "second")) return "skipped";
   const unitPref = unitOf(client);
   const names = [client.first_name, client.preferred_name, ...(client.full_name ?? "").split(" ")].filter(Boolean) as string[];
   const competitionId = cand.kind === "lift" || cand.kind === "total" || cand.kind === "preference" || cand.timing ? meta.competitionId : null;
@@ -231,6 +234,8 @@ export async function upsertCandidate(
   const tentative = !!(cand.tentative || meta.tentative);
   if (existing) {
     const g = existing as GoalRow;
+    // Backfilling an old meeting must not replace a more recent source.
+    if (g.source_at && meta.sourceAt && Date.parse(meta.sourceAt) < Date.parse(g.source_at)) return "skipped";
     const same = isNumber
       ? g.client_value != null && Number(g.client_value) === lo && (g.client_value_max == null ? hi == null : Number(g.client_value_max) === hi) && (g.client_unit === unit || unitSource === "inferred")
       : (g.client_text ?? "").trim() === cand.text.trim();
@@ -326,6 +331,7 @@ export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ c
     const a = s.analysis as any;
     for (const it of (a.items ?? []) as any[]) {
       if (it?.kind !== "goal" && it?.kind !== "objective") continue;
+      if (it.basis === "interpretation") continue;
       const text = String(it.text ?? "");
       const quote = String(it.quote ?? text);
       const measured = measurableGoals(text, quote);
@@ -336,7 +342,12 @@ export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ c
       if (it?.kind !== "goal") continue;
       const text = String(it.text ?? "");
       const quote = String(it.quote ?? text);
-      if (measurableGoals(text, quote).length) continue; // the items carry the numbers
+      const measured = measurableGoals(text, quote);
+      // Some older analyses saved a goal only as intelligence, not as an item.
+      if (measured.length) {
+        for (const c of measured) cands.push({ c, speaker: it.speaker === "coach" || it.speaker === "athlete" ? it.speaker : "unclear", due: it.expiresOn ?? null, context: text, tentative: c.tentative });
+        continue;
+      }
       const w = wordedGoal(text, quote);
       if (w && w.kind !== "preference") cands.push({ c: w, speaker: it.speaker === "coach" || it.speaker === "athlete" ? it.speaker : "unclear", due: it.expiresOn ?? null, context: text, tentative: false });
     }
@@ -347,7 +358,10 @@ export async function extractFromMeeting(sb: Db, sessionId: string): Promise<{ c
     const needsEvidence = cands.some((x) => x.c.values.length && !x.c.unit);
     const loaded = needsEvidence ? await loadGoalContext(sb, client.id, { goals: [], evidence: true }).catch(() => null) : null;
     const seen = new Set<string>();
-    for (const x of cands) {
+    // Prefer final-attempt candidates, then preserve source ordering. Earlier
+    // attempts are visible in the source meeting rather than in the result ledger.
+    for (const x of [...cands].sort((a,b) => Number(b.c.timing === "third") - Number(a.c.timing === "third"))) {
+      if (x.c.kind === "lift" && (x.c.timing === "opener" || x.c.timing === "second")) continue;
       // a meet goal: an attempt, a meet word, or due on the meet day
       const atMeet = !!s.competition_id && (x.c.timing != null || x.due === compDate || x.c.kind === "preference");
       const meta: CandidateMeta = {

@@ -234,8 +234,9 @@ export const FIELD_LABELS: Record<string, string> = {
 };
 
 /** Returns whether the row has the minimum required fields filled in. */
-export function isGoalsSetupComplete(row: ClientGoalsSetupRow | null | undefined): boolean {
+export function isGoalsSetupComplete(row: ClientGoalsSetupRow | null | undefined, nutritionOnly = false): boolean {
   if (!row) return false;
+  if (nutritionOnly) return Boolean(row.nutrition_goal);
   return Boolean(
     row.main_goal &&
     row.training_days_per_week &&

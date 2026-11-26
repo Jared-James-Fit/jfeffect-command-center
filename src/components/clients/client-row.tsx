@@ -97,6 +97,8 @@ function ChipActions({
             return <RemindButton key={a} r={r} primary={i === 0} close={close} />;
           case "billing":
             return <ClientNameLink key={a} clientId={r.id} tab="billing" className={cls} onClick={close}>Open billing</ClientNameLink>;
+          case "setup":
+            return <ClientNameLink key={a} clientId={r.id} tab="summary" className={cls} onClick={close}>Open setup checklist</ClientNameLink>;
           case "profile":
             return <ClientNameLink key={a} clientId={r.id} className={cls} onClick={close}>Open profile</ClientNameLink>;
           case "agreement":
@@ -192,7 +194,7 @@ export function ClientRow({
   const enterPov = () => pov.enter(r.id, { fallbackName: r.full_name });
   // The workout quick view (a drawer over the list), or without one client view straight onto
   // today's workout as the client sees it. Only with a program to open.
-  const canOpenWorkout = pov.canPov && !!(r.block_id || r.next_block_id);
+  const canOpenWorkout = r.service_kind !== "nutrition" && pov.canPov && !!(r.block_id || r.next_block_id);
   const openWorkout = () => (onQuickView ? onQuickView(r) : pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name }));
   const who = r.full_name ?? "the client";
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
@@ -250,7 +252,14 @@ export function ClientRow({
       )}
 
       {/* Program: what's running, its dates and how far through */}
-      <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />
+      {r.service_kind === "nutrition" ? (
+        <div className="min-w-0 space-y-1 text-sm">
+          <ClientNameLink clientId={r.id} tab="nutrition" className="font-medium hover:underline">Nutrition coaching</ClientNameLink>
+          <p className={cn("text-xs", r.f_missing_nutrition ? "text-warning" : "text-muted-foreground")}>
+            {r.f_missing_nutrition ? "Nutrition targets need attention" : r.nut_end ? `Targets through ${fmtRange(null, r.nut_end)?.replace("? → ", "")}` : "Targets assigned"}
+          </p>
+        </div>
+      ) : <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />}
 
       {/* Open client is the way in; Client view shows their app as they see it; the dumbbell is the
           workout quick view (today's session, a drawer over the list); everything else is in ⋯ */}

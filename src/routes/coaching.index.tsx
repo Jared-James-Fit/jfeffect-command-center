@@ -36,7 +36,8 @@ import shotMeet from "@/assets/coaching/app-competition-athlete.webp";
 import { trackSite } from "@/lib/site-funnel";
 import { shareMeta } from "@/lib/share-meta";
 import { hostedImageProps } from "@/lib/hosted-image";
-import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
+import { CoachingPackagesGrid, PackageCard } from "@/components/sales/coaching-packages";
+import { comparisonPackages, packageComparisonLink, publicComparisonRows, priceText } from "@/lib/coaching-packages/packages";
 import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
 import {
   callsPolicy,
@@ -83,6 +84,10 @@ const DESCRIPTION =
 
 export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
+  validateSearch: (search: Record<string, unknown>): { view?: "packages"; plans?: string } => ({
+    ...(search.view === "packages" ? { view: "packages" as const } : {}),
+    ...(search.view === "packages" && typeof search.plans === "string" && search.plans.length <= 732 ? { plans: search.plans } : {}),
+  }),
   loader: async () => ({ packages: await packagesForPage() }),
   staleTime: 5 * 60_000,
   head: ({ loaderData }) => ({
@@ -304,6 +309,7 @@ function useCoachingSeen() {
 function CoachingPage() {
   const { packages } = Route.useLoaderData();
   const pricingRef = useCoachingSeen();
+  const { view, plans } = Route.useSearch();
   const pricing = paidPackages(listedPackages(packages)).length > 0;
   const cost = costAnswer(packages);
   // a package with calls on the site gets its own answer: the allowance, the 24-hour rule, no rollover
@@ -311,6 +317,7 @@ function CoachingPage() {
     .map((p) => ({ q: `How do the ${p.name} calls work?`, a: callsPolicy(p) }))
     .filter((x): x is { q: string; a: string } => !!x.a);
   const faq = [...FAQ.slice(0, 6), ...callsAnswers, ...FAQ.slice(6)];
+  if (view === "packages") return <PackageComparisonPage packages={packages} plans={plans} />;
   return (
     <SalesPageShell pageId="coaching">
       {/* 1. What it is, and the one button */}
@@ -684,5 +691,70 @@ function CoachingPage() {
       <div className="pb-24 md:pb-0" />
       <StickyMobileCta label={CTA} href={APPLY_TO} hideWhenInline />
     </SalesPageShell>
+  );
+}
+
+
+/** A focused presentation for consultations, using exactly the public catalogue and its existing cards. */
+function PackageComparisonPage({ packages, plans }: { packages: PublicPackage[]; plans?: string }) {
+  const visible = comparisonPackages(packages, plans);
+  const groups = [
+    { title: "Ongoing options", rows: visible.filter((p) => p.kind !== "one_time") },
+    { title: "One-time services", rows: visible.filter((p) => p.kind === "one_time") },
+  ].filter((group) => group.rows.length > 0);
+  return (
+    <SalesPageShell pageId="packages" cta={null}>
+      <section className="mx-auto max-w-7xl px-5 py-10 sm:py-16">
+        <header className="mx-auto mb-9 max-w-2xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">JF Effect</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Services &amp; packages</h1>
+          <p className="mt-3 text-base text-muted-foreground">Compare the options and choose what fits your goals. Prices are in Canadian dollars, plus applicable tax.</p>
+          {plans && <a href={packageComparisonLink()} className="mt-4 inline-block text-sm font-medium underline underline-offset-4">View all options</a>}
+        </header>
+        {groups.length === 0 ? (
+          <p role="status" className="mx-auto max-w-md rounded-2xl border border-border p-6 text-center text-sm text-muted-foreground">These options aren't available right now. Please check the full catalogue or contact JF Effect.</p>
+        ) : groups.map(({ title, rows }) => (
+          <section key={title} className="mb-10 space-y-4" aria-label={title}>
+            <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {rows.map((pkg) => <PackageCard key={pkg.slug} pkg={pkg} compact from="packages" />)}
+            </div>
+            {rows.length > 1 && <PackageFeatureComparison packages={rows} />}
+          </section>
+        ))}
+      </section>
+    </SalesPageShell>
+  );
+}
+
+
+/** Optional comparison: no inferred entitlement claims, and no mixing one-off
+ * purchases with recurring services in the same table. */
+function PackageFeatureComparison({ packages }: { packages: PublicPackage[] }) {
+  const rows = publicComparisonRows(packages);
+  return (
+    <details className="rounded-2xl border border-border bg-card" data-package-feature-comparison>
+      <summary className="cursor-pointer px-5 py-4 text-sm font-semibold">Compare inclusions side by side</summary>
+      <div className="border-t border-border p-4">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-sm">
+            <caption className="sr-only">Listed package features and prices</caption>
+            <thead>
+              <tr className="border-b border-border text-left align-bottom">
+                <th scope="col" className="w-48 p-3 font-medium">Listed features</th>
+                {packages.map(p => <th scope="col" key={p.slug} className="min-w-36 max-w-56 p-3 font-semibold"><span className="block">{p.name}</span><span className="block pt-1 text-xs font-normal text-muted-foreground">{priceText(p)}</span></th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => <tr key={row.key} className="border-b border-border last:border-0">
+                <th scope="row" className="max-w-56 whitespace-normal p-3 text-left font-medium">{row.label}</th>
+                {row.listed.map((listed,i) => <td key={packages[i].slug} className="p-3 text-center">{listed ? <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /><span className="sr-only">Listed</span></span> : <span className="text-muted-foreground"><span aria-hidden="true">—</span><span className="sr-only">Not explicitly listed</span></span>}</td>)}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">A dash means this exact feature is not listed in the package description. Ask your coach if you need clarification.</p>
+      </div>
+    </details>
   );
 }

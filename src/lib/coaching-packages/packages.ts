@@ -69,6 +69,44 @@ export type PublicPackage = {
 };
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The focused public package presentation uses the existing coaching route. */
+export const PACKAGES_PAGE_URL = "https://jfeffect.com/coaching?view=packages";
+
+/** Share only public catalogue slugs, never negotiated terms or private client data. */
+export function packageComparisonLink(slugs: readonly string[] = []): string {
+  const valid = [...new Set(slugs.filter((slug) => SLUG_RE.test(slug) && slug.length <= 60))].slice(0, 12);
+  return valid.length ? `${PACKAGES_PAGE_URL}&plans=${encodeURIComponent(valid.join(","))}` : PACKAGES_PAGE_URL;
+}
+
+/** Fail closed for a selection that no longer exists; never include unlisted packages. */
+export function comparisonPackages<T extends PublicPackage>(rows: readonly T[], plans?: string): T[] {
+  const listed = listedPackages(rows);
+  if (!plans) return listed;
+  const wanted = new Set(plans.split(",").filter((slug) => SLUG_RE.test(slug) && slug.length <= 60).slice(0, 12));
+  return listed.filter((p) => wanted.has(p.slug));
+}
+/** The public catalogue is marketing copy, not an entitlement matrix. Only an
+ * explicit exact feature match earns a Listed mark; absent copy is not a denial. */
+export function publicComparisonRows(packages: readonly PublicPackage[]) {
+  const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+  const unique = new Map<string, string>();
+  const featureSets = packages.map((p) => {
+    const features = p.features.map((f) => f.trim()).filter(Boolean);
+    for (const f of features) if (!unique.has(normalize(f))) unique.set(normalize(f), f);
+    return new Set(features.map(normalize));
+  });
+  return [...unique].map(([key, label]) => ({
+    key, label, listed: featureSets.map((set) => set.has(key)),
+  })).sort((a,b) => Number(b.listed.every(Boolean)) - Number(a.listed.every(Boolean)));
+}
+
+/** The picker accepts only currently listed public slugs. */
+export function selectedPublicSlugs(packages: readonly PublicPackage[], requested: readonly string[]): string[] {
+  const allowed = new Set(listedPackages(packages).map(p => p.slug));
+  return [...new Set(requested)].filter(s => allowed.has(s)).slice(0, 4);
+}
+
 export const LIMITS = {
   name: 60,
   tagline: 120,

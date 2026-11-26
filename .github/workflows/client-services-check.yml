@@ -1,0 +1,33 @@
+name: Client services checks
+on:
+  pull_request:
+    paths:
+      - 'src/components/clients/**'
+      - 'src/components/sales/package-share-dialog.tsx'
+      - 'src/components/leads/lead-card.tsx'
+      - 'src/components/coaching-sessions/command-centre.tsx'
+      - 'src/lib/clients-directory*'
+      - 'src/lib/client-setup-requests.ts'
+      - 'src/lib/client-goals/**'
+      - 'src/lib/coaching-agreement*'
+      - 'src/lib/coaching-packages/**'
+      - 'src/routes/coaching.index.tsx'
+      - 'src/route-pages/_authenticated/admin/clients.$id.tsx'
+      - 'src/test/client-directory-services.test.ts'
+      - 'src/test/coaching-packages.test.ts'
+      - '.github/workflows/client-services-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: |
+          sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
+          bun install --frozen-lockfile --ignore-scripts
+      - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
+      - run: bun run test src/test/client-setup-requests.test.ts src/test/client-directory-services.test.ts src/test/coaching-packages.test.ts src/test/clients-list-wiring.test.ts src/test/clients-row-status.test.ts src/test/client-account-setup.test.ts src/test/client-profile-account-access.test.ts

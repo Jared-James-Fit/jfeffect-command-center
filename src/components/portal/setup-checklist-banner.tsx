@@ -1,3 +1,4 @@
+import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -35,6 +36,7 @@ type Item = { key: ItemKey; label: string; description: string; to?: string; sea
 export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const agreement = useCoachingAgreement();
+  const scope = useGoalsServiceScope(clientId);
   const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
@@ -81,7 +83,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
       },
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
-      { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
+      { key: "goals_setup", label: scope.nutritionOnly ? "Finish nutrition setup" : "Finish Goals & Setup", description: scope.nutritionOnly ? "Nutrition preferences and goals for your coach." : "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null, scope.nutritionOnly) },
       { key: "calendar", label: "Sync your calendar", description: "Optional: add your sessions and workouts to Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone, optional: true },
     ];
     // The Coaching Agreement is the one mandatory step, so it leads the list. It only
@@ -99,13 +101,13 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
         done: agreement.state.state.state !== "needs_signature",
       });
     }
-    return base;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open]);
+    return scope.nutritionOnly ? base.filter(i => i.key !== "training_schedule") : base;
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
   const done = required.filter((i) => i.done).length;
-  if (!clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
+  if (!scope.ready || !clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
   if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;

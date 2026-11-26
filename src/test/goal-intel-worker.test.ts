@@ -156,6 +156,17 @@ describe("goals from a meeting", () => {
     expect(tables.client_goals.every((g) => !/ana/.test(g.dedupe_key))).toBe(true);
   });
 
+  it("keeps openers and AI interpretations out of the final-result goal ledger", async () => {
+    const { extractFromMeeting } = await import("@/lib/goal-intel/goals.server");
+    tables.coaching_sessions[0].analysis.items.unshift(
+      { kind: "objective", text: "Squat opener 90 kg", quote: "squat opener 90 kg", speaker: "coach", due: "2026-12-05", basis: "confirmed" },
+      { kind: "objective", text: "Squat third attempt 150 kg", quote: "squat third attempt 150 kg", speaker: "unclear", due: "2026-12-05", basis: "interpretation" },
+    );
+    await extractFromMeeting(db, SESSION);
+    expect(lift("squat")).toMatchObject({ client_value: 220, client_value_max: 225, status: "proposed" });
+    expect(tables.client_goals.filter(g => g.kind === "lift")).toHaveLength(3);
+  });
+
   it("reads each proposed goal against the meet forecast and recommends the top end she asked for", async () => {
     const { extractFromMeeting, assessClient } = await import("@/lib/goal-intel/goals.server");
     await extractFromMeeting(db, SESSION);

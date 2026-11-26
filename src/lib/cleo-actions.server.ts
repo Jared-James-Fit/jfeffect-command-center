@@ -198,6 +198,41 @@ function when(date: string, time: string): string {
   return d.toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+const identityFields = ["first_name", "last_name", "full_name", "preferred_name"] as const;
+
+function identityBefore(c: any) {
+  return Object.fromEntries(identityFields.map(key => [key, c[key] ?? null]));
+}
+
+function identityPatch(p: any) {
+  const patch: Record<string, string | null> = {};
+  if (p.first_name !== undefined && p.last_name !== undefined) {
+    patch.first_name = p.first_name;
+    patch.last_name = p.last_name;
+    patch.full_name = [p.first_name, p.last_name].join(" ");
+  }
+  if (p.preferred_name !== undefined) patch.preferred_name = p.preferred_name;
+  return patch;
+}
+
+function identitySummary(c: any, p: any) {
+  const before = identityBefore(c);
+  const patch = identityPatch(p);
+  const changes = Object.entries(patch).filter(([key, value]) => before[key] !== value);
+  if (!changes.length) throw new Error("That name is already saved.");
+  const lines: string[] = [];
+  if (changes.some(([key]) => key === "full_name" || key === "first_name" || key === "last_name")) {
+    const oldName = before.full_name ?? [before.first_name, before.last_name].filter(Boolean).join(" ");
+    lines.push(`Full name: ${oldName || "Not set"} → ${patch.full_name}`);
+    // If the display name was already correct, show which split name fields are being corrected.
+    if (before.full_name === patch.full_name) {
+      for (const [key, value] of changes.filter(([key]) => key === "first_name" || key === "last_name")) lines.push(`${key.replace(/_/g, " ")}: ${before[key] ?? "Not set"} → ${value}`);
+    }
+  }
+  if (changes.some(([key]) => key === "preferred_name")) lines.push(`Preferred name: ${before.preferred_name ?? "Not set"} → ${patch.preferred_name ?? "Not set"}`);
+  return [`Update ${clientLabel(c)}'s profile name.`, ...lines].join("\n");
+}
+
 /** The card's words, from the database. Throws when the thing doesn't exist or can't be done. */
 export async function describeAction(db: any, kind: CleoActionKind, p: any): Promise<string> {
   if (kind === "restore_program_version") {
@@ -207,6 +242,10 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
   const program = await import("@/lib/cleo-program.server");
   if (program.isProgramKind(kind)) return program.describeProgramAction(db, kind, p, businessToday());
   switch (kind) {
+    case "update_client_identity": {
+      const c = await client(db, p.client_id);
+      return identitySummary(c, p);
+    }
     case "update_meet_from_attachment":
       throw new Error("A source attachment is required.");
     case "create_task":
@@ -276,6 +315,8 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
       case "send_message":
       case "schedule_message":
         return { href: `/admin/communication?tab=messages&client=${p.client_id}`, label: "Open the chat" };
+      case "update_client_identity":
+        return client(p.client_id, "info", "Open account info");
       case "update_meet_from_attachment":
         return { href: `/admin/competition/${p.competition_id}`, label: "Open competition" };
       case "add_client_note":
@@ -352,6 +393,22 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
     const before = logisticsBefore(row, p.fields);
     intakeMeta = { _meet_before: before, _meet_source: source };
     summary = [`Update ${clientLabel(await client(admin, p.client_id))}'s ${row.name} (${row.meet_date}).`, ...logisticsChanges(before, p.fields), `Source: ${source.name}`, `Extraction confidence: ${p.confidence}${p.confidence !== "high" ? " — needs review" : ""}`, "Confirm to apply the listed changes; cancel to keep current values."].join("\n");
+  } else if (kind === "update_client_identity") {
+    const p = CLEO_ACTION_PARAMS.update_client_identity.parse(raw);
+    await assertRequesterReaches(admin, actor.userId, p.client_id);
+    const c = await client(actor.db, p.client_id);
+    const before = identityBefore(c);
+    // Snapshot is server-derived, not supplied by the model.
+    intakeMeta = { _identity_before: before };
+    summary = identitySummary(c, p);
+    if (p.source_id && p.source_quote) {
+      const { requireClientAiConsent } = await import("@/lib/ai-consent/consent.server");
+      await requireClientAiConsent(p.client_id);
+      const { verifyCompetitionNameEvidence } = await import("@/lib/cleo-competition-evidence.server");
+      const file = await verifyCompetitionNameEvidence(actor.db, { ...p, source_id: p.source_id, source_quote: p.source_quote });
+      intakeMeta._identity_source = { id: file.id, name: file.file_name };
+      summary += `\nSource: ${file.file_name ?? "Competition file"}`;
+    }
   } else {
     summary = await describeAction(actor.db, kind, params);
   }
@@ -395,6 +452,31 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
   const sb = actor.supabase;
   const myCoachId = async () => (await sb.from("coaches").select("id").eq("user_id", actor.userId).maybeSingle()).data?.id ?? null;
   switch (kind) {
+    case "update_client_identity": {
+      const before = (raw as { _identity_before?: Record<string, string | null> })._identity_before;
+      if (!before || identityFields.some(key => !Object.prototype.hasOwnProperty.call(before, key))) throw new Error("The reviewed name is missing. Ask Cleo for a new card.");
+      await assertRequesterReaches(await service(), actor.userId, p.client_id);
+      if (p.source_id && p.source_quote) {
+        const { requireClientAiConsent } = await import("@/lib/ai-consent/consent.server");
+        await requireClientAiConsent(p.client_id);
+        const { verifyCompetitionNameEvidence } = await import("@/lib/cleo-competition-evidence.server");
+        await verifyCompetitionNameEvidence(actor.db, p);
+      }
+      const patch = identityPatch(p);
+      const fields = Object.keys(patch).filter(key => key !== "full_name" && patch[key] !== before[key]);
+      let query = sb.from("clients").update({
+        ...patch,
+        info_last_updated_at: new Date().toISOString(),
+        info_last_updated_by: senderRole,
+        info_last_updated_fields: fields,
+      }).eq("id", p.client_id);
+      // Compare the exact reviewed identity, so a newer manual edit cannot be overwritten.
+      for (const key of identityFields) query = before[key] === null ? query.is(key, null) : query.eq(key, before[key]);
+      const { data, error } = await query.select("id, full_name, preferred_name").maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("The profile changed since review or is no longer accessible. Ask Cleo for a new card.");
+      return `Profile name updated: ${data.full_name ?? data.preferred_name ?? "saved"}.`;
+    }
     case "create_task": {
       const { error } = await sb.from("tasks").insert({
         title: p.title,

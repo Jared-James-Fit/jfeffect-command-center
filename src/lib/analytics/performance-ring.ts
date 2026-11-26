@@ -26,6 +26,27 @@ export function ringTotal(lifts: RingLifts): number | null {
     : null;
 }
 
+/** A display-only sum of recent logged training evidence, not a meet forecast.
+ * All lifts must have a usable session within the same 42-day lookback.
+ * A lower-bound set is explicitly retained as such rather than upgraded to an exact max. */
+export function recentTrainingRing(strength: Record<CompLift, LiftStrength>, today: string) {
+  const lifts = emptyLifts();
+  let lowerBound = false;
+  for (const lift of COMP_LIFTS) {
+    const last = [...strength[lift].sessions]
+      .filter(s => !s.outlier && Number.isFinite(s.e1rm) && s.e1rm > 0 && age(s.day, today) >= 0 && age(s.day, today) <= 42)
+      .sort((a, b) => b.day.localeCompare(a.day))[0];
+    if (!last) continue;
+    lowerBound ||= last.kind !== "exact";
+    lifts[lift] = {
+      lb: last.e1rm,
+      day: last.day,
+      detail: (last.kind === "exact" ? "Recent comparable training estimate" : "Recent logged lower-bound estimate") + " on " + last.day + "; not a meet projection.",
+    };
+  }
+  return { lifts, totalLb: ringTotal(lifts), lowerBound };
+}
+
 /** Same-day strength scenarios from the existing forecast engine. No
  * extrapolation, no substitution of a past meet or coach-entered max.
  * Its high scenario requires favourable performance across all three lifts. */

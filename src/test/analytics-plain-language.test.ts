@@ -103,7 +103,9 @@ describe("how a supporting muscle counts", () => {
     expect(map).toContain("data-muscle-settings");
     const dash = read("src/components/analytics/client-analytics-dashboard.tsx");
     expect(dash).toContain('title="Muscle training map"');
-    expect(dash).toContain(`sub="See which muscles you've trained the most."`);
+    expect(map).toContain("data-muscle-overview");
+    expect(map).toContain("data-muscle-metric-select");
+    expect(dash).toContain("data-analytics-section-select");
     expect(dash).toContain("supportCredit,");
   });
 });

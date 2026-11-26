@@ -31,14 +31,14 @@ export function Kg({
   );
 }
 
-export function RangeText({ r, lb = false }: { r: Range | null | undefined; lb?: boolean }) {
+export function RangeText({ r, lb = true }: { r: Range | null | undefined; lb?: boolean }) {
   if (!r) return <span className="text-muted-foreground">Not enough data</span>;
   return (
     <span className="tabular-nums">
       <span className="text-muted-foreground">{r.conservative}</span>
       <span className="mx-1 font-semibold text-foreground">{r.expected}</span>
       <span className="text-muted-foreground">{r.high}</span>
-      <span className="ml-1 text-muted-foreground">kg{lb ? ` · ${toLb(r.expected)} lb` : ""}</span>
+      <span className="ml-1 text-muted-foreground">kg{lb ? ` · ${toLb(r.conservative)}–${toLb(r.high)} lb` : ""}</span>
     </span>
   );
 }

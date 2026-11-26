@@ -4,6 +4,11 @@ import {
   anchorLine,
   callsLine,
   callsPolicy,
+  comparisonPackages,
+  publicComparisonRows,
+  selectedPublicSlugs,
+  packageComparisonLink,
+  PACKAGES_PAGE_URL,
   centerpiece,
   decisionRows,
   changeWords,
@@ -429,5 +434,38 @@ describe("every way in, side by side on the landing page (Nov 23 2026)", () => {
     expect(hero).not.toMatch(/\$\d/);
     // the bottom repeats the choice compactly
     expect(landing).toContain("decisionRows(list)");
+  });
+});
+
+
+describe("shareable package comparisons", () => {
+  it("uses the existing listed catalogue and never exposes an unlisted package", () => {
+    expect(comparisonPackages([plusDraft, complete, free]).map((p) => p.slug)).toEqual(["free", "complete"]);
+    expect(comparisonPackages([plusDraft, complete, free], "plus,complete,unknown").map((p) => p.slug)).toEqual(["complete"]);
+    expect(comparisonPackages([plusDraft, complete, free], "plus")).toEqual([]);
+  });
+  it("builds a share link from valid unique slugs only", () => {
+    expect(packageComparisonLink()).toBe(PACKAGES_PAGE_URL);
+    const url = new URL(packageComparisonLink(["complete", "free", "complete", "../secret"]));
+    expect(url.searchParams.get("view")).toBe("packages");
+    expect(url.searchParams.get("plans")).toBe("complete,free");
+    expect(url.pathname).toBe("/coaching");
+  });
+});
+
+describe("focused package comparison and sharing", () => {
+  it("only compares explicitly listed feature wording, without guessing synonyms or inclusions", () => {
+    const rows = publicComparisonRows([
+      { ...complete, features: ["Weekly check-ins", "Training", " weekly check-ins "] },
+      { ...free, features: [" WEEKLY CHECK-INS ", "Training templates"] },
+    ]);
+    expect(rows).toEqual([
+      { key: "weekly check-ins", label: "Weekly check-ins", listed: [true, true] },
+      { key: "training", label: "Training", listed: [true, false] },
+      { key: "training templates", label: "Training templates", listed: [false, true] },
+    ]);
+  });
+  it("rejects unlisted, unknown and duplicate selections", () => {
+    expect(selectedPublicSlugs([complete, free, plusDraft], ["plus", "complete", "unknown", "complete", "free"])).toEqual(["complete", "free"]);
   });
 });
