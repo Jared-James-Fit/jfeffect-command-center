@@ -4,7 +4,7 @@
 
 export const MEMBERSHIP_AGREEMENT_SLUG = "membership-agreement";
 
-/** The ticks a member gives, each recorded word for word with their typed name. */
+/** The ticks a member gives, each recorded word for word with the authenticated account identity. */
 export const MEMBERSHIP_AGREEMENT_ACKS = [
   {
     id: "terms",
@@ -35,4 +35,18 @@ export function membershipAckText(ids: readonly string[]): string | null {
   const all = MEMBERSHIP_AGREEMENT_ACKS.map((a) => a.id as string);
   if (all.some((id) => !ids.includes(id))) return null;
   return MEMBERSHIP_AGREEMENT_ACKS.map((a) => `[x] ${a.text}`).join("\n");
+}
+
+/** The immutable, method-only v7 revision; only this version honors a v6 signature. */
+export const CLICK_ACCEPTANCE_VERSION_ID = "a3b82fe0-06e8-4d27-9c64-7b04567e71d2";
+
+export function isMemberAppAcceptance(row: {
+  signature_method: string; context_ref: string | null;
+  checkbox_checked: boolean | null; acknowledgement_text: string | null;
+}): boolean {
+  if (row.context_ref !== "member_app" || row.checkbox_checked !== true) return false;
+  // Historical typed-name signatures remain valid. Checkbox records must contain every exact acknowledgement.
+  if (row.signature_method === "typed_name") return true;
+  return row.signature_method === "checkbox" &&
+    row.acknowledgement_text === membershipAckText(MEMBERSHIP_AGREEMENT_ACKS.map(a => a.id));
 }
