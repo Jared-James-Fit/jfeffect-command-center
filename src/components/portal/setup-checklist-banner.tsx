@@ -1,7 +1,5 @@
 import { MemberSetupWizard } from "@/components/member/member-setup-wizard";
-import { getMySetupStatus } from "@/lib/member-setup.functions";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { isFreeAccount } from "@/lib/member-setup-steps";
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -43,11 +41,9 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
   const { isImpersonating } = useClientImpersonation();
   const agreement = useCoachingAgreement();
   const scope = useGoalsServiceScope(clientId);
-  const memberRead = useServerFn(getMySetupStatus);
   const memberEnabled = scope.requirements?.memberSetup === true && !isImpersonating;
-  const member = useQuery({ queryKey: ["m-setup-status"], queryFn: () => memberRead(), enabled: memberEnabled, staleTime: 60_000 });
-  const memberApplies = memberEnabled && member.data?.member?.account_type === "jf_member" && !member.data.member.is_admin_sandbox;
-  const memberFree = isFreeAccount(member.data?.member);
+  const memberApplies = scope.membership?.applicable === true;
+  const memberFree = scope.membership?.free === true;
   const needsGoals = scope.requirements?.coachingGoals === true;
   const { data: client, isPending: clientPending, isFetched: clientFetched, isError: clientError, refetch: retryClient } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
@@ -129,18 +125,18 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
     if (memberApplies) applicable.unshift({
       key: "member_setup", label: memberFree ? "Set up your training" : "Finish your membership setup",
       description: memberFree ? "Your goal, experience and training days." : "Your remaining membership details.",
-      icon: IdCard, done: member.data?.complete === true, onClick: () => setMemberOpen(true),
+      icon: IdCard, done: scope.membership?.complete === true, onClick: memberEnabled ? () => setMemberOpen(true) : undefined, to: "/portal/account",
     });
     for (const meet of scope.handlingMeets) applicable.push({ key: `meet:${meet.id}`, label: "Competition setup", description: meet.done ? meet.name : `${meet.name} · ${meet.remaining.length} steps remaining`, to: "/portal/competition", search: { meet: meet.id, onboard: true }, icon: Target, done: meet.done });
     return applicable;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, member.data?.complete]);
+  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, scope.membership?.complete, memberEnabled]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
   const done = required.filter((i) => i.done).length;
   if (!clientId || !userId) return null;
-  if (scope.error || clientError || (needsGoals && goalsError) || (memberEnabled && member.isError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : []), ...(memberEnabled ? [member.refetch()] : [])]); }}>Try again</Button></Card>;
-  if (!scope.ready || clientPending || !clientFetched || (needsGoals && (goalsPending || !goalsFetched)) || (memberEnabled && member.isPending)) return null;
+  if (scope.error || clientError || (needsGoals && goalsError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
+  if (!scope.ready || clientPending || !clientFetched || (needsGoals && (goalsPending || !goalsFetched))) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
   if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;
