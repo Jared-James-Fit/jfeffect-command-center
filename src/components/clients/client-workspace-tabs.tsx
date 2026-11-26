@@ -26,6 +26,7 @@ interface ClientWorkspaceTabsProps {
   onChange: (tab: WorkspaceTab) => void;
   heading?: string;
   clientId?: string;
+  selfServe?: boolean;
 }
 
 /**
@@ -36,9 +37,12 @@ interface ClientWorkspaceTabsProps {
  * the row, never sits off the edge). Every existing tab stays: the work you
  * do with a client in the row, profile and setup pages under More.
  */
-export function ClientWorkspaceTabs({ activeTab, onChange, heading, clientId }: ClientWorkspaceTabsProps) {
+export function ClientWorkspaceTabs({ activeTab, onChange, heading, clientId, selfServe = false }: ClientWorkspaceTabsProps) {
   const canAsk = useCleoAccess();
-  const activeMore = CLIENT_WORKSPACE_MORE_TABS.find((item) => item.value === activeTab);
+  const primary = selfServe ? CLIENT_WORKSPACE_PRIMARY_TABS.filter(item => !["meetings", "sessions", "cardio"].includes(item.value)) : CLIENT_WORKSPACE_PRIMARY_TABS;
+  // Preserve historical tabs and deep links; move lower-frequency workflows under More.
+  const extra = selfServe ? [...CLIENT_WORKSPACE_MORE_TABS, ...CLIENT_WORKSPACE_PRIMARY_TABS.filter(item => !primary.includes(item))] : CLIENT_WORKSPACE_MORE_TABS;
+  const activeMore = extra.find((item) => item.value === activeTab);
   const rowRef = useRef<HTMLDivElement>(null);
 
   // Keep the tab you're on in view (centred when the row scrolls), without moving the page.
@@ -67,7 +71,7 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading, clientId }: 
           ref={rowRef}
           className="-mb-px flex items-stretch overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {CLIENT_WORKSPACE_PRIMARY_TABS.map((item) => {
+          {primary.map((item) => {
             const isActive = activeTab === item.value;
             return (
               <button
@@ -111,7 +115,7 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading, clientId }: 
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Client workspace</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {CLIENT_WORKSPACE_MORE_TABS.map((item) => (
+              {extra.map((item) => (
                 <DropdownMenuItem
                   key={item.value}
                   onSelect={() => onChange(item.value)}
