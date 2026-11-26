@@ -314,7 +314,7 @@ export function LiftProgressCard({
           triggerClassName="h-11"
           ariaLabel="Select exercise"
         />
-        {quickPicks.length > 1 && (
+        {!bare && quickPicks.length > 1 && (
           <div
             className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]"
             role="group"
