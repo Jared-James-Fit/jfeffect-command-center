@@ -8,9 +8,10 @@ import { toast } from "sonner";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  preview?: boolean;
 };
 
-export function InstallAppDialog({ open, onOpenChange }: Props) {
+export function InstallAppDialog({ open, onOpenChange, preview = false }: Props) {
   const info = usePwaInstall();
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,6 +44,8 @@ export function InstallAppDialog({ open, onOpenChange }: Props) {
       toast("Your browser didn't offer an install prompt. Follow the steps below.");
     }
   };
+
+  if (preview) return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Install JF Effect</DialogTitle><DialogDescription>The client adds JF Effect to their phone home screen, then opens it from the icon. Only their own installed app launch verifies this step.</DialogDescription></DialogHeader><Button onClick={() => onOpenChange(false)}>Close preview</Button></DialogContent></Dialog>;
 
   // ── Already installed ────────────────────────────────────────────────
   if (info.isStandalone) {

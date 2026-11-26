@@ -60,7 +60,6 @@ function InstallPage() {
             {info.isInAppBrowser && <InAppBrowserWarning />}
             {info.platform === "ios" && !info.isInAppBrowser && (
               <IosInstructions onConfirm={() => {
-                if (signedIn) fireInstall({ data: { platform: "ios" } }).catch(() => {});
                 toast.success("Nice — open JF Effect from your home screen any time.");
               }} />
             )}
@@ -70,7 +69,6 @@ function InstallPage() {
                 onInstall={async (cb) => {
                   const r = await cb();
                   if (r === "accepted") {
-                    if (signedIn) fireInstall({ data: { platform: "android" } }).catch(() => {});
                     toast.success("Installing JF Effect — check your home screen.");
                   } else if (r === "dismissed") {
                     if (signedIn) fireDismiss().catch(() => {});
@@ -168,7 +166,7 @@ function IosInstructions({ onConfirm }: { onConfirm: () => void }) {
         </Step>
       </ol>
       <div className="mt-6">
-        <Button className="w-full" onClick={onConfirm}>I added JF Effect to my home screen</Button>
+        <Button className="w-full" onClick={onConfirm}>Show me what to do next</Button>
         <p className="mt-2 text-center text-xs text-muted-foreground">
           Don't see Share? Make sure you're using Safari, not Chrome or another browser.
         </p>

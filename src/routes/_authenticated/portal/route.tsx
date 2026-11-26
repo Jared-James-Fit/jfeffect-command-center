@@ -13,6 +13,7 @@ import { SubscriptionRestrictedBanner } from "@/components/subscription-restrict
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
+import { VerifiedHomeScreenTracker } from "@/components/verified-home-screen-tracker";
 import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
 import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
@@ -65,6 +66,7 @@ function PortalContent() {
   if (noAccount) return <MembershipPendingGate />;
   return (
     <>
+      <VerifiedHomeScreenTracker userId={portalUserId} preview={isImpersonating} />
       <PovFrame />
       <ClientPovBanner />
       {/* Crew draws its own top bar (+ · JF Effect · heart · you), for a coach viewing as a client too (under the banner) */}

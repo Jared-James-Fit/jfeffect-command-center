@@ -106,11 +106,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
   }
 
   const markDone = async () => {
-    await update({
-      home_screen_setup_status: "complete",
-      home_screen_setup_completed_at: new Date().toISOString(),
-    });
-    toast.success("Nice — you're all set.");
+    toast("Open JF Effect from your home screen to verify installation.");
   };
 
   const remindLater = async () => {
@@ -189,7 +185,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
                 </Button>
               )}
               <Button size="sm" variant="ghost" onClick={markDone} className="text-xs">
-                <CheckCircle2 className="mr-1 h-3 w-3" /> Mark as Done
+                <CheckCircle2 className="mr-1 h-3 w-3" /> Open from Home Screen
               </Button>
               <Button size="sm" variant="ghost" onClick={remindLater} className="text-xs text-muted-foreground">
                 Remind Me Later
@@ -229,7 +225,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
           </ol>
           <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
             <Button size="sm" onClick={async () => { setShowSteps(false); await markDone(); }} className="bg-primary text-xs font-semibold">
-              Mark as Done
+              Open from Home Screen
             </Button>
           </div>
         </DialogContent>
