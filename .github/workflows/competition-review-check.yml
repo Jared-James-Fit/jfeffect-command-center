@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx tsc --noEmit
       - run: bun run test src/test/competition-handling-ui.test.tsx src/test/competition-handling.test.ts
+      - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
+        if: ${{ !cancelled() }}
       - run: bun run build
+        if: ${{ !cancelled() }}
