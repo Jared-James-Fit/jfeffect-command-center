@@ -10,6 +10,10 @@ export type ChatGif = {
   media_url: string;
   media_type: string;
   thumb_url: string | null;
+  /** "sticker" rows show under Stickers (transparent), the rest under GIFs. */
+  kind?: "gif" | "sticker" | null;
+  width?: number | null;
+  height?: number | null;
   is_featured: boolean;
   active: boolean;
   archived: boolean;
@@ -50,6 +54,7 @@ export async function createGif(input: Partial<ChatGif>) {
     tags: input.tags ?? [],
     media_url: input.media_url,
     media_type: input.media_type ?? "image/gif",
+    kind: input.kind === "sticker" ? "sticker" : "gif",
     thumb_url: input.thumb_url ?? null,
     is_featured: !!input.is_featured,
     active: input.active ?? true,

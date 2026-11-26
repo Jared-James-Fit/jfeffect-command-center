@@ -45,7 +45,7 @@ export function communityPushCopy(n: ClaimedPush): { title: string; body: string
     }
     case "comment":
       return {
-        title: n.media_type === "audio" ? `${name} left a voice memo on your ${thing}` : n.media_type === "gif" ? `${name} sent a GIF on your ${thing}` : `${name} commented on your ${thing}`,
+        title: n.media_type === "audio" ? `${name} left a voice memo on your ${thing}` : n.media_type === "gif" ? `${name} sent a GIF on your ${thing}` : n.media_type === "sticker" ? `${name} sent a sticker on your ${thing}` : `${name} commented on your ${thing}`,
         body: "Tap to read it and reply.",
       };
     case "reply":

@@ -98,7 +98,7 @@ describe("calls are found before the limit, training sessions never take their p
 });
 
 describe("a recording never sits stuck", () => {
-  const sql = readFileSync("supabase/migrations/20270530110000_meeting_recording_reliability.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20270531130000_meeting_recording_reliability.sql", "utf8");
   const audio = readFileSync("src/lib/coaching-sessions/audio.server.ts", "utf8");
   it("parts waiting on the client's AI permission are checked again, and wake the job", () => {
     expect(audio).toContain("and(status.eq.waiting_consent,updated_at.lt.");
