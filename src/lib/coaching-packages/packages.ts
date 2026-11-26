@@ -86,6 +86,27 @@ export function comparisonPackages<T extends PublicPackage>(rows: readonly T[], 
   const wanted = new Set(plans.split(",").filter((slug) => SLUG_RE.test(slug) && slug.length <= 60).slice(0, 12));
   return listed.filter((p) => wanted.has(p.slug));
 }
+/** The public catalogue is marketing copy, not an entitlement matrix. Only an
+ * explicit exact feature match earns a Listed mark; absent copy is not a denial. */
+export function publicComparisonRows(packages: readonly PublicPackage[]) {
+  const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+  const unique = new Map<string, string>();
+  const featureSets = packages.map((p) => {
+    const features = p.features.map((f) => f.trim()).filter(Boolean);
+    for (const f of features) if (!unique.has(normalize(f))) unique.set(normalize(f), f);
+    return new Set(features.map(normalize));
+  });
+  return [...unique].map(([key, label]) => ({
+    key, label, listed: featureSets.map((set) => set.has(key)),
+  })).sort((a,b) => Number(b.listed.every(Boolean)) - Number(a.listed.every(Boolean)));
+}
+
+/** The picker accepts only currently listed public slugs. */
+export function selectedPublicSlugs(packages: readonly PublicPackage[], requested: readonly string[]): string[] {
+  const allowed = new Set(listedPackages(packages).map(p => p.slug));
+  return [...new Set(requested)].filter(s => allowed.has(s)).slice(0, 4);
+}
+
 export const LIMITS = {
   name: 60,
   tagline: 120,
