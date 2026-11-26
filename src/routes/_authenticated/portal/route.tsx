@@ -7,6 +7,7 @@ import { isCoachingOnlyPath, isLapsedMemberPath, useServiceTier } from "@/lib/se
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { useMemberAccess } from "@/lib/member-access";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
+import { MemberSetupGate } from "@/components/member/member-setup-gate";
 import { MemberAgreementGate } from "@/components/member/member-agreement";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
@@ -125,6 +126,7 @@ function MemberGates({ hasHandling, scopeReady }: { hasHandling: boolean; scopeR
           <SubscriptionRestrictedBanner status={status} subscriptionStatus={subscriptionStatus} />
         </div>
       )}
+      {!isImpersonating && <MemberSetupGate autoPrompt={false} />}
     </>
   );
 }
