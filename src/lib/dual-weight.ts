@@ -129,3 +129,28 @@ export function splitAtWeight(text: string): { head: string; tail: string } | nu
   const end = m.index + m[0].length;
   return { head: text.slice(0, end), tail: text.slice(end) };
 }
+
+/** Numeric input and range displays share the exact conversion constant. */
+export function inputKg(value: number, unit: WeightUnit): number {
+  return unit === "lb" ? value / LB_PER_KG : value;
+}
+
+/** A range reads as one value when both ends match. Converted equivalents
+ * use one decimal; the recorded unit retains up to two decimals. */
+export function dualRange(loKg: number, hiKg: number | null, unit: WeightUnit, recorded?: WeightUnit): DualWeight {
+  const other = otherUnit(unit);
+  const part = (u: WeightUnit) => {
+    const digits = u === recorded || (!recorded && u === unit) ? 2 : 1;
+    const lo = weightNumber(kgIn(loKg, u), digits);
+    const hi = hiKg == null ? lo : weightNumber(kgIn(hiKg, u), digits);
+    return `${lo === hi ? lo : lo + "–" + hi} ${u}`;
+  };
+  return { unit, primary: part(unit), secondary: part(other) };
+}
+
+export function roundUpWeight(kg: number, incrementKg: number): number | null {
+  if (!Number.isFinite(kg) || kg <= 0 || !Number.isFinite(incrementKg) || incrementKg <= 0) return null;
+  const ratio = kg / incrementKg;
+  if (Math.abs(ratio - Math.round(ratio)) < 1e-7) return null;
+  return Number((Math.ceil(ratio) * incrementKg).toFixed(8));
+}

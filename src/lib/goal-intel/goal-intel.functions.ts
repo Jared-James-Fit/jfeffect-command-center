@@ -48,6 +48,8 @@ export const getClientGoalsFn = createServerFn({ method: "POST" })
 const decision = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("approve"),
+    expectedVersion: z.number().int().positive().optional(),
+    changeReason: z.enum(["round_up", "restore"]).optional(),
     value: z.number().positive().max(3000).nullable().optional(),
     unit: unit.nullable().optional(),
     approach: approach.nullable().optional(),

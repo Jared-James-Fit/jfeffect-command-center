@@ -57,6 +57,10 @@ export type WorkloadBucket = {
   end: string;
   /** the bucket holds today (not over) */
   current: boolean;
+  /** Future buckets retain their plan, but have no completed workload. */
+  future?: boolean;
+  /** Whether the full bucket is inside the selected period and has elapsed. */
+  complete?: boolean;
   /** value per lift; null when there's nothing to average */
   values: Record<Lift, number | null>;
   /** how many sets each value reads (an average says how many) */
@@ -174,6 +178,8 @@ export function buildWorkload(input: {
       cur = {
         ...b,
         current: today >= b.start && today <= b.end,
+        future: b.start > today,
+        complete: b.start >= start && b.end <= end && b.end < today,
         values: { squat: null, bench: null, deadlift: null },
         n: { squat: 0, bench: 0, deadlift: 0 },
         prescribed: null,
@@ -190,7 +196,7 @@ export function buildWorkload(input: {
     for (const b of blocks) if (b.end >= start && b.start <= end) ensure(b.start);
   }
   for (const s of input.sets ?? []) {
-    if (!s?.day || s.day < start || s.day > end || !(s.reps > 0)) continue;
+    if (!s?.day || s.day < start || s.day > end || s.day > today || !(s.reps > 0)) continue;
     const lift = inScope(s, scope);
     if (!lift) continue;
     const b = ensure(s.day);
@@ -248,7 +254,7 @@ export function buildWorkload(input: {
     for (const l of LIFTS) {
       const xs = b.acc[l];
       b.n[l] = xs.length;
-      if (!xs.length) b.values[l] = sum ? 0 : null;
+      if (!xs.length) b.values[l] = sum && !b.future ? 0 : null;
       else {
         const total = xs.reduce((a, x) => a + x, 0);
         b.values[l] = Math.round((sum ? total : total / xs.length) * 10) / 10;
@@ -268,7 +274,7 @@ export type LiftShift = { lift: Lift; from: number; to: number; pct: number | nu
  * by sets), so one odd week never decides it. Null with under 3 buckets.
  */
 export function workloadShifts(buckets: WorkloadBucket[], lifts: Lift[] = LIFTS): LiftShift[] {
-  const done = buckets.filter((b) => !b.current);
+  const done = buckets.filter((b) => !b.current && !b.future && b.complete !== false);
   if (done.length < 3) return [];
   const third = Math.max(1, Math.floor(done.length / 3));
   const avg = (bs: WorkloadBucket[], l: Lift) => {
@@ -295,7 +301,7 @@ export function workloadShifts(buckets: WorkloadBucket[], lifts: Lift[] = LIFTS)
  * three weeks"), each lift's average per bucket. Empty without 2n finished.
  */
 export function splitShift(buckets: WorkloadBucket[], lifts: Lift[] = LIFTS, n = 3): LiftShift[] {
-  const done = buckets.filter((b) => !b.current);
+  const done = buckets.filter((b) => !b.current && !b.future && b.complete !== false);
   if (done.length < n * 2) return [];
   const a = done.slice(-2 * n, -n);
   const b = done.slice(-n);

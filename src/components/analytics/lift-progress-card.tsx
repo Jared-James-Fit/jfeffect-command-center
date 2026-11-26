@@ -13,6 +13,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ExerciseCompare } from "./exercise-compare";
+import { dualLoad, LB_PER_KG } from "@/lib/analytics/units";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
@@ -38,7 +40,7 @@ import {
 } from "@/lib/analytics/lift-sessions";
 
 type Unit = "lb" | "kg";
-type Metric = "est" | "top" | "volume" | "effort" | "velocity";
+type Metric = "est" | "single" | "top" | "volume" | "effort" | "velocity";
 
 export type LiftHistoryPoint = LiftSetInput & {
   day_id?: string | null;
@@ -51,7 +53,8 @@ export type LiftHistoryPoint = LiftSetInput & {
 export type LiftHistory = { name: string; pr: LiftHistoryPoint | null; points: LiftHistoryPoint[] };
 
 const METRICS: { key: Metric; label: string }[] = [
-  { key: "est", label: "Est. max" },
+  { key: "est", label: "e1RM" },
+  { key: "single", label: "1RM (single)" },
   { key: "top", label: "Best set" },
   { key: "volume", label: "Total weight" },
   { key: "effort", label: "Effort" },
@@ -75,6 +78,8 @@ export function LiftProgressCard({
   onOpenSet,
   single = false,
   compact: bare = false,
+  comparisonHistory,
+  periods,
 }: {
   history: LiftHistory[];
   displayUnit: Unit;
@@ -91,6 +96,8 @@ export function LiftProgressCard({
    * maxes or session list (Records and the exercise's History have those).
    */
   compact?: boolean;
+  comparisonHistory?: LiftHistory[];
+  periods?: Array<{id:string;name:string;start:string;end:string}>;
 }) {
   const [selectedEx, setSelectedEx] = useState("");
   // null = this lift's default: the estimated max for a squat / bench / deadlift
@@ -126,6 +133,7 @@ export function LiftProgressCard({
   const sessions = useMemo(() => sessionsByEx.get(activeEx) ?? [], [sessionsByEx, activeEx]);
   const color = exerciseColor(activeEx, series?.points?.[0]?.muscle_group);
   const hasVelocity = sessions.some((s) => s.velocity != null);
+  const singleOf=(s:LiftSession)=>s.sets.filter(p=>p.reps===1).reduce<LiftSetInput|null>((a,p)=>!a||p.load>a.load?p:a,null);
   const defaultMetric: Metric = liftFamily(activeEx) ? "est" : "top";
   const chosen = metric ?? defaultMetric;
   const activeMetric: Metric = chosen === "velocity" && !hasVelocity ? defaultMetric : chosen;
@@ -155,6 +163,7 @@ export function LiftProgressCard({
       sessions.map((s) => ({
         key: s.key,
         est: estOf(s) == null ? null : round1(conv(estOf(s)!)),
+        single: singleOf(s)?round1(conv(singleOf(s)!.load)):null,
         top: round1(conv(s.heaviest.load)),
         volume: Math.round(conv(s.tonnage)),
         effort: s.avgEffort,
@@ -210,7 +219,9 @@ export function LiftProgressCard({
   const value = (s: LiftSession, m: Metric): number | null =>
     m === "est"
       ? estOf(s) == null ? null : conv(estOf(s)!)
-      : m === "top"
+      : m === "single"
+        ? singleOf(s)?conv(singleOf(s)!.load):null
+        : m === "top"
         ? conv(s.heaviest.load)
         : m === "volume"
           ? conv(s.tonnage)
@@ -263,7 +274,7 @@ export function LiftProgressCard({
   // An axis that never zooms in past a change worth drawing: a 1 lb dip on a
   // 308–312 axis read as a crash (Nov 22 2026). At least 6% of the lift, 10 lb.
   const loadAxis = useMemo(() => {
-    const key = activeMetric === "top" ? "top" : "est";
+    const key = activeMetric === "single" ? "single" : activeMetric === "top" ? "top" : "est";
     const vals = chartData.map((d: any) => d[key]).filter((v: unknown): v is number => typeof v === "number");
     return niceDomain(vals, { minSpan: Math.max(conv(10), strengthMinSpan(vals)), floor: 0 });
   }, [chartData, activeMetric, conv]);
@@ -314,7 +325,7 @@ export function LiftProgressCard({
           triggerClassName="h-11"
           ariaLabel="Select exercise"
         />
-        {quickPicks.length > 1 && (
+        {!bare && quickPicks.length > 1 && (
           <div
             className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]"
             role="group"
@@ -368,31 +379,9 @@ export function LiftProgressCard({
             </span>
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Chart metric"
-            className={cn(
-              "grid gap-1 rounded-xl bg-muted/50 p-1",
-              hasVelocity ? "grid-cols-5" : "grid-cols-4",
-            )}
-          >
-            {METRICS.filter((m) => m.key !== "velocity" || hasVelocity).map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                role="tab"
-                aria-selected={activeMetric === m.key}
-                onClick={() => setMetric(m.key)}
-                className={cn(
-                  "h-9 rounded-lg text-xs font-bold transition-colors",
-                  activeMetric === m.key
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground",
-                )}
-              >
-                {m.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <select aria-label="Chart metric" className="min-h-10 flex-1 min-w-0 rounded-lg border border-border bg-background px-2 text-sm" value={activeMetric} onChange={e=>setMetric(e.target.value as Metric)}>{METRICS.filter(m=>m.key!=="velocity"||hasVelocity).map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select>
+            <ExerciseCompare key={activeEx} name={activeEx} points={comparisonHistory?.find(h=>h.name===activeEx)?.points??series.points} unit={displayUnit} periods={periods}/>
           </div>
 
           <SessionReadout
@@ -404,8 +393,8 @@ export function LiftProgressCard({
             isPr={selected.key === prKey}
             displayUnit={displayUnit}
             fmtLoad={fmtLoad}
-            onDetails={onOpenSet ? () =>
-              onOpenSet(toPoint(activeMetric === "top" ? selected.heaviest : selected.top))
+            onDetails={onOpenSet && (activeMetric !== "single" || singleOf(selected)) ? () =>
+              onOpenSet(toPoint((activeMetric === "single" ? singleOf(selected)! : activeMetric === "top" ? selected.heaviest : selected.top) as LiftHistoryPoint))
             : undefined}
           />
 
@@ -445,7 +434,7 @@ export function LiftProgressCard({
                           ? [0, "auto"]
                           : loadAxis.domain
                     }
-                    ticks={activeMetric === "est" || activeMetric === "top" ? loadAxis.ticks : undefined}
+                    ticks={activeMetric === "est" || activeMetric === "top" || activeMetric === "single" ? loadAxis.ticks : undefined}
                     allowDecimals={activeMetric === "velocity" || activeMetric === "effort"}
                   />
                   {/* Mounted only so Recharts wires touch; the readout replaces the floating tooltip. */}
@@ -520,7 +509,7 @@ export function LiftProgressCard({
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          <details className="space-y-2"><summary className="min-h-10 cursor-pointer text-sm font-medium pt-2">Training details</summary><div className="grid grid-cols-2 gap-2">
             {mainLift ? (
               <Tile
                 label="Strength"
@@ -616,6 +605,7 @@ export function LiftProgressCard({
           )}
 
           {velocityInsight}
+          </details>
 
           {!single && !bare && (
           <div>
@@ -787,7 +777,9 @@ function SessionReadout({
   const unit =
     metric === "est"
       ? `${displayUnit} estimated max`
-      : metric === "top"
+      : metric === "single"
+        ? `${displayUnit} · recorded single`
+        : metric === "top"
         ? `${displayUnit} × ${session.heaviest.reps}${heaviestEffort ? ` · ${fmtEffort(heaviestEffort)}` : ""}`
         : metric === "volume"
           ? `${displayUnit} lifted (weight × reps)`
@@ -824,6 +816,7 @@ function SessionReadout({
       <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
         <span className="text-2xl font-bold tabular-nums">{main}</span>
         <span className="text-xs font-semibold text-muted-foreground">{unit}</span>
+        {v!=null&&["single","est","top","volume"].includes(metric)&&<span className="text-xs text-muted-foreground">{dualLoad(displayUnit==="kg"?v*LB_PER_KG:v,displayUnit).other}</span>}
         {showDelta && (
           <span
             className={cn(

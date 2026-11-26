@@ -182,6 +182,8 @@ export type MuscleReadRow = {
   frequency: number;
   changePct: number | null;
   exercises: Array<{ name: string; sets: number; direct: boolean }>;
+  averageRpe?: number | null;
+  targetSets?: number | null;
   /** 0–1 against the most-trained muscle's sets this period (the map's colour) */
   share: number;
   level: MuscleLevel;
@@ -226,6 +228,7 @@ export function buildMuscleRead(input: {
   coached: boolean;
   /** how a supporting muscle's set counts (half by default) */
   supportCredit?: SupportCredit;
+  plan?: import("@/lib/analytics/training-load").PlanRow[];
   /** yyyy-mm-dd: a period that runs past today is compared up to today */
   today?: string;
 }): MuscleRead {
@@ -241,7 +244,10 @@ export function buildMuscleRead(input: {
   const weeks = Math.max(1, input.weeks);
   const enoughData = !input.partial && input.weeks >= 2 && input.sets.length >= 20;
   const counted = (ss: LoadSet[]) => ss.filter((s) => s.day && s.reps > 0 && patternOf(s) !== null);
-  const periodSets = counted(input.sets);
+  const periodSets = counted(input.sets).filter(s=>s.day>=input.start&&s.day<=input.end&&s.day <= (input.today ?? input.end));
+  const planned = new Map<FineMuscle,number>();
+  const effort = new Map<FineMuscle,{sum:number;n:number}>();
+  for(const p of input.plan??[]){if(!p.day||p.day<input.start||p.day>input.end||p.day>(input.today??input.end)||!(Number(p.sets)>0)||patternOf(p)===null)continue;for(const [m,w] of muscleCredits(p))planned.set(m,(planned.get(m)??0)+Number(p.sets)*(w>=1?1:credit));}
   // the exercises behind each muscle, and the period's own counts
   const byMuscle = new Map<FineMuscle, Map<string, { sets: number; direct: boolean }>>();
   const tally = new Map<FineMuscle, { direct: number; supporting: number; days: Set<string> }>();
@@ -249,6 +255,7 @@ export function buildMuscleRead(input: {
     const credits = muscleCredits(s);
     for (const [m, w] of credits) {
       const direct = w >= MUSCLE_CREDIT.primary;
+      const rating=s.rpe??(s.rir==null?null:10-s.rir);if((direct||credit>0)&&rating!=null&&rating>=1&&rating<=10){const e=effort.get(m)??{sum:0,n:0};e.sum+=rating;e.n++;effort.set(m,e);}
       const ex = byMuscle.get(m) ?? new Map();
       const cur = ex.get(s.exercise) ?? { sets: 0, direct: false };
       cur.sets += 1;
@@ -267,7 +274,7 @@ export function buildMuscleRead(input: {
   const span = isoDay(input.start) && isoDay(endDay) ? dayNum(endDay) - dayNum(input.start) + 1 : 0;
   const hist = counted(input.history ?? input.sets);
   const before =
-    span > 0 && hist.some((s) => s.day < input.start)
+    span > 0 && hist.some((s) => s.day >= dayStr(dayNum(input.start) - span) && s.day < input.start)
       ? { start: dayStr(dayNum(input.start) - span), end: dayStr(dayNum(input.start) - 1) }
       : null;
   const beforeTotals = new Map<FineMuscle, number>();
@@ -437,8 +444,13 @@ export function buildMuscleRead(input: {
         };
       }
     }
+    const targetSets=planned.size?round1(planned.get(muscle)??0):null;
+    if(targetSets!=null){fit=targetSets===0?{status:total>0?"more":"supported",words:total>0?"Training outside the elapsed plan.":"No work planned in elapsed period.",floor:0}:{status:total<targetSets*.8?"gap":total>targetSets*1.2?"more":"supported",words:`${fmtSets(total)} completed / ${fmtSets(targetSets)} planned credited sets in elapsed period.`,floor:targetSets};}
+    const ratings=effort.get(muscle);
     return {
       muscle,
+      averageRpe:ratings?round1(ratings.sum/ratings.n):null,
+      targetSets,
       role,
       perWeek,
       directPerWeek: direct,
@@ -512,4 +524,30 @@ const dayStr = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10
 
 function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+/** Compare equal elapsed windows, with the same muscle attribution on both sides. */
+export function compareMuscleWindows(read: MuscleRead, history: LoadSet[], a: {start:string;end:string}, b:{start:string;end:string}, credit:SupportCredit): MuscleRead {
+  if (![a.start,a.end,b.start,b.end].every(isoDay)) return read;
+  const span=Math.min(dayNum(a.end)-dayNum(a.start)+1,dayNum(b.end)-dayNum(b.start)+1);
+  if(span<=0)return read;
+  const aEnd=dayStr(dayNum(a.start)+span-1),bEnd=dayStr(dayNum(b.start)+span-1);
+  const count=(start:string,end:string)=>{
+    const ss=history.filter(s=>s.day>=start&&s.day<=end&&s.reps>0&&patternOf(s)!==null);
+    const map=new Map<FineMuscle,{direct:number;supporting:number;days:Set<string>;ex:Map<string,{sets:number;direct:boolean}>}>();
+    for(const s of ss)for(const [m,w] of muscleCredits(s)){
+      const t=map.get(m)??{direct:0,supporting:0,days:new Set<string>(),ex:new Map<string,{sets:number;direct:boolean}>()};
+      const direct=w>=1;if(direct)t.direct++;else t.supporting++;
+      if(direct||credit>0){t.days.add(s.day);const e=t.ex.get(s.exercise)??{sets:0,direct:false};e.sets++;e.direct||=direct;t.ex.set(s.exercise,e);}
+      map.set(m,t);
+    }
+    return {map,hasData:ss.length>0};
+  };
+  const now=count(a.start,aEnd),prev=count(b.start,bEnd);
+  const rows=read.rows.map(r=>{
+    const n=now.map.get(r.muscle),p=prev.map.get(r.muscle),total=round1((n?.direct??0)+credit*(n?.supporting??0)),before=round1((p?.direct??0)+credit*(p?.supporting??0));
+    const exercises=[...(n?.ex??new Map<string,{sets:number;direct:boolean}>())].map(([name,v])=>({name,...v})).sort((x,y)=>y.sets-x.sets).slice(0,6);
+    return {...r,perWeek:round1(total*7/span),averageRpe:null,targetSets:null,exercises,period:{total,direct:n?.direct??0,supporting:n?.supporting??0,days:n?.days.size??0,exerciseCount:n?.ex.size??0,before:now.hasData&&prev.hasData?{total:before,start:b.start,end:bEnd}:null,changePct:now.hasData&&prev.hasData&&before>0?Math.round((total-before)/before*100):null}};
+  });
+  return {...read,rows,weeks:span/7,enoughData:now.hasData&&prev.hasData};
 }
