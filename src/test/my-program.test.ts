@@ -473,7 +473,7 @@ describe("Workouts reads today first, and every page under it has a way back", (
     // the section only with a program, and it says nothing until something's logged or flagged
     expect(workouts).toMatch(/mode === "self" && !noProgram && !isLoading && dayItems.length > 0 && \(\s*<DeferRender/);
     const section = readFileSync("src/components/workouts/recovery-performance.tsx", "utf8");
-    expect(section).toContain("if (!everLogged && !recovery.pain.length) return null;");
+    expect(section).toContain("if (!everLogged && !recovery.pain.length && !recovery.general.length) return null;");
   });
 
   it("Programs and Move workouts have Back like the program, plan, builder and analytics pages", () => {

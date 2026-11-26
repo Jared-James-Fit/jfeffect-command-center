@@ -10,6 +10,7 @@ import { siteAnatomy, siteOf } from "@/lib/pain/sites";
 import { associations, associationLine, sessionContext, type PainSession } from "@/lib/pain/sessions";
 import { redFlags, URGENT_SIGNS } from "@/lib/pain/safety";
 import type { RecoverySuggestion } from "@/lib/pain/recovery";
+import { classLabel } from "@/lib/pain/symptoms";
 
 const feelWord = (f: string) => FEELS.find((x) => x.v === f)?.label.toLowerCase() ?? f;
 
@@ -27,7 +28,7 @@ export function areaLines(a: PainArea, sessions: PainSession[] = []): string[] {
     a.status === "quiet" ? "nothing since (gone quiet)" : null,
   ].filter(Boolean).join(" ");
   const lines = [`- ${head}`];
-  const facts: string[] = [];
+  const facts: string[] = [`kind: ${classLabel(a.cls).toLowerCase()}`];
   if (a.trend) facts.push(a.trendFrom === "client" ? `they said it's ${a.trend} than last time (same issue, their word)` : `rated ${a.trend === "worse" ? "worse" : a.trend === "better" ? "milder" : "the same"} than the report before`);
   if (a.sites.length)
     facts.push(
@@ -39,7 +40,8 @@ export function areaLines(a: PainArea, sessions: PainSession[] = []): string[] {
   if (a.timing.length) facts.push(`hurts: ${a.timing.map((t) => TIMINGS.find((x) => x.v === t)?.label.toLowerCase() ?? t).join(", ")}`);
   if (a.limiting.stopped || a.limiting.modified) facts.push(`in the last 4 weeks it ${[a.limiting.stopped ? `stopped ${a.limiting.stopped} session${a.limiting.stopped > 1 ? "s" : ""}` : null, a.limiting.modified ? `changed ${a.limiting.modified}` : null].filter(Boolean).join(" and ")}`);
   if (a.named.length) facts.push(`exercise they named: ${a.named.map((n) => `${n.name}${n.count > 1 ? ` ${n.count}×` : ""}`).join(", ")}`);
-  for (const as of associations(a, sessions)) facts.push(associationLine(as));
+  // a general symptom is never tied to the lifts it happened beside
+  if (a.cls !== "general") for (const as of associations(a, sessions)) facts.push(associationLine(as));
   const ctx = sessionContext(a, sessions);
   if (ctx.sessions >= 2 && (ctx.shortSleep >= 2 || ctx.veryHard >= 2 || ctx.lowEnergy >= 2))
     facts.push(`of the ${ctx.sessions} sessions it came up in: ${[ctx.shortSleep ? `${ctx.shortSleep} after under 6h sleep` : null, ctx.veryHard ? `${ctx.veryHard} rated very hard or max` : null, ctx.lowEnergy ? `${ctx.lowEnergy} with low energy going in` : null].filter(Boolean).join(", ")}`);
@@ -58,8 +60,13 @@ export function areaLines(a: PainArea, sessions: PainSession[] = []): string[] {
 export function painHistoryForAi(h: PainHistory, opts: { sessions?: PainSession[]; suggestions?: RecoverySuggestion[] } = {}): string | null {
   const live = h.areas.filter((a) => a.status !== "quiet");
   if (!h.areas.length) return null;
-  const lines = ["PAIN HISTORY (what they reported after workouts and in check-ins, last 12 weeks. Their reports, not a diagnosis; two reports are the same issue only where it says they said so):"];
-  for (const a of live.filter((x) => !x.minor)) lines.push(...areaLines(a, opts.sessions));
+  const lines = ["PAIN HISTORY (what they reported after workouts and in check-ins, last 12 weeks. Their reports, not a diagnosis; two reports are the same issue only where it says they said so. Each place says its kind: training soreness, tightness and muscle fatigue are normal responses to training; joint or tendon discomfort, pain and numbness or tingling are what to watch):"];
+  for (const a of live.filter((x) => !x.minor && x.cls !== "general")) lines.push(...areaLines(a, opts.sessions));
+  const general = live.filter((x) => x.cls === "general");
+  if (general.length) {
+    lines.push("GENERAL SYMPTOMS (not a muscle or joint; never attribute them to training or to a muscle, never read them as fatigue):");
+    for (const a of general) lines.push(...areaLines(a, opts.sessions));
+  }
   const minor = live.filter((x) => x.minor);
   if (minor.length) lines.push(`- One-off and mild, nothing to act on: ${minor.map((a) => `${a.label} (${shortDay(a.last)})`).join(", ")}`);
   const quiet = h.areas.filter((a) => a.status === "quiet");

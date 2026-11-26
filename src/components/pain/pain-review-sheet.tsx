@@ -29,6 +29,7 @@ import { redFlags, URGENT_SIGNS } from "@/lib/pain/safety";
 import { FEELS, TIMINGS, placeLabel, severityLabel } from "@/lib/pain/report";
 import { siteAnatomy } from "@/lib/pain/sites";
 import { areaLabel } from "@/lib/pain/regions";
+import { classLabel } from "@/lib/pain/symptoms";
 import { insertIntoComposer, queueComposerInsert } from "@/lib/composer-insert";
 import { approveRecoveryItemFn, dismissRecoveryItemFn, getClientRecoveryFn, setClientRecoveryModeFn } from "@/lib/recovery-automation/queue.functions";
 import { CATEGORIES, MODES, modeAllowed, type AutomationCategory, type AutomationMode } from "@/lib/recovery-automation/rules";
@@ -51,7 +52,8 @@ export const PAIN_SHEET_KEY = "client-pain";
 const feelWord = (f: string) => FEELS.find((x) => x.v === f)?.label.toLowerCase() ?? f;
 
 function AreaCard({ a, sessions }: { a: PainArea; sessions: Parameters<typeof associations>[1] }) {
-  const assoc = associations(a, sessions);
+  // a general symptom is never tied to the lifts it happened beside
+  const assoc = a.cls === "general" ? [] : associations(a, sessions);
   const ctx = sessionContext(a, sessions);
   const recent = [...a.entries].reverse().slice(0, 5);
   const tone = a.reasons.includes("red_flag") || a.reasons.includes("severe") || a.reasons.includes("worse") ? "text-warning" : "text-muted-foreground";
@@ -61,6 +63,11 @@ function AreaCard({ a, sessions }: { a: PainArea; sessions: Parameters<typeof as
         <span className="text-[15px] font-semibold">{a.label}</span>
         {a.status === "quiet" ? <span className="text-[12px] text-muted-foreground">quiet since {shortDay(a.last)}</span> : null}
       </div>
+      {/* what kind of symptom it reads as (symptoms.ts): never a diagnosis */}
+      <p className="text-[12px] font-medium text-muted-foreground" data-pain-area-kind={a.cls}>
+        {classLabel(a.cls)}
+        {a.cls === "general" ? " · not tied to training" : ""}
+      </p>
       <p className={cn("text-[13px] leading-snug", tone)}>{areaSummary(a)}</p>
       {a.reasons.length > 0 && <p className="text-[12px] text-muted-foreground">Why it's here: {a.reasons.map(reasonWords).join(", ")}</p>}
       {sidesLine(a) && <p className="text-[12px] text-muted-foreground">{sidesLine(a)}</p>}

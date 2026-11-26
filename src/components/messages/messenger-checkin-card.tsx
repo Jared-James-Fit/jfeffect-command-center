@@ -131,7 +131,7 @@ const WEEKLY: Q[] = [
   {
     key: "pain_details",
     prompt: "Where does it hurt, and what makes it worse?",
-    helper: "e.g. “Left knee hurts on squats and lunges.”",
+    helper: "e.g. “Left knee hurts under the kneecap on squats, about a 4. Headaches most mornings.”",
     type: "text",
     showWhen: (a) => Array.isArray(a.recovery_flags) && a.recovery_flags.includes("Pain / injury"),
     askedIf: "Pain / injury",

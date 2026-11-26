@@ -95,8 +95,9 @@ const REASON: Record<string, string> = {
   worse: "getting worse",
   persistent: "keeps coming back",
   limiting: "changing their sessions",
-  feel: "a pop, swelling or numbness",
+  feel: "a pop, swelling, numbness or weakness",
   unplaced: "a place they couldn't name",
+  symptom: "a general symptom (a headache, dizziness, nausea…)",
 };
 
 export function riskReasonWords(key: string): string {
@@ -116,8 +117,10 @@ export function classifyRecovery(reports: PainEntry[], areas: PainArea[], flags:
     if ((r.score ?? 0) >= 6 || r.severity === "severe") reasons.add("score");
     if (r.impact === "stopped") reasons.add("stopped");
     if (r.change === "worse") reasons.add("worse");
-    if (r.feel.some((f) => f === "pop" || f === "swollen" || f === "numb")) reasons.add("feel");
+    if (r.feel.some((f) => f === "pop" || f === "swollen" || f === "numb" || f === "weak" || f === "sudden")) reasons.add("feel");
     if (r.region === "other") reasons.add("unplaced");
+    // a general symptom (dizziness, a headache, nausea) is never answered automatically: the coach reads it
+    if (r.symptom) reasons.add("symptom");
   }
   const regions = new Set(reports.map((r) => r.region));
   for (const a of areas) {

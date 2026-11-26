@@ -48,6 +48,16 @@ const SILHOUETTE =
 
 const HAND = "84,486 72,486 60,488 56,500 54,520 53,548 57,564 64,572 74,572 80,564 83,544 84,520 85,500";
 const THUMB = "58,488 50,492 42,502 36,514 34,522 38,527 46,522 54,512 58,500";
+/** The palm (front) and the back of the hand (back), down to where the fingers start. */
+const PALM = "84,488 72,487 60,489 56,500 54,520 54,543 84,543 84,520";
+const BACK_OF_HAND = "84,488 72,487 60,489 56,500 54,520 54,535 84,535 84,520";
+/** Index, middle, ring and little finger, from the thumb's side in. */
+const FINGERS = [
+  "53,544 62,544 62,570 58,568 54,560",
+  "62,544 69,544 70,574 64,574 62,570",
+  "69,544 76,544 77,571 74,574 70,574",
+  "76,544 84,544 82,558 80,566 77,571",
+];
 
 export const FRONT: ViewSpec = {
   silhouette: SILHOUETTE,
@@ -89,6 +99,12 @@ export const FRONT: ViewSpec = {
     { site: "wrist_front", kind: "joint", ellipse: [72, 481, 13, 6] },
     { site: "hand", kind: "skin", pts: HAND },
     { site: "thumb", kind: "skin", pts: THUMB },
+    // the hand, palm forward: the index finger is on the thumb's side (Nov 26 2026)
+    { site: "palm", kind: "skin", pts: PALM },
+    { site: "index_finger", kind: "skin", pts: FINGERS[0] },
+    { site: "middle_finger", kind: "skin", pts: FINGERS[1] },
+    { site: "ring_finger", kind: "skin", pts: FINGERS[2] },
+    { site: "little_finger", kind: "skin", pts: FINGERS[3] },
     // hip & groin
     { site: "tfl", kind: "muscle", pts: "142,428 132,436 125,452 122,470 124,490 132,494 136,476 140,456 146,438", fiber: 98 },
     { site: "hip_outer", kind: "joint", ellipse: [125, 476, 5, 9] },
@@ -118,6 +134,24 @@ export const FRONT: ViewSpec = {
     { site: "ankle_front", kind: "joint", ellipse: [161, 866, 10, 5] },
     { site: "ankle_inner", kind: "joint", ellipse: [176, 859, 4, 6] },
     { site: "ankle_outer", kind: "joint", ellipse: [147, 864, 4, 6] },
+    // toes, the big toe on the inside of the foot (toward the midline)
+    { site: "toes", kind: "skin", pts: "141,893 179,893 180,900 170,906 150,906 140,900" },
+    { site: "big_toe", kind: "skin", pts: "168,893 179,893 180,900 172,906 166,906 166,899" },
+    // the pelvis and the hip joint under it
+    { site: "pubic_bone", kind: "joint", ellipse: [200, 462, 7, 5] },
+    { site: "hip_joint", kind: "joint", deep: true, ellipse: [160, 466, 9, 9] },
+    // the lower edge of the front ribs, under the chest
+    { site: "ribs_front", kind: "joint", pts: "148,262 164,272 180,280 196,286 196,294 180,289 162,281 146,271" },
+    // the head and face (areas, drawn quietly like the joints; the jaw muscle is a muscle)
+    { site: "top_of_head", kind: "joint", pts: "178,27 200,23 222,27 232,38 200,35 168,38" },
+    { site: "forehead", kind: "joint", pts: "170,43 200,39 230,43 238,56 232,62 200,60 168,62 162,56" },
+    { site: "temple", kind: "joint", ellipse: [164, 72, 5, 9] },
+    { site: "eyes", kind: "joint", ellipse: [183, 73, 9, 5] },
+    { site: "nose", kind: "joint", pts: "200,76 205,88 207,96 200,98 193,96 195,88" },
+    { site: "cheek", kind: "joint", ellipse: [181, 92, 8, 6] },
+    { site: "tmj", kind: "joint", ellipse: [163, 89, 3.5, 5] },
+    { site: "jaw_muscle", kind: "muscle", pts: "166,97 172,99 178,110 180,120 174,122 168,112", fiber: 80 },
+    { site: "chin", kind: "joint", pts: "190,118 200,121 210,118 214,126 206,131 194,131 186,126" },
   ],
   lines: [
     { pts: "200,272 200,460", mid: true, tone: "tendon" },
@@ -174,6 +208,13 @@ export const BACK: ViewSpec = {
     { site: "wrist_back", kind: "joint", ellipse: [72, 481, 13, 6] },
     { site: "hand", kind: "skin", pts: HAND },
     { site: "thumb", kind: "skin", pts: THUMB },
+    // the back of the hand, the knuckles and the fingers (the index finger on the thumb's side)
+    { site: "back_of_hand", kind: "skin", pts: BACK_OF_HAND },
+    { site: "knuckles", kind: "joint", pts: "54,536 84,536 84,545 54,545" },
+    { site: "index_finger", kind: "skin", pts: FINGERS[0] },
+    { site: "middle_finger", kind: "skin", pts: FINGERS[1] },
+    { site: "ring_finger", kind: "skin", pts: FINGERS[2] },
+    { site: "little_finger", kind: "skin", pts: FINGERS[3] },
     // hip & glute
     { site: "glute_med", kind: "muscle", pts: "178,428 158,428 138,436 128,450 126,468 140,474 160,466 176,452 184,440", fiber: 78 },
     { site: "glute_max", kind: "muscle", pts: "198,452! 186,446 166,458 146,472 130,490 128,516 134,540 152,556 178,560 198,552!", fiber: 148 },
@@ -194,6 +235,12 @@ export const BACK: ViewSpec = {
     { site: "heel", kind: "joint", ellipse: [161, 886, 12, 12] },
     { site: "ankle_outer", kind: "joint", ellipse: [147, 864, 4, 6] },
     { site: "ankle_inner", kind: "joint", ellipse: [176, 859, 4, 6] },
+    // the back of the ribs, out from the spine
+    { site: "ribs_back", kind: "joint", pts: "140,300 160,296 176,300 178,328 160,334 142,330" },
+    // the back of the head and the base of the skull
+    { site: "top_of_head", kind: "joint", pts: "180,27 200,23 220,27 230,38 200,36 170,38" },
+    { site: "back_of_head", kind: "joint", pts: "172,44 200,40 228,44 240,64 238,92 200,96 162,92 160,64" },
+    { site: "skull_base", kind: "muscle", pts: "176,98 196,101 197,110 186,113 174,108", fiber: 160 },
   ],
   lines: [
     { pts: "62,550 63,571", tone: "groove" },
@@ -212,7 +259,19 @@ export const SIDE: ViewSpec = {
   head: SIDE_HEAD,
   parts: [
     // trunk (behind the arm)
-    { kind: "skin", pts: "188,80 194,78 196,90 192,96 186,92" },
+    { site: "ear", kind: "skin", pts: "188,80 194,78 196,90 192,96 186,92" },
+    // the head and face, side on (the face toward the screen's right)
+    { site: "top_of_head", kind: "joint", pts: "184,28 196,23 214,26 224,33 204,34 188,36" },
+    { site: "forehead", kind: "joint", pts: "224,34 231,40 237,56 230,60 222,50" },
+    { site: "back_of_head", kind: "joint", pts: "170,48 180,36 186,58 184,84 176,98 168,90 166,66" },
+    { site: "temple", kind: "joint", ellipse: [214, 62, 6, 9] },
+    { site: "eyes", kind: "joint", ellipse: [231, 69, 5, 4] },
+    { site: "nose", kind: "joint", pts: "240,72 248,82 249,87 242,88 238,80" },
+    { site: "cheek", kind: "joint", ellipse: [224, 88, 7, 6] },
+    { site: "tmj", kind: "joint", ellipse: [200, 90, 3.5, 5] },
+    { site: "jaw_muscle", kind: "muscle", pts: "204,96 214,100 222,112 220,120 210,120 204,108", fiber: 80 },
+    { site: "chin", kind: "joint", pts: "232,112 238,113 238,120 232,125 226,122" },
+    { site: "skull_base", kind: "muscle", pts: "174,100 186,98 188,110 180,114 174,108", fiber: 160 },
     { site: "neck_back", kind: "muscle", pts: "170,100 182,104 186,124 182,140 174,132 170,116", fiber: 95 },
     { site: "upper_trap", kind: "muscle", pts: "180,122 188,132 196,160 206,182 196,188 184,172 176,150 176,132", fiber: 78 },
     { site: "neck_side", kind: "muscle", pts: "188,106 196,104 210,130 222,160 220,168 210,154 196,126", fiber: 60 },
@@ -222,6 +281,7 @@ export const SIDE: ViewSpec = {
     { site: "erectors_low", kind: "muscle", pts: "176,370 184,366 186,400 182,430 172,436 172,400", fiber: 90 },
     { site: "serratus", kind: "muscle", pts: "230,236 244,240 238,250 246,262 236,268 244,282 232,288 228,270 228,250", fiber: 25 },
     { site: "obliques", kind: "muscle", pts: "196,300 226,296 238,310 240,350 238,390 230,416 210,424 194,414 190,380 192,340", fiber: 55 },
+    { site: "ribs_side", kind: "joint", pts: "196,262 224,256 230,290 202,298 194,280" },
     { site: "abs", kind: "muscle", pts: "238,300 242,300 244,340 242,380 236,420 232,420 236,380 238,340", fiber: 90 },
     // hip & thigh
     { site: "glute_med", kind: "muscle", pts: "176,430 200,428 214,440 212,468 196,476 180,466 170,450", fiber: 85 },
@@ -243,7 +303,10 @@ export const SIDE: ViewSpec = {
     { site: "tibialis", kind: "muscle", pts: "214,688 226,690 226,740 222,800 218,840 212,840 212,790 212,740", fiber: 92 },
     { site: "achilles", kind: "tendon", pts: "180,820 188,822 186,866 178,864" },
     { site: "foot_top", kind: "skin", pts: "206,872 226,874 250,888 262,898 266,904 214,904 198,900" },
-    { site: "arch", kind: "tendon", pts: "204,902 248,902 238,906 210,906" },
+    { site: "arch", kind: "tendon", pts: "206,902 232,902 230,906 208,906" },
+    { site: "ball_of_foot", kind: "joint", pts: "232,902 256,902 254,906 232,906" },
+    { site: "toes", kind: "skin", pts: "252,890 262,898 266,904 262,906 252,906 248,898" },
+    { site: "foot_outer", kind: "skin", ellipse: [214, 896, 10, 4] },
     { site: "heel", kind: "joint", ellipse: [184, 892, 10, 9] },
     { site: "ankle_outer", kind: "joint", ellipse: [204, 866, 6, 7] },
     { site: "ankle_front", kind: "joint", ellipse: [222, 868, 5, 6] },

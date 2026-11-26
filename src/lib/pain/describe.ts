@@ -13,11 +13,24 @@
  * number they said out of 10. Words it can't place ("my back") come back as a
  * question, and anything it can't read at all goes to the server's reader
  * (describe.functions.ts) instead.
+ *
+ * The whole body (Nov 26 2026): the head and face ("a headache behind my
+ * eyes"), the jaw, the ribs, each finger, the palm, the toes and the bottom
+ * of the foot; general symptoms that aren't one place (dizziness, nausea,
+ * feeling unwell: symptoms.ts); tired, cramping or weak muscles; several
+ * symptoms in one breath ("my lower back feels tight and my hands are
+ * tingling"). Something it can't place in part of what they said goes to the
+ * server's reader too, and what that finds is added, never swapped for what
+ * this reader already read. It asks only what changes what happens next
+ * (`needs`, `safetyQuestions`): the side of a limb, how bad a pain is, and
+ * the safety questions a warning sign turns on.
  */
 import type { PainSide } from "@/lib/pain/regions";
-import { regionOf } from "@/lib/pain/regions";
+import { NON_TRAINING_REGIONS, regionOf } from "@/lib/pain/regions";
 import type { Change, Feel, Impact, Timing } from "@/lib/pain/report";
 import { NOTE_MAX } from "@/lib/pain/report";
+import { PAIN_SITES, siteCovers } from "@/lib/pain/sites";
+import { GENERAL_KEYS, generalOf, generalSymptomsIn, symptomClass, type GeneralSymptom } from "@/lib/pain/symptoms";
 
 export type DescribedPlace = {
   region: string;
@@ -35,11 +48,18 @@ export type DescribedPlace = {
   note: string;
   /** What's still needed from them. */
   needs: ("score" | "side")[];
+  /** A general symptom (a headache, dizziness, nausea…), null for a place that hurts. */
+  symptom?: GeneralSymptom | null;
 };
 
 export type Unclear = { word: string; options: string[] };
 
-export type DescribeResult = { places: DescribedPlace[]; unclear: Unclear[] };
+export type DescribeResult = {
+  places: DescribedPlace[];
+  unclear: Unclear[];
+  /** Part of what they said read like a symptom but named nowhere this reader knows: the server reads the whole thing. */
+  leftover?: string[];
+};
 
 export const DESCRIBE_MAX_CHARS = 600;
 
@@ -49,9 +69,45 @@ type PlaceWord = { re: RegExp; region: string; site?: string; plural?: RegExp };
 
 /** Exact spots, only when they name them. Longest phrases first. */
 const SITE_WORDS: PlaceWord[] = [
+  // the head and face
+  { re: /\b(?:behind|in|around) (?:my |the |both )?eyes?\b|\beye ?(?:balls?|sockets?)\b|\beyes?\b/, region: "face", site: "eyes", plural: /eyes\b/ },
+  { re: /\btemples?\b/, region: "head", site: "temple" },
+  { re: /\bforehead\b|\bfront of (?:my |the )?head\b/, region: "head", site: "forehead" },
+  { re: /\b(?:top of (?:my |the )?head|crown of (?:my |the )?head)\b/, region: "head", site: "top_of_head" },
+  { re: /\b(?:base of (?:my |the )?skull|where (?:my |the )?neck meets (?:my |the )?head|suboccipitals?)\b/, region: "head", site: "skull_base" },
+  { re: /\bback of (?:my |the )?head\b/, region: "head", site: "back_of_head" },
+  { re: /\b(?:sinus(?:es)?|cheek ?bones?|cheeks?)\b/, region: "face", site: "cheek", plural: /cheeks|sinuses|bones\b/ },
+  { re: /\b(?:tmj|jaw joint|jaw (?:clicks?|clicking|pops?|popping|locks?))\b/, region: "jaw", site: "tmj" },
+  { re: /\b(?:clench\w*|grind\w*) (?:my )?(?:jaw|teeth)\b|\bmasseter\b/, region: "jaw", site: "jaw_muscle" },
+  { re: /\bchin\b/, region: "jaw", site: "chin" },
+  { re: /\bears?\b(?!ly)/, region: "head", site: "ear", plural: /ears\b/ },
+  // the ribs
+  { re: /\bfront (?:of )?(?:my |the )?ribs?\b|\bbottom of (?:my |the )?ribs?\b/, region: "ribs", site: "ribs_front" },
+  { re: /\bside (?:of )?(?:my |the )?ribs?\b|\bintercostals?\b/, region: "ribs", site: "ribs_side" },
+  { re: /\bback (?:of )?(?:my |the )?ribs?\b|\brib (?:is )?out\b/, region: "ribs", site: "ribs_back" },
+  // the hand
+  { re: /\b(?:index|pointer|first) fingers?\b/, region: "wrist_hand", site: "index_finger", plural: /fingers\b/ },
+  { re: /\bmiddle fingers?\b/, region: "wrist_hand", site: "middle_finger", plural: /fingers\b/ },
+  { re: /\bring fingers?\b/, region: "wrist_hand", site: "ring_finger", plural: /fingers\b/ },
+  { re: /\b(?:little fingers?|pink(?:y|ie|ies))\b/, region: "wrist_hand", site: "little_finger", plural: /fingers|pinkies\b/ },
+  { re: /\bback of (?:my |the )?hands?\b/, region: "wrist_hand", site: "back_of_hand", plural: /hands\b/ },
+  { re: /\bpalms?\b/, region: "wrist_hand", site: "palm", plural: /palms\b/ },
+  { re: /\bknuckles?\b/, region: "wrist_hand", site: "knuckles", plural: /knuckles\b/ },
+  { re: /\b(?:fingers?|finger ?tips?)\b/, region: "wrist_hand", site: "fingers", plural: /fingers|tips\b/ },
+  { re: /\bhands?\b/, region: "wrist_hand", site: "hand", plural: /hands\b/ },
+  // the foot
+  { re: /\b(?:bottom|underneath|sole)s? of (?:my |the |both )?(?:left |right )?(?:foot|feet)\b|\bunder(?:neath)? (?:my |the )?(?:foot|feet)\b|\bsoles?(?: of (?:my |the )?(?:foot|feet))?\b/, region: "ankle_foot", site: "foot_sole", plural: /feet|soles\b/ },
+  { re: /\bballs? of (?:my |the )?(?:left |right )?(?:foot|feet)\b|\bforefoot\b/, region: "ankle_foot", site: "ball_of_foot", plural: /balls|feet\b/ },
+  { re: /\bbig toes?\b|\bbunions?\b/, region: "ankle_foot", site: "big_toe", plural: /toes|bunions\b/ },
+  { re: /\btoes?\b/, region: "ankle_foot", site: "toes", plural: /toes\b/ },
+  { re: /\b(?:outside|outer edge) of (?:my |the )?(?:left |right )?(?:foot|feet)\b/, region: "ankle_foot", site: "foot_outer", plural: /feet\b/ },
+  { re: /\btop of (?:my |the )?(?:left |right )?(?:foot|feet)\b/, region: "ankle_foot", site: "foot_top", plural: /feet\b/ },
+  // the pelvis and hip joint
+  { re: /\b(?:pubic bone|pubic|front of (?:my |the )?pelvis)\b/, region: "hip_groin", site: "pubic_bone" },
+  { re: /\b(?:hip joint|hip socket|deep (?:in|inside) (?:my |the )?hip)\b/, region: "hip_groin", site: "hip_joint", plural: /joints|sockets\b/ },
   { re: /\bbetween (?:my |the )?shoulder ?blades?\b/, region: "upper_back", site: "mid_trap" },
   { re: /\binside edge of (?:my |the )?shoulder ?blade\b/, region: "shoulder_blade", site: "scapula_border" },
-  { re: /\b(?:patellar tendon|below (?:my |the )?knee ?cap|under (?:my |the )?knee ?cap|jumper'?s knee)\b/, region: "knee", site: "patellar_tendon" },
+  { re: /\b(?:patellar tendon|below (?:my |the )?knee ?caps?|under(?:neath)? (?:my |the )?knee ?caps?|jumper'?s knee)\b/, region: "knee", site: "patellar_tendon", plural: /caps\b/ },
   { re: /\b(?:quad(?:riceps)? tendon|above (?:my |the )?knee ?cap)\b/, region: "knee", site: "quad_tendon" },
   { re: /\b(?:inside|inner|medial side) (?:of )?(?:my |the )?knees?\b/, region: "knee", site: "knee_inner", plural: /knees\b/ },
   { re: /\b(?:outside|outer|lateral side) (?:of )?(?:my |the )?knees?\b/, region: "knee", site: "knee_outer", plural: /knees\b/ },
@@ -89,11 +145,17 @@ const SITE_WORDS: PlaceWord[] = [
   { re: /\bheels?\b/, region: "ankle_foot", site: "heel", plural: /heels\b/ },
   { re: /\b(?:arch(?:es)? of (?:my |the )?feet|arch(?:es)? of (?:my |the )?foot|plantar(?: fascia)?)\b/, region: "ankle_foot", site: "arch", plural: /arches|feet\b/ },
   { re: /\bthumbs?\b/, region: "wrist_hand", site: "thumb", plural: /thumbs\b/ },
+  { re: /\b(?:arch(?:es)?|instep)\b/, region: "ankle_foot", site: "arch", plural: /arches\b/ },
   { re: /\b(?:breast ?bone|sternum)\b/, region: "chest", site: "sternum" },
 ];
 
 /** Whole regions (a word that could be any spot in it stays the region). */
 const REGION_WORDS: PlaceWord[] = [
+  { re: /\bjaw\b/, region: "jaw" },
+  { re: /\b(?:face|facial)\b/, region: "face" },
+  { re: /\b(?:head|skull)\b/, region: "head" },
+  { re: /\b(?:ribs?|rib ?cage)\b/, region: "ribs" },
+  { re: /\bpelvis\b/, region: "hip_groin" },
   { re: /\bshoulder ?blades?\b|\bscapula[es]?\b/, region: "shoulder_blade", plural: /blades|scapulae\b/ },
   { re: /\b(?:mid(?:dle)?[ -]?back|thoracic)\b/, region: "mid_back" },
   { re: /\b(?:low(?:er)?[ -]?back|lumbar)\b/, region: "low_back" },
@@ -103,7 +165,7 @@ const REGION_WORDS: PlaceWord[] = [
   { re: /\b(?:chest|pecs?|pectorals?)\b/, region: "chest", plural: /pecs|pectorals\b/ },
   { re: /\bupper arms?\b/, region: "upper_arm", plural: /arms\b/ },
   { re: /\b(?:elbows?|forearms?)\b/, region: "elbow", plural: /elbows|forearms\b/ },
-  { re: /\b(?:wrists?|hands?|fingers?|knuckles?)\b/, region: "wrist_hand", plural: /wrists|hands\b/ },
+  { re: /\bwrists?\b/, region: "wrist_hand", plural: /wrists\b/ },
   { re: /\b(?:abs|abdominals?|core|stomach)\b/, region: "abs" },
   { re: /\b(?:hips?|groin)\b/, region: "hip_groin", plural: /hips\b/ },
   { re: /\b(?:glutes?|butt)\b/, region: "glute", plural: /glutes\b/ },
@@ -112,7 +174,7 @@ const REGION_WORDS: PlaceWord[] = [
   { re: /\bknees?\b/, region: "knee", plural: /knees\b/ },
   { re: /\bshins?\b/, region: "shin", plural: /shins\b/ },
   { re: /\b(?:calf|calves)\b/, region: "calf", plural: /calves\b/ },
-  { re: /\b(?:ankles?|feet|foot|toes?)\b/, region: "ankle_foot", plural: /ankles|feet\b/ },
+  { re: /\b(?:ankles?|feet|foot)\b/, region: "ankle_foot", plural: /ankles|feet\b/ },
 ];
 
 /** Words that name more than one region: asked, never guessed. */
@@ -122,8 +184,8 @@ const VAGUE: { re: RegExp; word: string; options: string[] }[] = [
   { re: /\b(?:my|the|in my|both) legs?\b(?! (?:day|press|curls?|extensions?))/, word: "leg", options: ["hip_groin", "quad", "hamstring", "knee", "calf", "shin"] },
 ];
 
-/** Spots on the midline: no left or right (sites.ts `midline`; the test keeps them equal). */
-export const SITE_MIDLINE = new Set(["neck_spine", "sternum", "upper_spine", "mid_spine", "low_spine", "tailbone"]);
+/** Spots on the midline: no left or right (sites.ts `midline`). */
+export const SITE_MIDLINE: ReadonlySet<string> = new Set(PAIN_SITES.filter((s) => s.midline).map((s) => s.key));
 
 const NUMBER_WORDS: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
@@ -132,13 +194,19 @@ const SCORE_SAID =
   /\b(?:a|an|about|around|like|maybe|is|was|at|its|it's|probably|rated|rate|now|still|only)\s+(?:a\s+|an\s+|like\s+)?(10|[0-9]|zero|one|two|three|four|five|six|seven|eight|nine|ten)(?:ish)?\b(?!\s*(?:sets?|reps?|lbs?|kgs?|pounds?|kilos?|days?|weeks?|months?|years?|mins?|minutes?|hours?|hrs?|times?|x\b|%|percent|plates?|secs?|seconds?|sessions?|workouts?|miles?|km|k\b))/;
 
 const FEEL_WORDS: [RegExp, Feel][] = [
-  [/\b(?:pins and needles|tingl\w*|numb\w*)\b/, "numb"],
+  [/\b(?:pins and needles|tingl\w*|numb\w*)\b|\b(?:hands?|arms?|feet|foot|legs?|fingers?|toes?) (?:keeps? |kept )?(?:fall(?:s|ing)?|fell|going|goes|went|go) (?:to )?(?:sleep|asleep)\b/, "numb"],
+  [/\b(?:weak(?:ness)?|gave out|gives out|giving (?:out|way))\b/, "weak"],
+  [/\b(?:cramp\w*|spasm\w*|charley horse)\b/, "cramp"],
+  [/\b(?:fatigued|tired|smoked|fried|toast|gassed|wrecked|cooked|dead|heavy|drained|exhausted)\b(?! (?:sets?|squats?|singles?|doubles?|triples?|weights?|lifts?|bench\w*|deadlifts?|day|session|lifting|hang))/, "fatigued"],
+  [/\bpressure\b/, "pressure"],
+  [/\b(?:throb\w*|pounding|pulsing)\b/, "throbbing"],
+  [/\b(?:sudden(?:ly)?|out of nowhere|came on (?:fast|quick\w*)|thunderclap|worst (?:headache|pain) (?:ever|of my life|i'?ve (?:ever )?had))\b/, "sudden"],
   [/\b(?:pinch\w*)\b/, "pinch"],
   [/\b(?:sharp|stabbing|shooting|stabs?)\b/, "sharp"],
   [/\b(?:burn\w*)\b/, "burning"],
   [/\b(?:tight\w*|stiff\w*)\b/, "tight"],
   [/\b(?:sore\w*|tender\w*)\b/, "sore"],
-  [/\b(?:dull|ach\w*)\b/, "ache"],
+  [/\b(?:dull|ach\w*)\b(?<!head ?ach\w*)/, "ache"],
   [/\b(?:swollen|swelling|swell\w*|puffy)\b/, "swollen"],
   [/\b(?:popped|felt a pop|a pop|popping)\b/, "pop"],
 ];
@@ -217,7 +285,18 @@ function placesIn(text: string): PlaceHit[] {
       }
     }
   }
-  return hits.sort((a, b) => a.at - b.at);
+  // "my knee hurts underneath the kneecap" is one place, the exact spot: a region word in a
+  // clause that also names a spot in that region is the same place (its plural carries over)
+  const sites = hits.filter((h) => h.site);
+  const kept = hits.filter((h) => {
+    // "pinky on my right hand": the finger, never the finger and the whole hand
+    if (h.site) return !sites.some((x) => x !== h && siteCovers(h.site).includes(x.site!));
+    const same = sites.find((x) => x.region === h.region);
+    if (!same) return true;
+    if (h.plural) same.plural = true;
+    return false;
+  });
+  return kept.sort((a, b) => a.at - b.at);
 }
 
 type SideHit = Span & { side: PainSide | "both" };
@@ -297,7 +376,7 @@ const sidedRegion = (region: string) => !!regionOf(region)?.sided;
 const lateralRegion = (region: string) => !!regionOf(region)?.lateral;
 
 function blank(region: string, site: string | null, side: PainSide | null): DescribedPlace {
-  return { region, site, side, score: null, feel: [], timing: [], exerciseName: null, exerciseId: null, impact: null, change: null, note: "", needs: [] };
+  return { region, site, side, score: null, feel: [], timing: [], exerciseName: null, exerciseId: null, impact: null, change: null, note: "", needs: [], symptom: null };
 }
 
 function addNote(p: DescribedPlace, words: string) {
@@ -333,6 +412,18 @@ function apply(p: DescribedPlace, d: Detail, opts: { score: boolean }) {
   if (d.change && !p.change) p.change = d.change;
 }
 
+/** What it reads as needing from them: how bad only for a pain or a joint, a side only for a limb. */
+export function needsOf(p: DescribedPlace): ("score" | "side")[] {
+  const out: ("score" | "side")[] = [];
+  const cls = symptomClass({ ...p, score: null, severity: null });
+  if (p.score == null && (cls === "pain" || cls === "joint")) out.push("score");
+  if (p.side == null && (p.site ? !SITE_MIDLINE.has(p.site) && sidedRegion(p.region) : sidedRegion(p.region))) out.push("side");
+  return out;
+}
+
+/** Words that say something hurts or feels off (a clause with these and no place is read by the server). */
+const SYMPTOM_HINT = /\b(?:hurt\w*|pain\w*|ach\w*|sore\w*|tight\w*|stiff\w*|numb\w*|tingl\w*|burn\w*|throb\w*|cramp\w*|swoll\w*|sharp|pinch\w*|tweak\w*|strain\w*|injur\w*|bother\w*|killing|weak\w*|bruis\w*)\b/;
+
 /**
  * Read a description. `exercises`: today's workout, so "bench" is their own
  * Competition Bench Press when they did one.
@@ -342,23 +433,63 @@ export function describePain(input: string, opts: { exercises?: WorkoutExercise[
   const original = (input ?? "").slice(0, DESCRIBE_MAX_CHARS);
   const places: DescribedPlace[] = [];
   const unclear: Unclear[] = [];
+  const leftover: string[] = [];
   // the places the last clause with a place named: a clause with none of its own adds to these
   let group: DescribedPlace[] = [];
   let pending: { detail: Detail; words: string } | null = null;
 
+  const place = (made: DescribedPlace, detail: Detail, words: string, score: boolean): DescribedPlace => {
+    const existing = places.find((q) => q.region === made.region && q.site === made.site && q.side === made.side && (q.symptom ?? null) === (made.symptom ?? null));
+    const p = existing ?? made;
+    apply(p, detail, { score });
+    if (pending) apply(p, pending.detail, { score: false });
+    addNote(p, words);
+    if (!existing) places.push(p);
+    return p;
+  };
+
   for (const rawSentence of sentencesOf(original)) {
     const sentence = norm(rawSentence);
     for (const clause of clausesOf(sentence)) {
-      const hits = placesIn(clause);
+      let hits = placesIn(clause);
       const sides = sidesIn(clause);
       const detail = detailOf(clause, exercises);
+      const symptoms = generalSymptomsIn(clause);
+
+      // general symptoms: a headache takes the head or face spot named with it, the rest are no one place
+      const made: DescribedPlace[] = [];
+      if (symptoms.includes("headache")) {
+        const headHits = hits.filter((h) => h.region === "head" || h.region === "face");
+        hits = hits.filter((h) => !headHits.includes(h));
+        const said = sides.find((x) => x.side === "L" || x.side === "R")?.side;
+        const side: PainSide | null = said === "L" || said === "R" ? said : null;
+        if (headHits.length) for (const h of headHits) made.push(place({ ...blank(h.region, h.site, h.site && SITE_MIDLINE.has(h.site) ? null : side), symptom: "headache" }, detail, rawSentence, true));
+        else made.push(place({ ...blank("head", null, side), symptom: "headache" }, detail, rawSentence, true));
+      }
+      for (const k of symptoms) {
+        if (k === "headache") continue;
+        const def = generalOf(k);
+        if (!def) continue;
+        // a number goes to a symptom only when it's the one thing in the clause ("dizzy, about a 4")
+        made.push(place({ ...blank(def.region, null, null), symptom: k }, detail, rawSentence, !hits.length && symptoms.length === 1));
+      }
+
       // a detail said in another clause of this sentence counts for the places in it ("during squats, both knees")
       if (!hits.length) {
+        if (made.length) {
+          group = made;
+          pending = null;
+          continue;
+        }
         const vague = VAGUE.find((v) => v.re.test(clause));
         if (vague && !unclear.some((u) => u.word === vague.word)) unclear.push({ word: vague.word, options: vague.options });
         const hasDetail = detail.score != null || detail.feel.length || detail.timing.length || detail.exercise || detail.impact || detail.change || sides.length;
-        if (!hasDetail) continue;
+        if (!hasDetail) {
+          if (!vague && (group.length ? namesUnknownPart(clause) : SYMPTOM_HINT.test(clause))) leftover.push(clause.trim());
+          continue;
+        }
         if (!group.length) {
+          if (!vague && SYMPTOM_HINT.test(clause)) leftover.push(clause.trim());
           pending = { detail, words: rawSentence };
           continue;
         }
@@ -370,7 +501,7 @@ export function describePain(input: string, opts: { exercises?: WorkoutExercise[
           if (same.length) targets = same;
           else {
             // "my knee hurts. the left one is a 5": the place takes the side
-            const unsided = group.find((p) => p.side == null && (sidedRegion(p.region) || lateralRegion(p.region)));
+            const unsided = group.find((p) => p.side == null && !p.symptom && (sidedRegion(p.region) || lateralRegion(p.region)));
             if (unsided) {
               unsided.side = side;
               targets = [unsided];
@@ -384,43 +515,115 @@ export function describePain(input: string, opts: { exercises?: WorkoutExercise[
         continue;
       }
 
-      group = [];
+      group = [...made];
       hits.forEach((h, i) => {
-        // the side for this place: a side word before it (and after the place before it), else after it when it's alone
+        // the side for this place: a side word inside it ("bottom of my left foot"), else
+        // before it (and after the place before it), else after it when it's alone
         const prevEnd = i > 0 ? hits[i - 1].end : 0;
+        const within = sides.filter((s) => s.at >= h.at && s.end <= h.end);
         const before = sides.filter((s) => s.at >= prevEnd && s.end <= h.at);
         const after = hits.length === 1 ? sides.filter((s) => s.at >= h.end) : [];
-        const said = before[before.length - 1]?.side ?? after[0]?.side ?? null;
+        const said = within[0]?.side ?? before[before.length - 1]?.side ?? after[0]?.side ?? null;
         const canSide = h.site ? !SITE_MIDLINE.has(h.site) : sidedRegion(h.region) || lateralRegion(h.region);
         const both = canSide && sidedRegion(h.region) && (said === "both" || (said == null && h.plural));
-        const made: DescribedPlace[] = [];
-        if (both) {
-          made.push(blank(h.region, h.site, "L"), blank(h.region, h.site, "R"));
-        } else {
-          made.push(blank(h.region, h.site, canSide && (said === "L" || said === "R") ? said : null));
-        }
-        for (const p of made) {
-          const existing = places.find((q) => q.region === p.region && q.site === p.site && q.side === p.side);
-          const place = existing ?? p;
+        const fresh: DescribedPlace[] = both
+          ? [blank(h.region, h.site, "L"), blank(h.region, h.site, "R")]
+          : [blank(h.region, h.site, canSide && (said === "L" || said === "R") ? said : null)];
+        for (const f of fresh) {
           // a score in a clause naming two places belongs to neither (it can't be told which)
-          apply(place, detail, { score: hits.length === 1 && !both });
-          if (both && detail.score != null && hits.length === 1 && place.score == null) place.score = detail.score;
-          if (pending) apply(place, pending.detail, { score: false });
-          addNote(place, rawSentence);
-          if (!existing) places.push(place);
-          group.push(place);
+          const p = place(f, detail, rawSentence, hits.length === 1 && !both);
+          if (both && detail.score != null && hits.length === 1 && p.score == null) p.score = detail.score;
+          group.push(p);
         }
       });
       pending = null;
     }
   }
 
-  for (const p of places) {
-    p.needs = [];
-    if (p.score == null) p.needs.push("score");
-    if (p.side == null && (p.site ? !SITE_MIDLINE.has(p.site) && sidedRegion(p.region) : sidedRegion(p.region))) p.needs.push("side");
+  for (const p of places) p.needs = needsOf(p);
+  return leftover.length ? { places, unclear, leftover } : { places, unclear };
+}
+
+/** Words after "my" that aren't a body part (so "my workout hurt" isn't something unplaced). */
+const NOT_A_PART = new Set(["workout", "session", "set", "sets", "lift", "lifts", "squat", "squats", "bench", "deadlift", "deadlifts", "run", "runs", "training", "form", "body", "whole", "last", "first", "second", "third", "top", "next", "old", "usual", "same", "other", "left", "right", "own", "one", "coach", "program", "warm", "back", "arm", "arms", "leg", "legs", "energy", "sleep", "day", "week", "morning", "night", "life", "mind", "gym", "pr", "rep", "reps", "grip", "belt", "shoes", "knee", "knees"]);
+
+/** A clause that says something hurts in a part this reader doesn't know ("something in my gizmo hurts"). */
+function namesUnknownPart(clause: string): boolean {
+  if (!SYMPTOM_HINT.test(clause)) return false;
+  for (const m of clause.matchAll(/\b(?:my|the|in my|on my|of my)\s+([a-z]{3,})/g)) if (!NOT_A_PART.has(m[1])) return true;
+  return false;
+}
+
+/**
+ * What the server's reader found, added to what this reader already read:
+ * a place this reader has (the same spot and side, or the same symptom) keeps
+ * this reader's details; anything new is added. Never swaps one for the other.
+ */
+export function mergeDescribed(local: DescribeResult, server: DescribeResult): DescribeResult {
+  const places = [...local.places];
+  const same = (a: DescribedPlace, b: DescribedPlace) =>
+    (a.symptom ?? null) === (b.symptom ?? null) &&
+    a.region === b.region &&
+    (a.side ?? null) === (b.side ?? null) &&
+    // a region this reader read stays when the server only found a spot in it, and the other way round
+    (a.site === b.site || a.site == null || b.site == null);
+  for (const p of server.places) if (!places.some((q) => same(q, p) || (!!p.symptom && q.symptom === p.symptom))) places.push(p);
+  const unclear = [...local.unclear];
+  for (const u of server.unclear) if (!unclear.some((x) => x.word === u.word)) unclear.push(u);
+  return { places, unclear, leftover: [] };
+}
+
+// ── safety questions ─────────────────────────────────────────────────────
+
+export type SafetyQuestion = {
+  id: "weak" | "cauda" | "sudden" | "fainted";
+  text: string;
+  /** The places a yes is about (place keys: describedKey). */
+  keys: string[];
+};
+
+export const describedKey = (p: Pick<DescribedPlace, "region" | "site" | "side" | "symptom">) => `${p.region}:${p.site ?? ""}:${p.side ?? ""}:${p.symptom ?? ""}`;
+
+const BACK_AND_LEGS = new Set(["low_back", "glute", "hamstring", "hip_groin", "quad", "calf", "shin", "ankle_foot", "knee"]);
+
+/**
+ * The questions a report turns on because the answer decides whether it
+ * needs help now (safety.ts's urgent signs), never more: numbness or tingling
+ * asks about weakness (and, with the low back or legs, the groin and bladder);
+ * a headache asks whether it came on suddenly and severely; dizziness asks
+ * whether they fainted. Nothing already said is asked again.
+ */
+export function safetyQuestions(places: DescribedPlace[]): SafetyQuestion[] {
+  const out: SafetyQuestion[] = [];
+  const nerve = places.filter((p) => !p.symptom && p.feel.includes("numb"));
+  if (nerve.length && !nerve.some((p) => p.feel.includes("weak")))
+    out.push({ id: "weak", text: "Any weakness with the numbness or tingling?", keys: nerve.map(describedKey) });
+  const backNerve = nerve.filter((p) => BACK_AND_LEGS.has(p.region));
+  if (backNerve.length)
+    out.push({ id: "cauda", text: "Any numbness in the groin or inner thighs, or new trouble with your bladder or bowels?", keys: backNerve.map(describedKey) });
+  const headache = places.filter((p) => p.symptom === "headache");
+  if (headache.length && !headache.some((p) => p.feel.includes("sudden")))
+    out.push({ id: "sudden", text: "Did the headache come on suddenly and severely, like the worst you've had?", keys: headache.map(describedKey) });
+  const dizzy = places.filter((p) => p.symptom === "dizziness");
+  if (dizzy.length && !places.some((p) => p.symptom === "fainted"))
+    out.push({ id: "fainted", text: "Did you faint, or nearly faint?", keys: dizzy.map(describedKey) });
+  return out;
+}
+
+/** A yes to a safety question, as what changes in their places (a no changes nothing). */
+export function answerSafety(places: DescribedPlace[], q: SafetyQuestion): DescribedPlace[] {
+  const on = new Set(q.keys);
+  if (q.id === "fainted") {
+    if (places.some((p) => p.symptom === "fainted")) return places;
+    return [...places, { ...blank("general", null, null), symptom: "fainted", note: "Said yes to fainting or nearly fainting." }];
   }
-  return { places, unclear };
+  const feel: Feel = q.id === "sudden" ? "sudden" : q.id === "weak" ? "weak" : "numb";
+  return places.map((p) => {
+    if (!on.has(describedKey(p))) return p;
+    const next = { ...p, feel: p.feel.includes(feel) ? p.feel : [...p.feel, feel] };
+    if (q.id === "cauda") next.note = `${p.note ? `${p.note} ` : ""}Said yes to numbness in the groin or bladder or bowel changes.`.slice(0, NOTE_MAX);
+    return next;
+  });
 }
 
 /** "Left knee · 5/10 · during squats" for the confirm list. */
@@ -434,9 +637,9 @@ export function describedLine(p: DescribedPlace): string {
 // ── what the server's reader sent back, checked against their words ─────
 
 /** A body part said in the plural ("my knees"): both sides. */
-const PLURAL_PLACES = /\b(?:knees|shoulders|elbows|wrists|hands|hips|ankles|calves|quads|hamstrings|glutes|shins|feet|heels|thumbs|thighs|delts|lats|traps|forearms|arms|legs|pecs)\b/;
+const PLURAL_PLACES = /\b(?:knees|shoulders|elbows|wrists|hands|hips|ankles|calves|quads|hamstrings|glutes|shins|feet|heels|thumbs|thighs|delts|lats|traps|forearms|arms|legs|pecs|fingers|toes|palms|knuckles|soles|arches|pinkies)\b/;
 
-const FEEL_SET = new Set<Feel>(["sore", "tight", "ache", "sharp", "pinch", "numb", "swollen", "pop", "burning", "other"]);
+const FEEL_SET = new Set<Feel>(["sore", "tight", "ache", "sharp", "pinch", "numb", "swollen", "pop", "burning", "other", "fatigued", "cramp", "weak", "pressure", "throbbing", "sudden"]);
 const TIMING_SET = new Set<Timing>(["during", "after", "rest", "movement"]);
 const IMPACT_SET = new Set<Impact>(["none", "modified", "stopped"]);
 
@@ -456,10 +659,17 @@ export function groundedPlaces(raw: unknown, original: string, opts: { exercises
   const r = (raw ?? {}) as { places?: unknown; unclear?: unknown };
   const out: DescribedPlace[] = [];
   const siteRegion = new Map(opts.sites.map((s) => [s.key, s]));
+  const saidSymptoms = new Set(generalSymptomsIn(text));
   for (const x of Array.isArray(r.places) ? r.places.slice(0, 12) : []) {
     const p = (x ?? {}) as Record<string, unknown>;
-    const region = typeof p.region === "string" ? p.region : "";
-    if (!regionOf(region) || region === "other") continue;
+    // a general symptom only when their own words say it (a made-up "dizzy" would raise a warning sign)
+    const symptom = typeof p.symptom === "string" && GENERAL_KEYS.has(p.symptom) && saidSymptoms.has(p.symptom as GeneralSymptom) ? (p.symptom as GeneralSymptom) : null;
+    let region = typeof p.region === "string" ? p.region : "";
+    if (symptom) {
+      const home = generalOf(symptom)!.region;
+      if (home === "general" || !(region === "head" || region === "face")) region = home;
+    }
+    if (!regionOf(region) || region === "other" || (region === "general" && !symptom)) continue;
     const siteDef = typeof p.site === "string" ? siteRegion.get(p.site) : undefined;
     const site = siteDef && siteDef.region === region ? siteDef.key : null;
     const sided = site ? !siteDef!.midline && sidedRegion(region) : sidedRegion(region);
@@ -482,12 +692,10 @@ export function groundedPlaces(raw: unknown, original: string, opts: { exercises
     const words = typeof p.words === "string" ? p.words.trim() : "";
     const note = (words && text.includes(norm(words)) ? words : original.trim()).slice(0, NOTE_MAX);
     const sides: (PainSide | null)[] = rawSide === "both" && sided ? ["L", "R"] : [canSide && (rawSide === "L" || rawSide === "R") ? rawSide : null];
-    for (const side of sides) {
-      if (out.some((q) => q.region === region && q.site === site && q.side === side)) continue;
-      const place: DescribedPlace = { ...blank(region, site, side), score, feel, timing, impact, exerciseName: exercise?.name ?? null, exerciseId: exercise?.id ?? null, note };
-      place.needs = [];
-      if (place.score == null) place.needs.push("score");
-      if (place.side == null && sided) place.needs.push("side");
+    for (const side of symptom && region === "general" ? [null] : sides) {
+      if (out.some((q) => q.region === region && q.site === site && q.side === side && (q.symptom ?? null) === symptom)) continue;
+      const place: DescribedPlace = { ...blank(region, region === "general" ? null : site, side), symptom, score, feel, timing, impact, exerciseName: exercise?.name ?? null, exerciseId: exercise?.id ?? null, note };
+      place.needs = needsOf(place);
       out.push(place);
     }
   }
@@ -501,17 +709,17 @@ export function groundedPlaces(raw: unknown, original: string, opts: { exercises
 
 // ── the confirm list: one row per spot, its sides together ───────────────
 
-export type DescribedGroup = { key: string; region: string; site: string | null; places: DescribedPlace[]; choice: "L" | "R" | "both" | null; sided: boolean };
+export type DescribedGroup = { key: string; region: string; site: string | null; symptom: GeneralSymptom | null; places: DescribedPlace[]; choice: "L" | "R" | "both" | null; sided: boolean };
 
 /** Places grouped by spot, so "both knees" is one row with Left · Right · Both. */
 export function describedGroups(places: DescribedPlace[]): DescribedGroup[] {
   const out: DescribedGroup[] = [];
   for (const p of places) {
-    const key = `${p.region}:${p.site ?? ""}`;
+    const key = `${p.region}:${p.site ?? ""}:${p.symptom ?? ""}`;
     let g = out.find((x) => x.key === key);
     if (!g) {
       const sided = p.site ? !SITE_MIDLINE.has(p.site) && sidedRegion(p.region) : sidedRegion(p.region);
-      g = { key, region: p.region, site: p.site, places: [], choice: null, sided };
+      g = { key, region: p.region, site: p.site, symptom: p.symptom ?? null, places: [], choice: null, sided };
       out.push(g);
     }
     g.places.push(p);
@@ -528,7 +736,7 @@ export function chooseSide(group: DescribedGroup, choice: "L" | "R" | "both"): D
   const base = group.places.find((p) => p.side === choice) ?? group.places[0];
   const resided = (side: PainSide, from: DescribedPlace): DescribedPlace => {
     const p = { ...from, side, feel: [...from.feel], timing: [...from.timing] };
-    p.needs = p.score == null ? ["score"] : [];
+    p.needs = needsOf(p);
     return p;
   };
   if (choice === "both") {

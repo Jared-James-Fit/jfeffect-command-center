@@ -20,6 +20,7 @@
 import { areaLabel, regionFromName, regionOf, regionsInText, type PainSide } from "@/lib/pain/regions";
 import { severityOf, severityRank, type Change, type Feel, type Impact, type Severity, type Timing, type Trigger } from "@/lib/pain/report";
 import { siteOf } from "@/lib/pain/sites";
+import { GENERAL_KEYS, generalLabel, generalOf, generalSymptomsIn, symptomClass, worstClass, type SymptomClass } from "@/lib/pain/symptoms";
 
 export type PainEntry = {
   /** pain_reports.id, or a made-up id for an older report ("fb:<feedback id>:0"). */
@@ -52,7 +53,14 @@ export type PainEntry = {
   note: string | null;
   /** The place was read from their words, not picked. */
   inferred: boolean;
+  /** A general symptom (symptoms.ts): a headache, dizziness, nausea… null for a place that hurts. */
+  symptom?: string | null;
 };
+
+/** What kind of symptom an entry is (symptoms.ts: the one reader). */
+export function entryClass(e: Pick<PainEntry, "region" | "site" | "feel" | "score" | "severity" | "timing" | "symptom">): SymptomClass {
+  return symptomClass(e);
+}
 
 export const WINDOW_DAYS = 84;
 export const RECENT_DAYS = 42;
@@ -84,6 +92,7 @@ export type PainReportRow = {
   change: string | null;
   continues_id: string | null;
   note: string | null;
+  symptom?: string | null;
 };
 
 const asSide = (s: string | null | undefined): PainSide | null => (s === "L" || s === "R" ? s : null);
@@ -112,6 +121,7 @@ export function entriesFromReports(rows: PainReportRow[]): PainEntry[] {
     continuesId: r.continues_id ?? null,
     note: r.note ?? null,
     inferred: false,
+    symptom: r.symptom && GENERAL_KEYS.has(r.symptom) ? r.symptom : null,
   }));
 }
 
@@ -208,7 +218,12 @@ export function entriesFromCheckinText(rows: LegacyCheckinRow[], opts: { tz?: st
     const text = (c.pain_details ?? "").trim();
     if (!text) continue;
     const at = c.submitted_at ?? c.created_at;
-    const places = regionsInText(text);
+    // a headache or dizziness typed under "pain" is a general symptom, never a place that hurts
+    const symptoms = generalSymptomsIn(text);
+    const places: { region: string; side: PainSide | null; symptom?: string | null }[] = [
+      ...regionsInText(text).filter((p) => !(symptoms.includes("headache") && p.region === "head")),
+      ...symptoms.map((k) => ({ region: generalOf(k)!.region, side: null, symptom: k })),
+    ];
     (places.length ? places : [{ region: "other", side: null }]).forEach((p, i) =>
       out.push({
         id: `ci:${c.id}:${i}`,
@@ -233,6 +248,7 @@ export function entriesFromCheckinText(rows: LegacyCheckinRow[], opts: { tz?: st
         continuesId: null,
         note: text,
         inferred: places.length > 0,
+        symptom: (p as { symptom?: string | null }).symptom ?? null,
       }),
     );
   }
@@ -256,6 +272,13 @@ export type CoachReason =
 export type PainArea = {
   /** The region (one thread per region: both sides and "side not said" together, each counted). */
   region: string;
+  /** A general symptom's thread (one per symptom: every headache together), else null. */
+  symptom: string | null;
+  /**
+   * What kind of symptom it reads as (symptoms.ts): the most pressing kind
+   * reported in the last 6 weeks, soreness that keeps coming back read as pain.
+   */
+  cls: SymptomClass;
   label: string;
   /** Reports per side: { L: 2, R: 3, none: 5 }. */
   sides: { L: number; R: number; none: number };
@@ -318,9 +341,31 @@ function weekOf(day: string): string {
 
 const REASON_ORDER: CoachReason[] = ["red_flag", "severe", "stopped", "worse", "persistent", "limiting", "exercise"];
 
+/**
+ * A general symptom that needs more than a coach (safety.ts words it):
+ * fainting, a sudden headache or one with weakness or numbness, shortness of
+ * breath or a racing heart that came with dizziness or chest pain, and
+ * dizziness or a headache that keeps coming back during training.
+ */
+export function generalFlagged(e: PainEntry, around: PainEntry[] = []): boolean {
+  if (!e.symptom) return false;
+  const sameDay = around.filter((x) => x.date === e.date);
+  const has = (k: string) => sameDay.some((x) => x.symptom === k);
+  if (e.symptom === "fainted") return true;
+  if (e.symptom === "headache" && (e.feel.includes("sudden") || e.feel.includes("weak") || e.feel.includes("numb") || sameDay.some((x) => x.feel.includes("weak")))) return true;
+  if ((e.symptom === "breathless" || e.symptom === "palpitations") && (has("dizziness") || has("fainted") || sameDay.some((x) => x.region === "chest"))) return true;
+  if ((e.symptom === "dizziness" || e.symptom === "headache" || e.symptom === "breathless" || e.symptom === "palpitations") && e.timing.includes("during")) {
+    const times = around.filter((x) => x.symptom === e.symptom && x.timing.includes("during")).length;
+    // dizziness or a racing heart while lifting once is enough; a headache or breathlessness when it keeps happening
+    if (times >= 2 || e.symptom === "dizziness" || e.symptom === "palpitations") return true;
+  }
+  return false;
+}
+
 /** Red flags in a set of reports (safety.ts words them). */
 export function hasRedFlag(e: PainEntry): boolean {
-  if (e.feel.includes("numb")) return true;
+  if (e.symptom) return generalFlagged(e, [e]);
+  if (e.feel.includes("numb") || e.feel.includes("weak")) return true;
   if (e.feel.includes("pop") && (e.severity === "severe" || e.feel.includes("swollen") || e.impact === "stopped")) return true;
   if (e.feel.includes("swollen") && e.severity === "severe") return true;
   if (e.region === "chest" && (e.trigger === "daily" || e.trigger === "unsure") && severityRank(e.severity) >= 2) return true;
@@ -354,8 +399,8 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
   const groups = new Map<string, PainEntry[]>();
   for (const e of entries) {
     if (e.date < from || e.date > today) continue;
-    // "somewhere else" isn't one place: each one stands alone
-    const key = e.region === "other" ? `other:${e.id}` : e.region;
+    // "somewhere else" isn't one place: each one stands alone; a general symptom is its own thread
+    const key = e.symptom ? `sym:${e.symptom}` : e.region === "other" ? `other:${e.id}` : e.region;
     const list = groups.get(key) ?? [];
     list.push(e);
     groups.set(key, list);
@@ -409,11 +454,23 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
       if (limiting.modified >= 2) reasons.add("limiting");
       if (named.some((n) => n.count >= 2) && recentDays >= 2) reasons.add("exercise");
     }
-    const minor = days === 1 && reasons.size === 0 && (latest.severity === "mild" || latest.feel.every((f) => f === "sore" || f === "tight"));
+    const recentClasses = (recent.length ? recent : [latest]).map(entryClass);
+    let cls = worstClass(recentClasses) ?? "pain";
+    // soreness that keeps coming back isn't "normal" soreness any more
+    if (cls === "soreness" && status === "persistent") cls = "pain";
+    if (status !== "quiet" && cls === "general" && recent.some((e) => e.date >= addDays(today, -14) && generalFlagged(e, recent))) reasons.add("red_flag");
+    const minor =
+      days === 1 &&
+      reasons.size === 0 &&
+      (latest.severity === "mild" || latest.feel.every((f) => f === "sore" || f === "tight" || f === "fatigued")) &&
+      // a general symptom is never "nothing to act on" on its own say-so
+      cls !== "general";
 
     areas.push({
       region: latest.region,
-      label: latest.region === "other" ? (latest.note?.slice(0, 40) || "Somewhere else") : regionLabel(latest.region, sides),
+      symptom: latest.symptom ?? null,
+      cls,
+      label: latest.symptom ? generalLabel(latest.symptom) ?? "Symptom" : latest.region === "other" ? (latest.note?.slice(0, 40) || "Somewhere else") : regionLabel(latest.region, sides),
       sides,
       entries: list,
       days,
@@ -437,6 +494,7 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
       reasons: REASON_ORDER.filter((r) => reasons.has(r)),
       minor,
     });
+    // (a general red flag can be added after the reasons were first worked out)
   }
 
   const weight = (a: PainArea) => (a.reasons.length ? 100 - REASON_ORDER.indexOf(a.reasons[0]) * 10 : 0);
@@ -527,14 +585,24 @@ export function followUpFor(
   entries: PainEntry[],
   region: string,
   side: PainSide | null,
-  opts: { today: string; feedbackId?: string | null; site?: string | null },
+  opts: { today: string; feedbackId?: string | null; site?: string | null; symptom?: string | null },
 ): FollowUp | null {
   if (region === "other") return null;
+  // a general symptom asks about the last time that symptom came up, wherever it was
+  if (region === "general" || opts.symptom) {
+    const from = addDays(opts.today, -RECENT_DAYS);
+    const prior = entries
+      .filter((e) => e.symptom && e.symptom === opts.symptom && e.date >= from && e.date <= opts.today && !(opts.feedbackId && e.feedbackId === opts.feedbackId))
+      .sort((a, b) => b.at.localeCompare(a.at))[0];
+    if (!prior) return null;
+    return { id: prior.id, stored: prior.stored, date: prior.date, site: prior.site, score: prior.score, severity: prior.severity, trigger: prior.trigger, exerciseName: prior.exerciseName, feel: prior.feel };
+  }
   const from = addDays(opts.today, -RECENT_DAYS);
   let best: PainEntry | null = null;
   let bestSame = false;
   for (const e of entries) {
     if (e.region !== region || e.date < from || e.date > opts.today) continue;
+    if (e.symptom) continue;
     if (opts.feedbackId && e.feedbackId === opts.feedbackId) continue;
     if (side && e.side && e.side !== side) continue;
     // the same spot beats another spot in the region; then the latest

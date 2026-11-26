@@ -20,7 +20,9 @@ import type { GivenSuggestion } from "@/lib/pain/recovery";
 const REPORT_COLS_BASE =
   "id, client_id, feedback_id, checkin_id, day_id, reported_on, reported_at, source, region, side, severity, trigger, exercise_name, feel, impact, same_issue, change, continues_id, note";
 /** With the spot, 0–10 and when it hurts (20270430091000_pain_sites.sql); the base set while that isn't in yet. */
-const REPORT_COLS = `${REPORT_COLS_BASE}, site, score, timing`;
+const REPORT_COLS_SITES = `${REPORT_COLS_BASE}, site, score, timing`;
+/** With a general symptom too (20270603090000_whole_body_symptoms.sql). */
+const REPORT_COLS = `${REPORT_COLS_SITES}, symptom`;
 
 /** Did the read fail only because a newer column isn't in this database yet? */
 function missingColumn(error: any): boolean {
@@ -88,7 +90,9 @@ export async function loadPainEntries(
         .contains("answers", { recovery_flags: ["Pain / injury"] })
         .limit(1000),
     ]);
-    const r = r0.error && missingColumn(r0.error) ? await reportsQuery(REPORT_COLS_BASE) : r0;
+    let r = r0;
+    if (r.error && missingColumn(r.error)) r = await reportsQuery(REPORT_COLS_SITES);
+    if (r.error && missingColumn(r.error)) r = await reportsQuery(REPORT_COLS_BASE);
     if (r.error) throw r.error;
     if (f.error) throw f.error;
     reports.push(...((r.data ?? []) as PainReportRow[]));

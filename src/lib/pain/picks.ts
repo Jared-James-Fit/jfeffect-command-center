@@ -8,6 +8,7 @@ import { cleanReports, severityFromScore, severityLevel, severityOf, type Change
 import { siteOf } from "@/lib/pain/sites";
 import type { FollowUp, PainEntry } from "@/lib/pain/history";
 import type { DescribedPlace } from "@/lib/pain/describe";
+import { symptomClass, limitsTraining } from "@/lib/pain/symptoms";
 
 export type PainPick = Omit<PainReportInput, "severity"> & {
   uid: string;
@@ -19,15 +20,15 @@ export type PainPick = Omit<PainReportInput, "severity"> & {
 let seq = 0;
 const uid = () => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-export type PainPlace = { region: string; side: PainSide | null; site?: string | null };
+export type PainPlace = { region: string; side: PainSide | null; site?: string | null; symptom?: PainPick["symptom"] };
 
-export function newPick(region: string, side: PainSide | null, site: string | null = null): PainPick {
-  return { uid: uid(), region, side, site, severity: null, score: null, timing: [], feel: [], open: region === "other" };
+export function newPick(region: string, side: PainSide | null, site: string | null = null, symptom: PainPick["symptom"] = null): PainPick {
+  return { uid: uid(), region, side, site, symptom, severity: null, score: null, timing: [], feel: [], open: region === "other" };
 }
 
-/** The same place: region, side and spot. */
+/** The same place: region, side, spot and (for a general symptom) which one. */
 export function samePlace(p: PainPlace, q: PainPlace): boolean {
-  return p.region === q.region && (p.side ?? null) === (q.side ?? null) && (p.site ?? null) === (q.site ?? null);
+  return p.region === q.region && (p.side ?? null) === (q.side ?? null) && (p.site ?? null) === (q.site ?? null) && (p.symptom ?? null) === (q.symptom ?? null);
 }
 
 /**
@@ -38,10 +39,10 @@ export function samePlace(p: PainPlace, q: PainPlace): boolean {
  */
 export function addPick(picks: PainPick[], place: PainPlace): { picks: PainPick[]; uid: string } {
   const site = siteOf(place.site);
-  const norm: PainPlace = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null };
+  const norm: PainPlace = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null, symptom: place.symptom ?? null };
   const found = picks.find((p) => samePlace(p, norm));
   if (found) return { picks, uid: found.uid };
-  const p = newPick(norm.region, norm.side, norm.site ?? null);
+  const p = newPick(norm.region, norm.side, norm.site ?? null, norm.symptom ?? null);
   return { picks: [...picks, p], uid: p.uid };
 }
 
@@ -89,18 +90,32 @@ export function answerFollowUp(p: PainPick, choice: Change | "new", prior: Follo
   };
 }
 
-/** The picks to send (places rated, 0–10 or a band; the review won't finish with one missing). */
+/**
+ * Does how bad (0–10) change what happens with this place? Only for pain, a
+ * joint or tendon, or numbness (it decides the safety notice, recovery's cap
+ * and whether the coach is asked to look). Soreness, tightness, tired muscles
+ * and a general symptom are kept without one: never a question that changes
+ * nothing.
+ */
+export function needsRating(p: Pick<PainPick, "region" | "site" | "feel" | "timing" | "symptom" | "score" | "severity">): boolean {
+  return limitsTraining(symptomClass({ ...p, score: null, severity: null }));
+}
+
+/** The picks to send (rated, or a kind that needs no rating; the review won't finish with one missing). */
 export function picksToReports(picks: PainPick[]): PainReportInput[] {
   return cleanReports(
     picks
-      .filter((p) => p.severity || typeof p.score === "number")
-      .map(({ uid: _uid, open: _open, ...p }) => ({ ...p, severity: typeof p.score === "number" ? severityFromScore(p.score) : p.severity! })),
+      .filter((p) => p.severity || typeof p.score === "number" || !needsRating(p))
+      .map(({ uid: _uid, open: _open, ...p }) => ({ ...p, severity: typeof p.score === "number" ? severityFromScore(p.score) : p.severity ?? null })),
   );
 }
 
-/** A place still waiting for how bad. */
-export function unrated(p: Pick<PainPick, "score" | "severity">): boolean {
-  return typeof p.score !== "number" && !p.severity;
+/** A place still waiting for how bad (only when it matters: needsRating). */
+export function unrated(p: Pick<PainPick, "score" | "severity"> & Partial<Pick<PainPick, "region" | "site" | "feel" | "timing" | "symptom">>): boolean {
+  if (typeof p.score === "number" || p.severity) return false;
+  // older callers pass only the rating: it's waiting
+  if (p.region == null) return true;
+  return needsRating(p as PainPick);
 }
 
 /** Editing a review: its saved places. */
@@ -123,6 +138,7 @@ export function picksFromEntries(entries: PainEntry[], feedbackId: string): Pain
       change: e.change,
       continuesId: e.continuesId,
       note: e.note,
+      symptom: (e.symptom ?? null) as PainPick["symptom"],
     }));
 }
 
@@ -269,12 +285,12 @@ export function restorePick(picks: PainPick[], removed: PainPick, index: number)
 export function applyDescribed(
   picks: PainPick[],
   places: DescribedPlace[],
-  prior?: (place: { region: string; side: PainSide | null; site: string | null }) => FollowUp | null,
+  prior?: (place: { region: string; side: PainSide | null; site: string | null; symptom?: string | null }) => FollowUp | null,
 ): { picks: PainPick[]; uids: string[] } {
   let next = picks;
   const uids: string[] = [];
   for (const d of places) {
-    const res = addPick(next, { region: d.region, side: d.side, site: d.site });
+    const res = addPick(next, { region: d.region, side: d.side, site: d.site, symptom: d.symptom ?? null });
     next = res.picks;
     const p = next.find((x) => x.uid === res.uid)!;
     const patch: Partial<PainPick> = {};
@@ -291,7 +307,7 @@ export function applyDescribed(
     const words = d.note.trim();
     if (words && !(p.note ?? "").includes(words)) patch.note = (p.note ? `${p.note} ${words}` : words).slice(0, 300);
     if (d.change && p.sameIssue == null && prior) {
-      const f = prior({ region: p.region, side: p.side ?? null, site: p.site ?? null });
+      const f = prior({ region: p.region, side: p.side ?? null, site: p.site ?? null, symptom: p.symptom ?? null });
       if (f) Object.assign(patch, answerFollowUp({ ...p, ...patch }, d.change, f));
     }
     next = updatePick(next, res.uid, patch);

@@ -632,9 +632,10 @@ export async function loadCompetitionContext(
 
   const pain = ((painMap?.flagged ?? []) as any[]).map((a) => ({
     place: a.label as string,
-    lift: liftForPlace(a.label ?? a.region ?? ""),
+    lift: a.cls === "general" ? null : liftForPlace(a.label ?? a.region ?? ""),
     worse: a.trend === "worse",
     score: a.latest?.score ?? null,
+    general: a.cls === "general",
   }));
   const recoveryFlags = checkins.filter((c: any) => {
     const f = c.answers?.recovery_flags;

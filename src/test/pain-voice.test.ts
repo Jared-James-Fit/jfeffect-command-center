@@ -50,13 +50,11 @@ describe("pain voice transcription", () => {
     err.mockRestore();
   });
 
-  it("orders OpenAI's transcriber, then Whisper, then the gateway, by the keys there are", () => {
+  it("orders OpenAI's transcriber, then Whisper, and never the Lovable gateway (no Lovable credits)", () => {
     expect(
-      painTranscribers({ OPENAI_API_KEY: "k", LOVABLE_API_KEY: "g" }).map((t) => t.name),
-    ).toEqual(["openai:gpt-4o-mini-transcribe", "openai:whisper-1", "gateway:gemini-2.5-flash"]);
-    expect(painTranscribers({ LOVABLE_API_KEY: "g" }).map((t) => t.name)).toEqual([
-      "gateway:gemini-2.5-flash",
-    ]);
+      painTranscribers({ OPENAI_API_KEY: "k", LOVABLE_API_KEY: "g" } as any).map((t) => t.name),
+    ).toEqual(["openai:gpt-4o-mini-transcribe", "openai:whisper-1"]);
+    expect(painTranscribers({ LOVABLE_API_KEY: "g" } as any)).toEqual([]);
     expect(painTranscribers({})).toEqual([]);
   });
 

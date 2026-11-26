@@ -87,6 +87,12 @@ export const PLAUSIBLE: Record<string, Pattern[]> = {
   shin: ["Single-leg", "Squat", "Calves"],
   calf: ["Calves", "Single-leg", "Squat"],
   ankle_foot: ["Calves", "Single-leg", "Squat"],
+  ribs: ["Horizontal press", "Hip hinge", "Squat", "Horizontal pull", "Vertical pull", "Trunk"],
+  // not trained by lifting: never tied to a lift (symptoms.ts, a general symptom never is)
+  head: [],
+  face: [],
+  jaw: [],
+  general: [],
 };
 
 export function associations(area: Pick<PainArea, "entries"> & { region?: string; named?: { name: string; count: number }[] }, sessions: PainSession[]): Association[] {

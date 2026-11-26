@@ -27,8 +27,10 @@ describe("the spots on the body map", () => {
       expect(s.label.length).toBeGreaterThan(2);
       expect(s.label[0]).toBe(s.label[0].toUpperCase());
     }
-    // every region but "somewhere else" has spots to pick
-    for (const r of REGION_KEYS.filter((k) => k !== "other")) expect(sitesIn(r).length).toBeGreaterThan(0);
+    // every region but "somewhere else" and "whole body" (a general symptom has no place) has spots to pick
+    for (const r of REGION_KEYS.filter((k) => k !== "other" && k !== "general")) expect(sitesIn(r).length).toBeGreaterThan(0);
+    // a group covers only spots that exist, in its own region
+    for (const s of PAIN_SITES.filter((x) => x.covers)) for (const c of s.covers!) expect(siteOf(c)?.region).toBe(s.region);
   });
 
   it("names a spot the way a person says it, side first, and keeps the anatomical name apart", () => {
@@ -57,7 +59,8 @@ describe("the drawing", () => {
   it("draws every spot somewhere, and only spots it knows", () => {
     const drawn = new Set<string>();
     for (const v of VIEWS) for (const s of sitesOnView(atlasView(v.key, v.facing))) drawn.add(s);
-    expect(PAIN_SITES.filter((s) => !drawn.has(s.key)).map((s) => s.key)).toEqual([]);
+    // a group ("Fingers", "Bottom of foot") is drawn through the spots it covers
+    expect(PAIN_SITES.filter((s) => !drawn.has(s.key) && !(s.covers ?? []).some((c) => drawn.has(c))).map((s) => s.key)).toEqual([]);
     expect([...drawn].filter((k) => !SITE_KEYS.has(k))).toEqual([]);
   });
 

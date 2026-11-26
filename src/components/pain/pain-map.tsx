@@ -26,10 +26,11 @@ import { atlasView, hasDeep, partAt, regionBox, type AtlasPart, type AtlasView, 
 import { DETAIL_SCALE, IDENTITY, centerOn, clampXf, fitView, frameBox, toDrawing, toScreen, zoomAt, type Size, type Xf } from "@/lib/pain/anatomy/stage";
 import { PAIN_REGIONS, areaLabel, regionOf, type PainSide } from "@/lib/pain/regions";
 import { PAIN_SITES, searchSites, siteAnatomy, siteLabel, siteOf } from "@/lib/pain/sites";
-import { CHANGES, FEELS, FEEL_CHOICES, FEEL_SIGNS, IMPACTS, NOTE_MAX, TIMINGS, placeLabel, scoreWord, type Feel, type Timing } from "@/lib/pain/report";
+import { CHANGES, FEELS, FEEL_CHOICES, FEEL_SIGNS, HEAD_FEEL_CHOICES, HEAD_SIGNS, IMPACTS, NOTE_MAX, TIMINGS, placeLabel, scoreWord, type Feel, type Timing } from "@/lib/pain/report";
+import { GENERAL_SYMPTOMS, classShort, generalOf, symptomClass, type GeneralSymptom } from "@/lib/pain/symptoms";
 import { followUpFor, shortDay, type PainEntry } from "@/lib/pain/history";
-import { addPick, answerFollowUp, applyDescribed, mirrorOf, pickScore, recentSites, scorePatch, setSideChoice, sideChoiceOf, unrated, updatePaired, type PainPick, type SideChoice } from "@/lib/pain/picks";
-import { chooseSide, describePain, describedGroups, describedLine, type DescribeResult, type DescribedPlace } from "@/lib/pain/describe";
+import { addPick, answerFollowUp, applyDescribed, mirrorOf, needsRating, pickScore, recentSites, scorePatch, setSideChoice, sideChoiceOf, unrated, updatePaired, type PainPick, type SideChoice } from "@/lib/pain/picks";
+import { answerSafety, chooseSide, describePain, describedGroups, describedLine, mergeDescribed, needsOf, safetyQuestions, type DescribeResult, type DescribedPlace, type SafetyQuestion } from "@/lib/pain/describe";
 import { readPainDescriptionFn, transcribePainVoiceFn } from "@/lib/pain/describe.functions";
 import { AiConsentInline, useMyAiConsent } from "@/components/ai-consent/ai-consent";
 import { useVoiceDictation } from "@/hooks/use-voice-dictation";
@@ -218,8 +219,8 @@ function PlaceDetails({
   const left = both ? (pick.side === "L" ? pick : mirror!) : null;
   const right = both ? (pick.side === "R" ? pick : mirror!) : null;
   const prior = useMemo(
-    () => (ctx ? followUpFor(ctx.entries, pick.region, pick.side ?? null, { today: ctx.today, feedbackId: ctx.feedbackId, site: pick.site }) : null),
-    [ctx, pick.region, pick.side, pick.site],
+    () => (ctx ? followUpFor(ctx.entries, pick.region, pick.side ?? null, { today: ctx.today, feedbackId: ctx.feedbackId, site: pick.site, symptom: pick.symptom }) : null),
+    [ctx, pick.region, pick.side, pick.site, pick.symptom],
   );
   const followChoice = pick.sameIssue === false ? "new" : pick.sameIssue ? pick.change ?? null : null;
   const timing = pick.timing ?? [];
@@ -229,8 +230,14 @@ function PlaceDetails({
   const [noteOpen, setNoteOpen] = useState(!!pick.note?.trim());
   const [otherOpen, setOtherOpen] = useState(!!pick.exerciseName && !ctx?.exercises.some((x) => x.name === pick.exerciseName));
   const score = pickScore(pick);
-  const safety = needsSafetyNotice([{ region: pick.region, side: pick.side ?? null, severity: pick.severity, score: pick.score, feel: pick.feel, trigger: pick.trigger, timing }]);
+  const safety = needsSafetyNotice([{ region: pick.region, side: pick.side ?? null, severity: pick.severity, score: pick.score, feel: pick.feel, trigger: pick.trigger, timing, symptom: pick.symptom }]);
   const label = (s: string) => <p className="text-[13px] font-semibold text-muted-foreground">{s}</p>;
+  // what this place reads as (symptoms.ts) decides what's worth asking: how bad only when it changes
+  // what happens next, what it feels like only where there's a muscle or joint to feel it in
+  const general = generalOf(pick.symptom);
+  const head = !!general || pick.region === "head" || pick.region === "face" || pick.region === "jaw";
+  const rateOptional = !needsRating(pick);
+  const kind = symptomClass(pick);
 
   return (
     <div
@@ -266,7 +273,9 @@ function PlaceDetails({
       <div className="flex shrink-0 items-start gap-3 px-5 pb-2 pt-3">
         <div className="min-w-0 flex-1">
           <p className="text-[18px] font-semibold leading-tight" data-pain-details-name>{name}</p>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">{[anat, region && pick.site ? region.label : null].filter(Boolean).join(" · ") || "The whole area"}</p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground" data-pain-details-kind={kind}>
+            {[general ? null : anat, general ? null : region && pick.site ? region.label : null, classShort(kind)].filter(Boolean).join(" · ") || "The whole area"}
+          </p>
         </div>
         <button
           type="button"
@@ -337,7 +346,7 @@ function PlaceDetails({
           </div>
         ) : (
           <div className="space-y-2">
-            {label("How bad is it?")}
+            {label(rateOptional ? "How bad is it? (optional)" : "How bad is it?")}
             <ScoreScale value={score} onPick={(n) => onChange(scorePatch(n))} label={`${name}: how bad, 0 to 10`} />
           </div>
         )}
@@ -364,10 +373,11 @@ function PlaceDetails({
           </div>
         )}
 
+        {(!general || general.key === "headache") && (
         <div className="space-y-2">
           {label("What does it feel like?")}
           <div className="flex flex-wrap gap-2">
-            {[...FEEL_CHOICES, ...((pick.feel ?? []).includes("pinch") ? (["pinch"] as Feel[]) : [])].map((f) => {
+            {[...(head ? HEAD_FEEL_CHOICES : FEEL_CHOICES), ...((pick.feel ?? []).includes("pinch") ? (["pinch"] as Feel[]) : [])].map((f) => {
               const on = (pick.feel ?? []).includes(f);
               return (
                 <button key={f} type="button" className={chip(on)} aria-pressed={on} onClick={() => toggleFeel(f)} data-pain-feel={f}>
@@ -378,7 +388,7 @@ function PlaceDetails({
           </div>
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
             <span className="text-[12px] text-muted-foreground">Also:</span>
-            {FEEL_SIGNS.map((f) => {
+            {(head ? HEAD_SIGNS : FEEL_SIGNS).map((f) => {
               const on = (pick.feel ?? []).includes(f);
               return (
                 <button key={f} type="button" className={cn(chip(on), "min-h-9 text-[13px]")} aria-pressed={on} onClick={() => toggleFeel(f)} data-pain-feel={f}>
@@ -388,9 +398,10 @@ function PlaceDetails({
             })}
           </div>
         </div>
+        )}
 
         <div className="space-y-2">
-          {label("When does it hurt?")}
+          {label(general ? "When did it happen?" : "When does it hurt?")}
           <div className="flex flex-wrap gap-2">
             {TIMINGS.map((t) => {
               const on = timing.includes(t.v);
@@ -501,7 +512,7 @@ function PlaceDetails({
           className="h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-50"
           data-pain-details-done
         >
-          {score == null || (both && pickScore(mirror!) == null) ? "Done (rate it later)" : "Done"}
+          {!rateOptional && (score == null || (both && pickScore(mirror!) == null)) ? "Done (rate it later)" : "Done"}
         </button>
       </div>
     </div>
@@ -510,13 +521,27 @@ function PlaceDetails({
 
 // ── the list ────────────────────────────────────────────────────────────
 
-function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainSide | null; site: string | null }) => void }) {
+function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainSide | null; site: string | null; symptom?: GeneralSymptom | null }) => void }) {
   const [q, setQ] = useState("");
   const results = useMemo(() => searchSites(q), [q]);
   const byRegion = useMemo(() => {
     if (q.trim()) return null;
-    return PAIN_REGIONS.filter((r) => r.key !== "other").map((r) => ({ region: r, sites: PAIN_SITES.filter((s) => s.region === r.key) }));
+    return PAIN_REGIONS.filter((r) => r.key !== "other" && r.key !== "general").map((r) => ({ region: r, sites: PAIN_SITES.filter((s) => s.region === r.key) }));
   }, [q]);
+  // a symptom that isn't one place (a headache, dizziness, nausea…): found by name, or listed first
+  const symptoms = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return GENERAL_SYMPTOMS;
+    return GENERAL_SYMPTOMS.filter((g) => g.label.toLowerCase().includes(t) || g.key.includes(t) || g.words.test(t) || (t.length >= 4 && g.words.test(`${t}y`)));
+  }, [q]);
+  const symptomRow = (g: (typeof GENERAL_SYMPTOMS)[number]) => (
+    <div key={g.key} className="flex min-h-12 items-center gap-3 border-b border-white/[0.06] py-2" data-pain-list-symptom={g.key}>
+      <p className="min-w-0 flex-1 text-[15px] font-medium leading-tight">{g.label}</p>
+      <button type="button" onClick={() => onPick({ region: g.region, side: null, site: null, symptom: g.key })} className="inline-flex h-10 min-w-[4rem] items-center justify-center rounded-lg bg-muted px-3 text-[13px] font-semibold hover:bg-muted-foreground/25" aria-label={`Pick ${g.label.toLowerCase()}`}>
+        Pick
+      </button>
+    </div>
+  );
   const sideButtons = (label: string, region: string, site: string | null, sided: boolean, anat?: string | null) =>
     sided ? (
       <span className="flex shrink-0 gap-1.5">
@@ -554,7 +579,7 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search: knee, lats, rotator cuff…"
+            placeholder="Search: knee, thumb, headache…"
             aria-label="Search the body"
             {...noAutofill("pain-search")}
             autoCapitalize="off"
@@ -570,6 +595,12 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
         </label>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
+        {symptoms.length > 0 && (
+          <section className="pt-1" data-pain-list-symptoms>
+            <p className="pb-1 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">Not in one place</p>
+            {symptoms.map(symptomRow)}
+          </section>
+        )}
         {byRegion
           ? byRegion.map(({ region: r, sites }) => (
               <section key={r.key} className="pt-3">
@@ -583,7 +614,7 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
                 {sites.map(row)}
               </section>
             ))
-          : results.length
+          : results.length || symptoms.length
             ? results.map(row)
             : (
               <div className="space-y-3 py-8 text-center text-[14px] text-muted-foreground">
@@ -617,6 +648,8 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
   const [dropped, setDropped] = useState<Set<string>>(new Set());
   const [reading, setReading] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // the safety questions answered so far (a yes changes the places; a no just closes it)
+  const [answered, setAnswered] = useState<Set<string>>(new Set());
   const readFn = useServerFn(readPainDescriptionFn);
   const hearFn = useServerFn(transcribePainVoiceFn);
   const read = async (words: string) => {
@@ -625,22 +658,32 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
     setNote(null);
     setChoices({});
     setDropped(new Set());
+    setAnswered(new Set());
     const local = describePain(t, { exercises: ctx?.exercises ?? [] });
-    if (local.places.length || local.unclear.length) {
+    const unplaced = !!local.leftover?.length;
+    if ((local.places.length || local.unclear.length) && !unplaced) {
       setResult(local);
       return;
     }
+    // part of it read like a symptom in a place this reader doesn't know: the server reads the
+    // whole thing and what it finds is added to what was read here (never swapped)
+    if (local.places.length) setResult(local);
     setReading(true);
     try {
       const r = await readFn({ data: { text: t.slice(0, 600), exercises: (ctx?.exercises ?? []).slice(0, 40) } });
-      if (r.ok && (r.places.length || r.unclear.length)) setResult({ places: r.places, unclear: r.unclear });
-      else {
+      if (r.ok && (r.places.length || r.unclear.length)) setResult(local.places.length || local.unclear.length ? mergeDescribed(local, { places: r.places, unclear: r.unclear }) : { places: r.places, unclear: r.unclear });
+      else if (local.places.length || local.unclear.length) {
+        setResult(local);
+        setNote("Part of that couldn't be placed. Add it on the body, or say where.");
+      } else {
         setResult({ places: [], unclear: [] });
         setNote(r.ok ? "Couldn't place that. Name the body part (knee, low back, left shoulder), or tap it on the body." : r.reason === "busy" ? "Too many tries right now. Tap it on the body instead." : "Couldn't read that right now. Tap it on the body instead.");
       }
     } catch {
-      setResult({ places: [], unclear: [] });
-      setNote("Couldn't read that right now. Tap it on the body instead.");
+      if (!local.places.length && !local.unclear.length) {
+        setResult({ places: [], unclear: [] });
+        setNote("Couldn't read that right now. Tap it on the body instead.");
+      } else setResult(local);
     } finally {
       setReading(false);
     }
@@ -661,7 +704,7 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
       void read(next);
     },
   });
-  // speech goes to OpenAI or Google: someone who hasn't allowed that is asked in place first
+  // speech goes to OpenAI: someone who hasn't allowed that is asked in place first
   const aiConsent = useMyAiConsent();
   const [askVoice, setAskVoice] = useState(false);
   const canMic = voice.supported;
@@ -673,12 +716,19 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
     () => groups.flatMap((g) => (choices[g.key] ? chooseSide(g, choices[g.key]) : g.places)),
     [groups, choices],
   );
+  const questions = useMemo(() => safetyQuestions(finalPlaces).filter((q) => !answered.has(q.id)), [finalPlaces, answered]);
+  const answer = (q: SafetyQuestion, yes: boolean) => {
+    feedback("tap");
+    setAnswered((a) => new Set([...a, q.id]));
+    if (!yes) return;
+    setResult((r) => (r ? { ...r, places: answerSafety(r.places, q) } : r));
+  };
   const addUnclear = (region: string) => {
     feedback("tap");
     setResult((r) => {
       if (!r) return r;
-      const place: DescribedPlace = { region, site: null, side: null, score: null, feel: [], timing: [], exerciseName: null, exerciseId: null, impact: null, change: null, note: text.trim().slice(0, 300), needs: ["score"] };
-      if (regionOf(region)?.sided) place.needs.push("side");
+      const place: DescribedPlace = { region, site: null, side: null, score: null, feel: [], timing: [], exerciseName: null, exerciseId: null, impact: null, change: null, note: text.trim().slice(0, 300), needs: [], symptom: null };
+      place.needs = needsOf(place);
       return { places: [...r.places, place], unclear: r.unclear.filter((u) => !u.options.includes(region)) };
     });
   };
@@ -696,7 +746,7 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
                 if (result) setResult(null);
               }}
               rows={4}
-              placeholder="e.g. both knees bother me on squats, the left is about a 5. my right shoulder pinches on bench"
+              placeholder="e.g. my left knee hurts under the kneecap on squats, about a 5. my lower back is tight and I've had a headache"
               aria-label="Describe where it hurts"
               {...noAutofill("pain-describe")}
               autoCapitalize="sentences"
@@ -716,10 +766,10 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
           <VoiceStatusLine
             voice={voice}
             className="text-[13px]"
-            idle={<p className="text-[12px] text-muted-foreground">Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept.</p>}
+            idle={<p className="text-[12px] text-muted-foreground">Say everything at once: where, which side, how it feels, how bad out of 10, and anything like a headache or dizziness. Recordings are turned into words and never kept.</p>}
           />
           {askVoice && aiConsent.needsYes && (
-            <AiConsentInline use="turns what you say into words" via="OpenAI (or Google if OpenAI can't)" onAllowed={() => setAskVoice(false)} onNo={() => setAskVoice(false)} />
+            <AiConsentInline use="turns what you say into words" via="OpenAI" onAllowed={() => setAskVoice(false)} onNo={() => setAskVoice(false)} />
           )}
           {!result && (
             <button
@@ -741,15 +791,21 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
             {groups.map((g) => {
               const choice = choices[g.key] ?? g.choice;
               const places = choices[g.key] ? chooseSide(g, choices[g.key]) : g.places;
-              const name = g.site ? siteOf(g.site)?.label ?? "" : regionOf(g.region)?.label ?? g.region;
+              const gen = generalOf(g.symptom);
+              const spot = g.site ? siteOf(g.site)?.label ?? "" : regionOf(g.region)?.label ?? g.region;
+              const name = gen ? (gen.key === "headache" && (g.site || g.region === "face") ? `${gen.label} · ${spot.toLowerCase()}` : gen.label) : spot;
               const scores = places.map((p) => (p.score != null ? `${p.side ? `${p.side === "L" ? "Left" : "Right"} ` : ""}${p.score}/10` : null)).filter(Boolean).join(" · ");
+              const wantsScore = places.some((p) => p.needs.includes("score"));
+              const kind = places[0] ? classShort(symptomClass(places[0])) : "";
               const rest = places[0] ? describedLine({ ...places[0], score: null }) : "";
               return (
                 <div key={g.key} className="space-y-2 rounded-xl border border-white/10 p-3" data-pain-describe-row={g.key}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="min-w-0 text-[15px] font-semibold">{name}</p>
                     <span className="flex shrink-0 items-center gap-1">
-                      <span className={cn("text-[13px] font-semibold tabular-nums", scores ? "text-foreground" : "text-warning")}>{scores || "rate it next"}</span>
+                      <span className={cn("text-[13px] font-semibold tabular-nums", scores || !wantsScore ? "text-foreground" : "text-warning")} data-pain-describe-kind>
+                        {scores || (wantsScore ? "rate it next" : kind)}
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
@@ -804,6 +860,18 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
                 </div>
               </div>
             ))}
+            {questions.map((q) => (
+              <div key={q.id} className="space-y-2 rounded-xl border border-warning/50 bg-warning/[0.06] p-3" data-pain-safety-question={q.id}>
+                <p className="text-[14px] font-semibold">{q.text}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => answer(q, true)} className="h-10 rounded-lg bg-white/[0.1] text-[14px] font-semibold" data-pain-safety-yes>Yes</button>
+                  <button type="button" onClick={() => answer(q, false)} className="h-10 rounded-lg bg-white/[0.06] text-[14px] font-semibold text-muted-foreground" data-pain-safety-no>No</button>
+                </div>
+              </div>
+            ))}
+            {reading && result.places.length > 0 && (
+              <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading the rest…</p>
+            )}
             {note && <p className="text-[13px] text-muted-foreground">{note}</p>}
             <button type="button" onClick={() => setResult(null)} className="inline-flex h-10 items-center gap-1.5 text-[14px] font-semibold text-muted-foreground hover:text-foreground">
               <PenLine className="h-4 w-4" aria-hidden /> Change what I wrote
@@ -1211,14 +1279,14 @@ export function PainMap({
     if (res.uid !== uid) setActive(res.uid);
   };
   const applyDescription = (places: DescribedPlace[]) => {
-    const prior = ctx ? (pl: { region: string; side: PainSide | null; site: string | null }) => followUpFor(ctx.entries, pl.region, pl.side, { today: ctx.today, feedbackId: ctx.feedbackId, site: pl.site }) : undefined;
+    const prior = ctx ? (pl: { region: string; side: PainSide | null; site: string | null; symptom?: string | null }) => followUpFor(ctx.entries, pl.region, pl.side, { today: ctx.today, feedbackId: ctx.feedbackId, site: pl.site, symptom: pl.symptom }) : undefined;
     const res = applyDescribed(latest.current.picks, places, prior);
     onChange(res.picks);
     feedback("tap");
     setMode("map");
     // the one question that's left: how bad, for the first place without a number
     const first = res.picks.find((p) => res.uids.includes(p.uid) && unrated(p)) ?? null;
-    if (first && first.region !== "other") {
+    if (first && first.region !== "other" && first.region !== "general") {
       const where = viewForPlace(first.site, first.region, first.side ?? null);
       setViewKey(where.view);
       setFacing(where.facing);
@@ -1307,7 +1375,7 @@ export function PainMap({
             ) : mode === "list" ? (
               <PlaceSearch
                 onPick={(place) => {
-                  const where = place.region === "other" ? null : viewForPlace(place.site, place.region, place.side);
+                  const where = place.region === "other" || place.region === "general" ? null : viewForPlace(place.site, place.region, place.side);
                   if (where) {
                     setViewKey(where.view);
                     setFacing(where.facing);
@@ -1548,7 +1616,7 @@ export function PainMap({
                         type="button"
                         onClick={() => {
                           feedback("tap");
-                          if (p.region !== "other") {
+                          if (p.region !== "other" && p.region !== "general") {
                             const where = viewForPlace(p.site, p.region, p.side ?? null);
                             setViewKey(where.view);
                             setFacing(where.facing);
@@ -1565,7 +1633,7 @@ export function PainMap({
                         data-pain-tray-item={p.site ?? p.region}
                       >
                         <span className="max-w-[11rem] truncate">{placeLabel(p)}</span>
-                        <span className={cn("tabular-nums", unrated(p) ? "text-warning" : "text-muted-foreground")}>{sc != null ? `${sc}/10` : "rate it"}</span>
+                        <span className={cn("tabular-nums", unrated(p) ? "text-warning" : "text-muted-foreground")}>{sc != null ? `${sc}/10` : unrated(p) ? "rate it" : classShort(symptomClass(p))}</span>
                       </button>
                     );
                   })}

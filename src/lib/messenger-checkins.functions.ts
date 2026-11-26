@@ -873,6 +873,27 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
       }
     }
 
+    // what they typed under "where does it hurt" goes into the one pain history (pain_reports,
+    // read by recovery, the coach's sheet, Cleo and programming) through the same reader as the
+    // review's voice. Best effort: a check-in never fails because of it, and its text stays readable.
+    if (taskType === "weekly_checkin") {
+      try {
+        const { checkinPainReports } = await import("@/lib/pain/checkin-pain");
+        const { reportsForOlderSchema } = await import("@/lib/pain/report");
+        const reports = checkinPainReports((data.answers as any)?.pain_details as string | undefined);
+        if (reports.length) {
+          let { error: painError } = await sb.rpc("pain_reports_save" as any, { _feedback_id: null, _checkin_id: row.id, _reports: reports } as any);
+          if (painError && ["23514", "23502"].includes((painError as any).code)) {
+            const older = reportsForOlderSchema(reports);
+            if (older.length) ({ error: painError } = await sb.rpc("pain_reports_save" as any, { _feedback_id: null, _checkin_id: row.id, _reports: older } as any));
+          }
+          if (painError) console.warn("[checkin-pain] not saved", { message: (painError as any).message });
+        }
+      } catch (e: any) {
+        console.warn("[checkin-pain] skipped", { message: e?.message });
+      }
+    }
+
     // This month's Nutrition Update answered inside the check-in: the form's submission, and its AI plan queued.
     let nutritionSubmissionId: string | null = null;
     if (taskType === "weekly_checkin") {

@@ -220,7 +220,7 @@ function placeOf(r: any): Place {
     region: r.region,
     side,
     site: r.site ?? null,
-    name: placeLabel({ region: r.region, side, site: r.site ?? null, note: r.note }),
+    name: placeLabel({ region: r.region, side, site: r.site ?? null, note: r.note, symptom: r.symptom ?? null }),
     score: score != null ? `${score}/10` : severityLabel((r.severity as Severity) ?? null),
     level,
     extra: extra || null,

@@ -2,9 +2,8 @@
  * "Describe it" in a pain report, the server's two parts: reading a
  * description the app's own reader couldn't place (readPainDescriptionFn) and
  * turning a spoken one into words (transcribePainVoiceFn: OpenAI's
- * transcriber, then Whisper, then the gateway's Gemini). Signed in only:
- * the athlete, or their coach previewing them. Reading is on the OpenAI key;
- * voice reaches the gateway only when both OpenAI transcribers refuse.
+ * transcriber, then Whisper). Signed in only: the athlete, or their coach
+ * previewing them. Both are on the OpenAI key only, never the Lovable gateway.
  *
  * Never metered with AI credits on purpose: reporting pain must never cost
  * anything or stop because credits ran out. Held to 20 a login per 10
@@ -83,7 +82,7 @@ export const transcribePainVoiceFn = createServerFn({ method: "POST" })
     if (!(await mayReport((context as any).supabase, userId))) return { ok: false, reason: "Voice is for reporting pain from your account." };
     if (await limited(userId, "pain_voice")) return { ok: false, reason: "That's a lot of recordings in a few minutes. Type it for now, or try again shortly." };
     if (!(await (await import("@/lib/ai-consent/consent.server")).userAllowsAi(userId)))
-      return { ok: false, reason: "Voice is turned into text by OpenAI or Google, which you haven't allowed (Account → Privacy & data). Type it instead." };
+      return { ok: false, reason: "Voice is turned into text by OpenAI, which you haven't allowed (Account → Privacy & data). Type it instead." };
     try {
       const { transcribePainAudio } = await import("@/lib/pain/describe.server");
       const r = await transcribePainAudio(data.audio, data.mime);

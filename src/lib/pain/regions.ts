@@ -11,6 +11,13 @@
  * mid back, a shoulder blade "pinch", adductor, tennis elbow, calf), and the
  * shoulder blade, mid back and glute are their own regions because lifters
  * tell them apart from the shoulder, low back and hip.
+ *
+ * The whole body (Nov 26 2026): the head, face, jaw and ribs are regions of
+ * their own, hands and feet are spots inside wrist / hand and ankle / foot
+ * (sites.ts: palm, each finger, the ball of the foot, the toes), and
+ * `general` holds a symptom that isn't in one place (dizziness, nausea:
+ * symptoms.ts). `general` is never drawn on the map and never a training
+ * muscle, so nothing reads it as one.
  */
 
 export type PainSide = "L" | "R";
@@ -28,6 +35,9 @@ export type PainRegion = {
 };
 
 export const PAIN_REGIONS: readonly PainRegion[] = [
+  { key: "head", label: "Head", sided: false, lateral: true, group: "upper" },
+  { key: "face", label: "Face", sided: false, lateral: true, group: "upper" },
+  { key: "jaw", label: "Jaw", sided: false, lateral: true, group: "upper" },
   { key: "neck", label: "Neck", sided: false, lateral: true, group: "upper" },
   { key: "shoulder", label: "Shoulder", sided: true, group: "upper" },
   { key: "chest", label: "Chest", sided: true, group: "upper" },
@@ -38,6 +48,7 @@ export const PAIN_REGIONS: readonly PainRegion[] = [
   { key: "shoulder_blade", label: "Shoulder blade", sided: true, group: "trunk" },
   { key: "mid_back", label: "Mid back", sided: false, lateral: true, group: "trunk" },
   { key: "low_back", label: "Low back", sided: false, lateral: true, group: "trunk" },
+  { key: "ribs", label: "Ribs", sided: false, lateral: true, group: "trunk" },
   { key: "abs", label: "Abs / core", sided: false, group: "trunk" },
   { key: "hip_groin", label: "Hip / groin", sided: true, group: "lower" },
   { key: "glute", label: "Glute", sided: true, group: "lower" },
@@ -49,7 +60,12 @@ export const PAIN_REGIONS: readonly PainRegion[] = [
   { key: "ankle_foot", label: "Ankle / foot", sided: true, group: "lower" },
   // only from the list (and older reports): where they say it in words
   { key: "other", label: "Somewhere else", sided: false, group: "trunk" },
+  // a symptom that isn't in one place (dizziness, nausea): never drawn, never a muscle
+  { key: "general", label: "Whole body", sided: false, group: "trunk" },
 ];
+
+/** Regions that aren't trained by lifting: a symptom there is never read as training fatigue. */
+export const NON_TRAINING_REGIONS: ReadonlySet<string> = new Set(["head", "face", "jaw", "general"]);
 
 export const REGION_KEYS: readonly string[] = PAIN_REGIONS.map((r) => r.key);
 const BY_KEY = new Map(PAIN_REGIONS.map((r) => [r.key, r]));
@@ -59,7 +75,7 @@ export function regionOf(key: string | null | undefined): PainRegion | null {
 }
 
 export const REGION_GROUPS: { key: RegionGroup; label: string }[] = [
-  { key: "upper", label: "Neck, shoulders & arms" },
+  { key: "upper", label: "Head, neck, shoulders & arms" },
   { key: "trunk", label: "Back & trunk" },
   { key: "lower", label: "Hips & legs" },
 ];
@@ -101,16 +117,20 @@ export function legacyAreaText(picks: { region: string; side: PainSide | null; n
  * region. Order matters only for the text reader: longer phrases first.
  */
 const ALIASES: [RegExp, string][] = [
+  [/\b(jaw|tmj|chin|masseter)\b/i, "jaw"],
+  [/\b(eyes?|cheeks?|nose|sinus\w*|face|facial)\b/i, "face"],
+  [/\b(head|headaches?|migraines?|temples?|forehead|skull|ears?)\b/i, "head"],
+  [/\b(ribs?|rib ?cage|intercostals?)\b/i, "ribs"],
   [/\b(shoulder ?blades?|scapula[es]?|rhomboids?)\b/i, "shoulder_blade"],
   [/\b(mid(dle)?[ -]?back|thoracic)\b/i, "mid_back"],
   [/\b(low(er)?[ -]?back|lumbar|si joint|sacr\w*|ql)\b/i, "low_back"],
   [/\b(upper[ -]?back|traps?|trapezius)\b/i, "upper_back"],
   [/\b(neck|cervical)\b/i, "neck"],
   [/\b(rotator cuff|shoulders?|delts?|deltoids?|ac joint)\b/i, "shoulder"],
-  [/\b(chest|pecs?|pectorals?|sternum|ribs?)\b/i, "chest"],
+  [/\b(chest|pecs?|pectorals?|sternum)\b/i, "chest"],
   [/\b(biceps?|triceps?|upper arms?)\b/i, "upper_arm"],
   [/\b(elbows?|tennis elbow|golfer'?s elbow|forearms?)\b/i, "elbow"],
-  [/\b(wrists?|hands?|fingers?|thumbs?)\b/i, "wrist_hand"],
+  [/\b(wrists?|hands?|fingers?|thumbs?|palms?|knuckles?|pinky|pinkie)\b/i, "wrist_hand"],
   [/\b(abs|abdominals?|core|oblique?s?|stomach)\b/i, "abs"],
   [/\b(hips?|groin|adductors?|hip flexors?|inner thighs?)\b/i, "hip_groin"],
   [/\b(glutes?|butt|piriformis|sciatic\w*)\b/i, "glute"],
@@ -119,7 +139,7 @@ const ALIASES: [RegExp, string][] = [
   [/\b(knees?|patella\w*)\b/i, "knee"],
   [/\b(shins?)\b/i, "shin"],
   [/\b(calf|calves)\b/i, "calf"],
-  [/\b(ankles?|feet|foot|achilles|heels?|toes?|plantar)\b/i, "ankle_foot"],
+  [/\b(ankles?|feet|foot|achilles|heels?|toes?|plantar|arch(es)?|soles?)\b/i, "ankle_foot"],
 ];
 
 /** The chips of the review before Nov 2026, as stored ("Calf / ankle", "Hip / groin"). */

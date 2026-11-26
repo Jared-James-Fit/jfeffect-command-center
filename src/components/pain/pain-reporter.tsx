@@ -47,7 +47,7 @@ export function PainReporter({ picks, onChange, ctx }: { picks: PainPick[]; onCh
     opened.current = true;
     if (picks.length === 0) setMapOpen(true);
   }, [picks.length]);
-  const safety = needsSafetyNotice(picks.map((p) => ({ region: p.region, side: p.side ?? null, severity: p.severity, score: p.score, feel: p.feel, trigger: p.trigger, timing: p.timing })));
+  const safety = needsSafetyNotice(picks.map((p) => ({ region: p.region, side: p.side ?? null, severity: p.severity, score: p.score, feel: p.feel, trigger: p.trigger, timing: p.timing, symptom: p.symptom })));
 
   const open = (uid: string | null) => {
     feedback("tap");

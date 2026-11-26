@@ -29,7 +29,7 @@ import {
 } from "@/lib/analytics/muscle-read";
 import { atlasView, type ViewKey } from "@/lib/pain/anatomy/atlas";
 import { muscleOfSite } from "@/lib/body3d/muscle-sites";
-import { BODY_THEME, muscleAt, paintView } from "@/lib/body3d/paint";
+import { BODY_THEME, MARK_COLORS, muscleAt, paintView, partShowsMark, type BodyMark } from "@/lib/body3d/paint";
 import { Segmented } from "@/components/analytics/viz";
 import { claimGesture, heldByOther, isBackEdge, onGestureReset, releaseGesture } from "@/lib/gesture-arena";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -495,6 +495,15 @@ function ModeLegend({ mode, dark }: { mode: MuscleMode; dark: boolean }) {
 // ── the body ───────────────────────────────────────────────────────────
 
 type ViewSnap = "front" | "side" | "back";
+/** Where the camera goes for each area (the drawing's y mapped into the 3D world, y up). */
+export type BodyFocus = "full" | "head" | "hands" | "feet";
+const FOCUS_CAM: Record<BodyFocus, { zoom: number; panY: number; pitch: number }> = {
+  full: { zoom: 1, panY: 0, pitch: 0.04 },
+  head: { zoom: 3, panY: 0.83, pitch: 0.02 },
+  hands: { zoom: 2.2, panY: -0.15, pitch: 0.04 },
+  feet: { zoom: 2.9, panY: -0.9, pitch: 0.12 },
+};
+const FOCUS_LABEL: Record<BodyFocus, string> = { full: "Body", head: "Head", hands: "Hands", feet: "Feet" };
 const SNAP_YAW: Record<ViewSnap, number> = { front: 0.22, side: Math.PI / 2, back: Math.PI };
 /** Past this zoom a vertical drag moves the body instead of scrolling the page. */
 const PAN_ZOOM = 1.15;
@@ -514,11 +523,17 @@ export function BodyView({
   preview = false,
   heightClass,
   ariaLabel = "Body coloured by the selected mode. Drag to turn, pinch to zoom, tap a muscle for details.",
+  marks,
+  focusAreas = false,
 }: {
   colorOf: (m: FineMuscle) => string | null;
   picked: FineMuscle | null;
   onPick: (m: FineMuscle | null) => void;
   dark: boolean;
+  /** Reported symptoms drawn over the colours (paint.ts: a hatch and an edge on the spot). */
+  marks?: BodyMark[];
+  /** Body · Head · Hands · Feet: the camera goes there in one tap (the full-screen views). */
+  focusAreas?: boolean;
   /** the List button (the muscle map's table view); none when not given */
   onList?: () => void;
   preview?: boolean;
@@ -602,12 +617,12 @@ export function BodyView({
     if (mode3d !== "3d" || !r) return;
     const th = BODY_THEME[dark ? "dark" : "light"];
     const views = (["front", "back", "side"] as ViewKey[]).map((k) =>
-      paintView(k, colorOf, th, picked),
+      paintView(k, colorOf, th, picked, undefined, marks ?? [], dark),
     );
     r.setTheme(dark);
     r.setTextures(views as [HTMLCanvasElement, HTMLCanvasElement, HTMLCanvasElement]);
     draw();
-  }, [mode3d, colorOf, picked, dark, draw]);
+  }, [mode3d, colorOf, picked, dark, draw, marks]);
 
   // a first, gentle turn into the three-quarter view (none with reduced motion)
   const animateTo = useCallback(
@@ -722,7 +737,7 @@ export function BodyView({
     if (!g.moved) return;
     r.cam.yaw += dx * 0.012;
     if (r.cam.zoom > PAN_ZOOM)
-      r.cam.panY = Math.max(-0.9, Math.min(0.9, r.cam.panY - dy * (0.004 / r.cam.zoom)));
+      r.cam.panY = Math.max(-0.95, Math.min(0.95, r.cam.panY - dy * (0.004 / r.cam.zoom)));
     else r.cam.pitch = Math.max(-0.35, Math.min(0.35, r.cam.pitch + dy * 0.006));
     draw();
   };
@@ -775,10 +790,18 @@ export function BodyView({
     box.addEventListener("wheel", onWheel, { passive: false });
     return () => box.removeEventListener("wheel", onWheel);
   }, [draw, mode3d, syncZoomed]);
-  const reset = () => animateTo({ yaw: SNAP_YAW[snap], zoom: 1, panY: 0, pitch: 0.04 });
+  const [focus, setFocus] = useState<BodyFocus>("full");
+  const reset = () => {
+    setFocus("full");
+    animateTo({ yaw: SNAP_YAW[snap], zoom: 1, panY: 0, pitch: 0.04 });
+  };
+  const focusOn = (f: BodyFocus) => {
+    setFocus(f);
+    animateTo({ ...FOCUS_CAM[f], yaw: SNAP_YAW[snap] });
+  };
 
   if (mode3d === "2d")
-    return <Body2D colorOf={colorOf} picked={picked} onPick={onPick} dark={dark} still={preview} />;
+    return <Body2D colorOf={colorOf} picked={picked} onPick={onPick} dark={dark} still={preview} marks={marks} />;
   return (
     <div className="relative" data-body3d={mode3d} data-body-preview={preview ? "" : undefined}>
       <div
@@ -805,6 +828,22 @@ export function BodyView({
           <div className="absolute inset-0 jf-skeleton rounded-2xl bg-muted/40" aria-hidden />
         )}
       </div>
+      {!preview && focusAreas && (
+        <div className="mt-2 grid grid-cols-4 gap-1 rounded-lg bg-muted/50 p-0.5" role="group" aria-label="Zoom to" data-body-focus>
+          {(Object.keys(FOCUS_CAM) as BodyFocus[]).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => focusOn(f)}
+              aria-pressed={focus === f}
+              className={cn("h-9 rounded-md text-[13px] font-medium transition-colors", focus === f ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground")}
+              data-body-focus-area={f}
+            >
+              {FOCUS_LABEL[f]}
+            </button>
+          ))}
+        </div>
+      )}
       {!preview && (
       <div className="mt-2 flex items-center gap-2">
         <Segmented
@@ -853,6 +892,7 @@ function Body2D({
   onPick,
   dark,
   still = false,
+  marks,
 }: {
   colorOf: (m: FineMuscle) => string | null;
   picked: FineMuscle | null;
@@ -860,8 +900,11 @@ function Body2D({
   dark: boolean;
   /** a small preview: no taps of its own, as tall as its box */
   still?: boolean;
+  marks?: BodyMark[];
 }) {
   const th = BODY_THEME[dark ? "dark" : "light"];
+  const markColors = MARK_COLORS[dark ? "dark" : "light"];
+  const hatchId = useId().replace(/:/g, "");
   return (
     <div className={cn("grid grid-cols-2 gap-2", still && "pointer-events-none")} data-body2d>
       {(["front", "back"] as const).map((k) => {
@@ -894,6 +937,24 @@ function Body2D({
                     </path>
                   );
                 })}
+              {marks?.length ? (
+                <>
+                  <defs>
+                    {(["limit", "general", "reported"] as const).map((t) => (
+                      <pattern key={t} id={`${hatchId}-${t}`} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        {t === "reported" ? <circle cx="4" cy="4" r="1.1" fill={markColors[t]} opacity="0.7" /> : <line x1="0" y1="0" x2="0" y2="8" stroke={markColors[t]} strokeWidth="2.4" opacity="0.85" />}
+                      </pattern>
+                    ))}
+                  </defs>
+                  {(["reported", "general", "limit"] as const).flatMap((t) =>
+                    v.parts
+                      .filter((p) => (!p.deep || marks.some((m) => m.site === p.site)) && marks.some((m) => m.tone === t && partShowsMark(p, m, true)))
+                      .map((p) => (
+                        <path key={`${t}-${p.id}`} d={p.d} fill={`url(#${hatchId}-${t})`} stroke={markColors[t]} strokeWidth={1.8} strokeDasharray={t === "reported" ? "3 2.5" : undefined} pointerEvents="none" data-body-mark={t} />
+                      )),
+                  )}
+                </>
+              ) : null}
             </svg>
             <figcaption className="text-center text-[11px] text-muted-foreground">
               {k === "front" ? "Front" : "Back"}

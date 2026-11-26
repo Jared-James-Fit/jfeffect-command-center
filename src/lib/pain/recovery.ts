@@ -17,6 +17,7 @@
  * worse since, and a physio suggestion that didn't settle it becomes "follow
  * up on the physio".
  */
+import { NON_TRAINING_REGIONS } from "@/lib/pain/regions";
 import type { PainArea, PainHistory } from "@/lib/pain/history";
 import { redFlags } from "@/lib/pain/safety";
 import { associations, associationLine, sessionContext, type PainSession } from "@/lib/pain/sessions";
@@ -47,7 +48,7 @@ export type GivenSuggestion = { key: string; region: string | null; at: string }
 
 export const REPEAT_DAYS = 21;
 
-const MUSCULAR = new Set(["neck", "upper_back", "shoulder_blade", "mid_back", "low_back", "glute", "hamstring", "quad", "calf", "chest", "upper_arm"]);
+const MUSCULAR = new Set(["neck", "upper_back", "shoulder_blade", "mid_back", "low_back", "glute", "hamstring", "quad", "calf", "chest", "upper_arm", "ribs"]);
 const SPINE = new Set(["neck", "upper_back", "mid_back", "low_back"]);
 const TENDON_PRONE = new Set(["elbow", "knee", "shoulder", "ankle_foot", "wrist_hand", "hip_groin"]);
 /** Where heat is the comfort measure (stiff, guarded muscle); everywhere else it's soft-tissue work. */
@@ -77,6 +78,17 @@ function areaSuggestions(a: PainArea, sessions: PainSession[], given: GivenSugge
   const recurring = a.days >= 2;
 
   if (flags.some((f) => f.urgent)) add("urgent", "Ask about the urgent warning signs today", flags.filter((f) => f.urgent).map((f) => f.text).join(" "));
+
+  // a general symptom, or the head, face or jaw: never a training change or a comfort measure, a doctor when it needs one
+  if (a.cls === "general" || NON_TRAINING_REGIONS.has(a.region)) {
+    const why = [
+      flags.length ? flags.map((f) => f.text.split(":")[0]).join("; ").toLowerCase() : null,
+      a.status === "persistent" || a.recentDays >= 3 ? `${a.recentDays} reports in the last 6 weeks` : null,
+      a.trend === "worse" ? "getting worse" : null,
+    ].filter(Boolean);
+    if (why.length && !flags.some((f) => f.urgent)) add("assess", "Worth a doctor's look", `${why.join(", ")}.`);
+    return out;
+  }
 
   const assessWhy = [
     flags.length ? flags.map((f) => f.text.split(":")[0]).join("; ").toLowerCase() : null,

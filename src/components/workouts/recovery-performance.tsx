@@ -10,6 +10,15 @@
  * front / side / back, a tap on a muscle for its read, the factors and what
  * kind each is (a device, logged by you, estimated), pain always on top.
  *
+ * Reported symptoms and estimated fatigue never share a look (Nov 26 2026):
+ * fatigue is the muscles' solid colour (green, yellow, orange), worked out
+ * from the log; what the athlete reported is drawn on the exact spot over it,
+ * anywhere on the body (pain_reports through pain/symptoms.ts): rose hatching
+ * for pain, a joint or numbness, blue for a headache, a dotted outline for
+ * soreness they reported. A general symptom with no place (dizziness, nausea)
+ * is a line of its own, never on a muscle. The full-screen body zooms to the
+ * head, hands or feet in one tap.
+ *
  * This file is lazy: the Workouts page paints and Start works before any of
  * it (or the 3D body) loads.
  */
@@ -17,7 +26,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfWeek } from "date-fns";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientResults } from "@/lib/pl-programs";
@@ -25,6 +34,8 @@ import { useAnalyticsUnit } from "@/lib/analytics/use-analytics-unit";
 import { formatWeightLifted } from "@/lib/weight-lifted";
 import { InfoTip } from "@/components/analytics/info-tip";
 import { BodyView, useDark } from "@/components/analytics/muscle-map";
+import { MARK_COLORS, type BodyMark } from "@/lib/body3d/paint";
+import { classLabel } from "@/lib/pain/symptoms";
 import type { FineMuscle } from "@/lib/analytics/training-load";
 import type { SleepBucket } from "@/lib/analytics/recovery-score";
 import {
@@ -32,6 +43,7 @@ import {
   weightLiftedKg,
   whenWords,
   type FactorKind,
+  type PainFlag,
   type RecentSet,
   type RecoveryState,
   type TodayRecovery,
@@ -42,10 +54,13 @@ const LB_PER_KG = 2.2046226;
 const DAY = 86_400_000;
 type Unit = "lb" | "kg";
 
-/** green recovered, yellow moderate, red elevated (or pain), grey no data: concrete colours for the 3D body. */
+/**
+ * Estimated fatigue: green recovered, yellow moderate, orange elevated, grey no data. Concrete
+ * colours for the 3D body. Red is never fatigue: a reported symptom is drawn over it (paint.ts).
+ */
 export const RECOVERY_COLORS: Record<"light" | "dark", Record<RecoveryState | "pain", string>> = {
-  light: { recovered: "#2fae74", moderate: "#e2b23a", elevated: "#d65450", pain: "#d65450", none: "#c4c8cf" },
-  dark: { recovered: "#239a66", moderate: "#cfa12f", elevated: "#cc4d49", pain: "#cc4d49", none: "#4a4f58" },
+  light: { recovered: "#2fae74", moderate: "#e2b23a", elevated: "#e07a2e", pain: "#e11d48", none: "#c4c8cf" },
+  dark: { recovered: "#239a66", moderate: "#cfa12f", elevated: "#d36f27", pain: "#fb7185", none: "#4a4f58" },
 };
 export const STATE_WORD: Record<RecoveryState, string> = {
   recovered: "Recovered",
@@ -113,8 +128,9 @@ export function useTodayRecovery(clientId: string, dayIds: string[]) {
         safe<any>(sb.from("pl_workout_feedback")
           .select("created_at, sleep_bucket, recovery_today, fatigue_feel, session_rpe, pain, pain_area, pain_level")
           .eq("client_id", clientId).gte("created_at", since(14).toISOString())),
+        // every column there is (the symptom column arrives with 20270603090000; older databases still read)
         safe<any>(sb.from("pain_reports")
-          .select("reported_on, region, side, site, score, severity")
+          .select("*")
           .eq("client_id", clientId).gte("reported_on", iso(since(21)))),
         safe<any>(sb.from("cardio_completions")
           .select("completed_date, duration_minutes, rpe, completed, skipped")
@@ -137,7 +153,17 @@ export function useTodayRecovery(clientId: string, dayIds: string[]) {
           painArea: c.pain_area ?? null,
           painLevel: c.pain_level != null ? Number(c.pain_level) : null,
         })),
-        pain: pain.map((p) => ({ day: String(p.reported_on).slice(0, 10), region: p.region, side: p.side ?? null, site: p.site ?? null, score: p.score != null ? Number(p.score) : null, severity: p.severity ?? null })),
+        pain: pain.map((p) => ({
+          day: String(p.reported_on).slice(0, 10),
+          region: p.region,
+          side: p.side ?? null,
+          site: p.site ?? null,
+          score: p.score != null ? Number(p.score) : null,
+          severity: p.severity ?? null,
+          feel: Array.isArray(p.feel) ? p.feel : [],
+          timing: Array.isArray(p.timing) ? p.timing : [],
+          symptom: p.symptom ?? null,
+        })),
         cardio: cardio.filter((c) => c.completed && !c.skipped).map((c) => ({ day: String(c.completed_date).slice(0, 10), minutes: c.duration_minutes != null ? Number(c.duration_minutes) : null, rpe: c.rpe != null ? Number(c.rpe) : null })),
         sleep: sleep.map((s) => ({ day: String(s.entry_date).slice(0, 10), hours: Number(s.sleep_hours) || 0 })),
         energy: energy.filter((e) => e.energy_rating != null).map((e) => ({ day: localDay(e.submitted_at), rating: Number(e.energy_rating) })),
@@ -186,7 +212,7 @@ export function useTodayRecovery(clientId: string, dayIds: string[]) {
   };
 }
 
-/** The colour a muscle is drawn in for recovery (pain always red, no data grey). */
+/** The colour a muscle is drawn in for its estimated fatigue (no data grey); what was reported is drawn over it. */
 export function useRecoveryColor(recovery: TodayRecovery | null) {
   const dark = useDark();
   const colorOf = useMemo(() => {
@@ -194,11 +220,23 @@ export function useRecoveryColor(recovery: TodayRecovery | null) {
     return (m: FineMuscle) => {
       const r = recovery?.muscles[m];
       if (!r) return p.none;
-      if (r.pain) return p.pain;
       return p[r.state];
     };
   }, [recovery, dark]);
-  return { colorOf, dark };
+  const marks = useMemo(() => recoveryMarks(recovery), [recovery]);
+  return { colorOf, dark, marks };
+}
+
+/** What was reported, as marks on the body: every place it has, never a general symptom with none. */
+export function recoveryMarks(r: TodayRecovery | null): BodyMark[] {
+  if (!r) return [];
+  const at = (f: PainFlag, tone: BodyMark["tone"]): BodyMark | null =>
+    f.region === "other" || f.region === "general" ? null : { region: f.region, site: f.site, side: f.side, tone };
+  return [
+    ...r.reported.map((f) => at(f, "reported")),
+    ...r.general.map((f) => at(f, "general")),
+    ...r.pain.map((f) => at(f, "limit")),
+  ].filter((m): m is BodyMark => !!m);
 }
 
 function scoreWords(r: TodayRecovery): { big: ReactNode; status: string } {
@@ -237,11 +275,14 @@ export function RecoveryPerformanceSection({
   // lb / kg: the one remembered choice the analytics page uses too
   const [unit] = useAnalyticsUnit(accountUnit);
   const { recovery, weekKg, everLogged, loading } = useTodayRecovery(clientId, dayIds);
-  const { colorOf, dark } = useRecoveryColor(recovery);
+  const { colorOf, dark, marks } = useRecoveryColor(recovery);
 
   if (loading) return <div className="h-[208px] rounded-2xl bg-muted/30 jf-skeleton" aria-hidden data-recovery-performance="loading" />;
   // nothing logged and nothing flagged: nothing to say yet (no "unlock it" card)
-  if (!everLogged && !recovery.pain.length) return null;
+  if (!everLogged && !recovery.pain.length && !recovery.general.length) return null;
+  // the card says at most two reported things: what limits training first, then a general symptom
+  const chips = [...recovery.pain.slice(0, 1), ...recovery.general.slice(0, recovery.pain.length ? 1 : 2)].slice(0, 2);
+  const more = recovery.pain.length + recovery.general.length - chips.length;
   const { big, status } = scoreWords(recovery);
   const band = recovery.band;
   const lifted = formatWeightLifted(weekKg * LB_PER_KG, unit);
@@ -260,7 +301,7 @@ export function RecoveryPerformanceSection({
       >
         {/* the page mounts this section only near the screen (DeferRender) and the body builds after idle */}
         <div className="h-[150px] w-[104px] shrink-0" aria-hidden>
-          <BodyView colorOf={colorOf} picked={null} onPick={() => {}} dark={dark} preview heightClass="h-[150px]" ariaLabel="Your muscles coloured by recovery" />
+          <BodyView colorOf={colorOf} picked={null} onPick={() => {}} dark={dark} preview heightClass="h-[150px]" ariaLabel="Your muscles coloured by recovery, with what you reported marked on them" marks={marks} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1 tabular-nums" data-recovery-score>
@@ -271,11 +312,23 @@ export function RecoveryPerformanceSection({
             {status}
           </div>
           <div className="text-[12px] text-muted-foreground" data-recovery-basis>{basisWords(recovery)}</div>
-          {/* pain is always said, whatever the score */}
-          {recovery.pain[0] && (
-            <div className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[12px] font-medium text-rose-700 dark:text-rose-300" data-recovery-pain>
-              <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-              <span className="truncate">{recovery.pain[0].label}{recovery.pain.length > 1 ? ` +${recovery.pain.length - 1}` : ""}</span>
+          {/* what they reported is always said, whatever the score: pain in rose, a general symptom in blue */}
+          {chips.length > 0 && (
+            <div className="mt-1.5 flex max-w-full flex-wrap gap-1" data-recovery-symptoms>
+              {chips.map((f, i) => (
+                <span
+                  key={`${f.label}:${f.day}`}
+                  className={cn(
+                    "inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium",
+                    f.cls === "general" ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+                  )}
+                  data-recovery-pain={f.cls === "general" ? undefined : ""}
+                  data-recovery-general={f.cls === "general" ? "" : undefined}
+                >
+                  {f.cls === "general" ? <Info className="h-3 w-3 shrink-0" aria-hidden /> : <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />}
+                  <span className="truncate">{f.label}{i === chips.length - 1 && more > 0 ? ` +${more}` : ""}</span>
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -321,7 +374,7 @@ export function RecoveryDetail({
   analyticsTo?: string;
 }) {
   const { recovery, loading } = useTodayRecovery(clientId, dayIds);
-  const { colorOf, dark } = useRecoveryColor(recovery);
+  const { colorOf, dark, marks } = useRecoveryColor(recovery);
   // the muscle picked stays picked for the visit (closing and reopening the page keeps it)
   const [picked, setPicked] = useState<FineMuscle | null>(() => lastPicked);
   const pick = (m: FineMuscle | null) => {
@@ -350,17 +403,17 @@ export function RecoveryDetail({
         </div>
         <InfoTip label="How recovery is worked out" title="How recovery is worked out">
           <p>Each muscle's fatigue comes from the sets you logged in the last week (how hard and how long ago), measured against your own usual workout for that muscle. The score weighs the muscles today's workout uses, then what you logged: sleep, how recovered you felt, cardio, energy and pain.</p>
-          <p className="mt-2">It's an estimate from your logs, never a measurement of your body, and it never changes your program. Pain you flag always shows and keeps the score down.</p>
+          <p className="mt-2">It's an estimate from your logs, never a measurement of your body, and it never changes your program. Pain, joint discomfort or numbness on a muscle today's workout uses always shows and keeps the score down. Soreness or tightness you report confirms the fatigue already counted (never twice). A headache, dizziness or nausea is listed apart and isn't counted as muscle fatigue.</p>
         </InfoTip>
       </div>
 
       {recovery.pain.length > 0 && (
         <ul className="space-y-1.5" data-recovery-pain-list>
           {recovery.pain.map((p) => (
-            <li key={`${p.label}:${p.day}`} className="flex items-start gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-[13.5px] text-rose-800 dark:text-rose-200">
+            <li key={`${p.label}:${p.day}`} className="flex items-start gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-[13.5px] text-rose-800 dark:text-rose-200" data-recovery-flag={p.cls}>
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <span>
-                <span className="font-semibold">{p.label}</span> flagged {whenWords(p.day, today)}
+                <span className="font-semibold">{p.label}</span> · {classLabel(p.cls).toLowerCase()} · flagged {whenWords(p.day, today)}
                 {p.score != null ? ` (${p.score}/10)` : ""}
                 {p.relevant ? " · counted in today's score" : ""}
               </span>
@@ -368,17 +421,70 @@ export function RecoveryDetail({
           ))}
         </ul>
       )}
-
-      <div>
-        <BodyView colorOf={colorOf} picked={picked} onPick={pick} dark={dark} heightClass="h-[380px] md:h-[460px]" ariaLabel="Your muscles coloured by recovery. Drag to turn, pinch to zoom, tap a muscle for its recovery." />
-        <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground" aria-label="What the colours show" data-recovery-legend>
-          {(["recovered", "moderate", "elevated", "none"] as const).map((s) => (
-            <li key={s} className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: RECOVERY_COLORS[dark ? "dark" : "light"][s] }} aria-hidden />
-              {s === "elevated" ? "Elevated fatigue or pain" : STATE_WORD[s]}
+      {recovery.general.length > 0 && (
+        <ul className="space-y-1.5" data-recovery-general-list>
+          {recovery.general.map((p) => (
+            <li key={`${p.label}:${p.day}`} className="flex items-start gap-2 rounded-xl bg-blue-500/10 px-3 py-2 text-[13.5px] text-blue-900 dark:text-blue-200">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                <span className="font-semibold">{p.label}</span> reported {whenWords(p.day, today)}
+                {p.score != null ? ` (${p.score}/10)` : ""} · not counted as muscle fatigue
+              </span>
             </li>
           ))}
         </ul>
+      )}
+
+      <div>
+        <BodyView
+          colorOf={colorOf}
+          picked={picked}
+          onPick={pick}
+          dark={dark}
+          heightClass="h-[380px] md:h-[460px]"
+          ariaLabel="Your muscles coloured by estimated fatigue, with what you reported marked on the spot. Drag to turn, pinch to zoom, tap a muscle for its recovery."
+          marks={marks}
+          focusAreas
+        />
+        <div className="mt-3 space-y-1.5 text-[12px] text-muted-foreground" data-recovery-legend>
+          <p className="font-medium text-foreground/80">Estimated fatigue</p>
+          <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Estimated fatigue colours">
+            {(["recovered", "moderate", "elevated", "none"] as const).map((s) => (
+              <li key={s} className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: RECOVERY_COLORS[dark ? "dark" : "light"][s] }} aria-hidden />
+                {STATE_WORD[s]}
+              </li>
+            ))}
+          </ul>
+          {marks.length > 0 && (
+            <>
+              <p className="pt-1 font-medium text-foreground/80">What you reported (striped on the spot)</p>
+              <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Reported symptom marks" data-recovery-mark-legend>
+                {(
+                  [
+                    ["limit", "Pain, joint or numbness"],
+                    ["general", "Headache"],
+                    ["reported", "Soreness or tightness"],
+                  ] as const
+                )
+                  .filter(([t]) => marks.some((m) => m.tone === t))
+                  .map(([t, label]) => (
+                    <li key={t} className="inline-flex items-center gap-1.5">
+                      <span
+                        className={cn("h-2.5 w-3.5 rounded-sm border", t === "reported" && "border-dashed")}
+                        style={{
+                          borderColor: MARK_COLORS[dark ? "dark" : "light"][t],
+                          background: t === "reported" ? "transparent" : `repeating-linear-gradient(45deg, ${MARK_COLORS[dark ? "dark" : "light"][t]} 0 2px, transparent 2px 4px)`,
+                        }}
+                        aria-hidden
+                      />
+                      {label}
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
 
       {pm ? (
@@ -387,7 +493,10 @@ export function RecoveryDetail({
             <h3 className="text-[16px] font-semibold">{pm.muscle}</h3>
             <button type="button" onClick={() => pick(null)} className="h-9 rounded-lg px-2 text-[13px] text-muted-foreground hover:text-foreground">Close</button>
           </div>
-          <p className="mt-0.5 text-[14px] font-medium">{pm.pain ? "Pain flagged" : STATE_WORD[pm.state]}</p>
+          <p className="mt-0.5 text-[14px] font-medium">
+            {STATE_WORD[pm.state]}
+            {pm.pain ? " · pain flagged" : pm.reported ? ` · you reported it ${pm.reported === "fatigue" ? "tired" : pm.reported === "tightness" ? "tight" : "sore"}` : ""}
+          </p>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
             <Fact label="Last trained" value={pm.lastTrained ? whenWords(pm.lastTrained, today) : "Not in 6 weeks"} />
             <Fact label="Sets, last 3 days" value={pm.sets72h ? String(pm.sets72h) : "None"} />
@@ -410,13 +519,20 @@ export function RecoveryDetail({
                   <button type="button" onClick={() => pick(m)} className="flex min-h-11 w-full items-center gap-2 text-left text-[14px]">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorOf(m) ?? undefined }} aria-hidden />
                     <span className="flex-1">{m}</span>
-                    <span className="text-[13px] text-muted-foreground">{r.pain ? "Pain flagged" : STATE_WORD[r.state]}</span>
+                    <span className="text-[13px] text-muted-foreground">{r.pain ? "Pain flagged" : r.reported ? `${STATE_WORD[r.state]} · reported` : STATE_WORD[r.state]}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
         </section>
+      )}
+
+      {recovery.score != null && (recovery.confidence !== "high" || recovery.missing.length > 0) && (
+        <p className="text-[12.5px] text-muted-foreground" data-recovery-confidence={recovery.confidence}>
+          {recovery.confidence === "low" ? "Low confidence" : recovery.confidence === "medium" ? "Medium confidence" : "High confidence"}
+          {recovery.missing.length ? `: ${recovery.missing.join("; ").toLowerCase()}.` : "."}
+        </p>
       )}
 
       {recovery.factors.length > 0 && (

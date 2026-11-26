@@ -29,9 +29,30 @@ export type PainSite = {
   deep?: boolean;
   /** Other words people use, for the search. */
   also?: string[];
+  /**
+   * A group of smaller spots ("Fingers" = each finger, "Bottom of foot" = the
+   * arch and the ball of the foot): picking it lights every one of them, and
+   * it's drawn through them (it has no shape of its own).
+   */
+  covers?: string[];
 };
 
 export const PAIN_SITES: readonly PainSite[] = [
+  // head (Nov 26 2026: the whole body)
+  { key: "forehead", region: "head", label: "Forehead", anat: "Frontal area", kind: "area", midline: true, also: ["brow", "front of head"] },
+  { key: "temple", region: "head", label: "Temple", anat: "Temporal area", kind: "area", also: ["temples", "side of head"] },
+  { key: "top_of_head", region: "head", label: "Top of head", anat: "Crown (vertex)", kind: "area", midline: true, also: ["crown"] },
+  { key: "back_of_head", region: "head", label: "Back of head", anat: "Occipital area", kind: "area", midline: true, also: ["occipital"] },
+  { key: "skull_base", region: "head", label: "Base of the skull", anat: "Suboccipitals", kind: "muscle", also: ["suboccipital", "where the neck meets the head"] },
+  { key: "ear", region: "head", label: "Ear", anat: "Ear", kind: "area", also: ["ears"] },
+  // face
+  { key: "eyes", region: "face", label: "Eye", anat: "Around or behind the eye", kind: "area", also: ["eyes", "behind the eyes", "eyeball", "orbit"] },
+  { key: "cheek", region: "face", label: "Cheek", anat: "Maxillary (sinus) area", kind: "area", also: ["sinus", "cheekbone"] },
+  { key: "nose", region: "face", label: "Nose", anat: "Nasal area", kind: "area", midline: true },
+  // jaw
+  { key: "jaw_muscle", region: "jaw", label: "Jaw muscle", anat: "Masseter", kind: "muscle", also: ["jaw", "clenching"] },
+  { key: "tmj", region: "jaw", label: "Jaw joint, in front of the ear", anat: "Temporomandibular joint (TMJ)", kind: "joint", also: ["tmj", "jaw joint", "jaw click"] },
+  { key: "chin", region: "jaw", label: "Chin", anat: "Mandible (front)", kind: "area", midline: true },
   // neck
   { key: "neck_side", region: "neck", label: "Side of neck", anat: "Sternocleidomastoid", kind: "muscle", also: ["scm", "front of neck"] },
   { key: "neck_back", region: "neck", label: "Back of neck", anat: "Neck extensors (splenius)", kind: "muscle", also: ["nape"] },
@@ -53,6 +74,10 @@ export const PAIN_SITES: readonly PainSite[] = [
   { key: "pec_minor", region: "chest", label: "Deep chest, under the collarbone", anat: "Pec minor", kind: "muscle", deep: true },
   { key: "serratus", region: "chest", label: "Side of ribs", anat: "Serratus anterior", kind: "muscle", also: ["ribs", "side"] },
   { key: "sternum", region: "chest", label: "Breastbone", anat: "Sternum", kind: "area", midline: true, also: ["middle of chest"] },
+  // ribs
+  { key: "ribs_front", region: "ribs", label: "Front of the ribs", anat: "Costal margin (lower front ribs)", kind: "joint", also: ["rib", "ribs", "under the chest"] },
+  { key: "ribs_side", region: "ribs", label: "Side of the ribs", anat: "Intercostals", kind: "muscle", also: ["rib", "ribs", "intercostal"] },
+  { key: "ribs_back", region: "ribs", label: "Back of the ribs", anat: "Posterior ribs", kind: "joint", also: ["rib", "ribs", "rib out"] },
   // upper arm
   { key: "biceps", region: "upper_arm", label: "Biceps", anat: "Biceps brachii", kind: "muscle", also: ["bicep", "front of arm"] },
   { key: "brachialis", region: "upper_arm", label: "Lower outer arm", anat: "Brachialis", kind: "muscle" },
@@ -68,8 +93,16 @@ export const PAIN_SITES: readonly PainSite[] = [
   // wrist & hand
   { key: "wrist_front", region: "wrist_hand", label: "Wrist, palm side", anat: "Wrist (palmar)", kind: "joint", also: ["wrist"] },
   { key: "wrist_back", region: "wrist_hand", label: "Back of wrist", anat: "Wrist (dorsal)", kind: "joint", also: ["wrist"] },
-  { key: "hand", region: "wrist_hand", label: "Hand and fingers", anat: "Hand", kind: "area", also: ["palm", "fingers", "knuckles"] },
-  { key: "thumb", region: "wrist_hand", label: "Thumb", anat: "Thumb (thenar)", kind: "area" },
+  { key: "hand", region: "wrist_hand", label: "Whole hand", anat: "Hand", kind: "area", also: ["hand", "hands"], covers: ["palm", "back_of_hand", "knuckles", "fingers", "thumb"] },
+  { key: "thumb", region: "wrist_hand", label: "Thumb", anat: "Thumb (thenar)", kind: "area", also: ["thumbs"] },
+  { key: "palm", region: "wrist_hand", label: "Palm", anat: "Palm (palmar hand)", kind: "area", also: ["palms"] },
+  { key: "back_of_hand", region: "wrist_hand", label: "Back of hand", anat: "Dorsum of the hand", kind: "area" },
+  { key: "knuckles", region: "wrist_hand", label: "Knuckles", anat: "MCP joints", kind: "joint", also: ["knuckle"] },
+  { key: "fingers", region: "wrist_hand", label: "Fingers", anat: "Digits", kind: "area", also: ["finger", "fingertips"], covers: ["index_finger", "middle_finger", "ring_finger", "little_finger"] },
+  { key: "index_finger", region: "wrist_hand", label: "Index finger", anat: "Second digit", kind: "area", also: ["pointer finger", "first finger"] },
+  { key: "middle_finger", region: "wrist_hand", label: "Middle finger", anat: "Third digit", kind: "area" },
+  { key: "ring_finger", region: "wrist_hand", label: "Ring finger", anat: "Fourth digit", kind: "area" },
+  { key: "little_finger", region: "wrist_hand", label: "Little finger", anat: "Fifth digit", kind: "area", also: ["pinky", "pinkie"] },
   // upper back
   { key: "upper_trap", region: "upper_back", label: "Upper trap", anat: "Upper trapezius", kind: "muscle", also: ["traps", "trap", "top of shoulder"] },
   { key: "mid_trap", region: "upper_back", label: "Between the shoulder blades", anat: "Middle trapezius", kind: "muscle", also: ["traps"] },
@@ -97,6 +130,8 @@ export const PAIN_SITES: readonly PainSite[] = [
   { key: "tfl", region: "hip_groin", label: "Front-outer hip", anat: "Tensor fasciae latae", kind: "muscle", also: ["tfl"] },
   { key: "hip_outer", region: "hip_groin", label: "Outer hip bone", anat: "Greater trochanter", kind: "joint", also: ["side of hip"] },
   { key: "groin", region: "hip_groin", label: "Groin", anat: "Pectineus", kind: "muscle", also: ["groin strain"] },
+  { key: "pubic_bone", region: "hip_groin", label: "Front of the pelvis", anat: "Pubic symphysis", kind: "joint", midline: true, also: ["pelvis", "pubic bone"] },
+  { key: "hip_joint", region: "hip_groin", label: "Deep in the hip joint", anat: "Hip joint", kind: "joint", deep: true, also: ["hip socket", "inside the hip"] },
   { key: "adductors", region: "hip_groin", label: "Inner thigh", anat: "Adductors", kind: "muscle", also: ["adductor", "inner thigh"] },
   // glute
   { key: "glute_max", region: "glute", label: "Glute", anat: "Gluteus maximus", kind: "muscle", also: ["butt", "glutes"] },
@@ -132,8 +167,13 @@ export const PAIN_SITES: readonly PainSite[] = [
   { key: "ankle_inner", region: "ankle_foot", label: "Inside of ankle", anat: "Medial malleolus", kind: "joint", also: ["ankle"] },
   { key: "ankle_outer", region: "ankle_foot", label: "Outside of ankle", anat: "Lateral malleolus", kind: "joint", also: ["ankle", "rolled ankle"] },
   { key: "heel", region: "ankle_foot", label: "Heel", anat: "Calcaneus", kind: "joint" },
-  { key: "arch", region: "ankle_foot", label: "Arch of foot", anat: "Plantar fascia", kind: "tendon", also: ["plantar", "sole"] },
-  { key: "foot_top", region: "ankle_foot", label: "Top of foot", anat: "Dorsum of foot", kind: "area", also: ["toes", "foot"] },
+  { key: "arch", region: "ankle_foot", label: "Arch of foot", anat: "Plantar fascia", kind: "tendon", also: ["plantar", "instep"] },
+  { key: "foot_top", region: "ankle_foot", label: "Top of foot", anat: "Dorsum of foot", kind: "area", also: ["foot"] },
+  { key: "foot_sole", region: "ankle_foot", label: "Bottom of foot", anat: "Sole (plantar foot)", kind: "area", also: ["sole", "underneath the foot"], covers: ["arch", "ball_of_foot"] },
+  { key: "ball_of_foot", region: "ankle_foot", label: "Ball of foot", anat: "Metatarsal heads", kind: "joint", also: ["forefoot", "metatarsals"] },
+  { key: "foot_outer", region: "ankle_foot", label: "Outside of foot", anat: "Fifth metatarsal", kind: "area", also: ["outer foot", "side of foot"] },
+  { key: "toes", region: "ankle_foot", label: "Toes", anat: "Toes", kind: "area", also: ["toe"], covers: ["big_toe"] },
+  { key: "big_toe", region: "ankle_foot", label: "Big toe", anat: "Hallux (first toe)", kind: "joint", also: ["bunion"] },
 ];
 
 const BY_KEY = new Map(PAIN_SITES.map((s) => [s.key, s]));
@@ -145,6 +185,41 @@ export function siteOf(key: string | null | undefined): PainSite | null {
 
 export function sitesIn(region: string): PainSite[] {
   return PAIN_SITES.filter((s) => s.region === region);
+}
+
+/** Every spot a group covers, all the way down ("hand" → palm, fingers, each finger…); [] for a plain spot. */
+export function siteCovers(site: string | null | undefined): string[] {
+  const out: string[] = [];
+  const walk = (k: string) => {
+    for (const c of siteOf(k)?.covers ?? []) {
+      if (out.includes(c)) continue;
+      out.push(c);
+      walk(c);
+    }
+  };
+  if (site) walk(site);
+  return out;
+}
+
+/** The groups a spot belongs to ("index_finger" → fingers, hand). */
+export function siteGroups(site: string | null | undefined): string[] {
+  if (!site) return [];
+  return PAIN_SITES.filter((s) => siteCovers(s.key).includes(site)).map((s) => s.key);
+}
+
+/**
+ * "site:side" keys with every group's spots added, for drawing: a picked
+ * "Fingers" lights each finger on that side.
+ */
+export function expandPlaceKeys(keys: ReadonlySet<string>): Set<string> {
+  const out = new Set(keys);
+  for (const k of keys) {
+    const at = k.lastIndexOf(":");
+    const site = k.slice(0, at);
+    const side = k.slice(at + 1);
+    for (const c of siteCovers(site)) out.add(`${c}:${siteOf(c)?.midline ? "-" : side}`);
+  }
+  return out;
 }
 
 /** Does this place take a left or right? A midline site never does; a whole region does when it comes in pairs. */

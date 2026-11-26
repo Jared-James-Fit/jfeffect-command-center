@@ -178,7 +178,14 @@ describe("check-outs, sleep, cardio, energy and load move the score, each marked
     expect(r.basis).toBe("measured");
     expect(r.score!).toBeLessThan(base.score!);
     const kinds = Object.fromEntries(r.factors.map((f) => [f.key, f.kind]));
-    expect(kinds).toMatchObject({ muscles: "estimated", sleep: "logged", feel: "logged", fatigue: "logged", session: "logged" });
+    expect(kinds).toMatchObject({ muscles: "estimated", sleep: "logged", feel: "logged", session: "logged" });
+    // "how recovered" and "fatigued" are one read of how they felt: never both counted
+    expect(kinds.fatigue).toBeUndefined();
+    const onlyFatigue = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: upperDay, sets,
+      checkouts: [{ at: at(0, 7), sleepBucket: null, recovery: null, fatigueFeel: "fatigued", sessionRpe: null, pain: false }],
+    });
+    expect(onlyFatigue.factors.find((f) => f.key === "fatigue")).toMatchObject({ effect: -5, kind: "logged" });
   });
 
   it("a device's sleep is measured and wins over a check-out's", () => {
@@ -238,5 +245,100 @@ describe("helpers", () => {
       { day: "2026-11-16", loadKg: 200, reps: 1 },
     ];
     expect(weightLiftedKg(sets, "2026-11-23", TODAY)).toBe(500);
+  });
+});
+
+describe("reported symptoms are told apart from estimated fatigue (Nov 26 2026 audit)", () => {
+  const sets = history();
+
+  it("training soreness confirms fatigue on the muscle and never caps the score", () => {
+    const clean = buildTodayRecovery({ now: NOW, today: TODAY, planned: upperDay, sets });
+    const sore = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: upperDay, sets,
+      pain: [{ day: "2026-11-24", region: "chest", side: null, site: null, score: null, severity: null, feel: ["sore"], timing: ["after"] }],
+    });
+    expect(sore.pain).toHaveLength(0);
+    expect(sore.reported).toHaveLength(1);
+    expect(sore.reported[0].cls).toBe("soreness");
+    expect(sore.painCapped).toBe(false);
+    expect(sore.muscles.Chest.reported).toBe("soreness");
+    expect(sore.muscles.Chest.state).not.toBe("recovered");
+    // at most what the soreness itself means: never a second penalty
+    expect(sore.score!).toBeGreaterThan(PAIN_CAP);
+    expect(sore.score!).toBeLessThanOrEqual(clean.score!);
+    expect(sore.factors.find((f) => f.key === "reported")).toMatchObject({ effect: 0, kind: "logged" });
+  });
+
+  it("soreness on a muscle that's already fatigued changes nothing (the higher of the two, never both)", () => {
+    const fresh = [...sets, ...squat(1, 6, 9)];
+    const base = buildTodayRecovery({ now: NOW, today: TODAY, planned: lowerDay, sets: fresh });
+    const sore = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: lowerDay, sets: fresh,
+      pain: [{ day: TODAY, region: "quad", side: "L", site: null, score: null, severity: null, feel: ["sore"], timing: ["after"] }],
+    });
+    expect(sore.score).toBe(base.score);
+  });
+
+  it("a headache is a general symptom: listed apart, never on a muscle, never capping", () => {
+    const clean = buildTodayRecovery({ now: NOW, today: TODAY, planned: lowerDay, sets });
+    const r = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: lowerDay, sets,
+      pain: [{ day: TODAY, region: "head", side: null, site: null, score: 6, severity: "moderate", symptom: "headache" }],
+    });
+    expect(r.pain).toHaveLength(0);
+    expect(r.general).toHaveLength(1);
+    expect(r.general[0]).toMatchObject({ label: "Headache", cls: "general", muscles: [], relevant: false });
+    expect(r.score).toBe(clean.score);
+    expect(r.painCapped).toBe(false);
+    expect(r.status).toBe("Symptoms reported");
+    expect(r.observation).toMatch(/^Headache reported today: not counted as muscle fatigue/);
+  });
+
+  it("dizziness with no place is listed and goes quiet after two days", () => {
+    const r = buildTodayRecovery({ now: NOW, today: TODAY, planned: upperDay, sets, pain: [{ day: "2026-11-24", region: "general", side: null, site: null, score: null, severity: null, symptom: "dizziness" }] });
+    expect(r.general[0].label).toMatch(/Dizziness/);
+    const old = buildTodayRecovery({ now: NOW, today: TODAY, planned: upperDay, sets, pain: [{ day: "2026-11-20", region: "general", side: null, site: null, score: null, severity: null, symptom: "dizziness" }] });
+    expect(old.general).toHaveLength(0);
+  });
+
+  it("joint discomfort and numbness on today's muscles still cap; a stored side reads as a side", () => {
+    const knee = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: lowerDay, sets,
+      pain: [{ day: "2026-11-24", region: "knee", side: "L", site: "patellar_tendon", score: 4, severity: "moderate", feel: ["ache"] }],
+    });
+    expect(knee.painCapped).toBe(true);
+    expect(knee.pain[0]).toMatchObject({ cls: "joint", label: "Left below the kneecap" });
+    const numb = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: upperDay, sets,
+      pain: [{ day: "2026-11-24", region: "wrist_hand", side: "R", site: "thumb", score: null, severity: null, feel: ["numb"] }],
+    });
+    expect(numb.pain[0].cls).toBe("nerve");
+  });
+
+  it("a very hard session lowers it only when its sets weren't rated (rated sets already carry the effort)", () => {
+    const rated = [...sets, ...bench(0, 5, 9.5).map((x) => ({ ...x, at: at(0, 6) }))];
+    const withRated = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: upperDay, sets: rated,
+      checkouts: [{ at: at(0, 7), sleepBucket: null, recovery: null, fatigueFeel: null, sessionRpe: 9.5, pain: false }],
+    });
+    expect(withRated.factors.some((f) => f.key === "session")).toBe(false);
+    const unrated = [...sets, ...bench(0, 5).map((x) => ({ ...x, rpe: null, at: at(0, 6) }))];
+    const withUnrated = buildTodayRecovery({
+      now: NOW, today: TODAY, planned: upperDay, sets: unrated,
+      checkouts: [{ at: at(0, 7), sleepBucket: null, recovery: null, fatigueFeel: null, sessionRpe: 9.5, pain: false }],
+    });
+    expect(withUnrated.factors.some((f) => f.key === "session")).toBe(true);
+  });
+
+  it("says how sure it is and what was missing", () => {
+    const r = buildTodayRecovery({ now: NOW, today: TODAY, planned: upperDay, sets });
+    expect(r.confidence).toBe("medium");
+    expect(r.missing).toContain("No check-out in the last 3 days");
+    const partly = buildTodayRecovery({
+      now: NOW, today: TODAY, sets,
+      planned: [...upperDay, { sets: 12, primary: ["calves"], secondary: [] }, { sets: 12, primary: ["abs"], secondary: [] }],
+    });
+    expect(partly.coverage).toBeLessThan(1);
+    expect(partly.missing.some((m) => /no recent history/.test(m))).toBe(true);
   });
 });
