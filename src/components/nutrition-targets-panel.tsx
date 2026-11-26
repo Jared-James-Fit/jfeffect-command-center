@@ -253,6 +253,7 @@ export function NutritionTargetsPanel({
             clientId={clientId}
             days={plan.nutrition_target_days ?? []}
             references={previous}
+            currentId={plan.id}
             showCleo={!cleoEntry}
             anchor={plan.start_date && plan.start_date > todayLocalISO() ? plan.start_date : undefined}
             onReuse={(source) => { setEditing(null); setCopySource(source); setOpen(true); }}
@@ -326,16 +327,16 @@ export function NutritionTargetsPanel({
                       <div className="text-[15px] font-medium">{planPeriod(t)}</div>
                       <div className="text-[13px] text-muted-foreground">{planLine(t, { dates: false })}</div>
                     </div>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => startAgainFrom(t)} disabled={reusing === t.id} title="Make this the client's plan again, from today">
-                      <RotateCcw className="h-3.5 w-3.5" /> Use again
+                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => { setEditing(null); setCopySource(t); setOpen(true); }} title="Copy the previous plan into the editor for review">
+                      <RotateCcw className="h-3.5 w-3.5" /> Use as draft
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <MoreButton label="Previous plan options" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setEditing(t); setOpen(true); }}>
-                          <Pencil className="mr-2 h-4 w-4" /> Open
+                        <DropdownMenuItem onClick={() => { setEditing(null); setCopySource(t); setOpen(true); }}>
+                          <Pencil className="mr-2 h-4 w-4" /> Open as draft
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => downloadPdf(t)}>
                           <Download className="mr-2 h-4 w-4" /> Download PDF
