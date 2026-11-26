@@ -20,6 +20,7 @@ import { SessionsCard } from "@/components/portal/sessions-card";
 import { IncludedCallsCard } from "@/components/portal/included-calls-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AgreementDashboardCard } from "@/components/coaching-agreement/agreement-dashboard-card";
+import { HeadshotTaskCard } from "@/components/headshots/headshot-ui";
 import { LevelCelebrations } from "@/components/portal/athlete-level-card";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
@@ -256,6 +257,13 @@ function PortalHome() {
                   </SectionErrorBoundary>
                 }
               />
+            </SectionErrorBoundary>
+          )}
+          {/* an account headshot update that's outstanding (hidden once snoozed or done; a new client's
+              first one is the setup checklist's step) */}
+          {client?.id && coaching && (
+            <SectionErrorBoundary label="Account headshot">
+              <HeadshotTaskCard />
             </SectionErrorBoundary>
           )}
           {client?.id && (

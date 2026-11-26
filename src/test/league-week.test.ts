@@ -191,7 +191,7 @@ describe("where it shows", () => {
     expect(screen).toContain('useEffect(() => onNewVisit(() => setWeekSlot("wait")), []);');
     // never on the coach's own page; it takes the people-to-follow spot that visit
     expect(screen).toContain("const weekOn = ownBar && !coach;");
-    expect(screen).toContain("if (!previewOnly && !following && !coach && i === 0 && !weekCard)");
+    expect(screen).toContain("if (!previewOnly && !following && !coach && i === 0 && !weekCard && !photoCard)");
   });
   it("is one tap away all week on Rankings (Last week), and its button opens Rankings", () => {
     const card = read("src/components/portal/athlete-level-card.tsx");
