@@ -10,7 +10,7 @@ import { contractBadge, lastSeenChip, type ChipAction } from "./clients-status";
  */
 
 /** Buttons a status can offer beside its explanation. "assign_program" opens Assign program in place. */
-export type RowAction = ChipAction | "assign_program";
+export type RowAction = ChipAction | "assign_program" | "setup";
 
 export type RowStatusId =
   | "payment_issue"
@@ -136,19 +136,19 @@ export function rowStatuses(r: DirectoryRow): RowStatus[] {
   if (contract && contractStatus === "no_account") {
     out.push({
       id: "no_account", label: "No app account", tone: "warn",
-      hint: contract.hint, next: contract.next, actions: ["profile"],
+      hint: contract.hint, next: "Open the client setup checklist.", actions: ["setup"],
     });
   } else if (r.f_needs_setup && !accountActivated) {
     out.push({
       id: "needs_setup", label: "Needs setup", tone: "warn",
       hint: "They haven't signed in to their account yet. The invite or password reset is still pending.",
-      next: "Open their profile and resend the invite.", actions: ["profile"],
+      next: "Open the client setup checklist to send or resend the invite.", actions: ["setup"],
     });
   } else if (!r.last_active_at && !r.last_login_at) {
     out.push({
       id: "never_signed_in", label: "Never signed in", tone: "warn",
       hint: "They haven't opened the app yet.",
-      next: "Open their profile and resend the invite.", actions: ["profile"],
+      next: "Open the client setup checklist to send or resend the invite.", actions: ["setup"],
     });
   }
 
