@@ -13,6 +13,7 @@ on:
       - 'src/lib/coaching-packages/**'
       - 'src/routes/coaching.index.tsx'
       - 'src/route-pages/_authenticated/admin/clients.$id.tsx'
+      - 'src/components/competition/prep/handling-directory.tsx'
       - 'src/test/client-directory-services.test.ts'
       - 'supabase/migrations/20270605090000_universal_client_directory.sql'
       - 'src/test/coaching-packages.test.ts'

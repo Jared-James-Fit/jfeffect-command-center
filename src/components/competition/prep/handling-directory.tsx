@@ -3,23 +3,39 @@
  * coach is handling at a meet, by where it stands (Invited, Onboarding,
  * Preparing, Ready, Completed, Cancelled), with the account it's on (coaching,
  * member, no login yet), the meet, and the payment. One folded row until it's
- * opened; nothing when nobody's ever been handled. A row opens the athlete's
- * Competition tab on that meet. Handling is a service on the athlete's
+ * opened; nothing when nobody's ever been handled. Every card is the same
+ * ClientRow rendered by the parent. Handling is a service on the athlete's
  * permanent account, so the account itself stays where it is in its own list.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, Trophy } from "lucide-react";
+import { ChevronDown, Trophy } from "lucide-react";
+import { listClientsDirectoryFn, type DirectoryRow } from "@/lib/clients-directory.functions";
+import { readWholeDirectory } from "@/lib/clients-directory-starred";
 import { listHandlingFn } from "@/lib/competition/handling.functions";
-import { HANDLING_FILTERS, HANDLING_WORD, PAYMENT_WORD, matchesFilter, type HandlingStatus } from "@/lib/competition/handling";
+import { HANDLING_FILTERS, HANDLING_WORD, matchesFilter, type HandlingStatus } from "@/lib/competition/handling";
 import { cn } from "@/lib/utils";
-import { dayWords } from "./prep-ui";
 
-export function HandlingDirectory({ search = "" }: { search?: string }) {
+export function HandlingDirectory({ search = "", lifecycle, renderClientRow, starredOnly }: {
+  search?: string;
+  lifecycle: "active" | "archived" | "deactivated";
+  renderClientRow: (row: DirectoryRow) => ReactNode;
+  starredOnly?: ReadonlySet<string>;
+}) {
   const read = useServerFn(listHandlingFn);
   const q = useQuery({ queryKey: ["competition-handling-list"], queryFn: () => read({ data: { limit: 200 } }), staleTime: 60_000 });
+  const readDirectory = useServerFn(listClientsDirectoryFn);
+  const directory = useQuery({
+    queryKey: ["clients-directory", "handling", lifecycle],
+    enabled: !!q.data?.rows?.length,
+    queryFn: () => readWholeDirectory((page, size) => readDirectory({ data: {
+      coachingType: "Competition Handling", lifecycle, page, size, separateNutrition: false,
+      search: "", flags: [], match: "any", sort: "name", coachId: null,
+    } })),
+    staleTime: 10_000,
+  });
+  const byClient = useMemo(() => new Map((directory.data?.rows ?? []).map(r => [r.id, r])), [directory.data]);
   const [open, setOpen] = useState<boolean | null>(null);
   useEffect(() => {
     try {
@@ -30,15 +46,16 @@ export function HandlingDirectory({ search = "" }: { search?: string }) {
   const [filter, setFilter] = useState<HandlingStatus | "active">("active");
   const needle = search.trim().toLowerCase();
   const rows = useMemo(() => ((q.data?.rows ?? []) as any[])
-    .filter((r) => !needle || [r.athlete, r.meet].some((v) => String(v ?? "").toLowerCase().includes(needle)))
-    .sort((a, b) => String(a.meetDate ?? "9999").localeCompare(String(b.meetDate ?? "9999"))), [q.data, needle]);
+    .filter((r) => (!starredOnly || starredOnly.has(r.client_id)) && (!directory.data || byClient.has(r.client_id)))
+    .filter((r) => !needle || [r.athlete, r.meet, byClient.get(r.client_id)?.email].some((v) => String(v ?? "").toLowerCase().includes(needle)))
+    .sort((a, b) => String(a.meetDate ?? "9999").localeCompare(String(b.meetDate ?? "9999"))), [q.data, needle, byClient, directory.data, starredOnly]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const f of HANDLING_FILTERS) c[f.key] = rows.filter((r) => matchesFilter(r.status, f.key)).length;
+    for (const f of HANDLING_FILTERS) c[f.key] = new Set(rows.filter((r) => matchesFilter(r.status, f.key)).map(r => r.client_id)).size;
     return c;
   }, [rows]);
   if (!rows.length) return null;
-  const shown = rows.filter((r) => matchesFilter(r.status, filter));
+  const shown = [...new Set(rows.filter((r) => matchesFilter(r.status, filter)).map(r => r.client_id))];
   const expanded = !!needle || (open ?? counts.active > 0);
   const summary = (["invited", "onboarding", "preparing", "ready"] as const)
     .filter((k) => counts[k])
@@ -77,30 +94,13 @@ export function HandlingDirectory({ search = "" }: { search?: string }) {
               </button>
             ))}
           </div>
-          {shown.length ? (
-            <ul className="divide-y divide-border">
-              {shown.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    to="/admin/clients/$id"
-                    params={{ id: r.client_id }}
-                    search={{ tab: "competition", competition: r.competition_id }}
-                    className="flex items-center gap-2 px-2 py-2.5 hover:bg-muted/40"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="text-[14px] font-medium">{r.athlete}</span>
-                      <span className="block truncate text-[12.5px] text-muted-foreground">
-                        {[r.meet, r.meetDate ? dayWords(r.meetDate) : null, r.account].filter(Boolean).join(" · ")}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-right text-[12px]">
-                      <span className="block font-medium">{HANDLING_WORD[r.status as HandlingStatus]}</span>
-                      <span className="block text-muted-foreground">{PAYMENT_WORD[r.payment as keyof typeof PAYMENT_WORD] ?? ""}</span>
-                    </span>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </Link>
-                </li>
-              ))}
+          {directory.isError ? (
+            <button type="button" className="px-2 py-3 text-sm" onClick={() => directory.refetch()}>Couldn't load clients · Retry</button>
+          ) : !directory.data ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">Loading clients…</p>
+          ) : shown.length ? (
+            <ul className="space-y-2">
+              {shown.map(id => byClient.get(id)).filter((r): r is DirectoryRow => !!r).map(renderClientRow)}
             </ul>
           ) : (
             <p className="px-2 py-3 text-[13px] text-muted-foreground">Nobody here.</p>

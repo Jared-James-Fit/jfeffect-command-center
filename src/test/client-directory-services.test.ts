@@ -10,7 +10,7 @@ const row = (id: string, extra: Partial<DirectoryRow> = {}) => ({
   next_action: { kind: "assign", label: "Assign program" },
   ...extra,
 } as DirectoryRow);
-const opts = { flags: [], match: "any" as const, sort: "name", page: 1, size: 15 };
+const opts = { flags: [], match: "any" as const, sort: "name", separateNutrition: true, page: 1, size: 15 };
 
 describe("nutrition service directory", () => {
   it("retains real nutrition, payment and review alerts and removes irrelevant training flags", () => {
@@ -19,12 +19,11 @@ describe("nutrition service directory", () => {
     expect(n.next_action.kind).toBe("review");
     expect(n.service_kind).toBe("nutrition");
   });
-  it("paginates all services together without duplicate accounts and keeps counts consistent", () => {
+  it("groups nutrition before pagination without duplicate accounts and keeps counts consistent", () => {
     const result = organizeDirectoryServices([row("a"), row("n"), row("z")], new Set(["n"]), { ...opts, size: 1 });
     expect(result.rows.map(r => r.id)).toEqual(["a"]);
-    expect(result.total).toBe(3);
-    const second = organizeDirectoryServices([row("a"), row("n"), row("z")], new Set(["n"]), { ...opts, size: 1, page: 2 });
-    expect(second.rows.map(r => r.id)).toEqual(["n"]);
+    expect(result.nutritionRows.map(r => r.id)).toEqual(["n"]);
+    expect(result.total).toBe(2);
     expect(result.counts.all).toBe(3);
     expect(result.counts.no_program).toBe(2);
     expect(result.counts.no_nutrition).toBe(3);
@@ -33,9 +32,11 @@ describe("nutrition service directory", () => {
     const rows = [row("a"), row("n")];
     const ids = new Set(["n"]);
     const filtered = organizeDirectoryServices(rows, ids, { ...opts, flags: ["no_program"] });
+    expect(filtered.nutritionRows).toEqual([]);
     expect(filtered.total).toBe(1);
-    const whole = organizeDirectoryServices(rows, ids, opts);
+    const whole = organizeDirectoryServices(rows, ids, { ...opts, separateNutrition: false });
     expect(whole.rows.map(r => r.id)).toEqual(["a", "n"]);
+    expect(whole.nutritionRows).toEqual([]);
     expect(whole.total).toBe(2);
   });
 });

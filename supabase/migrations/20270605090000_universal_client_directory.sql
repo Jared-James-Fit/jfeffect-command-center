@@ -1,6 +1,5 @@
 -- A paid or invited meet-handling relationship belongs in the same client
--- directory, as does any human-service package (subscription or one-time).
--- Account tier still controls entitlements; never promote members
+-- directory's handling view. Account tier still controls entitlements; never promote members
 -- to full coaching merely to display them. The existing RPC still owns search,
 -- lifecycle, filters, pagination and counts, and returns one row per client.
 SET lock_timeout = '3s';
@@ -14,13 +13,13 @@ BEGIN
   def := pg_get_functiondef(f);
   IF position('universal_handling_directory' in def) > 0 THEN RETURN; END IF;
   anchor := E'    where (v_is_admin or public.is_assigned_coach(c.id))\n      and c.service_tier = ''coaching''';
-  replacement := E'    where (v_is_admin or public.is_assigned_coach(c.id) or c.id IN (SELECT public.coached_client_ids()))\n      and (c.service_tier = ''coaching'' or exists (select 1 from public.competition_handling h where h.client_id = c.id) or exists (select 1 from public.coaching_package_enrollments e join public.coaching_packages p on p.id = e.package_id where e.client_id = c.id and p.kind in (''subscription'', ''one_time''))) -- universal_handling_directory';
+  replacement := E'    where (v_is_admin or public.is_assigned_coach(c.id) or (p_coaching_type = ''Competition Handling'' and c.id IN (SELECT public.coached_client_ids())))\n      and (c.service_tier = ''coaching'' or (p_coaching_type = ''Competition Handling'' and exists (select 1 from public.competition_handling h where h.client_id = c.id))) -- universal_handling_directory';
   IF (length(def) - length(replace(def, anchor, ''))) / length(anchor) <> 1 THEN
     RAISE EXCEPTION 'Universal client directory: scope anchor changed';
   END IF;
   def := replace(def, anchor, replacement);
   anchor := 'b.id, b.full_name, b.email, b.profile_picture_url, b.coaching_type,';
-  replacement := 'b.id, b.full_name, b.email, b.profile_picture_url, case when b.service_tier = ''coaching'' then b.coaching_type when exists (select 1 from public.competition_handling h where h.client_id = b.id) then ''Competition Handling'' else (select p.name from public.coaching_package_enrollments e join public.coaching_packages p on p.id = e.package_id where e.client_id = b.id and p.kind in (''subscription'', ''one_time'') order by (e.status = ''active'') desc, e.starts_on desc, e.id limit 1) end as coaching_type,';
+  replacement := 'b.id, b.full_name, b.email, b.profile_picture_url, case when b.service_tier <> ''coaching'' then ''Competition Handling'' else b.coaching_type end as coaching_type,';
   IF (length(def) - length(replace(def, anchor, ''))) / length(anchor) <> 1 THEN
     RAISE EXCEPTION 'Universal client directory: identity anchor changed';
   END IF;

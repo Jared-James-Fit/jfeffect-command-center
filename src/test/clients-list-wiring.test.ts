@@ -137,12 +137,16 @@ describe("the filters reach the database", () => {
 });
 
 
-describe("universal client directory", () => {
-  it("renders every service through the one client row and pagination path", () => {
-    expect(page).not.toContain("HandlingDirectory");
-    expect(page).not.toContain("nutritionRows");
-    expect(page).not.toContain("separateNutrition");
+describe("shared client card across categories", () => {
+  it("preserves the handling and nutrition panels but shares the exact row renderer", () => {
+    const handling = read("src/components/competition/prep/handling-directory.tsx");
+    expect(page).toContain("<HandlingDirectory");
+    expect(page).toContain("renderClientRow={renderClientRow}");
+    expect(page).toContain("nutritionRows.map(renderClientRow)");
+    expect(page).toContain("rows.map(renderClientRow)");
     expect(page.match(/<ClientRow\s/g)).toHaveLength(1);
-    expect(page).toContain("rows.map((r)");
+    expect(handling).toContain(".map(renderClientRow)");
+    expect(handling).toContain("coachingType: \"Competition Handling\"");
+    expect(handling).not.toContain("params={{ id: r.client_id }}");
   });
 });
