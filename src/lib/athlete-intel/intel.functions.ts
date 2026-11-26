@@ -199,7 +199,8 @@ export const sourceActionFn = createServerFn({ method: "POST" })
       if (data.purposes) patch.purposes = data.purposes;
       if (data.context !== undefined) patch.context = data.context;
       // who it's from and what it's for change how it's read: read again
-      await sb.from("athlete_intel_sources").update({ ...patch, ...(["ready", "waiting_consent", "failed"].includes(src.status) ? { status: "queued", attempts: 0, error: null } : {}) }).eq("id", src.id);
+      const { error } = await sb.from("athlete_intel_sources").update({ ...patch, ...(["ready", "waiting_consent", "failed"].includes(src.status) ? { status: "queued", attempts: 0, error: null, retry_at: null, progress: null } : {}) }).eq("id", src.id);
+      if (error) throw new Error(error.message);
     }
     await s.logIntel(sb, { clientId: src.client_id, competitionId: src.competition_id, sourceId: src.id, actorId: context.userId, actor: "coach", action: `source_${data.action}` });
     return { ok: true };

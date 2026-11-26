@@ -110,6 +110,7 @@ export function AddInfoSheet({
 
   // paste: files (screenshots) become uploads; text goes in the box as usual
   const onPaste = (e: React.ClipboardEvent) => {
+    if (busy) return;
     const files = Array.from(e.clipboardData?.files ?? []);
     if (files.length) {
       e.preventDefault();

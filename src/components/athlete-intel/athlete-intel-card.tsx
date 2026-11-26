@@ -29,7 +29,7 @@ import {
 import { MEET_LOGISTICS_LABELS } from "@/lib/competition/attachment-intake";
 import { defaultMeetFileSelection, validMeetFileValue, type MeetFileProposal } from "@/lib/athlete-intel/meet-files";
 import { factLine } from "@/lib/athlete-intel/findings";
-import { PROVIDER_LABEL, PURPOSE_LABEL, type Fact, type FactKind } from "@/lib/athlete-intel/types";
+import { PROVIDERS, PROVIDER_LABEL, PURPOSE_LABEL, type Provider, type Fact, type FactKind } from "@/lib/athlete-intel/types";
 import { AddInfoSheet } from "./add-info-sheet";
 
 export const intelKey = (clientId: string, competitionId: string | null) => ["athlete-intel", clientId, competitionId] as const;
@@ -278,18 +278,17 @@ function MeetFileReview({ competitionId, proposals, onDone }: {
   });
   const clearAll = () => setChoices(Object.fromEntries(available.map(p => [rowKey(p), false])));
   const run = useMutation({
-    mutationFn: () => apply({ data: {
+    mutationFn: (rows: { proposal: MeetFileProposal; value: string }[]) => apply({ data: {
       competitionId,
-      updates: selected.map(p => ({
+      updates: rows.map(({ proposal: p, value }) => ({
         factId: p.factId,
         before: p.before,
         extracted: p.value,
-        value: (edits[rowKey(p)] ?? p.value).trim(),
+        value,
       })),
     } }),
-    onSuccess: async (r) => {
-      const fields = new Set(selected.map(p => p.field));
-      setSaved(old => [...old, ...available.filter(p => fields.has(p.field)).map(rowKey)]);
+    onSuccess: async (r, rows) => {
+      setSaved(old => [...old, ...rows.map(({ proposal }) => rowKey(proposal))]);
       setEditing(null);
       toast.success(r.count === 1 ? "Meet detail updated" : `${r.count} meet details updated`);
       if (r.scheduleWarning) toast.warning("Saved. Schedule refresh will be retried by the competition worker.");
@@ -313,7 +312,7 @@ function MeetFileReview({ competitionId, proposals, onDone }: {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 text-[12px]">
         <label className="flex cursor-pointer items-center gap-2 font-medium">
           <Checkbox aria-label="Select all non-conflicting updates" disabled={run.isPending || !safe.length} checked={safe.length > 0 && selectedSafe === safe.length ? true : selectedSafe > 0 ? "indeterminate" : false} onCheckedChange={v => v === true ? selectAll() : setChoices(old => ({ ...old, ...Object.fromEntries(safe.map(p => [rowKey(p), false])) }))} />
-          {available.some(p => p.conflict) ? "Select all clear" : "Select all"}
+          {available.some(p => p.conflict) ? "Select all non-conflicting" : "Select all"}
         </label>
         <button type="button" disabled={run.isPending} onClick={clearAll} className="text-muted-foreground hover:text-foreground hover:underline">Deselect all</button>
       </div>
@@ -356,7 +355,7 @@ function MeetFileReview({ competitionId, proposals, onDone }: {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-b-xl border-t border-border bg-card px-3 py-2.5">
         <span className="text-[11.5px] text-muted-foreground">Only selected details will change.</span>
-        <Button size="sm" className="shrink-0" disabled={!selected.length || invalid} loading={run.isPending} onClick={() => run.mutate()} data-meet-file-confirm>
+        <Button size="sm" className="shrink-0" disabled={!selected.length || invalid} loading={run.isPending} onClick={() => run.mutate(selected.map(p => ({ proposal: p, value: (edits[rowKey(p)] ?? p.value).trim() })))} data-meet-file-confirm>
           Confirm {selected.length} {selected.length === 1 ? "update" : "updates"}
         </Button>
       </div>
@@ -595,6 +594,7 @@ function SourceSheet({ source, facts, onClose, onReplace, onDone }: { source: an
               Delete
             </Button>
           </div>
+          {["ready", "waiting_consent", "failed", "stored"].includes(source.status) ? <SourceMetadataEditor key={source.id} source={source} onDone={onDone} /> : null}
           {mine.length ? (
             <div className="space-y-3 border-t border-border pt-3">
               <p className="text-[12px] text-muted-foreground">What Cleo read from it ({mine.filter((f) => f.status === "active").length} in use)</p>
@@ -617,6 +617,44 @@ function SourceSheet({ source, facts, onClose, onReplace, onDone }: { source: an
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+
+function SourceMetadataEditor({ source, onDone }: { source: any; onDone: () => void }) {
+  const act = useServerFn(sourceActionFn);
+  const [open, setOpen] = useState(false);
+  const [provider, setProvider] = useState<Provider>(source.provider ?? "unknown");
+  const [name, setName] = useState(source.provider_name ?? "");
+  const [context, setContext] = useState(source.context ?? "");
+  const run = useMutation({
+    mutationFn: () => act({ data: { sourceId: source.id, action: "update", provider, providerName: name.trim() || null, context: context.trim() || null } }),
+    onSuccess: () => { setOpen(false); toast.success("File details updated"); onDone(); },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't update file details"),
+  });
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+      <button type="button" className="flex w-full items-center justify-between gap-2 text-left font-medium" aria-expanded={open} onClick={() => setOpen(v => !v)}>
+        Edit file details <ChevronRight className={cn("h-4 w-4 text-muted-foreground", open && "rotate-90")} />
+      </button>
+      {open ? <div className="mt-2 space-y-2">
+        <label className="block text-[12px] font-medium">Provided by
+          <select className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-[13px]" disabled={run.isPending} value={provider} onChange={e => {setProvider(e.target.value as Provider);setName("");}}>
+            {PROVIDERS.map(p => <option key={p} value={p}>{PROVIDER_LABEL[p]}</option>)}
+          </select>
+        </label>
+        <label className="block text-[12px] font-medium">Source name (optional)
+          <Input className="mt-1 h-9 text-[13px]" value={name} maxLength={120} disabled={run.isPending} onChange={e => setName(e.target.value)} />
+        </label>
+        <label className="block text-[12px] font-medium">Context / notes (optional)
+          <textarea className="mt-1 min-h-16 w-full rounded-md border border-border bg-background p-2 text-[13px]" value={context} maxLength={1000} disabled={run.isPending} onChange={e => setContext(e.target.value)} />
+        </label>
+        <div className="flex items-center justify-end gap-2">
+          <Button size="sm" variant="ghost" disabled={run.isPending} onClick={() => {setProvider(source.provider ?? "unknown");setName(source.provider_name ?? "");setContext(source.context ?? "");setOpen(false);}}>Cancel</Button>
+          <Button size="sm" loading={run.isPending} onClick={() => run.mutate()}>Save details</Button>
+        </div>
+      </div> : null}
+    </div>
   );
 }
 
