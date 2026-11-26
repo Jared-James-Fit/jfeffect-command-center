@@ -93,11 +93,6 @@ const DEV_SHORT: Record<DevStatus, string> = {
   steady: "No signal",
   unknown: "Too early",
 };
-const ROLE_WORD = {
-  prime: "A main muscle for your goal",
-  support: "A supporting muscle for your goal",
-  optional: "Optional for your goal",
-} as const;
 
 /** What each reading means, said once under its legend. */
 export function modeMeans(mode: MuscleMode, reference: number): string {
@@ -162,8 +157,7 @@ export function muscleColor(
     if (!row.period.before) return null;
     const delta = row.period.total - row.period.before.total;
     if (Math.abs(delta) < 0.5) return p.steady;
-    const magnitude=Math.abs(delta);
-    return delta>0?(magnitude>=10?"#36a6cf":"#46798e"):(magnitude>=10?"#bf665d":"#895d58");
+    return delta>0?"#36a6cf":"#bf665d";
   }
   if (mode === "fit") {
     const s = row.fit.status;
@@ -342,7 +336,7 @@ function MuscleOverview({ranked,rows,onPick}:{ranked:MuscleReadRow[];rows:Muscle
       {low&&ranked.slice(0,3).every(r=>r.muscle!==low.muscle)&&<button type="button" onClick={()=>onPick(low.muscle)} className="flex min-h-10 w-full items-center justify-between gap-2 border-t border-border text-xs"><span className="text-muted-foreground">Least trained priority · {low.muscle}</span><span className="font-medium tabular-nums">{fmtSets(low.period.total)} sets ›</span></button>}
       {zero.length>0&&<button type="button" onClick={()=>onPick(zero[0].muscle)} className="flex min-h-10 w-full items-center justify-between gap-2 border-t border-border text-xs"><span className="text-muted-foreground">No logged work · {zero[0].muscle}{zero.length>1?" +"+(zero.length-1)+" more":""}</span><span>›</span></button>}
     </div>:<p className="text-xs text-muted-foreground">No working sets logged in this period.</p>}
-    <div className="flex flex-wrap gap-1.5">{rows.map(r=><button type="button" key={r.muscle} onClick={()=>onPick(r.muscle)} className="min-h-8 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2">{r.muscle}</button>)}</div>
+    <select aria-label="Find a muscle" value="" onChange={e=>{if(e.target.value)onPick(e.target.value as FineMuscle)}} className="min-h-10 w-full rounded-lg border border-border bg-background px-2 text-xs"><option value="">Find a muscle…</option>{rows.map(r=><option key={r.muscle} value={r.muscle}>{r.muscle}</option>)}</select>
   </div>;
 }
 
@@ -489,8 +483,8 @@ function ModeLegend({ mode, dark }: { mode: MuscleMode; dark: boolean }) {
           ? [
               sw(p.supported, "On track"),
               sw(p.look, "Lighter"),
-              sw(p.gap, "Almost no work"),
-              sw(p.more, "Much more"),
+              sw(p.gap, "Below target"),
+              sw(p.more, "Above target"),
               sw(skin, "Too early to tell", true),
             ]
           : [
@@ -996,7 +990,6 @@ function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: Re
 function MuscleDetail({
   row,
   mode,
-  coached,
   credit,
   enough,
   onClear,
