@@ -140,7 +140,10 @@ describe("competition preparation screens", () => {
     expect(html).toContain(`Step ${prep.steps.length} of ${prep.steps.length}`);
     expect(html).toContain("data-handling-terms");
     expect(html).toContain("data-web-only");
-    expect(html).toContain("They tap Done here");
+    expect(html).toContain("Close preview");
+    expect(html).toContain("Client preview · nothing is saved or signed.");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*?Pay<\/button>/);
+    expect(html).toMatch(/<button[^>]*(?:disabled|aria-disabled="true")[^>]*data-accept-terms[^>]*>|<button[^>]*data-accept-terms[^>]*(?:disabled|aria-disabled="true")[^>]*>/);
     // a sport that isn't powerlifting is never asked lifts or warm-ups
     expect(stepsFor({ sport: "strongman", handled: false })).not.toContain("lifts");
   });
