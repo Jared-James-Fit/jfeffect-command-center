@@ -52,7 +52,9 @@ export const getMyHeadshot = createServerFn({ method: "GET" })
       await assertStaffFor(supabase, userId, data.viewAsClientId);
       return { ...(await s.myHeadshot(db, await s.clientById(db, data.viewAsClientId))), preview: true };
     }
-    return { ...(await s.myHeadshot(db, await s.clientForUser(db, userId))), preview: false };
+    let client = await s.clientForUser(db, userId);
+    if (await s.recoverPendingHeadshot(db, client)) client = await s.clientForUser(db, userId);
+    return { ...(await s.myHeadshot(db, client)), preview: false };
   });
 
 /** "Remind me later": the Home card and pushes wait for the next reminder moment. */
@@ -161,6 +163,7 @@ export const getClientHeadshot = createServerFn({ method: "GET" })
     await assertStaffFor(supabase, userId, data.clientId);
     const db = await admin();
     const s = await import("./headshots.server");
+    await s.recoverPendingHeadshot(db, await s.clientById(db, data.clientId));
     const view = await s.staffView(db, data.clientId, userId);
     const c = await s.clientById(db, data.clientId);
     return { ...view, applies: s.headshotApplies(c), hasLogin: !!c?.user_id, isAdmin: await isAdmin(supabase, userId) };
