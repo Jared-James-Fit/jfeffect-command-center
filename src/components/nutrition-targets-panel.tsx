@@ -33,7 +33,7 @@ import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
 import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
-import { manageScheduledNutrition, scheduledNutritionQuery, scheduledNutritionKey, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
+import { manageScheduledNutrition, scheduledNutritionQuery, scheduledNutritionKey, scheduledPlanReference, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 
 export function NutritionTargetsPanel({
@@ -90,7 +90,7 @@ export function NutritionTargetsPanel({
   const plansState = queryView(plansQ as any).kind;
   const { current, previous } = splitPlans(targets);
   const revisions = useQuery(nutritionRevisionQuery(clientId));
-  const comparisonReferences = orderPlanReferences(previous, revisions.data ?? []);
+  const comparisonReferences = [...orderPlanReferences(previous, revisions.data ?? []), ...(scheduledQ.data ?? []).map(scheduledPlanReference)];
   const [reusing, setReusing] = useState<string | null>(null);
 
   const refresh = () => {
