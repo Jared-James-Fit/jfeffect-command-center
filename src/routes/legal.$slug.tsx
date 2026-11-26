@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { getPublicLegalDocument } from "@/lib/legal.functions";
 import { ArrowLeft, ShieldAlert, FileText } from "lucide-react";
 import { legalShareTitle, shareMeta } from "@/lib/share-meta";
+import { LegalDocumentBody } from "@/components/legal/legal-document-body";
 
 export const Route = createFileRoute("/legal/$slug")({
   loader: async ({ params }) => {
@@ -43,12 +44,12 @@ function PublicLegalPage() {
   const v = doc.version;
   const isMembershipTerms = doc.slug === "membership-agreement";
   return (
-    <article className="mx-auto max-w-3xl px-4 py-10">
+    <article className="mx-auto max-w-2xl px-5 py-8 sm:px-8 sm:py-12">
       <Link to="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-3 w-3" /> Back to JF Effect
       </Link>
       <header className="mt-4 border-b border-border pb-4">
-        <h1 className="text-2xl font-semibold">{doc.title}</h1>
+        <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{doc.title}</h1>
         <p className="mt-1 text-xs text-muted-foreground">
           Version {v.version_number}
           {v.effective_date ? ` · Effective ${new Date(v.effective_date).toLocaleDateString()}` : ""}
@@ -92,11 +93,7 @@ function PublicLegalPage() {
           </p>
         </aside>
       ) : null}
-      <div
-        className="prose prose-sm dark:prose-invert mt-6 max-w-none whitespace-pre-wrap"
-        // Body is plain text/markdown stored server-side; rendered as preformatted
-        // text to avoid HTML injection. Markdown rendering can be layered on later.
-      >{v.body}</div>
+      <LegalDocumentBody body={v.body} className="mt-6" />
       {isMembershipTerms ? (
         <div className="mt-8 border-t border-border pt-4 text-sm">
           <Link

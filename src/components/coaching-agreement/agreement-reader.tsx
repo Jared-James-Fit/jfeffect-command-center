@@ -79,14 +79,14 @@ export function AgreementReader({
   };
 
   return (
-    <div className={cn("space-y-5", className)}>
+    <div className={cn("space-y-6", className)}>
       {showIntro && (
         <div className="space-y-3">
           {content.intro.map((clause, i) => (
             <p
               key={i}
               className={cn(
-                "text-[15px] leading-relaxed text-muted-foreground",
+                "text-[15px] leading-[1.7] text-foreground/90",
                 i === 0 &&
                   "rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-foreground",
               )}
@@ -101,17 +101,17 @@ export function AgreementReader({
       )}
 
       {showKeyTerms && (
-        <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <section className="rounded-xl border border-border/60 p-4 sm:p-5">
           <h3 className="text-base font-bold tracking-tight">Key terms at a glance</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             A plain-English summary. The full terms below are what you agree to, and they control if
             anything differs.
           </p>
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-4 space-y-3">
             {content.keyTerms.map((term) => (
               <li key={term.title} className="flex gap-3">
                 <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                <p className="text-[15px] leading-snug text-muted-foreground">
+                <p className="text-[14px] leading-relaxed text-foreground/90">
                   <span className="font-semibold text-foreground">{term.title}. </span>
                   {term.text}
                 </p>
@@ -121,7 +121,7 @@ export function AgreementReader({
         </section>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-base font-bold tracking-tight">Full agreement</h3>
           {!record && (
@@ -147,7 +147,7 @@ export function AgreementReader({
           return (
             <section
               key={section.id}
-              className="agreement-section-card break-inside-avoid rounded-2xl border border-border bg-card"
+              className="agreement-section-card break-inside-avoid rounded-xl border border-border/60"
             >
               {record ? (
                 <header className="flex items-start gap-3 p-4 pb-0">
@@ -160,7 +160,7 @@ export function AgreementReader({
               ) : (
                 <button
                   type="button"
-                  className="flex min-h-[56px] w-full items-start gap-3 rounded-2xl p-4 text-left active:bg-muted/50"
+                  className="flex min-h-[56px] w-full items-start gap-3 rounded-xl px-3 py-3.5 text-left active:bg-muted/50"
                   aria-expanded={isOpen}
                   aria-controls={panelId}
                   onClick={() => toggle(section.id)}
@@ -182,7 +182,7 @@ export function AgreementReader({
               {isOpen && (
                 <div
                   id={panelId}
-                  className="space-y-3 border-t border-border/60 px-4 pb-4 pt-3 mt-3"
+                  className="space-y-4 border-t border-border/60 px-4 pb-4 pt-4"
                 >
                   {section.clauses.map((clause, i) => (
                     <p key={i} className="text-[15px] leading-relaxed text-muted-foreground">
@@ -213,13 +213,13 @@ function SectionHeading({
 }) {
   return (
     <div className="flex min-w-0 flex-1 items-start gap-3">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
         {number}
       </span>
       <div className="min-w-0">
         <h4 className="text-[15px] font-semibold leading-snug text-foreground">{title}</h4>
         <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-          <span className="font-medium">In short:</span> {inShort}
+          {inShort}
         </p>
       </div>
     </div>

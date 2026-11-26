@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { LegalDocumentBody } from "@/components/legal/legal-document-body";
 import { AgreementAccessScreen } from "@/components/legal/agreement-access-screen";
 import { CheckCircle2, ExternalLink, FileSignature, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -97,7 +98,7 @@ function MemberAgreementSheet({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-4">
             <section>
               <h3 className="text-sm font-bold">The short version</h3>
               <ul className="mt-2 space-y-1.5">
@@ -111,11 +112,9 @@ function MemberAgreementSheet({
               <p className="mt-2 text-[11px] text-muted-foreground">The full agreement below is what you're agreeing to.</p>
             </section>
 
-            <details className="group rounded-xl border bg-secondary/20">
-              <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-semibold">Read the full agreement</summary>
-              <div className="max-h-[50dvh] overflow-y-auto whitespace-pre-wrap border-t px-3 py-3 text-xs leading-relaxed text-foreground/90">
-                {v.body}
-              </div>
+            <details className="group rounded-xl border border-border/60">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold">Read the full agreement</summary>
+              <LegalDocumentBody body={v.body} className="border-t border-border/60 px-4 py-4" />
             </details>
             <a
               href="/legal/membership-agreement"
@@ -130,7 +129,7 @@ function MemberAgreementSheet({
               {MEMBERSHIP_AGREEMENT_ACKS.map((a) => {
                 const on = ticks.includes(a.id);
                 return (
-                  <label key={a.id} className="flex cursor-pointer items-start gap-3 rounded-xl border p-3">
+                  <label key={a.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/60 p-3.5">
                     <Checkbox
                       checked={on}
                       onCheckedChange={(c) =>
@@ -138,7 +137,7 @@ function MemberAgreementSheet({
                       }
                       className="mt-0.5"
                     />
-                    <span className="text-sm leading-snug">{a.text}</span>
+                    <span className="text-sm leading-relaxed">{a.text}</span>
                   </label>
                 );
               })}

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ShieldCheck, ShieldAlert, FileText, Clock } from "lucide-react";
 import { useState } from "react";
+import { LegalDocumentBody } from "./legal-document-body";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
@@ -140,11 +141,14 @@ function DocRow({ doc }: { doc: any }) {
   const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState(false);
   const [typedName, setTypedName] = useState("");
+  const [saving, setSaving] = useState(false);
   const acceptFn = useServerFn(recordAcceptance);
   const qc = useQueryClient();
   const isAccepted = !!doc.accepted_at || !!doc.satisfied_by_prior_version;
 
   const submit = async () => {
+    if (saving || isAccepted || !doc.version || (doc.version.signature_method === "checkbox" && !checked) || (doc.version.signature_method === "typed_name" && !typedName.trim())) return;
+    setSaving(true);
     try {
       await acceptFn({ data: {
         document_id: doc.document_id,
@@ -162,6 +166,8 @@ function DocRow({ doc }: { doc: any }) {
       setOpen(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Could not record acceptance.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -186,28 +192,29 @@ function DocRow({ doc }: { doc: any }) {
           </div>
         </div>
       </div>
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet open={open} onOpenChange={(next) => { if (!saving) { setOpen(next); if (next) { setChecked(false); setTypedName(""); } } }}>
         <SheetTrigger asChild>
           <Button size="sm" variant={isAccepted ? "outline" : "default"}>
             {isAccepted ? "Review" : "Review & accept"}
           </Button>
         </SheetTrigger>
-        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{doc.title}</SheetTitle>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden border-l-0 p-0 sm:max-w-xl">
+          <SheetHeader className="shrink-0 border-b border-border/60 pb-3 pr-5 pl-28 pt-[calc(env(safe-area-inset-top,0px)+1rem)]">
+            <SheetTitle className="text-lg leading-tight tracking-tight">{doc.title}</SheetTitle>
+            <p className="text-xs text-muted-foreground">Version {doc.version?.version_number}{isAccepted ? " · Accepted" : doc.is_required ? " · Required" : ""}</p>
           </SheetHeader>
-          <div className="mt-4 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
             {doc.version?.summary && (
-              <p className="text-sm text-muted-foreground">{doc.version.summary}</p>
+              <p className="mb-5 border-b border-border/60 pb-4 text-sm leading-relaxed text-muted-foreground">{doc.version.summary}</p>
             )}
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap rounded-md border border-border bg-muted/20 p-4 text-sm">
-              {doc.version?.body}
-            </div>
+            <LegalDocumentBody body={doc.version?.body ?? ""} />
+          </div>
+          <div className="shrink-0 border-t border-border/60 bg-background px-5 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:px-7">
             {!isAccepted && (
-              <div className="space-y-3 border-t border-border pt-4">
+              <div className="space-y-3">
                 {doc.version?.signature_method === "checkbox" && (
-                  <label className="flex items-start gap-2 text-sm">
-                    <Checkbox checked={checked} onCheckedChange={(v) => setChecked(!!v)} />
+                  <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed">
+                    <Checkbox checked={checked} disabled={saving} onCheckedChange={(v) => setChecked(!!v)} className="mt-0.5 h-5 w-5 shrink-0" />
                     <span>I have read and accept {doc.title}.</span>
                   </label>
                 )}
@@ -221,7 +228,7 @@ function DocRow({ doc }: { doc: any }) {
                     />
                   </div>
                 )}
-                <Button onClick={submit} disabled={(doc.version?.signature_method === "checkbox" && !checked) || (doc.version?.signature_method === "typed_name" && !typedName.trim())} className="w-full">Accept {doc.title}</Button>
+                <Button onClick={submit} disabled={saving || !doc.version || (doc.version?.signature_method === "checkbox" && !checked) || (doc.version?.signature_method === "typed_name" && !typedName.trim())} className="h-12 w-full text-[15px] font-semibold">{saving ? "Saving…" : `Accept ${doc.title}`}</Button>
               </div>
             )}
             {isAccepted && (
