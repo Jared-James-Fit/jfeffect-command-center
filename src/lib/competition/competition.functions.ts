@@ -141,6 +141,7 @@ export const createCompetitionFn = createServerFn({ method: "POST" })
       .select("id")
       .eq("client_id", data.clientId)
       .eq("status", "upcoming")
+      .eq("internal_test", false)
       .eq("is_primary", true)
       .limit(1);
     const f = data.fields;
@@ -373,7 +374,7 @@ export const getAssessmentFn = createServerFn({ method: "POST" })
     if (!row) return row;
     const { data: competition } = await sb
       .from("competitions")
-      .select("id, name, meet_date, weight_class")
+      .select("id, name, meet_date, weight_class, internal_test")
       .eq("id", row.competition_id)
       .maybeSingle();
     return { ...row, competition_context: competition ?? null };
@@ -1002,6 +1003,7 @@ export const getMyCompetitionsFn = createServerFn({ method: "POST" })
       )
       .eq("client_id", clientId)
       .in("status", ["upcoming", "completed"])
+      .eq("internal_test", false)
       .order("meet_date", { ascending: false })
       .limit(20);
     const ids = (comps ?? []).map((c: any) => c.id);
