@@ -71,7 +71,7 @@ export function MeetOnboarding({
     0,
     steps.findIndex((s) => !meet.info?.steps?.[s]),
   );
-  const [i, setI] = useState(meet.infoComplete ? 0 : firstOpen);
+  const [i, setI] = useState(meet.infoComplete ? (meet.handling && !meet.handling.termsAcceptedAt ? Math.max(0, steps.indexOf("confirm")) : 0) : firstOpen);
   const [info, setInfo] = useState<AthleteInfo>(() => ({ unit: "kg", ...(meet.info ?? {}) }));
   const c = meet.competition ?? {};
   const [ev, setEv] = useState<Ev>(() => ({
