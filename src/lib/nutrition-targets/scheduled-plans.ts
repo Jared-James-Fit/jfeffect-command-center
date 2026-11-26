@@ -13,3 +13,8 @@ export async function manageScheduledNutrition(clientId: string, draft: Schedule
   if (error || !data) throw new Error(error?.message ?? "Couldn't save scheduled plan");
   return data as { id?: string; targetId?: string; archived?: number };
 }
+
+/** Drafts may be compared but must never be mistaken for actual historical intake. */
+export function scheduledPlanReference(draft: ScheduledNutrition): import("./plan-history").PlanRow {
+  return { ...draft.payload, id: draft.id, client_id: draft.client_id, status: "Scheduled", start_date: draft.start_date, end_date: draft.payload.end_date ?? null, nutrition_target_days: draft.days, scheduled_reference: true };
+}
