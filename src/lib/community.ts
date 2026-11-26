@@ -147,6 +147,10 @@ export type CommunityAuthor = {
   title?: string | null;
   /** Their @username, without the @ (community_author). */
   username?: string | null;
+  /** Their membership badge, from what they actually have (null: staff, or hidden). */
+  badge?: "coaching" | "premium" | "member" | "free" | null;
+  /** A disclosed virtual Crew account run by JF Effect. */
+  virtual?: boolean | null;
 };
 
 export type CommunitySeries =
@@ -747,10 +751,10 @@ export function caughtUpAt(posts: { fresh?: boolean }[]): number | null {
 }
 
 export type CommentMedia = {
-  /** A GIF's is its public link (from the GIF library). */
+  /** A GIF's / sticker's is its public link (the library or KLIPY). */
   path: string;
   thumb: string | null;
-  type: "image" | "video" | "gif" | "audio";
+  type: "image" | "video" | "gif" | "sticker" | "audio";
   width: number | null;
   height: number | null;
   /** A voice memo's length in seconds. */

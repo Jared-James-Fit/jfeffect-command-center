@@ -71,7 +71,7 @@ export function activityLine(n: CommunityNotice): { names: string[]; others: num
   if (!names.length) names.push("Someone");
   const others = Math.max(0, count - names.length);
   const thing = THING[n.post_kind] ?? "post";
-  const said = n.snippet?.trim() ? n.snippet.trim() : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type ? "📷 Photo" : null;
+  const said = n.snippet?.trim() ? n.snippet.trim() : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type === "sticker" ? "Sticker" : n.media_type ? "📷 Photo" : null;
   switch (n.kind) {
     case "reaction": {
       // every reaction is a like, whatever the emoji (history included: worded here, never stored)

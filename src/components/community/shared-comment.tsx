@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, MessageCircle, Play } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge } from "@/components/community/post-card";
 import { signCommunityPaths } from "@/lib/community-media";
 import { VoiceMemoPlayer } from "@/components/community/voice-memo";
 import { cn } from "@/lib/utils";
 import type { CommentMedia, CommunityAuthor, SharedComment } from "@/lib/community";
+import { NameMarks } from "@/components/name-marks";
+import { SentMediaView } from "@/components/media/media-view";
 
 /** Ask the community screen to open a post (a shared comment's original). */
 export { OPEN_POST_EVENT, openCommunityPost } from "@/lib/community-notifications";
@@ -40,7 +41,7 @@ export function SharedCommentCard({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-1">
             <span className="truncate text-[13px] font-bold leading-tight">{shared.author.name}</span>
-            {shared.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+            <NameMarks person={shared.author as any} userId={(shared.author as any).user_id} size={13} />
           </div>
           {shared.post_author && <div className="truncate text-[11px] leading-tight text-muted-foreground">Commented on {shared.post_author}'s post</div>}
         </div>
@@ -64,8 +65,16 @@ export function SharedCommentCard({
 }
 
 function SharedMedia({ media }: { media: CommentMedia }) {
-  // a GIF's link or a voice memo's file; else the photo's thumb
-  const path = media.type === "gif" || media.type === "audio" ? media.path : media.thumb ?? (media.type === "image" ? media.path : null);
+  // a GIF / sticker is drawn from its own public link
+  if (media.type === "gif" || media.type === "sticker") {
+    return <SentMediaView m={{ kind: media.type, url: media.path, preview: media.thumb, width: media.width, height: media.height }} max={220} className="mt-2" />;
+  }
+  return <SharedFile media={media} />;
+}
+
+function SharedFile({ media }: { media: CommentMedia }) {
+  // a voice memo's file; else the photo's thumb
+  const path = media.type === "audio" ? media.path : media.thumb ?? (media.type === "image" ? media.path : null);
   const { data: url } = useQuery({
     queryKey: ["community-media-full", path],
     enabled: !!path,
@@ -73,7 +82,6 @@ function SharedMedia({ media }: { media: CommentMedia }) {
     queryFn: async () => (await signCommunityPaths([path]))[path!] ?? null,
   });
   if (media.type === "audio") return <VoiceMemoPlayer src={url ?? null} duration={media.duration} className="mt-2" />;
-  if (media.type === "gif") return url ? <img src={url} alt="GIF" loading="lazy" className="mt-2 block max-h-48 max-w-[240px] rounded-xl bg-muted object-cover" /> : null;
   const ratio = media.width && media.height ? Math.min(Math.max(media.width / media.height, 0.6), 1.6) : 1;
   return (
     <div data-pinch-zoom className="relative mt-2 overflow-hidden rounded-xl bg-muted" style={{ width: ratio >= 1 ? 240 : Math.round(260 * ratio), maxWidth: "100%", aspectRatio: String(ratio) }}>

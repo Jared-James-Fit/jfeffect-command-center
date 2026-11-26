@@ -69,8 +69,9 @@ export type MessageRoute =
 export function useMessageAuthor() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ postId, body, story }: { postId: string; body: string; story?: boolean }): Promise<MessageRoute> => {
-      const { data, error } = await db.rpc("community_message_author", { _post_id: postId, _body: body, ...(story ? { _story: true } : {}) });
+    mutationFn: async ({ postId, body, story, media }: { postId: string; body: string; story?: boolean; media?: Record<string, unknown> | null }): Promise<MessageRoute> => {
+      // media: a picked GIF / sticker (mediaAttachment), checked again by the database
+      const { data, error } = await db.rpc("community_message_author", { _post_id: postId, _body: body, ...(story ? { _story: true } : {}), ...(media ? { _media: media } : {}) });
       if (error) throw new Error(friendlyError(error.message));
       return data as MessageRoute;
     },

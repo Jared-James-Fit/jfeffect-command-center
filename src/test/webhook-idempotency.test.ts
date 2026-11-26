@@ -19,6 +19,8 @@ let failReadsOn: string | null = null;
 
 vi.mock("@supabase/supabase-js", () => {
   const makeClient = () => ({
+    // stripe_event_reclaim: a claim that isn't stale is never taken back, so a repeat is a duplicate.
+    rpc: async () => ({ data: false, error: null }),
     from(table: string) {
       const builder: any = {
         _table: table,

@@ -1,5 +1,6 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/components/loading";
+import { PovAccessLogDialog } from "@/components/pov/pov-access-log";
 import { loadErrorKind, queryView } from "@/lib/loading/load-state";
 import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -45,7 +46,7 @@ import { AppActivityCard } from "@/components/app-activity-card";
 import { ClientCalendarSyncStatus } from "@/components/admin/client-calendar-sync-status";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
-import { Send } from "lucide-react";
+import { History, Send } from "lucide-react";
 import { FolderOpen, Eye, PauseCircle, Power } from "lucide-react";
 import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -261,6 +262,8 @@ export function ClientProfileWorkspace({
     setBase(next);
     setForm((f: any) => ({ ...(f ?? {}), ...patch }));
   };
+
+  const [accessLogOpen, setAccessLogOpen] = useState(false);
 
   if (!form) {
     // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
@@ -542,6 +545,7 @@ export function ClientProfileWorkspace({
         ) : (
           <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><PauseCircle className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
         )}
+        <DropdownMenuItem onSelect={() => setAccessLogOpen(true)}><History className="mr-2 h-4 w-4" />Account access log</DropdownMenuItem>
         <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
           <Trash2 className="mr-2 h-4 w-4" />Delete client
@@ -549,6 +553,7 @@ export function ClientProfileWorkspace({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+  const accessLog = <PovAccessLogDialog clientId={id} name={form.full_name} open={accessLogOpen} onOpenChange={setAccessLogOpen} />;
 
   const links = [
     ["Program Sheet", form.program_sheet_link],
@@ -616,6 +621,7 @@ export function ClientProfileWorkspace({
           moreMenu={moreMenu}
         />
       )}
+      {accessLog}
       <div className={cn(WORKSPACE_CONTAINER_CLASS, embedded && "px-3 py-3 md:px-6 md:py-4")}>
       {/*
         The profile-shell "Actions" grid was removed — Message, POV and More

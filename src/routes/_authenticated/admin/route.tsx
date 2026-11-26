@@ -7,6 +7,7 @@ import { FINANCE_BAR, STAFF_BAR, buildFinanceNav, buildInternalNav, buildInterna
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
+import { PovStartHost } from "@/components/pov/pov-start";
 import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
@@ -95,6 +96,8 @@ function AdminLayout() {
       {!viewOnly && <TaskPopupGate />}
       <ReturnToDashboardPill />
       {cleoOn && <SummerAssistant />}
+      {/* "View as": why, and confirm-it's-you before edits in a member's account */}
+      <PovStartHost />
     </AppShell>
   );
 }

@@ -5,7 +5,8 @@
 //   3. monthly recap ready (the 1st, 9am local, only if they played)
 //   4. Cleo's weekly recap for Premium members (Monday 9am local, premium/weekly-recap.server.ts)
 //   5. Crew items waiting for review that nobody was told about (crew-reports.server.ts)
-//   6. account headshots: due reminders on the admin's schedule, evidence past retention (headshots.server.ts)
+//   6. the weekly business summary for admins (Monday 9am Winnipeg, bi/weekly-push.server.ts)
+//   7. account headshots: due reminders on the admin's schedule, evidence past retention (headshots.server.ts)
 import { digestLines, weighInDue } from "@/lib/checkin-coordination/plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLIENT_VIEW_HOME } from "@/lib/client-home";
@@ -61,10 +62,19 @@ export async function runPushTick(admin: SupabaseClient, now = new Date()) {
     console.warn("[push-tick] cleo recaps failed", e);
   }
 
+  // The weekly business summary for admins (Monday 9am in the business's clock)
+  let biWeekly = 0;
+  try {
+    const { runWeeklyBusinessSummary } = await import("@/lib/bi/weekly-push.server");
+    biWeekly = (await runWeeklyBusinessSummary(admin, now)).sent;
+  } catch (e) {
+    console.warn("[push-tick] weekly business summary failed", e);
+  }
+
   // Only people with at least one active device.
   const { data: subs } = await db.from("push_subscriptions").select("user_id").eq("enabled", true);
   const userIds = [...new Set(((subs ?? []) as any[]).map((s) => s.user_id).filter(Boolean))] as string[];
-  if (!userIds.length) return { queue, digests: 0, recaps: 0, cleoRecaps, headshots };
+  if (!userIds.length) return { queue, digests: 0, recaps: 0, cleoRecaps, biWeekly, headshots };
 
   const [{ data: prefs }, { data: roles }, { data: clients }] = await Promise.all([
     db.from("push_notification_preferences").select("user_id, timezone").in("user_id", userIds),
@@ -125,7 +135,7 @@ export async function runPushTick(admin: SupabaseClient, now = new Date()) {
       }
     }
   }
-  return { queue, digests, recaps, cleoRecaps, headshots };
+  return { queue, digests, recaps, cleoRecaps, biWeekly, headshots };
 }
 
 async function leagueParticipants(db: any, month: string): Promise<Set<string>> {

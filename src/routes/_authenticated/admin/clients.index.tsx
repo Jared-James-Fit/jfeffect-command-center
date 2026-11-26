@@ -31,9 +31,8 @@ import { RecentlyDeletedRow } from "@/components/account/recently-deleted";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
-import { listMembers } from "@/lib/members.functions";
 import { listTeam } from "@/lib/staff-invites.functions";
-import { MembersDirectory, MEMBERS_KEY, NewMemberButton, TestAccountCard, realMemberCount } from "@/components/members/members-directory";
+import { MembersDirectory, NewMemberButton, realMemberCount, useAccountDirectory } from "@/components/members/members-directory";
 import { StaffPage } from "@/route-pages/_authenticated/admin/staff";
 import { AccountsSwitcher, KINDS, useSwipeBetween, type AccountKind } from "@/components/accounts/accounts-switcher";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -95,21 +94,15 @@ function ClientsDirectoryPage() {
   const { kind: _kind, starred: _starred, ...clientSearch } = search;
   const starredMode: StarredMode | null = kind === "clients" ? starredModeFromSearch(search.starred) : null;
   const stars = useClientStars();
-  const membersFn = useServerFn(listMembers);
   const teamFn = useServerFn(listTeam);
-  const { data: membersData } = useQuery({
-    queryKey: MEMBERS_KEY,
-    enabled: isAdmin,
-    queryFn: () => membersFn({ data: {} }) as Promise<{ members: Array<{ is_admin_sandbox?: boolean | null; status: string }> }>,
-    staleTime: 30_000,
-  });
+  const { data: accounts } = useAccountDirectory(isAdmin);
   const { data: teamData } = useQuery({ queryKey: ["team-access"], enabled: isAdmin, queryFn: () => teamFn(), staleTime: 30_000 });
   const goKind = (k: AccountKind) =>
     navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, kind: k === "clients" ? undefined : k }), resetScroll: false });
-  // Everyone here is coached, so Members (memberships) only shows once there's a
-  // member; a saved ?kind=members link still opens it.
-  const memberCount = realMemberCount(membersData?.members);
-  const kinds: AccountKind[] = (memberCount ?? 0) > 0 || kind === "members" ? KINDS : KINDS.filter((k) => k !== "members");
+  // Members is always there for admins: every account that isn't a coaching client lives there,
+  // read from every login and record (admin_account_directory), so nobody falls between lists.
+  const memberCount = realMemberCount(accounts?.rows);
+  const kinds: AccountKind[] = KINDS;
   const swipe = useSwipeBetween(kinds.indexOf(kind), (i) => goKind(kinds[i]), kinds.length);
   const qc = useQueryClient();
   const listFn = useServerFn(listClientsDirectoryFn);
@@ -293,16 +286,12 @@ function ClientsDirectoryPage() {
       <div {...swipe} data-no-swipe-back={kind === "clients" ? undefined : ""} className="min-h-[60vh]">
       {kind === "members" ? (
         <div className="space-y-3 p-3 sm:p-4 md:p-6">
-          <MembersDirectory showTest={false} />
+          <MembersDirectory />
           {/* accounts waiting out their 30 days, with Restore */}
           <RecentlyDeletedRow />
         </div>
       ) : kind === "team" ? (
         <div>
-          {/* The one test account lives with the logins that run the business. */}
-          <div className="mx-auto max-w-3xl px-4 pt-3 md:px-6">
-            <TestAccountCard returnTo="/admin/clients?kind=team" />
-          </div>
           <StaffPage embedded />
           <div className="mx-auto max-w-3xl px-4 pb-6 md:px-6">
             <Link to="/admin/team" search={{ tab: "people" } as any} className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 text-sm font-semibold hover:bg-muted/40">

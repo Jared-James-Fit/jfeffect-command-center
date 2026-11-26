@@ -16,7 +16,6 @@ import { ReportSheet } from "@/components/community/report-sheet";
 import { ProfileEditSheet } from "@/components/community/profile-edit";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useCrewPhotoPicker } from "@/components/community/crew-photo-picker";
-import { CoachBadge } from "@/components/community/post-card";
 import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { RepostsGrid, SavedView } from "@/components/community/saved-view";
 import { isWorkoutCard, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
@@ -24,6 +23,7 @@ import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls 
 import { StoryAvatar, StoryHostContext, useStoryRing } from "@/components/community/story-ring";
 import { storyGroupFor, storyRings } from "@/lib/story-ring";
 import { useSeenStories } from "@/lib/story-seen";
+import { NameMarks } from "@/components/name-marks";
 
 /**
  * A person's corner of the community: photo, name, a short bio, follower /
@@ -156,7 +156,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h2 className="font-display truncate text-[28px] uppercase leading-none">{profile.author.name}</h2>
-            {profile.author.is_coach && <CoachBadge />}
+            <NameMarks person={profile.author} userId={profile.author.user_id} size={16} />
           </div>
           {profile.username && <div className="mt-1 truncate text-[13px] font-semibold text-muted-foreground" data-profile-username>@{profile.username}</div>}
           {profile.author.is_coach && <div className="mt-1 text-[12px] font-bold text-foreground/80">{profile.author.title || "Coach · JF Effect"}</div>}
