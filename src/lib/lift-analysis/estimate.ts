@@ -766,6 +766,8 @@ export const ESTIMATE_ROM_MM: Record<Movement["kind"], [number, number] | null> 
 export const ESTIMATE_ROM_SPREAD = 0.15;
 /** Two candidates that both read the set (left and right stacks, a stack and a circle) agree within this. */
 export const ESTIMATE_AGREE = 0.12;
+/** Motion and edge heights within this ratio are blended (geometric mean), see estimateRead. */
+export const BLEND_MAX = 1.45;
 
 /** Evenly spread frames, about `perSecond` a second. */
 export function everyNth(frames: Frame[], perSecond: number): Frame[] {
@@ -867,11 +869,12 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     // the two disagree on real stacks both ways: what moves with the plate stops short of its rim
     // (blur, shadow, a lit edge), its edges run on into whatever dark is beside it (an upright, a hand).
     // Measured on Dwayne's front-on squats: motion 55 px, edges 77, the plate 63; another set, motion 43,
-    // edges 60, the plate 60. When they're within 1.6× of each other the size is their geometric mean,
+    // edges 60, the plate 60. When they're within 1.45× of each other the size is their geometric mean,
     // its margin the spread of a size known only to lie between them (the gap ÷ √12, in log terms: the
     // truth lay between in every set checked); further apart, the edges have run into something and
-    // motion stands
-    const blend = !!motion && !!prof && prof.b > 1.1 * motion.b && prof.b <= 1.6 * motion.b;
+    // motion stands. 1.45× keeps that margin inside the scale gate (quality.ts TOLERANT 12 %), so a
+    // blended size is never one that can't be logged while a wider gap would be (motion alone)
+    const blend = !!motion && !!prof && prof.b > 1.1 * motion.b && prof.b <= BLEND_MAX * motion.b;
     const bB = blend ? Math.sqrt(prof!.b * motion!.b) : motion?.b ?? 0;
     const ext: Extent | null = motion
       ? {
