@@ -56,12 +56,14 @@ export function SbdDonut({
   const [classPick, setClassPick] = useState<string | null>(null);
   const [meetPick, setMeetPick] = useState("latest");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [comparePick, setComparePick] = useState("latest");
   const weights = useMemo(() => normalizeWeights(bodyweights), [bodyweights]);
   const refs = useMemo(() => weightReferences(meets, sex), [meets, sex]);
   const bw = useMemo(() => weightContextAt(weights, refs, today), [weights, refs, today]);
   const timeline = useMemo(() => historyOpen ? weightPeriods(weights, refs) : [], [weights, refs, historyOpen]);
   const projection = useMemo(() => currentRing(strength, today), [strength, today]);
-  const gymRecords = useMemo(() => view === "gym" ? gymRingRecords(results, strength, weights, refs, today) : [], [view, results, strength, weights, refs, today]);
+  const gymRecords = useMemo(() => (view === "gym" || compareOpen) ? gymRingRecords(results, strength, weights, refs, today) : [], [view, compareOpen, results, strength, weights, refs, today]);
   const options = view === "competition" ? classes(meets.map(officialClass)) : classes(gymRecords.map((x) => x.classLabel));
   const unknown = view === "competition" ? meets.some((m) => !officialClass(m)) : gymRecords.some((r) => !r.classLabel);
   const defaultClass = view === "gym" && bw.category && options.includes(bw.category.label) ? bw.category.label : "all";
@@ -81,6 +83,16 @@ export function SbdDonut({
   const size = 208;
   const radius = 87;
   const sum = ringTotal(lifts);
+  const compareChoices = compareOpen ? [
+    { key: "latest", label: "Latest competition", ...competitionRing(meets, "all", "latest") },
+    ...classes(meets.map(officialClass)).map(c => ({key: "meet:" + c, label: c + " · best official total", ...competitionRing(meets, c, "best")})),
+    ...["all", ...classes(gymRecords.map(r => r.classLabel))].flatMap(c => (["actual", "estimated"] as const).map(m => {
+      const records = gymRingBests(gymRecords, m, c);
+      return { key: "gym:" + c + ":" + m, label: (c === "all" ? "All-time" : c) + (m === "actual" ? " · gym singles" : " · estimated gym bests"), lifts: records, totalLb: ringTotal(records), meet: null };
+    })),
+  ] : [];
+  const comparison = compareChoices.find(c => c.key === comparePick) ?? compareChoices[0];
+  const delta = (a: number, b: number) => (a >= b ? "+" : "−") + dualLoad(Math.abs(a-b),unit).main;
   let at = 0;
 
   return (
@@ -168,6 +180,30 @@ export function SbdDonut({
         {view === "gym" && onRecords && <button type="button" className="min-h-10 shrink-0 font-medium text-foreground" onClick={onRecords}>Records ›</button>}
       </div>
 
+      <button type="button" className="min-h-10 w-full rounded-lg border border-border text-xs font-medium" onClick={() => setCompareOpen(true)}>Compare performance</button>
+      <Sheet open={compareOpen} onOpenChange={setCompareOpen}>
+        <SheetContent side="bottom" swipeToClose className="max-h-[82dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
+          <SheetTitle>Compare performance</SheetTitle>
+          <SheetDescription>Compare the selected view against a recorded historical result. Projected and achieved values are different types of evidence.</SheetDescription>
+          <select className={selectStyle} aria-label="Historical comparison" value={comparePick} onChange={e => setComparePick(e.target.value)}>
+            {compareChoices.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          {comparison && <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-xs"><div><div className="text-muted-foreground">{title}</div><strong>{total == null ? "—" : dualLoad(total,unit).main}</strong></div><div><div className="text-muted-foreground">{comparison.label}</div><strong>{comparison.totalLb == null ? "—" : dualLoad(comparison.totalLb,unit).main}</strong></div></div>
+            {COMP_LIFTS.map(l => {
+              const a = lifts[l], b = comparison.lifts[l];
+              const av = a && !a.stale ? a.lb : null, bv = b?.lb ?? null;
+              const max = Math.max(av ?? 0,bv ?? 0,1);
+              return <div key={l} className="space-y-1"><div className="flex justify-between text-sm"><span>{COMP_LIFT_LABEL[l]}</span><span>{av == null || bv == null ? "—" : delta(av,bv)}</span></div>
+                {[av,bv].map((v,i) => <div key={i} className="flex items-center gap-2"><div className="flex-1 rounded-full bg-muted"><div className={cn("h-2 rounded-full", i ? "bg-muted-foreground" : "bg-primary")} style={{width:(v ?? 0)/max*100+"%"}} /></div><span className="w-32 text-right text-xs">{v == null ? "—" : dualLoad(v,unit).main+" · "+dualLoad(v,unit).other}</span></div>)}
+                {b && <div className="text-[11px] text-muted-foreground">{b.classLabel ?? "Unclassified"} · {fmtDay(b.day)}{b.bodyweightKg == null ? "" : " · "+bwText(b.bodyweightKg,unit)}</div>}
+              </div>;
+            })}
+            <p className="text-xs text-muted-foreground">Individual gym bests can come from separate days. Differences are not proof of competition-day performance.</p>
+          </div>}
+          <Button variant="outline" onClick={() => setCompareOpen(false)}>Done</Button>
+        </SheetContent>
+      </Sheet>
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
         <SheetContent side="bottom" swipeToClose className="max-h-[82dvh] overflow-y-auto rounded-t-2xl px-5 pb-6">
           <SheetTitle>Weight history</SheetTitle>
