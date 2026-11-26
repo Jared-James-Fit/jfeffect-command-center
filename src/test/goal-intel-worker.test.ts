@@ -199,6 +199,13 @@ describe("recoverable goal decisions", () => {
     expect(tables.client_goal_events.some(e=>e.goal_id===before.id&&e.action==="reopen")).toBe(true);
     expect(tables.client_update_outbox).toHaveLength(0);
   });
+  it("can approve a target without falsely confirming inferred source units", async () => {
+    const { extractFromMeeting, decideGoal } = await import("@/lib/goal-intel/goals.server");
+    await extractFromMeeting(db, SESSION);
+    const g = lift("squat");
+    const saved = await decideGoal(db,g.id,{action:"approve",expectedVersion:g.version,confirmedSourceUnit:null,value:225,unit:"lb"},{userId:COACH_USER,kind:"coach"});
+    expect(saved).toMatchObject({status:"active",client_unit:"lb",client_unit_source:"inferred",client_value:220,client_value_max:225});
+  });
   it("approves a rounded kilogram target after explicit confirmation of the original pounds", async () => {
     const { extractFromMeeting, decideGoal } = await import("@/lib/goal-intel/goals.server");
     await extractFromMeeting(db, SESSION);

@@ -448,7 +448,7 @@ export async function extractFromMessages(sb: Db): Promise<number> {
 /* The coach's decisions                                              */
 
 export type GoalDecision =
-  | { action: "approve"; expectedVersion?: number; confirmedSourceUnit?: Unit; changeReason?: "round_up" | "restore"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
+  | { action: "approve"; expectedVersion?: number; confirmedSourceUnit?: Unit | null; changeReason?: "round_up" | "restore"; value?: number | null; unit?: Unit | null; approach?: ApproachKey | null; deadline?: string | null; text?: string | null; clientFacing?: boolean | null }
   | { action: "dismiss"; expectedVersion?: number }
   | { action: "archive" }
   | { action: "reopen"; expectedVersion?: number }
@@ -518,7 +518,7 @@ export async function decideGoal(sb: Db, goalId: string, d: GoalDecision, actor:
       ...(d.deadline !== undefined ? { deadline: d.deadline } : {}),
       ...(d.clientFacing != null ? { client_facing: d.clientFacing } : {}),
       // a unit the coach approved is a unit confirmed
-      ...(g.client_unit_source === "inferred" && (d.confirmedSourceUnit === g.client_unit || (unit && g.client_unit === unit)) ? { client_unit_source: "coach" } : {}),
+      ...(g.client_unit_source === "inferred" && (d.confirmedSourceUnit === g.client_unit && d.confirmedSourceUnit != null || (d.confirmedSourceUnit === undefined && unit && g.client_unit === unit)) ? { client_unit_source: "coach" } : {}),
       recommendation_status: g.recommendation_status === "open" ? "approved" : g.recommendation_status,
       ...(g.kind === "bodyweight" && kg != null && g.feasibility?.nowKg != null ? { direction: kg < g.feasibility.nowKg ? "down" : "up" } : {}),
     };

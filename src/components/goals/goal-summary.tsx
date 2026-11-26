@@ -316,12 +316,9 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
   const [mode, setMode] = useState<"cleo" | "discussed">("cleo");
   const [drafts, setDrafts] = useState<Record<string, { draft: WeightDraft; version: number; rounded?: boolean }>>({});
   const [confirmedUnits, setConfirmedUnits] = useState<Record<string, boolean>>({});
-  const [confirmedRules, setConfirmedRules] = useState<string | null>(null);
   const [approvalRequest, setApprovalRequest] = useState<Array<{id:string; version:number}> | null>(null);
   const comp = view.competitions.find(c => c.id === first.competition_id);
   const increment = comp?.incrementKg ?? 2.5;
-  const ruleKey = `${first.competition_id}:${increment}`;
-  const rulesReady = !!comp?.rulesConfirmed || confirmedRules === ruleKey;
   const proposed = goals.filter(g => g.status === "proposed");
   const hasCleo = proposed.some(g => reviewTarget(g, increment, "cleo").basis === "Cleo suggested");
   const sourceUnits = (["kg", "lb"] as Unit[]).map(u => ({ unit: u, rows: proposed.filter(g => g.client_unit === u && inferredUnitKey(g)) })).filter(x => x.rows.length);
@@ -331,17 +328,17 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
     return { value: target.kg == null ? "" : String(target.kg), unit: "kg" };
   };
   const loadValid = (g: GoalRow) => { const d = draftFor(g); return validMeetIncrement(draftKg(d), increment) && Number(d.value) <= 3000; };
-  const isValid = (g: GoalRow) => rulesReady && loadValid(g) && (!inferredUnitKey(g) || !!reviewedSourceUnit(g, confirmedUnits));
+  const needsSourceReview = (g: GoalRow) => !!inferredUnitKey(g) && !reviewedSourceUnit(g, confirmedUnits);
   const requested = approvalRequest?.map(r => proposed.find(g => g.id === r.id && g.version === r.version)).filter((g):g is GoalRow => !!g) ?? [];
-  const requestValid = !!approvalRequest && requested.length === approvalRequest.length && requested.every(isValid);
+  const requestValid = !!approvalRequest && requested.length === approvalRequest.length && requested.every(loadValid);
   const batch = useMutation({
     mutationFn: async (items: GoalRow[]) => {
       let saved = 0;
       for (const g of items) {
         const d = draftFor(g);
-        if (!isValid(g)) throw new Error("Confirm the source units and valid meet increments first.");
+        if (!loadValid(g)) throw new Error("Enter a valid target using the displayed weight increment.");
         try {
-          await decide({ data: { goalId: g.id, decision: { action: "approve", value: Number(d.value), unit: d.unit, expectedVersion: g.version, confirmedSourceUnit: reviewedSourceUnit(g, confirmedUnits), changeReason: drafts[g.id]?.rounded ? "round_up" : undefined, clientFacing: g.client_facing } } });
+          await decide({ data: { goalId: g.id, decision: { action: "approve", value: Number(d.value), unit: d.unit, expectedVersion: g.version, confirmedSourceUnit: reviewedSourceUnit(g, confirmedUnits) ?? null, changeReason: drafts[g.id]?.rounded ? "round_up" : undefined, clientFacing: g.client_facing } } });
           saved++;
         } catch (error) {
           throw new Error(`${saved} of ${items.length} targets saved. ${error instanceof Error ? error.message : "Refresh and review the remaining targets."}`);
@@ -359,7 +356,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
   });
   const requestApproval = (items: GoalRow[]) => {
     if (!items.length || !items.every(loadValid)) { toast.error("Enter valid meet-increment targets first."); return; }
-    if (items.every(isValid)) batch.mutate(items);
+    if (!items.some(needsSourceReview)) batch.mutate(items);
     else setApprovalRequest(items.map(g => ({id:g.id,version:g.version})));
   };
   const projected = goals.map(g => g.feasibility?.projection?.expectedKg ?? null);
@@ -374,7 +371,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <p className="text-sm font-semibold">{first.event_title ?? "Competition targets"}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{sources.join(" / ")}{sources.length ? " · " : ""}{increment} kg increments{comp?.rulesConfirmed ? "" : " (verify rules)"}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{sources.join(" / ")}{sources.length ? " · " : ""}{increment} kg {comp?.rulesConfirmed ? "meet increments" : "draft rounding"}</p>
       </div>
       <span className="shrink-0 text-xs text-muted-foreground">{first.feasibility?.timeLeft?.line ?? ""}</span>
     </div>
@@ -390,14 +387,21 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
         <p className="col-span-full text-[11px]">Relative to the forecast, not the probability of a successful lift.</p>
       </div>
     </details>
-    {proposed.length > 0 && !proposed.every(isValid) && <p className="mt-1 text-[11px] text-muted-foreground">Approval will ask you to confirm any unverified units or meet increments.</p>}
     <Dialog open={approvalRequest !== null} onOpenChange={v => { if (!v && !batch.isPending) setApprovalRequest(null); }}>
       <DialogContent className="max-w-sm max-h-[85dvh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Confirm &amp; approve</DialogTitle><DialogDescription>Check the source units and meet increments once. This approves goal targets, not platform attempts.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Review goal targets</DialogTitle><DialogDescription>Save the targets below. Cleo inferred the units of the original discussion; you can verify them if you know, or leave the source unverified.</DialogDescription></DialogHeader>
         <div className="space-y-2 text-sm" data-goal-approval-checks>
           {requested.map(g => <div key={g.id} className="flex justify-between gap-2"><span className="capitalize">{g.lift}</span><span className="font-medium">{dualLoadText(draftKg(draftFor(g))!, "kg")}</span></div>)}
-          {sourceUnits.filter(({rows})=>rows.some(g=>requested.some(r=>r.id===g.id))).map(({unit:u,rows}) => <label key={u} className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={rows.every(g => !!reviewedSourceUnit(g, confirmedUnits))} disabled={batch.isPending} onChange={e=>{const checked=e.target.checked;setConfirmedUnits(old=>({...old,...Object.fromEntries(rows.map(g=>[inferredUnitKey(g)!,checked]))}));}} /> Discussed weights were in {u} ({rows.map(g=>g.lift).join(", ")})</label>)}
-          {!comp?.rulesConfirmed && <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={rulesReady} disabled={batch.isPending} onChange={e=>setConfirmedRules(e.target.checked?ruleKey:null)}/> Meet uses {increment} kg increments</label>}
+          {sourceUnits.filter(({rows})=>rows.some(g=>requested.some(r=>r.id===g.id))).map(({unit:u,rows}) => {
+            const relevant = rows.filter(g=>requested.some(r=>r.id===g.id));
+            return <div key={u} className="rounded-md border border-border p-2.5 space-y-1.5">
+              <p className="text-xs font-medium">Original discussion · Cleo assumed {u}</p>
+              {relevant.map(g=><p key={g.id} className="text-xs text-muted-foreground"><span className="capitalize">{g.lift}</span>: {g.client_value}{g.client_value_max != null ? "–"+g.client_value_max : ""} {u} (inferred)</p>)}
+              <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={relevant.every(g=>!!reviewedSourceUnit(g,confirmedUnits))} disabled={batch.isPending} onChange={e=>{const checked=e.target.checked;setConfirmedUnits(old=>({...old,...Object.fromEntries(relevant.map(g=>[inferredUnitKey(g)!,checked]))}));}} /> Yes, those numbers were in {u}</label>
+              <p className="text-[11px] text-muted-foreground">Optional. Leave unchecked if unsure; the original units remain unverified.</p>
+            </div>;
+          })}
+          <p className="text-xs text-muted-foreground">These are goal targets, not final platform attempts. Meet rules are verified separately in competition planning.</p>
           {approvalRequest && requested.length !== approvalRequest.length && <p className="text-muted-foreground">A goal changed. Cancel and review again.</p>}
         </div>
         <DialogFooter><Button variant="outline" disabled={batch.isPending} onClick={()=>setApprovalRequest(null)}>Cancel</Button><Button disabled={batch.isPending || !requestValid} onClick={()=>batch.mutate(requested)}>{batch.isPending?"Saving…":`Approve ${requested.length} target${requested.length===1?"":"s"}`}</Button></DialogFooter>
@@ -452,7 +456,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
                           </SelectContent>
                         </Select>
                       </div> : null}
-                      <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({...old,[g.id]:{draft,rounded,version:g.version}}))} incrementKg={increment} confirmed={rulesReady} disabled={batch.isPending} />
+                      <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({...old,[g.id]:{draft,rounded,version:g.version}}))} incrementKg={increment} confirmed={!!comp?.rulesConfirmed} disabled={batch.isPending} />
                     </div>
                     {!validMeetIncrement(draftKg(draftFor(g)), increment) && <p className="text-xs text-muted-foreground">Choose a positive multiple of {increment} kg.</p>}
                     <div className="flex flex-wrap items-center gap-2">
