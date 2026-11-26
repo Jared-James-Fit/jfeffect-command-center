@@ -19,12 +19,14 @@ import { cn } from "@/lib/utils";
 import {
   answerQuestionFn,
   applyRecommendationsFn,
+  applyMeetFileFactFn,
   factActionFn,
   getIntelFn,
   requestAnswerFn,
   sourceActionFn,
   sourceFileFn,
 } from "@/lib/athlete-intel/intel.functions";
+import { MEET_LOGISTICS_LABELS } from "@/lib/competition/attachment-intake";
 import { factLine } from "@/lib/athlete-intel/findings";
 import { PROVIDER_LABEL, PURPOSE_LABEL, type Fact, type FactKind } from "@/lib/athlete-intel/types";
 import { AddInfoSheet } from "./add-info-sheet";
@@ -71,6 +73,8 @@ export function AthleteIntelCard({
   onChanged?: () => void;
 }) {
   const read = useServerFn(getIntelFn);
+  const applyMeet = useServerFn(applyMeetFileFactFn);
+  const [applyingFact, setApplyingFact] = useState<string | null>(null);
   const qc = useQueryClient();
   const [adding, setAdding] = useState<null | { replaces?: { id: string; name: string } | null; files?: File[] | null }>(null);
   const [openSource, setOpenSource] = useState<string | null>(null);
@@ -118,15 +122,15 @@ export function AthleteIntelCard({
     <section ref={ref} className="rounded-2xl border border-border bg-card p-4" data-athlete-intel>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold">Athlete information</h3>
+          <h3 className="text-[15px] font-semibold">{competitionId ? "Competition files" : "Athlete information"}</h3>
           <p className="text-[12.5px] text-muted-foreground">
             {sources.length
               ? `${sources.length} item${sources.length === 1 ? "" : "s"} · read into the forecast, attempts and gameplan`
-              : `Logs, programs, meet results or their coach's notes: Cleo reads them into ${athleteFirst}'s preparation.`}
+              : `Schedules, nominations, rules, logs and coach notes: Cleo reads them into ${athleteFirst}'s preparation.`}
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setAdding({})} data-intel-add-open>
-          <Plus /> Add
+          <Plus /> {competitionId ? "Upload files" : "Add"}
         </Button>
       </div>
 
@@ -142,11 +146,32 @@ export function AthleteIntelCard({
           {latest.summary.impact?.before && latest.summary.impact?.after ? (
             <span className="text-muted-foreground"> Expected total {latest.summary.impact.before} → {latest.summary.impact.after} kg.</span>
           ) : (
-            <span className="text-muted-foreground"> Incorporated into preparation.</span>
+            <span className="text-muted-foreground"> Read and organized; meet changes require confirmation.</span>
           )}
         </p>
       ) : null}
 
+      {competitionId && data?.meetLogistics?.length ? (
+        <div className="mt-3 rounded-xl border border-border p-3" data-meet-file-proposals>
+          <p className="text-[14px] font-semibold">Meet details to confirm</p>
+          <p className="text-[12px] text-muted-foreground">Check each source before updating the schedule. Existing values stay until confirmed.</p>
+          {data.meetLogistics.map((p: any) => (
+            <div key={p.factId} className="mt-2 border-t border-border pt-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 text-[13px]"><span className="font-medium">{MEET_LOGISTICS_LABELS[p.field] ?? p.field}</span><div>{p.before ? <span className="text-muted-foreground">{p.before} → </span> : null}{p.value}</div></div>
+                <Button size="sm" variant="outline" disabled={!!applyingFact} onClick={async () => {
+                  if (p.before && !window.confirm("Replace " + p.before + " with " + p.value + "?")) return;
+                  setApplyingFact(p.factId);
+                  try { await applyMeet({ data: { competitionId, factId: p.factId, before: p.before } }); toast.success("Meet updated"); }
+                  catch (e: any) { toast.error(e?.message ?? "Could not update meet"); }
+                  finally { setApplyingFact(null); refresh(); }
+                }}>{applyingFact === p.factId ? "Saving…" : "Confirm"}</Button>
+              </div>
+              <details className="mt-1 text-[12px] text-muted-foreground"><summary className="cursor-pointer break-words">{p.source}{p.location ? " · " + p.location : ""}</summary><p className="break-words">{p.quote}</p></details>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {question ? <QuestionBlock q={question} more={data.questions.later} athleteFirst={athleteFirst} coachContactOk={coachContactOk} onDone={refresh} /> : null}
 
       {findings.length ? (
