@@ -15,7 +15,7 @@ import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ClientMoreMenu } from "./quick-actions";
-import { ChangePlanSheet } from "@/components/admin/intel/change-plan-sheet";
+import { ChangeServiceSheet } from "./change-service-sheet";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { useAuth } from "@/lib/auth";
@@ -308,7 +308,7 @@ export function ClientRow({
 
       <ClientQuickSheet kind={sheet} clientId={r.id} clientName={r.full_name} onClose={() => setSheet(null)} />
       <AssignProgramDialog open={assignOpen} onOpenChange={setAssignOpen} clientId={r.id} clientName={r.full_name} />
-      {isAdmin && planOpen && <ChangePlanSheet clientId={r.id} open={planOpen} onOpenChange={setPlanOpen} />}
+      {isAdmin && planOpen && <ChangeServiceSheet clientId={r.id} clientName={r.full_name} open={planOpen} onOpenChange={setPlanOpen} />}
     </li>
   );
 }

@@ -57,7 +57,7 @@ export function ClientMoreMenu({
   onAssignProgram?: () => void;
   /** Opens nutrition or cardio in place, over the list (else the profile's Nutrition tab). */
   onOpenPanel?: (kind: QuickPanelKind) => void;
-  /** Move between coaching and the free membership (admins). */
+  /** Change assigned services or account tier (admins). */
   onChangePlan?: () => void;
 }) {
   const qc = useQueryClient();
@@ -198,7 +198,7 @@ export function ClientMoreMenu({
         </DropdownMenuItem>
         {onChangePlan && (
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onChangePlan(); }}>
-            <ArrowRightLeft className="h-4 w-4" /> Change plan
+            <ArrowRightLeft className="h-4 w-4" /> Change service
           </DropdownMenuItem>
         )}
         {onArchive && (

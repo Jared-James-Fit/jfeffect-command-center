@@ -518,6 +518,28 @@ export const enrollClientInPackage = createServerFn({ method: "POST" })
     return { id: saved.id as string };
   });
 
+
+/** Immediate service transfer on the same client. Database transaction preserves the previous
+ * enrollment if validation or the new assignment fails; Stripe is never touched. */
+export const switchClientServicePackageFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    clientId: z.string().uuid(),
+    packageId: z.string().uuid(),
+    expectedEnrollmentId: z.string().uuid().nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: id, error } = await supabase.rpc("switch_client_service_package", {
+      _client_id: data.clientId, _package_id: data.packageId,
+      _expected_enrollment_id: data.expectedEnrollmentId,
+    });
+    if (error) throw new Error(error.message);
+    if (!id) throw new Error("Couldn't change the service.");
+    return { id: id as string };
+  });
+
 export const endEnrollment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))

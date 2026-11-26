@@ -56,6 +56,8 @@ export function ChangePlanSheet({
         qc.invalidateQueries({ queryKey: ["clients-directory"] }),
         qc.invalidateQueries({ queryKey: MEMBERS_KEY }),
         qc.invalidateQueries({ queryKey: ["plan-change-review"] }),
+        qc.invalidateQueries({ queryKey: ["competition-handling-list"] }),
+        qc.invalidateQueries({ queryKey: ["goals-service-scope"] }),
       ]);
       onDone?.(to);
       onOpenChange(false);
