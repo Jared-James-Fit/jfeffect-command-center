@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { currentRing, competitionRing, gymRingBests, ringTotal, type GymRingRecord } from "@/lib/analytics/performance-ring";
 import { weightContextAt, weightPeriods, nearestWeightReference } from "@/lib/analytics/weight-context";
 import { liftStrengths } from "@/lib/analytics/lift-strength";
+import { attemptStats, lifterProfile, compareInsights, type PerformanceVersion } from "@/lib/analytics/coach-analysis";
 import type { MeetResult } from "@/lib/analytics/competition-strength";
 
 const refs = [{ kg: 66, label: "66 kg" }, { kg: 74, label: "74 kg" }];
@@ -45,5 +46,28 @@ describe("performance views", () => {
     expect(gymRingBests(records,"estimated","66 kg").squat?.lb).toBe(550);
     expect(gymRingBests(records,"actual","all").squat?.lb).toBe(530);
     expect(ringTotal(gymRingBests(records,"actual","all"))).toBeNull();
+  });
+});
+
+describe("evidence-based coaching comparisons", () => {
+  it("does not invent a specialist or vulnerability without meets", () => {
+    const p=lifterProfile([],null);
+    expect(p.identity).toBe("Profile developing");
+    expect(p.weapon).toMatch(/No distinct/);
+    expect(p.vulnerability).toMatch(/No reliable/);
+  });
+  it("counts only recorded attempts and recognizes repeatable execution", () => {
+    const rows=["2026-03-01","2026-06-01"].map(date=>({...meet(date,"66",500,330,600),equipment:"Raw",federation:"IPF",attempts:{s:[200,210,220],b:[130,-140,-145],d:[240,250,null]}}));
+    expect(attemptStats(rows,"deadlift")).toEqual({attempts:4,success:4,thirds:0,thirdSuccess:0});
+    expect(lifterProfile(rows,"male").weapon).toMatch(/Squat: 6\/6/);
+    expect(lifterProfile(rows,"male").vulnerability).toMatch(/Bench: 4 missed/);
+  });
+  it("distinguishes evidence types and bodyweight-relative performance", () => {
+    const m=meet("2026-03-01","66",500,330,600);
+    const v:PerformanceVersion={key:"a",label:"A",kind:"official",lifts:competitionRing([m],"all","best").lifts,totalLb:m.total,bodyweightKg:66};
+    const other={...v,key:"b",kind:"projected" as const,bodyweightKg:74};
+    const out=compareInsights(v,other);
+    expect(out[0].label).toBe("Evidence types differ");
+    expect(out.some(i=>i.label==="Bodyweight efficiency")).toBe(true);
   });
 });
