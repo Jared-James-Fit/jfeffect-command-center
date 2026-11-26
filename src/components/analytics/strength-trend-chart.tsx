@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/today";
 import { COMP_LIFTS, COMP_LIFT_LABEL, type CompLift } from "@/lib/analytics/competition-strength";
 import type { LiftStrength } from "@/lib/analytics/lift-strength";
+import type { LiftIntel } from "@/lib/strength-intel/profile";
+import { confidenceWord } from "@/lib/strength-intel/rules";
 import {
   envelopeAt,
   envelopeTrend,
@@ -133,6 +135,7 @@ export function StrengthTrendChart({
             </>
           )}
         </p>
+        <StrengthProfileRow intel={ls.intel} today={end} unit={unit} />
       </div>
     );
     if (!vals.length) {
@@ -532,4 +535,58 @@ function monthTicks(
   }
   const every = Math.max(1, Math.ceil(out.length / Math.max(2, Math.floor(width / 52))));
   return out.filter((_, i) => i % every === 0);
+}
+
+/**
+ * The lift's numbers kept apart (strength-intel/profile.ts): what they've lifted
+ * on a platform, in training, the highest a hard set has implied, and how sure
+ * the estimate above is. Each answers a different question, so none stands in
+ * for another.
+ */
+function StrengthProfileRow({ intel, today, unit }: { intel: LiftIntel | undefined; today: string; unit: "kg" | "lb" }) {
+  if (!intel) return null;
+  const conv = (lb: number) => (unit === "kg" ? Math.round((lb / LB_PER_KG) * 2) / 2 : Math.round(lb));
+  const day = (d: string) => {
+    const x = parseLocalDate(d);
+    return x ? format(x, x.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM d, yyyy") : d;
+  };
+  const cells: Array<{ k: string; label: string; value: string; sub: string }> = [];
+  if (intel.competitionPR)
+    cells.push({ k: "comp", label: "Competition PR", value: `${conv(intel.competitionPR.value)} ${unit}`, sub: day(intel.competitionPR.day) });
+  if (intel.trainingPR)
+    cells.push({
+      k: "training",
+      label: "Best in training",
+      value: `${conv(intel.trainingPR.load)} ${unit} × ${intel.trainingPR.reps}`,
+      sub: day(intel.trainingPR.day),
+    });
+  if (intel.peakE1rm)
+    cells.push({ k: "peak", label: "Peak estimate", value: `${conv(intel.peakE1rm.value)} ${unit}`, sub: day(intel.peakE1rm.day) });
+  const c = intel.current;
+  const word = c ? confidenceWord(c.confidence) : null;
+  if (!cells.length && !c) return null;
+  return (
+    <div className="mt-3 space-y-2" data-strength-profile>
+      {cells.length > 0 && (
+        <dl className="grid grid-cols-3 gap-2">
+          {cells.map((x) => (
+            <div key={x.k} className="rounded-lg bg-muted/50 px-2.5 py-2" data-strength-metric={x.k}>
+              <dt className="text-[11px] text-muted-foreground">{x.label}</dt>
+              <dd className="text-[14px] font-semibold tabular-nums leading-tight">{x.value}</dd>
+              <dd className="text-[11px] text-muted-foreground">{x.sub}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {c && (
+        <p className="text-[12px] text-muted-foreground" data-strength-confidence>
+          {word === "high" ? "High" : word === "moderate" ? "Moderate" : "Low"} confidence in the estimate
+          {c.state === "floor" ? " (only lighter sets so far: at least this)" : ""}
+          {" · "}last updated {day(c.lastUpdate)}
+          {intel.style ? ` · ${intel.style} stance` : ""}
+          {intel.otherStyle?.current ? ` (${intel.otherStyle.style}: ${conv(intel.otherStyle.current.value)} ${unit}, kept apart)` : ""}
+        </p>
+      )}
+    </div>
+  );
 }

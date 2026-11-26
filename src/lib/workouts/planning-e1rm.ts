@@ -117,5 +117,13 @@ export function referenceLines(ref: PlanningRef | null | undefined, family: Lift
   }
   const conf = e1rmConfidenceLine(ref);
   if (conf) out.push(conf);
+  if (ref.today) {
+    const pct = Math.round(Math.abs(ref.today.ratio) * 1000) / 10;
+    out.push(
+      ref.today.word === "strong"
+        ? `Today's sets read ${pct}% over it: moving well. The plan stays as written; let the RPE decide.`
+        : `Today's sets read ${pct}% under it: a heavy day. If a set goes over the cap, the next one comes down.`,
+    );
+  }
   return out;
 }

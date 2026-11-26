@@ -964,7 +964,7 @@ export async function getClientResults(
   // long-term client's OLDEST 1,000 sets, so this month, PRs and charts stalled.
   const data = await fetchAllPages((from, to) => sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, velocity_excluded, velocity_quality, velocity_uncertainty, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, sort_order, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, muscle_groups, secondary_muscle_groups, counts_toward_volume, category, competition_lift_type, is_competition_lift, movement_family, primary_movement_pattern))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, velocity_excluded, velocity_quality, velocity_uncertainty, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, sort_order, purpose_label, movement_family, percentage_basis, tempo, notes, exercises(name, muscle_group, primary_muscle_group, muscle_groups, secondary_muscle_groups, counts_toward_volume, category, competition_lift_type, is_competition_lift, movement_family, primary_movement_pattern))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .not("completed_at", "is", null)
@@ -1020,6 +1020,11 @@ export async function getClientResults(
         row_order: r.pl_exercise_rows?.sort_order ?? 0,
         purpose_label: r.pl_exercise_rows?.purpose_label ?? null,
         movement_family: r.pl_exercise_rows?.movement_family ?? null,
+        // what the strength read needs to tell a top set from a back-off and sumo from conventional
+        percentage_basis: r.pl_exercise_rows?.percentage_basis ?? null,
+        tempo: r.pl_exercise_rows?.tempo ?? null,
+        row_notes: r.pl_exercise_rows?.notes ?? null,
+        name_override: r.pl_exercise_rows?.exercise_name_override ?? null,
         date: r.completed_at,
         est_1rm: hasLoad ? epley1RM(loadLb, Number(r.actual_reps) || 0) : 0,
         exercise_id: r.pl_exercise_rows?.exercise_id ?? null,

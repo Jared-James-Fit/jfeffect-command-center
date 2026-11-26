@@ -188,7 +188,7 @@ export function firstProgramText(intel: GeneratorIntel): string {
   ].join("\n");
 }
 
-export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[]; exclude?: string[]; previousRoadmap?: string | null }): Brief {
+export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[]; exclude?: string[]; previousRoadmap?: string | null; /** the strength read in words (strength-intel/describe.ts) */ strength?: string | null }): Brief {
   const budget = x.budgetChars ?? BRIEF_BUDGET_CHARS;
   const { ctx, prev, history } = intel;
   const sections: Array<BriefSection & { text: string }> = [];
@@ -197,6 +197,7 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
   add("athlete", "Athlete", athleteSection(ctx));
   // how they're developing: the deterministic read every decision below should follow (see DEVELOPMENT_RULES)
   if (intel.development) add("development", "Athlete development (computed from their records)", developmentText(intel.development, ctx.unit));
+  if (x.strength) add("strength", "Strength per lift (the app's one strength read: competition PR, best in training, peak estimate, current estimate and the coach's reference, kept apart)", x.strength);
   // the workload the coach sees on the analytics page: where the work went and how it moved (see TRAINING_LOAD_RULES)
   const loadText = trainingLoadBrief(intel.trainingLoad);
   if (loadText) add("training_load", "Training load (computed from their logged sets and the program)", loadText);

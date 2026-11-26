@@ -12,6 +12,7 @@ import type { PreviousLiftIdentity, PreviousLiftLog } from "@/lib/workout-previo
 import { trainedOn } from "@/lib/workouts/exercise-history";
 import { instanceDates } from "@/lib/workouts/history-reads";
 import { fetchStrengthInputs, strengthIntelFrom, type StrengthReadInputs } from "@/lib/strength-intel/read";
+import { dailyRead } from "@/lib/strength-intel/profile";
 import { isStrengthBasis, planningRefs, type StrengthRefs } from "@/lib/strength-intel/planning";
 import { todayLocalISO, toLocalISO } from "@/lib/today";
 
@@ -134,9 +135,23 @@ export function fetchStrengthReadInputs(clientId: string): Promise<StrengthReadI
   return fetchStrengthInputs(sb, clientId);
 }
 
-/** The planning references on a day (today, or a finished workout's own day). */
+/**
+ * The planning references for a workout's day: planned from what was known
+ * BEFORE that day (so today's sets never move today's % mid-session, and a
+ * finished workout keeps the reference it was planned from), with what that
+ * day's own sets said against it alongside, as information only.
+ */
 export function strengthRefsAsOf(inputs: StrengthReadInputs | null | undefined, day: string): StrengthRefs | null {
-  return inputs ? planningRefs(strengthIntelFrom(inputs, day)) : null;
+  if (!inputs) return null;
+  const before = new Date(Date.parse(`${day}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const refs = planningRefs(strengthIntelFrom(inputs, before));
+  const onDay = strengthIntelFrom(inputs, day);
+  for (const fam of ["squat", "bench", "deadlift"] as const) {
+    const ref = refs.e1rm[fam];
+    const d = ref ? dailyRead(onDay.lifts[fam], day) : null;
+    if (ref && d && d.word !== "normal") ref.today = { ratio: d.ratio, word: d.word };
+  }
+  return refs;
 }
 
 /** Rows whose % reads the strength read: the athlete's read is fetched only when a workout has one. */

@@ -146,7 +146,7 @@ describe("the logger and the coach's quick view read it", () => {
   const guides = readFileSync("src/components/clients/workout-quick-view/load-guides.ts", "utf8");
   it("from the one strength read, never a narrower read of its own", () => {
     expect(reads).toContain("return fetchStrengthInputs(sb, clientId);");
-    expect(reads).toContain("planningRefs(strengthIntelFrom(inputs, day))");
+    expect(reads).toContain("planningRefs(strengthIntelFrom(inputs, before))");
   });
   it("waits for it before the % says there's nothing on file, and reads a finished workout on its own day", () => {
     expect(wdv).toContain("const maxesPending = maxesLoading || (isStrengthBasis(row.percentage_basis) && e1rmPending);");

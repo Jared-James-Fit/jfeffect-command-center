@@ -67,7 +67,7 @@ export function rxLine(r: Pick<RowSnap, "sets" | "reps" | "rpe" | "rir" | "perce
   const unit = r.loadUnit ?? (r.loadKg != null && r.loadLb == null ? "kg" : "lb");
   const fixed = unit === "kg" ? r.loadKg : r.loadLb;
   if (fixed != null) parts.push(`${fixed} ${unit}`);
-  else if (r.percentage != null) parts.push(`${r.percentage}% ${r.percentageBasis === "training_max" ? "TM" : r.percentageBasis === "est_1rm" ? "e1RM" : "1RM"}`);
+  else if (r.percentage != null) parts.push(`${r.percentage}% ${r.percentageBasis === "training_max" ? "TM" : r.percentageBasis === "est_1rm" ? "e1RM" : r.percentageBasis === "comp_pr" ? "comp PR" : r.percentageBasis === "var_e1rm" ? "own e1RM" : "1RM"}`);
   const rest = r.restOverride ?? r.restSeconds;
   if (rest != null) parts.push(`rest ${clock(rest)}`);
   if (r.tempo) parts.push(`tempo ${r.tempo}`);

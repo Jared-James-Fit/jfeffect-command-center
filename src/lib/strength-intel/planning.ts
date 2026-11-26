@@ -45,6 +45,8 @@ export type PlanningRef = {
   lowerBound?: boolean;
   /** how much their platform runs over training (a meet read as training-day strength) */
   premium?: number;
+  /** what today's sets say against it, when they say something ("moving well" / "heavy today"): information, never a change to the plan */
+  today?: { ratio: number; word: "strong" | "heavy" } | null;
 };
 
 /** Bases that read the strength engine (the rest read the coach's maxes, today's sets or nothing). */
@@ -175,4 +177,15 @@ export function planningRefs(intel: StrengthIntel): StrengthRefs {
     }
   }
   return refs;
+}
+
+/** strengthLoadInputs' three numbers alone, to spread into computeRowLoad. */
+export function strengthKgs(
+  refs: StrengthRefs | null | undefined,
+  basis: string | null | undefined,
+  family: LiftFamily | null | undefined,
+  exerciseId: string | null | undefined,
+): { loggedE1rmKg: number | null; compPrKg: number | null; variationE1rmKg: number | null } {
+  const { ref: _ref, ...kgs } = strengthLoadInputs(refs, basis, family, exerciseId);
+  return kgs;
 }

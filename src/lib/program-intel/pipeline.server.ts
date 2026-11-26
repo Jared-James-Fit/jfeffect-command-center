@@ -34,6 +34,9 @@ import { privacySafeRecords } from "./export";
 import { isLowValueExercise, meetsStandard, withStandardStrategy, withStandardSubstitutions } from "./exercise-standard";
 import { loadIntelRecords } from "./load";
 import { loadingRefsFrom, loadingRefsText, withLoadingGuard, type LoadingRefs } from "./loading";
+import { fetchStrengthIntel } from "@/lib/strength-intel/read";
+import { strengthText } from "@/lib/strength-intel/describe";
+import { planningRefs } from "@/lib/strength-intel/planning";
 import { isLiftFamily, type LiftFamily } from "@/lib/workouts/load-reference";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { programInLocalWeeks, withLocalWeeks } from "./program-view";
@@ -388,8 +391,12 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const { data: assigned } = await admin.from("program_intel_jobs").select("id, created_at, result, brain").eq("client_id", job.client_id).eq("kind", "generate").eq("status", "assigned").order("created_at");
     const outcomes = generatedProgramOutcomes(rec, (assigned ?? []) as any);
     const previousRoadmap = roadmapText((assigned ?? []).slice(-1)[0]);
-    const brief = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), previousRoadmap });
-    const compact = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), exclude: CONSTRUCT_EXCLUDE, previousRoadmap });
+    // the one strength read (strength-intel), never a number of the brief's own; a read that fails never stops a run
+    const strengthRead = await fetchStrengthIntel(admin, job.client_id).catch(() => null);
+    const strength = strengthRead ? strengthText(strengthRead, intel.ctx.unit, rec.maxes as any[]) || null : null;
+    const e1rmFromLogs = strengthRead ? planningRefs(strengthRead).e1rm : null;
+    const brief = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), previousRoadmap, strength });
+    const compact = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), exclude: CONSTRUCT_EXCLUDE, previousRoadmap, strength });
     const override = await routeOverride(admin, job);
     const routes = Object.fromEntries((["strategy", "construct", "repair", "review"] as AiTask[]).map((t) => [t, resolveRoute(t, override, { anyModel: !!job.options?.bench, openaiOnly: !job.options?.bench })])) as Record<"strategy" | "construct" | "repair" | "review", ReturnType<typeof resolveRoute>>;
     // what the run's progress bar reads: each step's first model and how long it usually takes (run-eta.ts)
@@ -435,9 +442,9 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       // and what a percentage may read per competition lift (loading.ts): never a max that isn't on file
       load_refs: [
         loadReferences(intel.prev ?? (intel.history.lifts.some((l) => l.maxOnFileKg != null) ? intel.history : null)),
-        loadingRefsText(loadingRefsFrom(rec.maxes, intel.history.lifts)),
+        loadingRefsText(loadingRefsFrom(rec.maxes, intel.history.lifts, Date.now(), e1rmFromLogs)),
       ].filter(Boolean).join("\n\n"),
-      loading_refs: loadingRefsFrom(rec.maxes, intel.history.lifts),
+      loading_refs: loadingRefsFrom(rec.maxes, intel.history.lifts, Date.now(), e1rmFromLogs),
       first_program: intel.firstProgram,
       athlete_catalog: intel.prev ? athleteCatalog(intel.prev, intel.exercises) : [],
       audit_inputs: {
