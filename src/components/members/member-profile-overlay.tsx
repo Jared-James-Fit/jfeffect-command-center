@@ -1,6 +1,11 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { Suspense, useEffect, useRef } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { resolveMemberClientFn } from "@/lib/members.functions";
+import { memberWorkspaceTab } from "@/lib/member-workspace-routing";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useOverlayMemberId, useCloseMemberProfile } from "@/lib/open-member-profile";
 
@@ -33,6 +38,17 @@ function Skeleton() {
 export function MemberProfileOverlayMount() {
   const { memberId, memberTab } = useOverlayMemberId();
   const close = useCloseMemberProfile();
+  const navigate = useNavigate();
+  const resolve = useServerFn(resolveMemberClientFn);
+  const linked = useQuery({ queryKey: ["member-client-link", memberId], enabled: !!memberId, queryFn: () => resolve({ data: { memberId: memberId! } }) });
+  useEffect(() => {
+    if (!memberId || !linked.data?.clientId) return;
+    const id = linked.data.clientId;
+    void navigate({ to: ".", search: (prev: Record<string, unknown>) => {
+      const { memberId: _m, memberTab: _t, ...rest } = prev;
+      return { ...rest, clientId: id, clientTab: memberWorkspaceTab(memberTab) };
+    }, replace: true } as any);
+  }, [memberId, memberTab, linked.data?.clientId, navigate]);
   const triggerRef = useRef<Element | null>(null);
 
   useEffect(() => {
@@ -43,9 +59,9 @@ export function MemberProfileOverlayMount() {
 
   return (
     <DialogPrimitive.Root
-      open={!!memberId}
+      open={!!memberId && !linked.data?.clientId}
       onOpenChange={(open) => {
-        if (!open) {
+        if (!open && !linked.data?.clientId) {
           close();
           setTimeout(() => {
             const el = triggerRef.current as HTMLElement | null;
@@ -82,7 +98,7 @@ export function MemberProfileOverlayMount() {
 
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<Skeleton />}>
-              {memberId ? (
+              {linked.isError ? <div className="space-y-3 p-6"><p>Could not resolve this member profile.</p><button className="underline" onClick={() => linked.refetch()}>Try again</button></div> : linked.isPending ? <Skeleton /> : memberId && !linked.data?.clientId ? (
                 <MemberProfileWorkspace
                   key={memberId}
                   memberId={memberId}

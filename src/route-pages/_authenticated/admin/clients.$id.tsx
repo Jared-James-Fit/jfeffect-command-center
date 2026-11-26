@@ -3,6 +3,7 @@ import { CardSkeleton, EmptyState, ErrorState, OfflineState, SlowNote } from "@/
 import { PovAccessLogDialog } from "@/components/pov/pov-access-log";
 import { noteAccessAttempt } from "@/lib/pov/access-check";
 import { useAuth } from "@/lib/auth";
+import { getClientMemberLinkFn } from "@/lib/members.functions";
 import { loadErrorKind, queryView } from "@/lib/loading/load-state";
 import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -86,6 +87,7 @@ const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string
     const m = await loader();
     return { default: (m as any)[name] as ComponentType<any> };
   });
+const MemberProfileSection = lazyDefault(() => import("@/route-pages/_authenticated/admin/members.$memberId"), "MemberProfileWorkspace");
 const ClientSessionsPanel = lazyDefault(() => import("@/components/sessions/client-sessions-panel"), "ClientSessionsPanel");
 const NutritionRequestPanel = lazyDefault(() => import("@/components/nutrition/NutritionRequestPanel"), "NutritionRequestPanel");
 const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
@@ -129,13 +131,23 @@ function TabFallback() {
   );
 }
 
-function SectionNav({ activeTab, onChange, heading, clientId }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string; clientId?: string }) {
+/** Membership controls are lazy and local to the relevant shared tab. */
+function MembershipWorkspaceSection({ memberId, section, label }: { memberId: string; section: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  return <details className="md:col-span-3 rounded-xl border bg-card p-4" onToggle={e => setOpen(e.currentTarget.open)}>
+    <summary className="cursor-pointer text-sm font-semibold">{label}</summary>
+    {open && <div className="mt-4"><Suspense fallback={<TabFallback />}><MemberProfileSection key={memberId + ":" + section} memberId={memberId} initialTab={section} sectionOnly /></Suspense></div>}
+  </details>;
+}
+
+function SectionNav({ activeTab, onChange, heading, clientId, selfServe }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string; clientId?: string; selfServe?: boolean }) {
   return (
     <ClientWorkspaceTabs
       activeTab={activeTab as WorkspaceTab}
       clientId={clientId}
       onChange={(next) => onChange(next as TabValue)}
       heading={heading}
+      selfServe={selfServe}
     />
   );
 }
@@ -281,6 +293,8 @@ export function ClientProfileWorkspace({
   // the access record is the admin's alone (the database refuses anyone else too)
   const { role: loginRole } = useAuth();
   const isAdminLogin = loginRole === "admin";
+  const readMember = useServerFn(getClientMemberLinkFn);
+  const memberLink = useQuery({ queryKey: ["client-member-link", id], enabled: isAdminLogin && !!data?.user_id, queryFn: () => readMember({ data: { clientId: id } }) });
 
   if (!form) {
     // A client that isn't there (deleted, a wrong link), a failed read or offline: said, with a way back,
@@ -691,10 +705,13 @@ export function ClientProfileWorkspace({
           onChange={(v) => setTab(v)}
           compact={embedded}
           heading={embedded ? "Workspace" : undefined}
+          selfServe={form.service_tier === "self_serve"}
         />
 
         <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
-          <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} onSendSetup={sendSetup} onCopySetup={copySetupLink} onTextSetup={smsLink("setup")} />
+          <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} onSendSetup={sendSetup} onCopySetup={copySetupLink} onTextSetup={smsLink("setup")} memberSetup={memberLink.data} memberSetupUnknown={memberLink.isError} />
+          {memberLink.data && form.service_tier === "self_serve" && <Card className="md:col-span-3 p-4 flex items-center justify-between gap-3"><div><p className="text-xs text-muted-foreground">Membership</p><p className="text-sm font-semibold">{memberLink.data.type === "jf_member" ? "JF Membership" : memberLink.data.type === "program_only" ? "Program-only" : "App account"}</p><p className="text-xs text-muted-foreground">{memberLink.data.subscription || memberLink.data.status} · Membership access {memberLink.data.accessActive ? "on" : "off"}</p></div><Button size="sm" variant="outline" onClick={() => setTab("account")}>Manage</Button></Card>}
+          {memberLink.isError && form.service_tier === "self_serve" && <Card className="md:col-span-3 p-4 text-sm">Membership details couldn’t load. <button className="underline" onClick={() => memberLink.refetch()}>Retry</button></Card>}
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
@@ -993,6 +1010,7 @@ export function ClientProfileWorkspace({
 
 
         <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="subscription" label="Membership subscription" />}
           <Suspense fallback={<TabFallback />}>
             <ClientBillingPanel clientId={id} onOpenSessions={() => setTab("sessions")} />
             <ClientSalesTable clientId={id} />
@@ -1006,6 +1024,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="notes" label="Legacy membership notes" />}
           {/* Personal context: coach-only (relationship, work & lifestyle with sources, private notes, history) */}
           <Suspense fallback={<TabFallback />}>
             <SectionErrorBoundary label="Personal context">
@@ -1033,6 +1052,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="info" className={WORKSPACE_GRID_CLASS}>
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="setup" label="Saved membership intake" />}
           {/* the account headshot first: status, a photo waiting to review, request / retake (private reason), take it with them */}
           <div className="md:col-span-3">
             <Suspense fallback={<TabFallback />}>
@@ -1159,6 +1179,9 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="sms" label="Membership SMS history" />}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="summary" label="Advanced membership settings" />}
+          {memberLink.data && <MembershipWorkspaceSection memberId={memberLink.data.id} section="access" label="Membership access and feature grants" />}
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-muted-foreground">Login & Access</h3>
@@ -1866,7 +1889,7 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 
 /** Coach-facing progress from the same saved account, agreement, and intake records
  * used by the athlete's Home setup checklist. Unknown reads never count as complete. */
-function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup, onTextSetup }: { form: any; clientId: string; onGoToTab: (tab: TabValue) => void; onSendSetup: () => Promise<void>; onCopySetup: () => Promise<void>; onTextSetup: () => Promise<void> }) {
+function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup, onTextSetup, memberSetup, memberSetupUnknown }: { memberSetup?: { applies: boolean; missing: string[] } | null; memberSetupUnknown?: boolean; form: any; clientId: string; onGoToTab: (tab: TabValue) => void; onSendSetup: () => Promise<void>; onCopySetup: () => Promise<void>; onTextSetup: () => Promise<void> }) {
   const coaching = form.service_tier !== "self_serve";
   const agreementFn = useServerFn(adminClientAgreementDetail);
   const scope = useGoalsServiceScope(clientId);
@@ -1935,6 +1958,8 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   const steps: Step[] = [
     { label: "Account access", state: form.portal_access_disabled || form.needs_admin_help ? "Needs review" : signedIn ? "Completed" : access.stage === "setup_expired" || (!invite && !form.user_id) ? "Not sent" : "Awaiting client", tab: "account" },
   ];
+  if (!coaching && memberSetup?.applies) steps.push({ label: "Membership setup", state: memberSetup.missing.length ? "Awaiting client" : "Completed", tab: "info" });
+  if (!coaching && memberSetupUnknown) steps.push({ label: "Membership setup", state: "Check status", tab: "account" });
   if (coaching) {
     const a = agreement.data;
     steps.push({ label: "Coaching agreement", state: !a ? "Check status" : a.state.state !== "needs_signature" ? "Completed" : !form.user_id ? "Not sent" : a.resignRequestedAt ? "Awaiting client" : "Not sent", tab: "documents" });
@@ -2072,7 +2097,7 @@ function ClientOverviewSnapshot({
     },
     { key: "user_id", label: "Login account", jumpTo: "account", populated: !!form.user_id },
   ];
-  const missing = critical.filter((c) => !c.populated && c.key !== "user_id");
+  const missing = critical.filter((c) => !c.populated && c.key !== "user_id" && (form.service_tier !== "self_serve" || ["first_name", "email"].includes(c.key)));
   // Login problems (no account yet, invite expired, never signed in, portal
   // off) sit in the same list as the missing fields: one short "Missing" card,
   // shown only when something is. The details live on Login & access.
