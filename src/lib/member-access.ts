@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useAuth } from "@/lib/auth";
+import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
+import { accessForShell, useNativeShell } from "@/lib/native-purchases";
 import { getCurrentMember } from "@/lib/members.functions";
 import { isSubscriptionActive, type AccountType } from "@/lib/membership";
 import { isMemberAccessActive } from "@/lib/memberAccess";
@@ -19,11 +21,18 @@ export type MemberAccessSummary = {
 export function useMemberAccess(): MemberAccessSummary {
   const fn = useServerFn(getCurrentMember);
   // Per person: saved on the device, so another account here never opens on this one's access.
-  const uid = useAuth().user?.id ?? null;
-  const { data, isLoading } = useQuery({
-    queryKey: ["current-member-access", uid],
-    enabled: !!uid,
-    queryFn: () => fn(),
+  const uid = usePortalUserId() ?? null;
+  const pov = usePovCrewRead();
+  const native = useNativeShell();
+  const { data, isLoading, isError } = useQuery({
+    queryKey: pov.key(["current-member-access", uid, native]),
+    enabled: !!uid && pov.ready,
+    queryFn: async () => {
+      if (!pov.isPov) return fn();
+      const { data, error } = await pov.read("member_access", "");
+      if (error) throw error;
+      return { member: data?.member ?? null, access: accessForShell(data?.access ?? [], !native) };
+    },
     staleTime: 60_000,
   });
   const member = data?.member ?? null;
@@ -45,7 +54,7 @@ export function useMemberAccess(): MemberAccessSummary {
   const subscriptionActive = isSubscriptionActive(member?.status);
 
   return {
-    loading: !uid || isLoading,
+    loading: !uid || !pov.ready || isLoading || isError,
     member,
     accountType: (member?.account_type ?? null) as AccountType | null,
     status: member?.status ?? null,
