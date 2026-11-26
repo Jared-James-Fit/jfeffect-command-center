@@ -1,4 +1,5 @@
 import { accountSetupProgress } from "@/lib/account-setup-scope";
+import { InstallAppDialog } from "@/components/portal/install-app-dialog";
 import { MemberSetupWizard } from "@/components/member/member-setup-wizard";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
@@ -10,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, CalendarPlus, Target, FileSignature } from "lucide-react";
+import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, CalendarPlus, Target, FileSignature, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyCalendarSyncStatus } from "@/lib/schedule.functions";
@@ -38,12 +39,13 @@ type Props = {
    */
   whenHidden?: ReactNode;
 };
-type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "member_setup";
+type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "member_setup" | "home_screen";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
 export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals, whenHidden = null, reminderOnly = false }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [launch, setLaunch] = useState(0);
   const shownLaunch = useRef<number | null>(null);
@@ -59,8 +61,8 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
   const { data: client, isPending: clientPending, isFetched: clientFetched, isError: clientError, refetch: retryClient } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients")
-        .select("id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, preferred_name, phone, date_of_birth, sex, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, committed_training_frequency, committed_training_days")
+      const { data, error } = await (supabase.from("clients") as any)
+        .select("home_screen_verified_at, id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, preferred_name, phone, date_of_birth, sex, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, committed_training_frequency, committed_training_days")
         .eq("user_id", userId).maybeSingle();
       if (error) throw error;
       return data;
@@ -105,6 +107,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
       { key: "goals_setup", label: scope.nutritionOnly ? "Finish nutrition setup" : "Finish Goals & Setup", description: scope.nutritionOnly ? "Nutrition preferences and goals for your coach." : "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", onClick: onOpenGoals, icon: Target, done: isGoalsSetupComplete(goals ?? null, scope.nutritionOnly) },
+      { key: "home_screen", label: "Install JF Effect on your phone", description: c?.home_screen_verified_at ? "Installed app launch verified." : "Add the app to your home screen, then open it from the icon to verify.", icon: Smartphone, done: !!c?.home_screen_verified_at, onClick: () => setInstallOpen(true) },
       { key: "calendar", label: "Sync your calendar", description: "Optional: add your sessions and workouts to Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone, optional: true },
     ];
     // The Coaching Agreement is the one mandatory step, so it leads the list. It only
@@ -188,7 +191,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   if ((!isImpersonating && (open.length === 0 || open.every((i) => i.key === "agreement"))) || required.length === 0) return <>{whenHidden}{camera.element}</>;
 
-  const stepSurfaces = <>{camera.element}{memberEnabled && <MemberSetupWizard key={clientId} open={memberOpen} onClose={() => setMemberOpen(false)} />}<SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} preview={isImpersonating} onOpenChange={(o) => { if (!o) setOpenStep(null); }} /></>;
+  const stepSurfaces = <>{camera.element}<InstallAppDialog open={installOpen} onOpenChange={setInstallOpen} preview={isImpersonating} />{memberEnabled && <MemberSetupWizard key={clientId} open={memberOpen} onClose={() => setMemberOpen(false)} />}<SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} preview={isImpersonating} onOpenChange={(o) => { if (!o) setOpenStep(null); }} /></>;
   if (reminderOnly) {
     if (!needsReminder) return null;
     const next = open.find(i => i.key !== "agreement")!;

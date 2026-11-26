@@ -9,9 +9,7 @@ import { HandlingSetupDialog } from "@/components/portal/setup-handling-dialog";
 import { type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
-import { HomeScreenSetupTracker } from "@/components/home-screen-setup-card";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
-import { InstallAppCard } from "@/components/portal/install-app-card";
 import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
 import { PickPlanCard } from "@/components/portal/pick-plan-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
@@ -177,9 +175,6 @@ function PortalHome() {
         </Dialog>
       )}
       {client?.id && portalUserId && <MissingBodyweightPrompt userId={portalUserId} />}
-      {/* Installing the app is asked by the launch popup (HomeScreenSetupGate) and
-          InstallAppCard below; this only records it for the coach once it's done. */}
-      {client?.id && <HomeScreenSetupTracker clientId={client.id} status={(client as any).home_screen_setup_status} />}
 
       <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-safe-bottom pt-3 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
         {/* Home is two sections: Today (what to do) and Progress (what to log).
@@ -306,7 +301,6 @@ function PortalHome() {
             step and the Calendar page's own card, so it isn't asked a third time. */}
         {client && (
           <div className="space-y-3">
-            <InstallAppCard hideWhenDone />
             <NotificationSetupPrompt problemsOnly />
           </div>
         )}

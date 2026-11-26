@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Circle, Clock, MapPin, LogIn, Smartphone, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 
 type Props = {
   clientId: string;
@@ -25,10 +24,17 @@ type ActivityRow = {
 
 /** Live presence + last action card shown on the admin/coach client profile.
  *  Falls back gracefully when the client has never signed in. */
-export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastActiveRoute, complianceStatus, homeScreenStatus }: Props) {
+export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastActiveRoute, complianceStatus }: Props) {
   const [recent, setRecent] = useState<ActivityRow | null>(null);
-  const [hsStatus, setHsStatus] = useState<string>(homeScreenStatus ?? "not_started");
-  useEffect(() => { setHsStatus(homeScreenStatus ?? "not_started"); }, [homeScreenStatus]);
+  const verification = useQuery({
+    queryKey: ["home-screen-verification", clientId],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("clients") as any).select("home_screen_verified_at").eq("id", clientId).maybeSingle();
+      if (error) throw error;
+      return (data?.home_screen_verified_at ?? null) as string | null;
+    },
+    enabled: !!clientId, refetchInterval: 30_000,
+  });
 
   useEffect(() => {
     let cancel = false;
@@ -91,26 +97,15 @@ export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastAc
         <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
           <Smartphone className="h-3 w-3" /> Home Screen
         </div>
-        {hsStatus === "complete" ? (
-          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-500">
-            <CheckCircle2 className="mr-1 h-3 w-3" /> Installed
-          </Badge>
+        {verification.data ? (
+          <div className="text-right">
+            <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-500" title="An installed app launch was detected; removal cannot be detected.">
+              <CheckCircle2 className="mr-1 h-3 w-3" /> Installed
+            </Badge>
+            <div className="mt-1 text-[10px] text-muted-foreground">Last verified {formatRelative(verification.data)}</div>
+          </div>
         ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={async () => {
-              const { error } = await (supabase.from("clients") as any)
-                .update({ home_screen_setup_status: "complete", home_screen_setup_completed_at: new Date().toISOString() })
-                .eq("id", clientId);
-              if (error) { toast.error(error.message); return; }
-              setHsStatus("complete");
-              toast.success("Marked installed.");
-            }}
-          >
-            Mark Installed
-          </Button>
+          <Badge variant="outline" className="text-muted-foreground">{verification.isError ? "Unavailable" : verification.isPending ? "Checking…" : "Not verified"}</Badge>
         )}
       </div>
     </Card>
