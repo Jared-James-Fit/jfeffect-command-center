@@ -42,7 +42,7 @@ export function goalLine(g: GoalRow, unit: Unit): string {
   const parts: string[] = [];
   parts.push(`${g.title}${g.deadline && !/ by /.test(g.title) ? ` (${dayWords(g.deadline)})` : ""}`);
   const said = fmtClientTarget(g);
-  if (said) parts.push(`client said: ${said}${g.client_unit_source === "inferred" ? " (unit inferred, unconfirmed)" : ""}${g.tentative ? " (tentative)" : ""}`);
+  if (said) parts.push(`${g.source_speaker === "coach" ? "coach discussed" : g.source_speaker === "unclear" ? "speaker unconfirmed, discussed" : "client said"}: ${said}${g.client_unit_source === "inferred" ? " (unit inferred, unconfirmed)" : ""}${g.tentative ? " (tentative)" : ""}`);
   if (g.status === "active") {
     if (g.approved_kg != null) parts.push(`APPROVED: ${fmtWeight(Number(g.approved_kg), unit)}${g.approved_approach ? ` (${APPROACH_LABEL[g.approved_approach]})` : ""}`);
     else if (g.approved_text) parts.push(`APPROVED: ${g.approved_text}`);

@@ -84,6 +84,11 @@ describe("extracting goals from what was said", () => {
     expect(g).toMatchObject({ kind: "lift", lift: "squat", values: [220, 225], unit: null, timing: "third", tentative: true });
   });
 
+  it("does not let one lift's attempt label bleed into a different lift", () => {
+    const gs = measurableGoals("Squat opener 100 kg, bench third attempt 60 kg");
+    expect(gs.map(g => [g.lift, g.timing])).toEqual([["squat", "opener"], ["bench", "third"]]);
+  });
+
   it("reads several lifts on one line (the coach's notes from the call)", () => {
     const gs = measurableGoals("Thinking for thirds:\n\nsquat 220 - 225\n\nbench 110-115\n\ndeadlift 264 - 280\n\nWant to hit top end don't care about going 9/9");
     expect(gs.map((g) => [g.lift, g.values])).toEqual([

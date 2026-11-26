@@ -112,7 +112,7 @@ export function measurableGoals(text: string, quote = text): GoalCandidate[] {
   }).sort((a, b) => a.index - b.index);
   const out: GoalCandidate[] = [];
   const tentative = HEDGES.test(quote) || HEDGES.test(t);
-  const timing = timingOf(t);
+  const timing = timingOf(hits.length ? t.slice(0, hits[0].index) : t);
   const seen = new Set<string>();
   for (let i = 0; i < hits.length; i++) {
     const h = hits[i];
@@ -129,7 +129,7 @@ export function measurableGoals(text: string, quote = text): GoalCandidate[] {
       lift: h.lift === "total" ? null : h.lift,
       values: v.values,
       unit: v.unit,
-      timing,
+      timing: timingOf(seg) ?? timing,
       text: t.trim().slice(0, 300),
       quote: String(quote ?? t).trim().slice(0, 600),
       tentative,
