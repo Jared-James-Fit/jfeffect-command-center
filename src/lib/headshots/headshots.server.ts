@@ -8,7 +8,7 @@
  *     (storage policy account_headshot_upload_ok), then read back and checked
  *     here: timing, files, the evidence frames (evidence.ts), the photo's
  *     header, the same photo sent twice or from another account
- *   - a submission that passes waits for review; accepting it copies the photo
+ *   - a guided submission that passes saves automatically; exceptions wait for review; accepting copies the photo
  *     into the avatars bucket as the account photo, closes the request and its
  *     reminders; declining keeps the old photo and asks again, in the same
  *     standard words as any request
@@ -285,9 +285,17 @@ const MIN_CAPTURE_MS = 1500;
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 const MAX_EVIDENCE_BYTES = 1024 * 1024;
 
+/** Only server-confirmed guided captures are eligible. EXIF alone is not evidence of spoofing. */
+export function canAutoSaveHeadshot(method: string, flags: unknown, checks: any): boolean {
+  return method === "guided" && Array.isArray(flags) &&
+    flags.every((f) => f === "exif" || f === "same_as_before") &&
+    checks?.blink?.confirmed === true && checks?.turn?.confirmed === true &&
+    Array.isArray(checks?.deviceProblems) && checks.deviceProblems.length === 0;
+}
+
 /**
  * The submission, checked on the server. Hard failures end the session ("try
- * again", with what to change); everything else goes for review with the
+ * again", with what to change); passing guided captures save automatically; exceptions go for review with the
  * server's own findings and the device's report side by side.
  */
 export async function submitCapture(
@@ -306,8 +314,9 @@ export async function submitCapture(
   // A lost response or a transient approval error must not require taking a
   // new photo. Only the original actor can retry this already-checked capture.
   if (h.status === "pending") {
-    if (h.method === "coach_assisted" && args.staffAccepts) {
-      await decide(db, { headshotId: h.id, actor: args.actor, decision: "accept", note: null }, now);
+    const automatic = canAutoSaveHeadshot(h.method, h.flags, h.server_checks);
+    if ((h.method === "coach_assisted" && args.staffAccepts) || automatic) {
+      await decide(db, { headshotId: h.id, actor: args.actor, decision: "accept", note: null, automatic }, now);
       return { ok: true, status: "accepted", flags: h.flags ?? [] };
     }
     return { ok: true, status: "pending", flags: h.flags ?? [] };
@@ -387,6 +396,7 @@ export async function submitCapture(
     deviceProblems,
   };
   const coachAccepts = h.method === "coach_assisted" && !!args.staffAccepts;
+  const automatic = canAutoSaveHeadshot(h.method, uniqueFlags, serverChecks);
   // one waiting per client: an older pending submission gives way to this one
   await (db as any).from("account_headshots").update({ status: "superseded" }).eq("client_id", h.client_id).eq("status", "pending");
   const { data: submitted, error } = await (db as any)
@@ -415,8 +425,8 @@ export async function submitCapture(
   if (!submitted) throw new Error("This capture changed while saving. Retry save to check its status.");
   await logHeadshotEvent(db, { clientId: h.client_id, headshotId: h.id, actor: args.actor, kind: "submitted", detail: { method: h.method, flags: uniqueFlags } });
 
-  if (coachAccepts) {
-    await decide(db, { headshotId: h.id, actor: args.actor, decision: "accept", note: null }, now);
+  if (coachAccepts || automatic) {
+    await decide(db, { headshotId: h.id, actor: args.actor, decision: "accept", note: null, automatic }, now);
     return { ok: true, status: "accepted", flags: uniqueFlags };
   }
   await notifyReviewers(db, h.client_id, h.id);
@@ -453,7 +463,7 @@ async function notifyReviewers(db: Admin, clientId: string, headshotId: string) 
 
 export async function decide(
   db: Admin,
-  args: { headshotId: string; actor: string; decision: "accept" | "decline"; note: string | null },
+  args: { headshotId: string; actor: string; decision: "accept" | "decline"; note: string | null; automatic?: boolean },
   now = new Date(),
 ): Promise<{ status: "accepted" | "declined" }> {
   const { data: h } = await (db as any).from("account_headshots").select("*").eq("id", args.headshotId).maybeSingle();
@@ -486,7 +496,7 @@ export async function decide(
   // One DB transaction: no success unless the profile, decision and request
   // have all persisted. Do not delete the staged file on an uncertain response.
   const { data: committed, error: commitErr } = await (db as any).rpc("commit_account_headshot", {
-    _headshot: h.id, _actor: args.actor, _display_path: displayPath, _note: note, _decided_at: now.toISOString(),
+    _headshot: h.id, _actor: args.actor, _display_path: displayPath, _note: note, _decided_at: now.toISOString(), ...(args.automatic === true ? { _automatic: true } : {}),
   });
   if (commitErr) throw new Error(commitErr.message);
   const saved = await clientById(db, c.id);
@@ -628,6 +638,19 @@ export async function sendDueReminder(db: Admin, c: ClientRow, now = new Date(),
 export async function runHeadshotTick(db: Admin, now = new Date()): Promise<{ reminders: number; purged: number; expired: number }> {
   const s = await loadPhotoSettings(db);
   let reminders = 0;
+  // Recover previously submitted, fully checked photos, including interrupted finalizations.
+  // Only eligible rows are selected; the commit RPC independently checks ownership and evidence.
+  const { data: ready } = await (db as any).from("account_headshots")
+    .select("id, user_id, method, flags, server_checks")
+    .eq("status", "pending").eq("method", "guided")
+    .contains("server_checks", { blink: { confirmed: true }, turn: { confirmed: true } })
+    .containedBy("flags", ["exif", "same_as_before"]).order("submitted_at").limit(100);
+  for (const h of ready ?? []) {
+    if (!canAutoSaveHeadshot(h.method, h.flags, h.server_checks)) continue;
+    try {
+      await decide(db, { headshotId: h.id, actor: h.user_id, decision: "accept", note: null, automatic: true }, now);
+    } catch (e) { console.warn("[headshots] automatic finalization failed", h.id, e); }
+  }
   // new coaching clients since onboarding headshots began, with no photo: their onboarding request
   if (s.headshot.requiredSince) {
     const { data: fresh } = await (db as any)

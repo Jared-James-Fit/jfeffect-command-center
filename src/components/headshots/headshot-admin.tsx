@@ -179,7 +179,7 @@ export function AccountHeadshotPanel({ clientId, clientName, bare = false }: { c
         <div className="min-w-0 text-[13px] text-muted-foreground">
           {v.currentUrl ? (
             <>
-              <div className="font-medium text-foreground">{v.status === "verified" ? "Verified headshot" : "Previously submitted headshot"}</div>
+              <div className="font-medium text-foreground">{v.status === "verified" ? "Current headshot" : "Previously submitted headshot"}</div>
               <div>
                 {v.status === "verified" ? "Taken live and approved" : "On file from before live verification"}
                 {v.currentUpdatedAt ? ` · ${new Date(v.currentUpdatedAt).toLocaleDateString()}` : ""}
@@ -350,11 +350,11 @@ function eventWords(kind: string, d: Record<string, any>): string {
     case "capture_started":
       return d.method === "coach_assisted" ? "Coach started a photo" : "Opened the headshot camera";
     case "submitted":
-      return "Sent a headshot for review";
+      return "Submitted a headshot";
     case "check_failed":
       return `A capture didn't pass (${String(d.reason ?? "").replace(/_/g, " ")})`;
     case "accepted":
-      return "Headshot approved";
+      return d.automatic ? "Headshot automatically saved" : "Headshot approved";
     case "declined":
       return `Retake requested${d.note ? ` (${d.note})` : ""}`;
     case "request_cancelled":
