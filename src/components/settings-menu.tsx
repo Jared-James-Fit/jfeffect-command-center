@@ -19,7 +19,6 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { useServiceTier } from "@/lib/service-tier";
 import type { NavItem } from "@/components/app-shell";
 import { toast } from "sonner";
 
@@ -45,17 +44,16 @@ export function SettingsMenu({
 }) {
   const { user, role } = useAuth();
   const { isImpersonating, client } = useClientImpersonation();
-  const { isSelfServe } = useServiceTier();
-  const viewerRole = isImpersonating ? (isSelfServe ? "member" : "client") : role;
-  const { data: targetEmail } = useQuery({
+  const { data: targetAccount } = useQuery({
     queryKey: ["pov-crew", client?.pov?.id, client?.user_id, client?.id, "menu-email"],
     enabled: isImpersonating && !!client?.id && !!client?.pov?.id,
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("email").eq("id", client!.id).maybeSingle();
-      return data?.email ?? "";
+      const { data } = await supabase.from("clients").select("email, service_tier").eq("id", client!.id).maybeSingle();
+      return data;
     },
   });
-  const viewerEmail = isImpersonating ? targetEmail ?? "" : user?.email ?? "";
+  const viewerRole = isImpersonating ? (targetAccount?.service_tier === "self_serve" ? "member" : "client") : role;
+  const viewerEmail = isImpersonating ? targetAccount?.email ?? "" : user?.email ?? "";
   const qc = useQueryClient();
   const navigate = useNavigate();
   // a client's or member's account photo is their account headshot, taken in Account with its live camera
