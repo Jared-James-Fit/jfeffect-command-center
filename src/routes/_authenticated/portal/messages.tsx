@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { coachLabel } from "@/lib/push/notification-payload";
 import { ErrorState, OfflineState, ThreadSkeleton } from "@/components/loading";
 import { queryView } from "@/lib/loading/load-state";
 import { useQuery } from "@tanstack/react-query";
@@ -46,6 +47,7 @@ export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
 });
 
+type MyCoach = { id: string; user_id: string | null; full_name: string | null; photo: string | null; phone: string | null };
 type CoachLast = { body: string | null; sender_role: string; created_at: string; read_by_client_at: string | null; attachments: any[] | null };
 
 /** The JF logo as a full link (the avatar reads a bare path as a stored photo). */
@@ -96,16 +98,19 @@ function ClientMessages() {
   const [coachChatOpen, setCoachChatOpen] = useState(false);
   const { peerLive: coachLive } = useChatPresence(viewingAsClient ? null : client?.id ?? null, "client", coachChatOpen);
 
+  // The coach's name, photo and (when call / text is on) phone. Clients can't
+  // read `coaches`, so this is the database's own lookup for their coach
+  // (my_coach, 20270531090000_client_reads_own_coach.sql); reading the table
+  // came back empty for every client: initials and no Call / Text.
   const { data: coach } = useQuery({
-    queryKey: ["my-assigned-coach", client?.assigned_coach_id],
-    enabled: !!client?.assigned_coach_id,
+    queryKey: ["my-coach", client?.id, client?.assigned_coach_id],
+    enabled: !!client?.id && !!client?.assigned_coach_id,
+    staleTime: 10 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("coaches")
-        .select("id, user_id, full_name, phone, profile_picture_url")
-        .eq("id", client!.assigned_coach_id!)
-        .maybeSingle();
-      return data;
+      const { data, error } = await (supabase as any).rpc("my_coach", { _client_id: client!.id });
+      if (error) throw error;
+      const row = (Array.isArray(data) ? data[0] : data) as MyCoach | undefined;
+      return row ?? null;
     },
   });
 
@@ -146,7 +151,8 @@ function ClientMessages() {
     return () => { supabase.removeChannel(ch); };
   }, [client?.id, qc]);
 
-  const coachName = coach?.full_name ?? "Coach Jared";
+  // the same label a client sees on their lockscreen: Coach + first name (notification-payload.ts)
+  const coachName = coachLabel(coach?.full_name);
   const coachTel = coach?.phone ? String(coach.phone).replace(/[^+\d]/g, "") : "";
   const callEnabled = !!client?.coach_call_access_enabled && !!coachTel;
   const smsEnabled = !!client?.coach_sms_access_enabled && !!coachTel;
@@ -169,7 +175,7 @@ function ClientMessages() {
   const pinned: PinnedChat = {
     id: "coach",
     name: coachName,
-    avatarUrl: coach?.profile_picture_url ?? null,
+    avatarUrl: coach?.photo ?? null,
     storyUserId: coach?.user_id ?? null,
     live: coachLive,
     preview: coachPreview,
@@ -194,7 +200,7 @@ function ClientMessages() {
         </Button>
         <LiveAvatar live={coachLive} size={40} tag={false}>
           <UserAvatar
-            src={coach?.profile_picture_url ?? null}
+            src={coach?.photo ?? null}
             name={coachName}
             size={40}
           />
@@ -261,7 +267,7 @@ function ClientMessages() {
             </Card>
           </div>
         ) : (
-          <MessageThread clientId={client.id} role="client" fullBleed peerAvatarPath={coach?.profile_picture_url ?? null} />
+          <MessageThread clientId={client.id} role="client" fullBleed peerAvatarPath={coach?.photo ?? null} />
         )}
       </>
     ),
