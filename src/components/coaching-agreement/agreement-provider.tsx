@@ -11,7 +11,8 @@ import {
   AGREEMENT_QUERY_ROOT,
   type AgreementContextValue,
 } from "./agreement-context";
-import { AgreementLaunchPopup } from "./agreement-launch-popup";
+import { AgreementAccessScreen } from "@/components/legal/agreement-access-screen";
+import { Button } from "@/components/ui/button";
 
 // The full signing flow carries the whole agreement text, so it loads only when first opened.
 const AgreementSignFlow = lazyWithRetry(() =>
@@ -19,18 +20,19 @@ const AgreementSignFlow = lazyWithRetry(() =>
 );
 
 export function CoachingAgreementProvider({ children }: { children: ReactNode }) {
-  const { user, role } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const getState = usePovFn(useServerFn(getMyAgreementState));
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
 
   // This provider sits above every signed-in page, so skip the lookup for accounts that are
-  // never asked to sign: admins and coaches (unless viewing as a client) and members.
+  // never asked to sign: admins and coaches (unless viewing as a client).
+  // Service tier, not a cached member role, decides which agreement applies.
   const neverAsked =
-    !isImpersonating && (role === "admin" || role === "coach" || role === "member");
+    !isImpersonating && (role === "admin" || role === "coach");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [AGREEMENT_QUERY_ROOT, "state", user?.id ?? "anon", povClient?.id ?? "self"],
     enabled: !!user?.id && !neverAsked,
     queryFn: () => getState({ data: {} }),
@@ -56,8 +58,13 @@ export function CoachingAgreementProvider({ children }: { children: ReactNode })
 
   return (
     <AgreementContext.Provider value={value}>
-      {children}
-      {canSign && <AgreementLaunchPopup flowOpen={open} />}
+      {canSign && !neverAsked && (authLoading || isLoading || isError || !data || data.reason === "unavailable") ? (
+        <AgreementAccessScreen checking={authLoading || isLoading} retry={() => void refetch()} />
+      ) : needsSignature ? (
+        <AgreementAccessScreen title="Coaching agreement required" description="Review and sign your coaching agreement before accessing your account.">
+          <Button className="h-12 w-full" onClick={openSignFlow}>Review & sign</Button>
+        </AgreementAccessScreen>
+      ) : children}
       {everOpened && (
         <Suspense fallback={null}>
           <AgreementSignFlow open={open} onOpenChange={setOpen} />

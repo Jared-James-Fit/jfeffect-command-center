@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMyLegalStatus } from "@/lib/legal.functions";
@@ -23,9 +24,11 @@ export function LegalNotice({
   className?: string;
   fallback?: string;
 }) {
+  const { user } = useAuth();
   const fn = useServerFn(listMyLegalStatus);
   const { data } = useQuery({
-    queryKey: ["legal-status"],
+    queryKey: ["legal-status", user?.id ?? "anon"],
+    enabled: !!user?.id,
     queryFn: () => fn(),
     staleTime: 5 * 60 * 1000,
   });

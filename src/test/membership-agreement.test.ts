@@ -21,11 +21,15 @@ describe("JF members sign their own Membership Agreement, never the Coaching Agr
     expect(fn).toContain("needsSigning: !signed && current.version_number >= IN_APP_SIGNING_FROM_VERSION,");
   });
 
-  it("the prompt waits for setup, never shows in View as client, and the Account page keeps the copy", () => {
+  it("the mandatory gate wraps portal content before setup, skips View as client, and keeps the Account copy", () => {
     const route = read("src/routes/_authenticated/portal/route.tsx");
-    expect(route).toContain("{!isImpersonating && <MemberAgreementGate />}");
+    expect(route).toContain("<MemberAgreementGate><PortalContent /></MemberAgreementGate>");
+    expect(route).toContain("if (isImpersonating) return <PortalContent />;");
     const gate = read("src/components/member/member-agreement.tsx");
-    expect(gate).toContain("data.needsSigning && setup?.complete !== false");
+    expect(gate).toContain("q.data.applicable && q.data.needsSigning");
+    expect(gate).not.toContain("sessionStorage");
+    expect(gate).not.toContain("Not now");
+    expect(gate).toContain("if (q.isError || !q.data)");
     expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("{!isImpersonating && <MemberAgreementCard />}");
   });
 

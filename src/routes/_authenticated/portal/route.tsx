@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
+import { AgreementAccessScreen } from "@/components/legal/agreement-access-screen";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav, selfServeNav, selfServeBottomNav } from "@/lib/admin-nav";
 import { isCoachingOnlyPath, isLapsedMemberPath, useServiceTier } from "@/lib/service-tier";
@@ -28,6 +29,19 @@ import { isNative } from "@/platform";
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
 function PortalLayout() {
+  const { isImpersonating } = useClientImpersonation();
+  const { isSelfServe, loading, noAccount, tier } = useServiceTier();
+  if (isImpersonating) return <PortalContent />;
+  if (loading || (!tier && !noAccount)) return <AgreementAccessScreen checking={loading} retry={() => window.location.reload()} />;
+  if (noAccount) return <MembershipPendingGate />;
+  return (
+    <LegalAcceptanceGate>
+      {isSelfServe ? <MemberAgreementGate><PortalContent /></MemberAgreementGate> : <PortalContent />}
+    </LegalAcceptanceGate>
+  );
+}
+
+function PortalContent() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
   // Coaching client or JF member: one portal, the coach's screens only for coaching.
@@ -66,7 +80,6 @@ function PortalLayout() {
           <>
             <FormPopupGate />
             <HomeScreenSetupGate />
-            <LegalAcceptanceGate />
             {/* a screen's short tutorial on its first visit, once (server-side), and the hub's replays */}
             <TutorialGate />
             {/* lb or kg, asked until answered (lb meanwhile). */}
@@ -110,8 +123,6 @@ function MemberGates({ hasHandling, scopeReady }: { hasHandling: boolean; scopeR
         </div>
       )}
       {!isImpersonating && <MemberSetupGate />}
-      {/* the Membership Agreement, asked once per launch until accepted */}
-      {!isImpersonating && <MemberAgreementGate />}
     </>
   );
 }
