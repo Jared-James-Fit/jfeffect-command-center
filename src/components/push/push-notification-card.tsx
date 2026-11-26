@@ -173,7 +173,7 @@ function PushNotificationControls({ showCoachingApps = false, bare = false }: { 
     master_enabled: true, messages: true, check_ins: true, lift_reviews: true,
     workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true, community: true,
     quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null, session_reminders: null,
-    ...(prefsQ.data ?? {}),
+    ...((prefsQ.data ?? {}) as Partial<Prefs>),
   }), [prefsQ.data]);
 
   async function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {

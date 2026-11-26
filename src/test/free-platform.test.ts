@@ -251,7 +251,7 @@ describe("Crew reports reach the team", () => {
     expect(fn).toContain("eventKey: `crew_report:${data.kind}:${data.targetId}:${uid}`");
     // the push carries nothing about the reporter or the content
     expect(fn).not.toMatch(/full_name|first_name|display_name|details|reason/);
-    expect(sheet).toContain("notifyCommunityReport({ data: { kind, targetId } })");
+    expect(sheet).toContain("notifyCommunityReport({ data: { kind: serverKind, targetId } })");
   });
 });
 
