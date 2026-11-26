@@ -48,7 +48,7 @@ export function rowDirectoryFlags(r: DirectoryRow): DirectoryFilterKey[] {
 export function organizeDirectoryServices(
   rows: readonly DirectoryRow[],
   nutritionIds: ReadonlySet<string>,
-  options: { flags: DirectoryFilterKey[]; match: "any" | "all"; sort: string; separateNutrition: boolean; page: number; size: number },
+  options: { flags: DirectoryFilterKey[]; match: "any" | "all"; sort: string; page: number; size: number },
 ) {
   const enriched = rows.map((r) => nutritionIds.has(r.id) ? nutritionDirectoryRow(r) : r);
   const counts = emptyCounts();
@@ -60,8 +60,6 @@ export function organizeDirectoryServices(
       (options.match === "all" ? options.flags.every((f) => flags.includes(f)) : options.flags.some((f) => flags.includes(f)));
   });
   if (options.sort === "attention") matching.sort((a,b) => a.priority - b.priority || (a.full_name ?? "").localeCompare(b.full_name ?? ""));
-  const nutritionRows = options.separateNutrition ? matching.filter((r) => r.service_kind === "nutrition") : [];
-  const main = options.separateNutrition ? matching.filter((r) => r.service_kind !== "nutrition") : matching;
   const offset = (options.page - 1) * options.size;
-  return { rows: main.slice(offset, offset + options.size), total: main.length, counts, nutritionRows };
+  return { rows: matching.slice(offset, offset + options.size), total: matching.length, counts };
 }

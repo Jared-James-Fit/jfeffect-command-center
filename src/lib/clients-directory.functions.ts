@@ -97,12 +97,10 @@ export type DirectoryResult = {
   rows: DirectoryRow[];
   total: number;
   counts: DirectoryCounts;
-  nutritionRows?: DirectoryRow[];
 };
 
 const InputSchema = z.object({
   search: z.string().optional().default(""),
-  separateNutrition: z.boolean().optional().default(false),
   // The filters picked; `match` says whether a client needs any of them or all of them.
   flags: z
     .array(z.enum(DIRECTORY_FILTER_KEYS))

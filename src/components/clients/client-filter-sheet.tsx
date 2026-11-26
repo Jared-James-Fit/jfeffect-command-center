@@ -26,6 +26,7 @@ export const COACHING_TYPES = [
   "Online Coaching",
   "In-Person Coaching",
   "Hybrid Coaching",
+  "Competition Handling",
   "Powerlifting",
   "Bodybuilding",
   "Fat Loss",

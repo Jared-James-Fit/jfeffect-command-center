@@ -135,3 +135,14 @@ describe("the filters reach the database", () => {
     expect(read("src/components/clients/client-filter-rail.tsx")).toContain("<MatchToggle value={match} onChange={onMatch} />");
   });
 });
+
+
+describe("universal client directory", () => {
+  it("renders every service through the one client row and pagination path", () => {
+    expect(page).not.toContain("HandlingDirectory");
+    expect(page).not.toContain("nutritionRows");
+    expect(page).not.toContain("separateNutrition");
+    expect(page.match(/<ClientRow\s/g)).toHaveLength(1);
+    expect(page).toContain("rows.map((r)");
+  });
+});
