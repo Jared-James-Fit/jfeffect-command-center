@@ -99,6 +99,8 @@ describe("competition preparation screens", () => {
   it("the overview is countdown, readiness, one recommendation and what's outstanding", () => {
     const html = wrap(createElement(PrepOverview, { prep, onSection: () => {}, onChanged: () => {}, onReviewChanges: () => {} }));
     expect(html).toContain("data-countdown");
+    expect(html).toContain("Checklist readiness");
+    expect(html).toContain("Review plan");
     expect(html).toContain(`data-readiness="${readiness.verdict}"`);
     expect(html).toContain("Approve Cleo&#x27;s gameplan");
     expect(html).toContain("Ari changed their meet details");
@@ -173,5 +175,27 @@ describe("wiring", () => {
   it("nothing in preparation calls a model", () => {
     for (const f of ["prep.server.ts", "handling.functions.ts", "gameplan.ts", "event-timeline.ts", "prep-checklist.ts", "opportunities.ts"])
       expect(readFileSync(`src/lib/competition/${f}`, "utf8")).not.toMatch(/callModel|askRoute|stagedCall/);
+  });
+});
+
+
+describe("competition review clarity", () => {
+  it("uses an app-styled picker rather than a native competition select", () => {
+    const tab = readFileSync("src/components/competition/competition-tab.tsx", "utf8");
+    expect(tab).toContain("data-competition-picker");
+    expect(tab).toContain('aria-label="Switch competition"');
+    expect(tab).not.toContain('aria-label="Competition"');
+    expect(tab).toMatch(/setAssessmentId\(null\);\s*setCompetitionId\(id\)/);
+  });
+  it("renders the assessment's own meet and keeps detailed analysis available", () => {
+    const sheet = readFileSync("src/components/competition/assessment-sheet.tsx", "utf8");
+    expect(sheet).toContain("a.competition_context.name");
+    expect(sheet).toContain("Detailed coaching analysis");
+    expect(sheet).toContain("n.coach_summary");
+    expect(sheet).toContain("Issues to review");
+    const fn = readFileSync("src/lib/competition/competition.functions.ts", "utf8");
+    const get = fn.slice(fn.indexOf("export const getAssessmentFn"), fn.indexOf("export const assessmentActionFn"));
+    expect(get).toContain("reachAssessment");
+    expect(get).toContain('.eq("id", row.competition_id)');
   });
 });
