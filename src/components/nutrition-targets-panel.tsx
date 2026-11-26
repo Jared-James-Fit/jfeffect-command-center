@@ -253,6 +253,7 @@ export function NutritionTargetsPanel({
             clientId={clientId}
             days={plan.nutrition_target_days ?? []}
             references={previous}
+            showCleo={!cleoEntry}
             anchor={plan.start_date && plan.start_date > todayLocalISO() ? plan.start_date : undefined}
             onReuse={(source) => { setEditing(null); setCopySource(source); setOpen(true); }}
           />
