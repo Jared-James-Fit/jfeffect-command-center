@@ -8,6 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import type { CommunityAuthor } from "@/lib/community";
 
 const db = supabase as any;
@@ -52,10 +53,16 @@ export function previewLine(t: DirectThread, me: string | null | undefined) {
 
 export function useDirectThreads(enabled = true) {
   const { user } = useAuth();
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: directThreadsKey,
-    enabled: enabled && !!user,
-    queryFn: listDirectThreads,
+    queryKey: pov.key(directThreadsKey),
+    enabled: enabled && !!user && pov.ready,
+    queryFn: async (): Promise<DirectThread[]> => {
+      if (!pov.isPov) return listDirectThreads();
+      const { data, error } = await pov.read("direct_threads", "chat_direct_threads");
+      if (error) throw error;
+      return Array.isArray(data) ? data as DirectThread[] : [];
+    },
     staleTime: 15_000,
     refetchInterval: 45_000,
   });
