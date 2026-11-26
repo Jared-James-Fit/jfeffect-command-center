@@ -711,7 +711,7 @@ export function ClientAnalyticsDashboard({
   const bodyweightHistory = useQuery({
     queryKey: clientBodyweightQueryKey(clientId),
     queryFn: () => loadClientBodyweight(clientId),
-    enabled: !!clientId && profile === "powerlifting" && view === "overview",
+    enabled: !!clientId && !hideBodyweight && (view === "overview" || view === "records" || view === "training"),
     staleTime: 60_000,
   });
 
@@ -961,7 +961,9 @@ export function ClientAnalyticsDashboard({
                           strength={strength}
                           meets={meets}
                           results={allResults as any[]}
-                          bodyweights={bodyweightHistory.data?.entries ?? []}
+                          bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []}
+                          hideBodyweight={hideBodyweight}
+                          periods={blocks.map(b=>({id:"block:"+b.id,name:b.name,start:b.start,end:b.end})).filter(b=>!!b.start&&!!b.end)}
                           sex={competition.data?.sex ?? null}
                           today={today}
                           unit={displayUnit}
@@ -1331,6 +1333,10 @@ export function ClientAnalyticsDashboard({
                     byExercise={byExercise}
                     meets={meets}
                     unit={displayUnit}
+                    bodyweights={hideBodyweight ? [] : bodyweightHistory.data?.entries ?? []}
+                    sex={competition.data?.sex ?? null}
+                    results={allResults as any[]}
+                    today={today}
                   />
                 </SectionErrorBoundary>
               </div>
