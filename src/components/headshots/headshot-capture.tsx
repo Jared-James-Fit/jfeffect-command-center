@@ -72,6 +72,8 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
   const [helpSent, setHelpSent] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<"pending" | "accepted" | null>(null);
+  const uploadedSession = useRef<string | null>(null);
+  const sendingRef = useRef(false);
   const startMine = useServerFn(startMyHeadshotCapture);
   const startCoach = useServerFn(startCoachHeadshotCapture);
   const submit = useServerFn(submitHeadshotCapture);
@@ -104,7 +106,8 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
   };
 
   const send = async () => {
-    if (!captured || !session) return;
+    if (!captured || !session || sendingRef.current) return;
+    sendingRef.current = true;
     setPhase("sending");
     setError(null);
     try {
@@ -114,8 +117,13 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
         // a retry after a dropped connection: the file is already there
         if (e && !/exists|duplicate/i.test(e.message)) throw e;
       };
-      await up(session.photoPath, captured.photo, "image/jpeg");
-      if (session.method !== "coach_assisted") await up(session.evidencePath, captured.evidence, "image/png");
+      // Once storage has accepted both files, retry only finalization. The server
+      // no longer allows uploads after the session becomes pending or accepted.
+      if (uploadedSession.current !== session.id) {
+        await up(session.photoPath, captured.photo, "image/jpeg");
+        if (session.method !== "coach_assisted") await up(session.evidencePath, captured.evidence, "image/png");
+        uploadedSession.current = session.id;
+      }
       const r = (await submit({ data: { headshotId: session.id, device: captured.device as any } })) as
         | { ok: true; status: "pending" | "accepted" }
         | { ok: false; message: string };
@@ -134,12 +142,15 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
       feedback("error");
       setError(e?.message ? `Couldn't send it: ${e.message}` : "Couldn't send it. Check your connection and try again.");
       setPhase("review");
+    } finally {
+      sendingRef.current = false;
     }
   };
 
   const retake = () => {
     if (captured) URL.revokeObjectURL(captured.photoUrl);
     setCaptured(null);
+    uploadedSession.current = null;
     setError(null);
     setSession(null);
     setAttempt((a) => a + 1);
@@ -220,7 +231,7 @@ function CaptureFlow({ mode, clientId, clientName, onClose, onDone }: { mode: Mo
             {!error || session ? (
               <Button size="lg" className="h-12 rounded-full" onClick={() => void send()} disabled={phase === "sending"} data-headshot-use>
                 {phase === "sending" ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
-                {phase === "sending" ? "Sending…" : "Use this photo"}
+                {phase === "sending" ? "Saving…" : error && session ? "Retry save" : "Use this photo"}
               </Button>
             ) : null}
             <Button size="lg" variant="secondary" className="h-12 rounded-full" onClick={retake} disabled={phase === "sending"} data-headshot-retake>
