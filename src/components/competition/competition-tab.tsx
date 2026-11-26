@@ -51,6 +51,7 @@ import { CompetitionForm, emptyCompetition, type CompetitionFormValues } from ".
 import { CompetitionField } from "./competition-field";
 import { AttemptsView, ForecastTable, GameDayView, Kg, WarmupsView } from "./plan-views";
 import { cn } from "@/lib/utils";
+import { GoalSummary } from "@/components/goals/goal-summary";
 
 export const competitionWorkspaceKey = (clientId: string, competitionId: string | null) =>
   ["competition-workspace", clientId, competitionId] as const;
@@ -307,13 +308,17 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
       ) : null}
 
       {section === "overview" ? (
-        <Overview
-          clientId={clientId}
-          sel={sel}
-          rewrite={rewrite}
-          onOpen={setAssessmentId}
-          onSection={setSection}
-        />
+        <>
+          <Overview
+            clientId={clientId}
+            sel={sel}
+            rewrite={rewrite}
+            onOpen={setAssessmentId}
+            onSection={setSection}
+          />
+          {/* the targets at this meet (the goal ledger): theirs, the projection, the approved one */}
+          <GoalSummary clientId={clientId} competitionId={comp.id} compact hideWhenEmpty />
+        </>
       ) : null}
       {section === "timeline" ? (
         <Timeline

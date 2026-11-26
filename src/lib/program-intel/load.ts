@@ -329,6 +329,15 @@ export async function loadIntelRecords(
     },
     null,
   );
+  const goalLedger = await optional<NonNullable<IntelRecords["goalLedger"]>>(
+    "goals",
+    async () => {
+      const { data, error } = await (sb as any).from("client_goals").select("*").eq("client_id", clientId).in("status", ["proposed", "active", "achieved", "missed"]).order("created_at", { ascending: true }).limit(60);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    [],
+  );
   const competitionPlan = await optional<IntelRecords["competitionPlan"]>(
     "competition plan",
     async () => {
@@ -469,6 +478,7 @@ export async function loadIntelRecords(
     checkins,
     competitionPlan,
     profile,
+    goalLedger,
     cardioTargets,
     cardioCompletions,
     ptSessions,

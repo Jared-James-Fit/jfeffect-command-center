@@ -42,6 +42,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/loading";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import { GoalSummary } from "@/components/goals/goal-summary";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -485,6 +486,9 @@ function PrepareStage({
       </div>
 
       <ChangesSinceReview changes={data.changesSinceReview ?? []} />
+
+      {/* what they're working toward (the goal ledger): the targets this meeting can confirm or move */}
+      <GoalSummary clientId={s.client_id} competitionId={s.competition_id ?? null} compact hideWhenEmpty />
 
       {agenda ? <Objective agenda={agenda} onOps={onOps} /> : null}
       {agenda ? <Clarify agenda={agenda} onOps={onOps} /> : null}
