@@ -393,8 +393,8 @@ export function LiftProgressCard({
             isPr={selected.key === prKey}
             displayUnit={displayUnit}
             fmtLoad={fmtLoad}
-            onDetails={onOpenSet ? () =>
-              onOpenSet(toPoint((activeMetric === "single" ? singleOf(selected) ?? selected.top : activeMetric === "top" ? selected.heaviest : selected.top) as LiftHistoryPoint))
+            onDetails={onOpenSet && (activeMetric !== "single" || singleOf(selected)) ? () =>
+              onOpenSet(toPoint((activeMetric === "single" ? singleOf(selected)! : activeMetric === "top" ? selected.heaviest : selected.top) as LiftHistoryPoint))
             : undefined}
           />
 
