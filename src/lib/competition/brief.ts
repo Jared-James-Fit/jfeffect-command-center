@@ -115,6 +115,12 @@ export type BriefContext = {
   classOptions?: ClassOption[];
   /** the goal ledger's targets at this meet (goal-intel): approved, the athlete's own, how they want to go about it */
   goals?: MeetGoal[];
+  /** uploaded athlete information (athlete-intel): what it added, evidence Cleo can cite, attempt plans that disagree */
+  intel?: {
+    retrieved: string[];
+    evidence: Array<{ id: string; kind: "training" | "intel"; text: string; lift: Lift | null; date: string | null }>;
+    conflicts: Lift[];
+  } | null;
 };
 
 export type MeetGoal = {
@@ -209,6 +215,8 @@ export type Brief = {
     pastCuts: PastCut[];
     conversion: ConversionPoint[];
     watchFacts: BriefContext["watch"];
+    /** uploaded athlete information's evidence (athlete-intel) */
+    intel?: NonNullable<BriefContext["intel"]>["evidence"];
   };
 };
 
@@ -246,6 +254,7 @@ export function missingInfo(ctx: BriefContext): MissingInfo {
   if (hard) retrieved.push(`${hard} hard competition-lift sessions in the last 6 weeks`);
   if (ctx.athlete.bodyweightAvg)
     retrieved.push(`Bodyweight: ${ctx.athlete.bodyweightAvg} kg (7-day average)`);
+  for (const line of ctx.intel?.retrieved ?? []) retrieved.push(line);
   const synced = ctx.competitors.filter((x) => x.meets.length).length;
   if (synced)
     retrieved.push(`${synced} competitor record${synced === 1 ? "" : "s"} from OpenPowerlifting`);
@@ -446,6 +455,7 @@ export function buildBrief(ctx: BriefContext): Brief {
       pastCuts: ctx.athlete.pastCuts ?? [],
       conversion: ctx.conversion,
       watchFacts: ctx.watch,
+      intel: ctx.intel?.evidence ?? [],
     },
   };
 }

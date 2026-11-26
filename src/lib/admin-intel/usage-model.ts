@@ -55,6 +55,7 @@ const AI_AREA: Record<string, AreaKey> = {
   cardio_plan: "coaching",
   competition: "coaching",
   competition_extract: "coaching",
+  athlete_intel: "coaching",
   session_brief: "coaching",
   session_analysis: "coaching",
   coach_write: "coaching",

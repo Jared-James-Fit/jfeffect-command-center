@@ -71,7 +71,7 @@ export async function hasBusinessRecords(admin: Admin, clientId: string | null):
 }
 
 /** The person's own files: photo, progress photos and videos, lift videos, Crew media, plan PDFs. Chat attachments and signed agreements stay. */
-const PERSONAL_BUCKETS = ["avatars", "account-headshots", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads", "documents", "equipment-photos"];
+const PERSONAL_BUCKETS = ["avatars", "account-headshots", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads", "documents", "equipment-photos", "athlete-intel"];
 
 async function removeFolder(admin: Admin, bucket: string, folder: string): Promise<number> {
   let removed = 0;
@@ -143,6 +143,15 @@ export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutc
   }
   for (const id of [row.user_id, row.client_id].filter(Boolean) as string[]) {
     for (const b of PERSONAL_BUCKETS) files += await removeFolder(admin, b, id);
+  }
+  // uploaded athlete information (athlete-intel): its files went with the folder above; the rows go too,
+  // even when the record itself is kept for business reasons
+  if (row.client_id) {
+    for (const t of ["athlete_intel_facts", "athlete_intel_questions", "athlete_intel_sources", "athlete_intel_links"])
+      await admin.from(t).delete().eq("client_id", row.client_id).then(
+        () => undefined,
+        () => undefined,
+      );
   }
   out.files = files;
 
