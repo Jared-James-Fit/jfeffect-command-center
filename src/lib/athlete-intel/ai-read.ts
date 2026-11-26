@@ -10,6 +10,7 @@
 import { classifyExercise, norm, parseDate } from "./classify";
 import type { Confidence, FactKind, Lift, Provider, Purpose, RawFact, TrainingData, Unit } from "./types";
 import { PURPOSES, toKg } from "./types";
+import { readMeetFileField } from "./meet-files";
 
 export class UnreadableAnswer extends Error {}
 
@@ -78,6 +79,12 @@ export function readAiAnswer(text: string, o: { source: string | null; fileKind:
     return nums.has(Number(d.slice(8, 10))) || ground.includes(d) ? d : null;
   };
   for (const raw of j.facts.slice(0, 600)) {
+    if (raw?.kind === "meet_logistics") {
+      const d = readMeetFileField(raw, ground);
+      if (!d) { dropped++; continue; }
+      facts.push({ kind: "note", lift: null, date: null, data: { text: d.text, meetLogistics: { field: d.field, value: d.value } }, quote: str(raw.quote, 300), location: str(raw.location, 80), confidence: "medium", scope: "meet" });
+      continue;
+    }
     const kind = raw?.kind as FactKind;
     if (!KINDS.includes(kind)) {
       dropped++;
