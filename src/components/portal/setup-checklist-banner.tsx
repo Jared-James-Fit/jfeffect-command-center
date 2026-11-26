@@ -83,7 +83,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
     queryFn: () => calFn({ data: {} }),
   });
   // the account headshot step: a new client's first one (an update someone asked for is Home's own card)
-  const { data: headshot, isFetched: headshotFetched, isError: headshotError, refetch: retryHeadshot } = useMyHeadshot();
+  const { data: headshot, isFetched: headshotFetched, isError: headshotError } = useMyHeadshot();
   const camera = useHeadshotCamera();
   const headshotNeeded = !!headshot?.outstanding && headshot.status === "missing";
   const headshotDone = !!headshot && (!headshot.applies || headshot.status === "pending" || headshot.status === "verified" || headshot.status === "previous" || headshot.status === "retake_requested");
@@ -146,10 +146,10 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const { required, done, open, needsReminder: incomplete } = accountSetupProgress(items);
   const nextItem = open[0] ?? required[0];
-  const failed = scope.error || clientError || (needsGoals && goalsError) || (!!scope.requirements?.headshot && headshotError);
-  const ready = scope.ready && !clientPending && clientFetched && (!needsGoals || (!goalsPending && goalsFetched)) && (!scope.requirements?.headshot || headshotFetched);
+  const failed = scope.error || clientError || (needsGoals && goalsError);
+  const ready = scope.ready && !clientPending && clientFetched && (!needsGoals || (!goalsPending && goalsFetched));
   // Optional sync and the separate mandatory agreement gate do not trigger this reminder.
-  const needsReminder = !!clientId && !!userId && ready && !failed && incomplete;
+  const needsReminder = !!clientId && !!userId && ready && !failed && incomplete && (!scope.requirements?.headshot || (headshotFetched && !headshotError));
 
   // Fresh portal mounts and actual foreground transitions are app openings.
   useEffect(() => {
@@ -183,10 +183,10 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
     return () => window.clearTimeout(timer);
   }, [reminderOnly, isImpersonating, needsReminder, setupRoute, launch, reminderOpen]);
   if (!clientId || !userId) return null;
-  if (failed) return reminderOnly ? null : <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : []), ...(scope.requirements?.headshot ? [retryHeadshot()] : [])]); }}>Try again</Button></Card>;
+  if (failed) return reminderOnly ? null : <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
   if (!ready) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
-  if (open.length === 0 || (!isImpersonating && open.every((i) => i.key === "agreement"))) return <>{whenHidden}{camera.element}</>;
+  if ((!isImpersonating && (open.length === 0 || open.every((i) => i.key === "agreement"))) || required.length === 0) return <>{whenHidden}{camera.element}</>;
 
   const stepSurfaces = <>{camera.element}{memberEnabled && <MemberSetupWizard key={clientId} open={memberOpen} onClose={() => setMemberOpen(false)} />}<SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} preview={isImpersonating} onOpenChange={(o) => { if (!o) setOpenStep(null); }} /></>;
   if (reminderOnly) {
