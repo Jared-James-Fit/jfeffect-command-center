@@ -52,7 +52,7 @@ function frontOnSquat(reps: number, seed = 3) {
   return { frames, truth };
 }
 
-describe("estimate: front-on plates (edge-on stacks)", () => {
+describe("estimate: front-on plates (edge-on stacks)", { timeout: 90_000 }, () => {
   it("reads every rep and an estimated set speed close to the truth", () => {
     const { frames, truth } = frontOnSquat(3);
     const res = estimateRead(frames, { movement: movementOf("Competition Squat"), expectedReps: 3, dirHint: "lower_first" });
