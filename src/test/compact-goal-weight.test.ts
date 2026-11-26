@@ -17,3 +17,23 @@ describe("compact goal weight", () => {
     expect(roundUpWeight(NaN, 2.5)).toBeNull();
   });
 });
+
+import { discussedKg, nearestMeetTarget, validMeetIncrement, inferredUnitKey, reviewedSourceUnit } from "@/lib/goal-intel/competition-review";
+describe("competition review", () => {
+  it("rounds draft targets without altering the original pounds", () => {
+    const source = { client_unit: "lb" as const, client_value: 220, client_value_max: 225 };
+    expect(nearestMeetTarget(discussedKg(source), 2.5)).toBe(102.5);
+    expect(nearestMeetTarget(inputKg(115,"lb"), 2.5)).toBe(52.5);
+    expect(nearestMeetTarget(inputKg(280,"lb"), 2.5)).toBe(127.5);
+    expect(validMeetIncrement(inputKg(225,"lb"),2.5)).toBe(false);
+    expect(validMeetIncrement(102.5,2.5)).toBe(true);
+    expect(source.client_value_max).toBe(225);
+  });
+  it("does not infer a missing unit or accept stale source confirmation", () => {
+    expect(discussedKg({client_unit:null,client_value:225,client_value_max:null})).toBeNull();
+    const g = {id:"squat",version:1,client_unit:"lb" as const,client_unit_source:"inferred" as const};
+    const key = inferredUnitKey(g)!;
+    expect(reviewedSourceUnit(g,{[key]:true})).toBe("lb");
+    expect(reviewedSourceUnit({...g,version:2},{[key]:true})).toBeUndefined();
+  });
+});
