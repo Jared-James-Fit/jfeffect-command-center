@@ -91,7 +91,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     refetchIntervalInBackground: false,
     placeholderData: (prev) => prev, // keep last known count while refetching
     queryFn: async (): Promise<AdminBadgeCounts> => {
-      const [inbox, mediaPending, supportAlerts, supportChats, myGroups] = await Promise.all([
+      const [inbox, mediaPending, supportAlerts, supportChats, myGroups, personal] = await Promise.all([
         // Per staff login: which chats have a new message from the client
         // (staff_inbox_state's `unread`: never a form sent in or a check-in card).
         (supabase as any).rpc("staff_inbox_state"),
@@ -112,6 +112,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
           .eq("user_id", user!.id)
           .eq("chat_groups.kind", "group")
           .eq("chat_groups.archived", false),
+        (supabase as any).rpc("chat_direct_threads"),
       ]);
       const memberships = (myGroups.data ?? []) as { group_id: string; last_read_at: string | null }[];
       let groups = 0;
@@ -125,7 +126,8 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
         groups = unreadGroupCount(memberships, latest ?? [], user!.id);
       }
       return {
-        messages: messagesBadge((inbox.data ?? []) as InboxBadgeRow[], (supportChats.data ?? []) as SupportBadgeRow[], groups),
+        messages: messagesBadge((inbox.data ?? []) as InboxBadgeRow[], (supportChats.data ?? []) as SupportBadgeRow[], groups)
+          + (Array.isArray(personal.data) ? personal.data.filter((t: any) => t.last && t.last.sender_id !== user!.id && (!t.read_at || new Date(t.last.created_at).getTime() > new Date(t.read_at).getTime())).length : 0),
         checkIns: mediaPending.count ?? 0,
         supportAlerts: supportAlerts.count ?? 0,
       };
