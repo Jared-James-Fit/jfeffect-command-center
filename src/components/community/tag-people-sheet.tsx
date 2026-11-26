@@ -2,13 +2,13 @@ import { useMemo, useState } from "react";
 import { Check, Search, X } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge } from "@/components/community/post-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { suggestMentions, type CommunityAuthor } from "@/lib/community";
 import { useCommunityMembers } from "@/lib/community.queries";
 import { MAX_TAGS } from "@/lib/crew-tags";
 import { feedback } from "@/lib/feedback";
+import { NameMarks } from "@/components/name-marks";
 
 /**
  * Tag people (Instagram's): search the crew by name or @username, tap to
@@ -121,7 +121,7 @@ export function TagPeopleSheet({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-[15px] font-semibold">{p.name}</span>
-                      {p.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+                      <NameMarks person={p as any} userId={(p as any).user_id} size={13} />
                     </span>
                     {p.username && <span className="block truncate text-[13px] text-muted-foreground">@{p.username}</span>}
                   </span>

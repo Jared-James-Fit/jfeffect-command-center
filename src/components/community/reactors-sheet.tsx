@@ -1,5 +1,6 @@
-import { BadgeCheck, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { NameMarks } from "@/components/name-marks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
@@ -88,7 +89,7 @@ function ReactorsSheetBody({ postId, onClose, onOpenAuthor, title = "Likes" }: R
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-1 text-[14px] font-semibold">
                       <span className="truncate">{r.is_me ? "You" : r.author.name}</span>
-                      {r.author.is_coach && <BadgeCheck className="h-4 w-4 shrink-0 fill-primary text-primary-foreground" aria-label="Coach" />}
+                      <NameMarks person={r.author as any} userId={r.author.user_id} />
                     </span>
                     {sub && <span className="block truncate text-[13px] text-muted-foreground">{sub}</span>}
                   </span>

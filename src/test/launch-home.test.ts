@@ -122,7 +122,6 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
       "src/routes/_authenticated/admin/client-pov.tsx",
       "src/route-pages/_authenticated/admin/messages.tsx",
       "src/components/pov-quick-toggle.tsx",
-      "src/components/members/members-directory.tsx",
       "src/route-pages/_authenticated/admin/members.$memberId.tsx",
       "src/components/admin/intel/membership-home.tsx",
     ];
@@ -131,6 +130,8 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
       expect(src, f).toContain("navigate({ to: CLIENT_VIEW_HOME });");
       expect(src, f).not.toContain('navigate({ to: "/portal" });');
     }
+    // Member Management's View as enters through the same shared hook as a client row.
+    expect(read("src/components/members/members-directory.tsx")).toContain("const pov = useEnterClientPov();");
     // The client profile enters through the shared hook, which lands on CLIENT_VIEW_HOME unless told a screen.
     const profile = read("src/route-pages/_authenticated/admin/clients.$id.tsx");
     expect(profile).toContain("const pov = useEnterClientPov();");

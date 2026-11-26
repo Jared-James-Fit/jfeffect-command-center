@@ -36,7 +36,7 @@ describe("viewing as a team member: the server refuses anything but reads", () =
 
   it("every server call carries the mark while previewing, and the guard runs on all of them", () => {
     const start = read("src/start.ts");
-    expect(start).toContain("functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, nativeAppMark]");
+    expect(start).toContain("functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard, povGuard, nativeAppMark]");
     expect(start).toContain("getTeamPreview() ? { [PREVIEW_HEADER]: \"1\" } : {}");
     expect(start).toContain("!isPreviewSafeFn(serverFnMeta?.name)");
   });
@@ -107,7 +107,7 @@ describe("Clients page: every account in one place", () => {
     expect(page).toContain('kind:          fallback(z.enum(["clients","members","team"]),');
     expect(page).toContain('const kind: AccountKind = isAdmin ? search.kind ?? "clients" : "clients";');
     expect(page).toContain("<AccountsSwitcher");
-    expect(page).toContain("<MembersDirectory showTest={false} />");
+    expect(page).toContain("<MembersDirectory />");
     expect(page).toContain("<StaffPage embedded />");
   });
 
@@ -120,13 +120,16 @@ describe("Clients page: every account in one place", () => {
     expect(read("src/components/accounts/accounts-switcher.tsx")).toContain("inSideScroller(el)");
   });
 
-  it("the members list hides admins' test accounts and offers the owner's own on top", () => {
+  it("the members list is the account directory; the owner's test account is a developer tool", () => {
     const dir = read("src/components/members/members-directory.tsx");
-    expect(dir).toContain("all.filter((m) => !m.is_admin_sandbox)");
-    expect(dir).toContain("m.is_admin_sandbox && m.user_id === user?.id");
-    expect(dir).toContain('const canPreview = role === "admin" && !viewOnly;');
-    expect(dir).toContain('if (role !== "admin" || viewOnly) return null;');
+    expect(dir).toContain("useAccountDirectory");
+    expect(dir).toContain("{isAdmin && !viewOnly && <AccountSyncCard />}");
+    expect(dir).not.toContain("TestAccountCard");
+    const dev = read("src/components/admin/developer-tools-card.tsx");
+    expect(dev).toContain("m.is_admin_sandbox && m.user_id === user?.id");
+    expect(dev).toContain('if (role !== "admin" || viewOnly) return null;');
     expect(read("src/routes/_authenticated/admin/members.index.tsx")).toContain("<MembersDirectory");
+    expect(read("src/routes/_authenticated/admin/settings.tsx")).toContain("DeveloperToolsCard");
   });
 
   it("coaching clients are never members (their Nutrition record isn't a membership)", () => {
@@ -143,12 +146,11 @@ describe("Clients page: every account in one place", () => {
     expect(withoutCoachingClients(rows, clients).map((m) => m.id)).toEqual(["member", "sandbox"]);
   });
 
-  it("Members only shows while there are members; the one test account sits on Team", () => {
-    expect(page).toContain('const kinds: AccountKind[] = (memberCount ?? 0) > 0 || kind === "members" ? KINDS : KINDS.filter((k) => k !== "members");');
+  it("Members is always a tab (nobody falls between lists); no test account on Team", () => {
+    expect(page).toContain("const kinds: AccountKind[] = KINDS;");
     expect(page).toContain("const swipe = useSwipeBetween(kinds.indexOf(kind), (i) => goKind(kinds[i]), kinds.length);");
     expect(page).toContain("kinds={kinds}");
-    expect(page).toContain('<TestAccountCard returnTo="/admin/clients?kind=team" />');
-    expect(page.match(/<TestAccountCard/g)?.length).toBe(1);
+    expect(page).not.toContain("<TestAccountCard");
   });
 
   it("View as on a team card is the owner's, for a finance login only", () => {

@@ -135,6 +135,7 @@ import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './ro
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_authenticated/admin/transactions'
 import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin/usage'
+import { Route as AuthenticatedAdminVirtualAccountsRouteImport } from './routes/_authenticated/admin/virtual-accounts'
 import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authenticated/admin/voice'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
@@ -1041,6 +1042,12 @@ const AuthenticatedAdminUsageRoute = AuthenticatedAdminUsageRouteImport.update({
   path: '/usage',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminVirtualAccountsRoute =
+  AuthenticatedAdminVirtualAccountsRouteImport.update({
+    id: '/virtual-accounts',
+    path: '/virtual-accounts',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminVoiceRoute = AuthenticatedAdminVoiceRouteImport.update({
   id: '/voice',
   path: '/voice',
@@ -2398,6 +2405,7 @@ export interface FileRoutesByFullPath {
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
+  '/admin/virtual-accounts': typeof AuthenticatedAdminVirtualAccountsRoute
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -2729,6 +2737,7 @@ export interface FileRoutesByTo {
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
+  '/admin/virtual-accounts': typeof AuthenticatedAdminVirtualAccountsRoute
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -3066,6 +3075,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
   '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
+  '/_authenticated/admin/virtual-accounts': typeof AuthenticatedAdminVirtualAccountsRoute
   '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -3403,6 +3413,7 @@ export interface FileRouteTypes {
     | '/admin/training-phases'
     | '/admin/transactions'
     | '/admin/usage'
+    | '/admin/virtual-accounts'
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
@@ -3734,6 +3745,7 @@ export interface FileRouteTypes {
     | '/admin/training-phases'
     | '/admin/transactions'
     | '/admin/usage'
+    | '/admin/virtual-accounts'
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
@@ -4070,6 +4082,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/admin/transactions'
     | '/_authenticated/admin/usage'
+    | '/_authenticated/admin/virtual-accounts'
     | '/_authenticated/admin/voice'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
@@ -5283,6 +5296,13 @@ declare module '@tanstack/react-router' {
       path: '/usage'
       fullPath: '/admin/usage'
       preLoaderRoute: typeof AuthenticatedAdminUsageRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/virtual-accounts': {
+      id: '/_authenticated/admin/virtual-accounts'
+      path: '/virtual-accounts'
+      fullPath: '/admin/virtual-accounts'
+      preLoaderRoute: typeof AuthenticatedAdminVirtualAccountsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/voice': {
@@ -6979,6 +6999,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminTransactionsRoute: typeof AuthenticatedAdminTransactionsRoute
   AuthenticatedAdminUsageRoute: typeof AuthenticatedAdminUsageRoute
+  AuthenticatedAdminVirtualAccountsRoute: typeof AuthenticatedAdminVirtualAccountsRoute
   AuthenticatedAdminVoiceRoute: typeof AuthenticatedAdminVoiceRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -7132,6 +7153,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminTransactionsRoute: AuthenticatedAdminTransactionsRoute,
     AuthenticatedAdminUsageRoute: AuthenticatedAdminUsageRoute,
+    AuthenticatedAdminVirtualAccountsRoute:
+      AuthenticatedAdminVirtualAccountsRoute,
     AuthenticatedAdminVoiceRoute: AuthenticatedAdminVoiceRoute,
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
