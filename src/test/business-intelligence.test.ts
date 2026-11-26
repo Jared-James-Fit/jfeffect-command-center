@@ -261,6 +261,33 @@ describe("Cleo's insights", () => {
     expect(ins.find((i) => i.id === "vital-LCP")!.hypothesis).toContain("Workouts");
     expect(buildInsights({ today: "2026-11-25", technical: t(1) }).some((i) => i.id === "errors")).toBe(false);
   });
+
+  it("names a slow server before blaming the page, and says nothing on too few readings", () => {
+    const t = (ttfb: { n: number; p75: number }) =>
+      shapeTechnical({
+        sessions: 100,
+        errors: { events: 0, sessions: 0, top: [] },
+        vitals: [
+          { metric: "LCP", n: 40, p75: 4900, good: 5, ni: 10, poor: 25 },
+          { metric: "TTFB", n: ttfb.n, p75: ttfb.p75, good: 5, ni: 5, poor: ttfb.n - 10 },
+        ],
+        vitals_by_feature: [{ feature: "Crew", metric: "LCP", n: 20, p75: 5500, poor: 14 }],
+      });
+    const slow = buildInsights({ today: "2026-11-26", technical: t({ n: 30, p75: 2905 }) });
+    const server = slow.find((i) => i.id === "vital-TTFB")!;
+    expect(server.fact).toContain("2.9s");
+    expect(server.hypothesis).toMatch(/publish/);
+    const lcp = slow.find((i) => i.id === "vital-LCP")!;
+    expect(lcp.hypothesis).toMatch(/^Much of it is waiting on the server: its slowest quarter takes 2\.9s.*Crew is the slowest page \(5\.5s\)/);
+    expect(lcp.recommendation).toMatch(/server response first/);
+
+    const thin = buildInsights({ today: "2026-11-26", technical: t({ n: 12, p75: 2905 }) });
+    expect(thin.some((i) => i.id === "vital-TTFB")).toBe(false);
+    expect(thin.find((i) => i.id === "vital-LCP")!.hypothesis).toBe("Crew is the slowest (5.5s).");
+
+    const fast = buildInsights({ today: "2026-11-26", technical: t({ n: 30, p75: 600 }) });
+    expect(fast.some((i) => i.id === "vital-TTFB")).toBe(false);
+  });
   it("confidence grows with the sample", () => {
     expect(confidenceFor(3)).toBe("low");
     expect(confidenceFor(20)).toBe("medium");

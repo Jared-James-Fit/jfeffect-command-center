@@ -428,19 +428,42 @@ export function buildInsights(x: InsightInputs): BiInsight[] {
         confidence: confidenceFor(t.sessions),
       }));
     }
+    // The server's own answer time (TTFB, Google's "poor" is over 1.8s). When it's slow it's most of
+    // every other wait, so the page-load reason below names it before blaming images or screens.
+    const ttfb = t.vitals.find((x2) => x2.metric === "TTFB" && x2.n >= 20 && x2.p75 != null);
+    const serverSlow = ttfb && ttfb.p75 != null && ttfb.p75 > 1800 ? ttfb : null;
+    if (serverSlow && serverSlow.p75 != null) {
+      out.push(make({
+        id: "vital-TTFB",
+        tab: "technical",
+        title: "The server is slow to start answering",
+        fact: `The slowest quarter of server responses take over ${(serverSlow.p75 / 1000).toFixed(1)}s before anything arrives (Google's "good" is under 0.8s).`,
+        hypothesis: "Usually a fresh copy of the server starting up: every publish restarts them all, and the first visits after it wait.",
+        recommendation: "Publish in fewer, bigger batches, and compare this tab on a day with no publish before changing any page.",
+        evidence: [`Server response p75 ${Math.round(serverSlow.p75)}ms`, `Readings ${serverSlow.n}`, `Good ${percent(serverSlow.goodRate)}`],
+        impact: 2,
+        urgency: 2,
+        confidence: confidenceFor(serverSlow.n),
+      }));
+    }
     for (const v of t.vitals.filter((x2) => (x2.metric === "LCP" || x2.metric === "INP") && x2.n >= 20)) {
       const limit = v.metric === "LCP" ? 2500 : 200;
       if (v.p75 != null && v.p75 > limit) {
         const slow = t.vitalsByFeature
           .filter((f) => f.metric === v.metric && f.n >= 5 && f.p75 != null && f.p75 > limit)
           .sort((p, q) => (q.p75 ?? 0) - (p.p75 ?? 0))[0];
+        const waitingOnServer = v.metric === "LCP" && serverSlow?.p75 != null;
         out.push(make({
           id: `vital-${v.metric}`,
           tab: "technical",
           title: v.metric === "LCP" ? "Pages are slow to show their main content" : "Taps are slow to respond",
           fact: `The slowest quarter of ${v.metric} readings are over ${v.metric === "LCP" ? `${(v.p75 / 1000).toFixed(1)}s` : `${Math.round(v.p75)}ms`} (Google's "good" is under ${v.metric === "LCP" ? "2.5s" : "200ms"}).`,
-          hypothesis: slow ? `${slow.feature} is the slowest (${v.metric === "LCP" ? `${((slow.p75 ?? 0) / 1000).toFixed(1)}s` : `${Math.round(slow.p75 ?? 0)}ms`}).` : "Large images or a heavy first screen on phones.",
-          recommendation: slow ? `Start with ${slow.feature}: what it loads before anything shows.` : "Check the largest pages on a mid-range phone.",
+          hypothesis: waitingOnServer
+            ? `Much of it is waiting on the server: its slowest quarter takes ${((serverSlow!.p75 ?? 0) / 1000).toFixed(1)}s before the page can start.${slow ? ` ${slow.feature} is the slowest page (${((slow.p75 ?? 0) / 1000).toFixed(1)}s).` : ""}`
+            : slow ? `${slow.feature} is the slowest (${v.metric === "LCP" ? `${((slow.p75 ?? 0) / 1000).toFixed(1)}s` : `${Math.round(slow.p75 ?? 0)}ms`}).` : "Large images or a heavy first screen on phones.",
+          recommendation: waitingOnServer
+            ? "Fix the server response first (see that insight); then look at what the slowest page loads."
+            : slow ? `Start with ${slow.feature}: what it loads before anything shows.` : "Check the largest pages on a mid-range phone.",
           evidence: [`${v.metric} p75 ${Math.round(v.p75)}`, `Readings ${v.n}`, `Good ${percent(v.goodRate)}`],
           impact: 2,
           urgency: 2,

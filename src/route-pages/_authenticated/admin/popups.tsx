@@ -723,9 +723,9 @@ function SetupGatesPanel() {
   const gates = [
     {
       icon: ImageIcon,
-      title: "Profile Picture",
-      desc: "First-load gate that asks new clients to upload a profile picture. Reads clients.profile_picture_url — once set, the gate stops showing.",
-      manage: "Per-client: edit on the client's profile page.",
+      title: "Account headshot",
+      desc: "Never a gate: new coaching clients get a setup checklist step and reminders on the schedule in Settings → Photo reminders; anyone else only when asked from their profile.",
+      manage: "Per-client: the Account headshot card on the client's profile (request, review, take it with them).",
       link: "/admin/clients" as const,
       linkLabel: "Open clients",
     },

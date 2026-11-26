@@ -108,6 +108,24 @@ export type MeetingExtras = {
   doneCommitments?: Array<{ owner: "coach" | "athlete"; text: string; closedOn: string | null }>;
   /** the client's weight unit, for anything said in a load */
   unit?: "kg" | "lb";
+  /** the goal ledger (goal-intel), each target already in words */
+  goals?: Array<{
+    id: string;
+    title: string;
+    status: "proposed" | "active";
+    /** what they said ("220–225 lb") */
+    clientTarget: string | null;
+    unitInferred: boolean;
+    tentative: boolean;
+    /** the coach-approved target, in words */
+    approved: string | null;
+    /** Cleo's projection (an interpretation) */
+    projection: string | null;
+    score: number | null;
+    /** the read's recommended action, when it asks for something */
+    action: string | null;
+    clientFacing: boolean;
+  }>;
 };
 
 export type SessionPrepInput = PrepInput &
@@ -442,6 +460,33 @@ export function buildSessionPrep(x: SessionPrepInput): SessionPrep {
     }
     if (e?.daysOut != null && e.daysOut <= 21 && !comp.gamePlanReleased)
       coachActions.push({ slot: "action-game-plan", text: "Release the game plan (attempts and warm-ups) before meet week", source: "read", kind: "action" });
+  }
+
+  // ---------------- the goal ledger: approved targets, what they said, and what still needs the coach
+  for (const g of x.goals ?? []) {
+    const slot = `goal:${g.id}`;
+    // Cleo's projection is an interpretation: the coach's to read, never on the shared screen
+    if (g.projection) observations.push({ slot: `${slot}:projection`, text: `${g.title}: projected ${g.projection}${g.score != null ? `, ${g.score}/100 feasibility` : ""}`, source: "read", ref: "Goals" });
+    if (g.status === "proposed") {
+      if (g.clientTarget)
+        decisions.push({
+          slot,
+          text: `Confirm the target: ${g.title}, they said ${g.clientTarget}${g.tentative ? " (tentatively)" : ""}`,
+          source: "athlete",
+          ref: "Goals",
+        });
+      if (g.unitInferred) clarify.push({ slot: `${slot}:unit`, text: `${g.title}: no unit was said (${g.clientTarget}); confirm it`, source: "athlete", clarify: true });
+      continue;
+    }
+    if (g.approved)
+      milestones.push({
+        slot,
+        text: `${g.title}: target ${g.approved}`,
+        // a target the client isn't told about stays off the shared screen
+        source: g.clientFacing ? "record" : "coach",
+        ref: "Goals",
+      });
+    if (g.action) recommendations.push({ slot: `${slot}:action`, text: `${g.title}: ${g.action}`, source: "read", ref: "Goals" });
   }
 
   // ---------------- the client's own words: answers, topics, recent messages (reported, never verified)

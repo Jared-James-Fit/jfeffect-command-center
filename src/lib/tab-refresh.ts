@@ -8,6 +8,7 @@
  * never loads anything twice. A pull is an explicit "load it now" and takes
  * anything older than a couple of seconds.
  */
+import { targetOwns } from "@/lib/gesture-arena";
 
 /** A tap refreshes what's on screen once it's this old. */
 export const RECENT_MS = 10_000;
@@ -70,6 +71,8 @@ export function canStartPull(target: EventTarget | null): boolean {
   const el = target instanceof Element ? target : null;
   if (!el) return true;
   if (el.closest('[role="dialog"],[role="alertdialog"],[data-no-pull-refresh],input,textarea,select,[contenteditable="true"]')) return false;
+  // something under the finger moves up and down itself (the gesture arena): it keeps the finger
+  if (targetOwns(el, "y")) return false;
   for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
     if (n.scrollTop > 0) return false;
   }

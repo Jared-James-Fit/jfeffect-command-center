@@ -1,9 +1,12 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { ChevronLeft, X } from "lucide-react";
 import { feedback } from "@/lib/feedback";
+import { BACK_EDGE_PX, claimGesture, heldByOther, isBackEdge, onGestureReset, releaseGesture, targetOwns } from "@/lib/gesture-arena";
 
-/** The phone's own edge swipe lives here: leave it to the phone. */
-const EDGE_PX = 24;
+/** Who holds the finger while a back swipe drags the page (the gesture arena). */
+const ARENA_ID = "swipe-back";
+/** A page that leaves after going back gets this long to go before it's put back as it was. */
+const CLOSE_WAIT_MS = 700;
 /** How far a finger moves before we decide what kind of gesture it is (not twitchy). */
 const LOCK_PX = 12;
 /** Sideways must clearly beat up/down, so scrolling never turns into a swipe. */
@@ -38,15 +41,21 @@ export function shouldGoBack(dx: number, speed: number, w: number): boolean {
  * short move or a quick flick is enough. Going back fades the page out and the next one in.
  *
  * Stays out of the way of everything else: vertical scrolling, open sheets and dialogs, text
- * fields, anything marked `data-no-swipe-back`, and a sideways scroller that can still scroll
+ * fields, anything marked `data-no-swipe-back`, a sideways scroller that can still scroll
  * back (a carousel past its first photo swipes the carousel; on its first photo, it's a back
- * swipe). Every frame is a transform on the GPU, painted once per animation frame.
+ * swipe), and anything that owns sideways drags (the gesture arena: the 3D body, a slider, a
+ * chart, a scrub bar, anything `touch-action: none` / `pan-y`), which keeps the finger. A
+ * swipe from the left edge is a back swipe over anything, where the edge is the app's (the
+ * home-screen app, the phone apps); in iPhone Safari's own tab the edge is the browser's Back.
+ * A gesture that never ended (a lost touchend, the app hidden) is put back, never left
+ * half-way. Every frame is a transform on the GPU, painted once per animation frame.
  */
 export function SwipeBack({
   enabled,
   target,
   onBack,
   onUsed,
+  closes = false,
 }: {
   enabled: boolean;
   /** What slides with the finger. */
@@ -54,11 +63,17 @@ export function SwipeBack({
   onBack: () => void;
   /** Someone used it (for retiring the demo). */
   onUsed?: () => void;
+  /**
+   * Going back takes `target` off the page (a full-screen page closing): it stays out of
+   * sight until it's gone, never slid back in. Otherwise (Crew's profile → feed) the new
+   * content eases in from the left in the same element.
+   */
+  closes?: boolean;
 }) {
   const strip = useRef<HTMLDivElement | null>(null);
   const arrow = useRef<HTMLDivElement | null>(null);
-  const cb = useRef({ onBack, onUsed });
-  cb.current = { onBack, onUsed };
+  const cb = useRef({ onBack, onUsed, closes });
+  cb.current = { onBack, onUsed, closes };
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
@@ -72,14 +87,20 @@ export function SwipeBack({
     let armed = false;
     let leaving = false;
     let frame = 0;
+    // a timer that puts things back if going back didn't happen (the page never left)
+    let restoreTimer = 0;
 
+    // never over typing or a dialog, even from the edge
+    const typingOrDialog = (el: Element) =>
+      !!el.closest('[role="dialog"],[role="alertdialog"],input,textarea,select,[contenteditable="true"]');
     const blocked = (el: EventTarget | null) => {
       if (!(el instanceof Element)) return true;
-      if (el.closest('[role="dialog"],[role="alertdialog"],[data-no-swipe-back],input,textarea,select,[contenteditable="true"]')) return true;
+      if (typingOrDialog(el) || el.closest("[data-no-swipe-back]")) return true;
       for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
         if (n.scrollLeft > 0 && n.scrollWidth > n.clientWidth) return true;
       }
-      return false;
+      // something under the finger turns, scrubs or slides sideways itself: it keeps the finger
+      return targetOwns(el, "x");
     };
     const sheetOpen = () => !!document.querySelector('[role="dialog"][data-state="open"],[role="alertdialog"][data-state="open"]');
     const EASE = "cubic-bezier(.22,.9,.25,1)";
@@ -122,6 +143,10 @@ export function SwipeBack({
       el.style.willChange = on ? "transform" : "";
     };
     const reset = () => {
+      if (restoreTimer) {
+        window.clearTimeout(restoreTimer);
+        restoreTimer = 0;
+      }
       const el = target.current;
       if (el) {
         el.style.transition = "";
@@ -134,12 +159,34 @@ export function SwipeBack({
       if (arrow.current) arrow.current.style.opacity = "0";
     };
 
+    // the page goes back to where it belongs and the finger is let go (a cancel, a lost end, the app hidden)
+    const abort = (ms = 200) => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      const wasBack = mode === "back";
+      start = null;
+      mode = "off";
+      releaseGesture(ARENA_ID);
+      if (wasBack && !leaving) {
+        paint(0, ms);
+        window.setTimeout(() => lift(false), ms + 10);
+      }
+    };
+
     const onStart = (e: TouchEvent) => {
+      // the last back swipe never ended (its touchend was lost): put the page back first
+      if (mode === "back") abort(0);
       start = null;
       mode = "off";
       if (leaving || e.touches.length !== 1) return;
       const t = e.touches[0];
-      if (t.clientX < EDGE_PX || sheetOpen() || blocked(e.target)) return;
+      if (sheetOpen() || !(e.target instanceof Element)) return;
+      if (t.clientX < BACK_EDGE_PX) {
+        // iPhone Safari's tab: the browser's own Back; elsewhere an intentional back swipe over anything
+        if (!isBackEdge(t.clientX) || typingOrDialog(e.target)) return;
+      } else if (blocked(e.target)) return;
       start = { x: t.clientX, y: t.clientY };
       mode = "undecided";
       dx = 0;
@@ -152,17 +199,21 @@ export function SwipeBack({
     const onMove = (e: TouchEvent) => {
       if (!start || mode === "off") return;
       if (e.touches.length !== 1) {
-        mode = "off";
-        lift(false);
-        paint(0, 200);
+        abort();
         return;
       }
       const t = e.touches[0];
       const ddx = t.clientX - start.x;
       const ddy = t.clientY - start.y;
       if (mode === "undecided") {
+        // something else took this finger (a held drag, a calendar workout being moved): not ours
+        if (e.defaultPrevented || heldByOther(ARENA_ID)) {
+          start = null;
+          mode = "off";
+          return;
+        }
         if (Math.abs(ddx) < LOCK_PX && Math.abs(ddy) < LOCK_PX) return;
-        if (ddx > 0 && ddx > Math.abs(ddy) * DIRECTION) {
+        if (ddx > 0 && ddx > Math.abs(ddy) * DIRECTION && claimGesture(ARENA_ID)) {
           mode = "back";
           lift(true);
           // start from where the finger is now, so the page doesn't jump by the lock distance
@@ -203,6 +254,7 @@ export function SwipeBack({
       const go = shouldGoBack(dx, speed, w);
       start = null;
       mode = "off";
+      releaseGesture(ARENA_ID);
       if (!go) {
         paint(0, 220);
         window.setTimeout(() => lift(false), 230);
@@ -219,6 +271,17 @@ export function SwipeBack({
       window.setTimeout(() => {
         cb.current.onUsed?.();
         cb.current.onBack();
+        if (cb.current.closes) {
+          // the page is closing (a full-screen page: its Back is history, which lands a moment
+          // later): it stays out of sight until it's gone, never slid back in; if it's still here
+          // after a beat, going back didn't happen, so it comes back as it was
+          restoreTimer = window.setTimeout(() => {
+            restoreTimer = 0;
+            leaving = false;
+            if (target.current?.isConnected) reset();
+          }, CLOSE_WAIT_MS);
+          return;
+        }
         // went back inside the same page (profile → feed)? bring the new content in from the left
         requestAnimationFrame(() => {
           const node = target.current;
@@ -244,25 +307,22 @@ export function SwipeBack({
         });
       }, 150);
     };
-    const onCancel = () => {
-      if (mode === "back") {
-        paint(0, 200);
-        window.setTimeout(() => lift(false), 210);
-      }
-      start = null;
-      mode = "off";
-    };
+    const onCancel = () => abort();
 
     document.addEventListener("touchstart", onStart, { passive: true });
     document.addEventListener("touchmove", onMove, { passive: false });
     document.addEventListener("touchend", onEnd, { passive: true });
     document.addEventListener("touchcancel", onCancel, { passive: true });
+    // the app went away mid-swipe (backgrounded, a call, the page hidden): put the page back
+    const stopReset = onGestureReset(() => abort(0));
     return () => {
       document.removeEventListener("touchstart", onStart);
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("touchend", onEnd);
       document.removeEventListener("touchcancel", onCancel);
+      stopReset();
       if (frame) cancelAnimationFrame(frame);
+      releaseGesture(ARENA_ID);
       reset();
     };
   }, [enabled, target]);
