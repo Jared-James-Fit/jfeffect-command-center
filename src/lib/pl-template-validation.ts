@@ -29,7 +29,7 @@ export const ROW_LABEL: Record<RowProblem, string> = {
 };
 
 /** The % bases the app can work a load out from (load-reference.ts, the logger's top-set read). */
-export const READABLE_PCT_BASES = new Set(["training_max", "1rm", "est_1rm", "top_set", "prev_set"]);
+export const READABLE_PCT_BASES = new Set(["training_max", "1rm", "est_1rm", "comp_pr", "var_e1rm", "top_set", "prev_set"]);
 
 /**
  * What a prescription row still needs before an athlete can follow it: one

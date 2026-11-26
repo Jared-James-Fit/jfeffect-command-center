@@ -96,7 +96,8 @@ export function meetRows(facts: Fact[], existing: Array<{ meet_date: string }> =
       meet_date: f.date,
       meet_name: m.name,
       federation: m.federation,
-      equipment: "Raw",
+      // not said in the file: unknown, never assumed raw (an equipped meet is left out of the strength read only when it says so)
+      equipment: null,
       event: "SBD",
       division: null,
       weight_class_kg: m.weightClass,

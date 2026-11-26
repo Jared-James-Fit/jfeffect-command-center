@@ -14,7 +14,6 @@ import { getClientBodyweightKgSeries, smoothedBodyweightKgAt } from "@/lib/bodyw
 import { listClientMaxes } from "@/lib/pl-maxes";
 import { resolveWorkoutRowUnits, type WUnit } from "@/lib/workout-unit-resolution";
 import { cardioLast } from "@/lib/workouts/workout-cardio";
-import { referenceFamily, type LiftFamily } from "@/lib/workouts/load-reference";
 import {
   dayGuides,
   historyByRow,
@@ -29,7 +28,10 @@ import {
   fetchExerciseUnitPrefs,
   fetchFamilyUnitHistory,
   fetchLastOtherReview,
-  fetchLoggedE1rmByFamily,
+  fetchStrengthReadInputs,
+  rowsReadStrength,
+  strengthDayFor,
+  strengthRefsAsOf,
   fetchSessionWarmups,
   liftHistoryKey,
 } from "@/lib/workouts/card-suggestion-reads";
@@ -117,24 +119,13 @@ export function usePeekLoadGuides({
     enabled: on && needsMaxes,
     queryFn: () => listClientMaxes(clientId, entry?.blockId ?? null),
   });
-  const e1rmFamilies = useMemo(() => {
-    const out = new Set<LiftFamily>();
-    for (const r of rows) {
-      if (r.percentage_basis !== "est_1rm" || !r.percentage || r.manual_override) continue;
-      const fam = referenceFamily({
-        rowFamily: r.movement_family,
-        competitionLiftType: r.exercises?.competition_lift_type,
-        movementFamily: r.exercises?.movement_family,
-      });
-      if (fam) out.add(fam);
-    }
-    return [...out].sort();
-  }, [rows]);
+  // the strength read a "% of …" works out from, read on the workout's own day (a finished one keeps its plan)
+  const readsStrength = useMemo(() => rowsReadStrength(rows), [rows]);
   const e1rm = useQuery({
-    queryKey: ["logged-e1rm", clientId, e1rmFamilies.join(",")],
-    enabled: on && e1rmFamilies.length > 0,
+    queryKey: ["logged-e1rm", "v3", clientId],
+    enabled: on && readsStrength,
     staleTime: 5 * 60_000,
-    queryFn: () => fetchLoggedE1rmByFamily(clientId, e1rmFamilies),
+    queryFn: () => fetchStrengthReadInputs(clientId),
   });
   const warmups = useQuery({
     queryKey: ["client-peek-warmups", clientId, instanceId, rowIds.join(",")],
@@ -169,7 +160,7 @@ export function usePeekLoadGuides({
     !bodyweight.isLoading &&
     !review.isLoading &&
     (!needsMaxes || !maxes.isLoading) &&
-    (e1rmFamilies.length === 0 || !e1rm.isLoading) &&
+    (!readsStrength || !e1rm.isLoading) &&
     !warmups.isLoading &&
     !prefs.isLoading &&
     !unitHistory.isLoading &&
@@ -199,7 +190,8 @@ export function usePeekLoadGuides({
       warmups: warmups.data ?? new Map(),
       maxes: maxes.data ?? [],
       maxesPending: needsMaxes && maxes.isLoading,
-      loggedE1rmByFamily: e1rm.data ?? null,
+      strengthRefs: strengthRefsAsOf(e1rm.data ?? null, strengthDayFor(null)),
+      e1rmPending: e1rm.isLoading,
     });
   }, [
     ready,
@@ -220,6 +212,7 @@ export function usePeekLoadGuides({
     maxes.isLoading,
     needsMaxes,
     e1rm.data,
+    e1rm.isLoading,
   ]);
 
   return { guides, loading: on && !ready };

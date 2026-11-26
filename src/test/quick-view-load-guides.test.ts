@@ -53,7 +53,7 @@ const base = (over: Partial<DayGuideInput> = {}): DayGuideInput => ({
   warmups: new Map(),
   maxes: [],
   maxesPending: false,
-  loggedE1rmByFamily: null,
+  strengthRefs: null,
   ...over,
 });
 
@@ -149,7 +149,7 @@ describe("quick view: one path with the logger", () => {
   const guides = read("src/components/clients/workout-quick-view/load-guides.ts");
 
   it("the logger reads its cards' inputs through the shared helpers", () => {
-    for (const fn of ["liftIdentityOf(", "historyByRow(", "dayReads(", "readinessFromReview(", "topSetBasisFor(", "backoffPlanFor(", "prescribedWeightFor(", "capHeldFor(", "progressionPlanFor(", "todaySetsIn(", "carryTodayIn(", "fetchClientLiftHistory(", "fetchLastOtherReview(", "fetchLoggedE1rmByFamily("]) {
+    for (const fn of ["liftIdentityOf(", "historyByRow(", "dayReads(", "readinessFromReview(", "topSetBasisFor(", "backoffPlanFor(", "prescribedWeightFor(", "capHeldFor(", "progressionPlanFor(", "todaySetsIn(", "carryTodayIn(", "fetchClientLiftHistory(", "fetchLastOtherReview(", "fetchStrengthReadInputs("]) {
       expect(wdv).toContain(fn);
     }
     expect(read("src/components/workout-day/load-suggestion-card.tsx")).toContain("suggestionBadge(hint, model)");

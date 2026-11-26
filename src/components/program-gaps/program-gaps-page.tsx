@@ -6,9 +6,10 @@
  * Add maxes / Set days (Athlete setup) and Place them (the Training tab).
  * `?client=` scrolls to one client (the Brief, the Training tab).
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { fetchStrengthReadInputs, strengthDayFor, strengthRefsAsOf } from "@/lib/workouts/card-suggestion-reads";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarX2, Check, ChevronRight, Dumbbell, Gauge, Layers, SlidersHorizontal } from "lucide-react";
@@ -105,6 +106,22 @@ function ClientGapsCard({ g, focused, onAi }: { g: ClientProgramGaps; focused: b
     } finally {
       setUsingEstimate(false);
     }
+  };
+  // what "Use estimated max" would read, per lift: the same strength read the logger works a % out from
+  const strength = useQuery({
+    queryKey: ["logged-e1rm", "v3", g.clientId],
+    enabled: g.maxes.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: () => fetchStrengthReadInputs(g.clientId),
+  });
+  const refs = useMemo(() => strengthRefsAsOf(strength.data ?? null, strengthDayFor(null)), [strength.data]);
+  const estimateFor = (lift: string) => {
+    const fam = (["squat", "bench", "deadlift"] as const).find((f) => lift.toLowerCase().includes(f === "deadlift" ? "dead" : f));
+    if (!fam || !refs) return null;
+    const ref = refs.e1rm[fam];
+    return ref
+      ? `Estimated max ${ref.lowerBound ? "at least " : ""}${ref.kg} kg (${ref.word} confidence)`
+      : `No estimate to read yet (${(refs.why[fam] ?? "").replace(/\.$/, "")}): these sets would go by their RPE.`;
   };
   const [allWorkouts, setAllWorkouts] = useState(focused);
   const when = whenLabel(g.today, g.firstDate);
@@ -203,6 +220,7 @@ function ClientGapsCard({ g, focused, onAi }: { g: ClientProgramGaps; focused: b
                   {m.nothingElse ? `, ${m.nothingElse} with no RPE either, so ${g.firstName} sees no weight` : ""}
                 </p>
                 {m.exercises.length > 1 && <p className="truncate text-[12px] text-muted-foreground">{m.exercises.join(", ")}</p>}
+                {estimateFor(m.lift) && <p className="text-[12px] text-muted-foreground" data-program-gaps-estimate-value>{estimateFor(m.lift)}</p>}
               </li>
             ))}
           </ul>

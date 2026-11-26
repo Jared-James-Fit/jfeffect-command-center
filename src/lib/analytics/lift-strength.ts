@@ -1,26 +1,17 @@
 /**
- * The competition lifts' strength over time, every session counted with its
- * confidence (strength-estimate.ts) and meets as what was lifted on the
- * platform (pure, tested). One read for the strength chart, the Overview's
- * numbers, the SBD composition and the calendar, so none of them disagree.
- * Loads in lb (getClientResults' unit); screens convert.
+ * The competition lifts' strength over time from the Strength Intelligence
+ * engine (src/lib/strength-intel/profile.ts): every session counted for what
+ * it can say, meets as what was lifted on the platform, one line per lift.
+ * One read for the strength chart, the Overview's numbers, the SBD
+ * composition, the calendar, the competition forecast and the logger's % of
+ * Est. 1RM, so none of them disagree. Loads in lb (getClientResults' unit);
+ * screens convert.
  */
-import {
-  compLiftOfResult,
-  COMP_LIFTS,
-  type CompLift,
-  type MeetResult,
-} from "@/lib/analytics/competition-strength";
-import {
-  envelopeAt,
-  envelopeTrend,
-  sessionEstimates,
-  strengthEnvelope,
-  type EnvelopePoint,
-  type EnvelopeTrend,
-  type SessionEstimate,
-} from "@/lib/analytics/strength-estimate";
-import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
+import { COMP_LIFTS, type CompLift, type MeetResult } from "@/lib/analytics/competition-strength";
+import { envelopeAt, envelopeTrend, type EnvelopePoint, type EnvelopeTrend, type SessionEstimate } from "@/lib/analytics/strength-estimate";
+import { buildStrengthIntel, type LiftIntel, type StrengthContext } from "@/lib/strength-intel/profile";
+
+export { isMeetLog, localDay, MEET_LOG_DAYS } from "@/lib/strength-intel/profile";
 
 export type LiftStrength = {
   lift: CompLift;
@@ -28,72 +19,35 @@ export type LiftStrength = {
   /** meets, as lifted (high confidence, never an estimate) */
   meets: Array<{ day: string; lb: number; name: string | null }>;
   envelope: EnvelopePoint[];
+  /** everything else the engine knows about this lift (PRs, peak, calibration, stance) */
+  intel: LiftIntel;
 };
 
-/** The athlete's own calendar day of an ISO time. */
-export function localDay(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** Days after a meet its attempts may still be typed into the app. */
-export const MEET_LOG_DAYS = 6;
-
-/** A session that is a meet's own attempts logged in the app: its heaviest set at the meet's lift, within a few days. */
-export function isMeetLog(
-  s: Pick<SessionEstimate, "day" | "heaviest">,
-  m: { day: string; lb: number },
-): boolean {
-  const gap = (Date.parse(`${s.day}T12:00:00Z`) - Date.parse(`${m.day}T12:00:00Z`)) / 86_400_000;
-  if (gap < -1 || gap > MEET_LOG_DAYS) return false;
-  return Math.abs(s.heaviest - m.lb) <= Math.max(2.5, m.lb * 0.01);
-}
+const lastDay = (results: any[], meets: MeetResult[]) => {
+  let d = "";
+  for (const r of results ?? []) if (r?.date && String(r.date).slice(0, 10) > d) d = String(r.date).slice(0, 10);
+  for (const m of meets ?? []) if (m?.date > d) d = m.date;
+  return d || "1970-01-01";
+};
 
 export function liftStrengths(
   results: any[],
   meets: MeetResult[] = [],
   today?: string,
+  ctx: Omit<StrengthContext, "today"> = {},
 ): Record<CompLift, LiftStrength> {
-  const comp = neutralizeObviousLoadOutliers(
-    (results ?? [])
-      .filter((r) => compLiftOfResult(r))
-      .map((r) => ({ ...r, est_1rm: Number(r.est_1rm) || 0 })),
-  );
+  // with no day given, read through the last thing logged (never past it)
+  const day = today ?? lastDay(results, meets);
+  const intel = buildStrengthIntel(results, meets, { ...ctx, today: day });
   const out = {} as Record<CompLift, LiftStrength>;
   for (const lift of COMP_LIFTS) {
-    const sets = comp
-      .filter((r: any) => compLiftOfResult(r) === lift && r.date && r.counts_load !== false)
-      .map((r: any) => ({
-        day: localDay(r.date),
-        load: Number(r.load) || 0,
-        reps: Number(r.reps) || 0,
-        rpe: r.rpe,
-        rir: r.rir,
-      }));
-    const ms = meets
-      .filter((m) => m.lifts[lift] > 0)
-      .map((m) => ({ day: m.date, lb: Math.round(m.lifts[lift] * 10) / 10, name: m.name }));
-    let sessions = sessionEstimates(sets);
-    // a meet is a max lifted: it stands in for that day's estimate, and for
-    // its attempts typed into the app a few days later (their RPEs, rated
-    // after the fact, read a 270 kg pull at "8" as a 297 kg max)
-    sessions = sessions.filter((s) => !ms.some((m) => isMeetLog(s, m)));
-    const withMeets: SessionEstimate[] = [
-      ...sessions,
-      ...ms.map((m) => ({
-        day: m.day,
-        e1rm: m.lb,
-        confidence: "high" as const,
-        set: { load: m.lb, reps: 1, effort: 10 },
-        heaviest: m.lb,
-      })),
-    ].sort((a, b) => a.day.localeCompare(b.day));
+    const l = intel.lifts[lift];
     out[lift] = {
       lift,
-      sessions,
-      meets: ms,
-      envelope: strengthEnvelope(withMeets, { until: today }),
+      sessions: l.sessions,
+      meets: l.meets,
+      envelope: today ? l.line : l.line.filter((p) => p.day <= day),
+      intel: l,
     };
   }
   return out;
@@ -115,17 +69,11 @@ export function liftNow(ls: LiftStrength, start: string, end: string): LiftNow {
 }
 
 /** The competition lift with the most sessions in the period (what a powerlifter's headline speaks for). */
-export function mainLift(
-  all: Record<CompLift, LiftStrength>,
-  start: string,
-  end: string,
-): CompLift | null {
+export function mainLift(all: Record<CompLift, LiftStrength>, start: string, end: string): CompLift | null {
   let best: CompLift | null = null;
   let n = 0;
   for (const lift of COMP_LIFTS) {
-    const c = all[lift].sessions.filter(
-      (s) => s.day >= start && s.day <= end && s.confidence !== "low",
-    ).length;
+    const c = all[lift].sessions.filter((s) => s.day >= start && s.day <= end && s.confidence !== "low").length;
     if (c > n) {
       n = c;
       best = lift;

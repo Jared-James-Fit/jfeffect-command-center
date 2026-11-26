@@ -17,7 +17,7 @@ import {
   type EnvelopePoint,
   type SessionEstimate,
 } from "@/lib/analytics/strength-estimate";
-import { meetsFromRows } from "@/lib/analytics/competition-strength";
+import { meetsWithDetail } from "@/lib/strength-intel/read";
 import { epley1RM } from "@/lib/analytics/e1rm";
 import type { BriefContext, CompetitionFacts } from "./brief";
 import { pastCuts, type ConversionPoint, type LiftEvidence } from "./forecast";
@@ -269,7 +269,7 @@ export async function loadLiftEvidence(sb: Db, clientId: string, today: string):
       [] as any[],
     ),
   ]);
-  const strengths = liftStrengths(sets, meetsFromRows(meetRows), today);
+  const strengths = liftStrengths(sets, meetsWithDetail(meetRows), today);
   const out = {} as Record<Lift, LiftEvidence>;
   for (const lift of LIFTS) out[lift] = liftEvidenceOf(lift, strengths[lift], today);
   return out;
@@ -501,7 +501,8 @@ export async function loadCompetitionContext(
 
   // the strength line per lift (the analytics' own read), meets as lifted
   const meets = allMeetRows.map(meetFromRow);
-  const strengths = liftStrengths(allSets, meetsFromRows(allMeetRows), today);
+  // the one strength read: raw meets only, an opener with two misses saying less (uploaded meets included)
+  const strengths = liftStrengths(allSets, meetsWithDetail(allMeetRows), today);
   const lifts = {} as Record<Lift, LiftEvidence>;
   const conversion: ConversionPoint[] = [];
   const topSingles: Partial<Record<Lift, number | null>> = {};
