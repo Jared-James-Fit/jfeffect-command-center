@@ -201,6 +201,7 @@ export function detectPurposes(o: { name?: string | null; text: string; sheetNam
   if (/\b(program|programme|block|week \d|wk ?\d|day \d|meso|template|plan|prescribed|target)\b/.test(all)) out.add("program");
   if (/\b(meet|competition|nationals|provincials|openpowerlifting|total|wilks|gl points|dots|placing|1st place|2nd place)\b/.test(all) && /\b(total|place|meet)\b/.test(all))
     out.add("competition_history");
+  if (/\b(weigh.in|flight|nominations|start list|lifting starts|meet schedule|event schedule|venue|technical rules)\b/.test(all)) out.add("event_logistics");
   if (/\b(opener|openers|attempts?|2nd attempt|third attempt|3rd|attempt selection)\b/.test(all)) out.add("attempts");
   if (/\b(warm ?ups?|warmups?|last warm)\b/.test(all)) out.add("warmups");
   if (/\b(cue|cues|technique|depth|lockout|bar path|elbows|hips rise|knees|brace|bracing|leg drive|setup|hitch)\b/.test(all)) out.add("technical");

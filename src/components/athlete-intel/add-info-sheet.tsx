@@ -188,9 +188,9 @@ export function AddInfoSheet({
     <Sheet open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg" data-intel-add onPaste={onPaste}>
         <SheetHeader className="text-left">
-          <SheetTitle>{replaces ? `Replace ${replaces.name}` : `Add information about ${athleteFirst}`}</SheetTitle>
+          <SheetTitle>{replaces ? `Replace ${replaces.name}` : competitionId ? `Add competition files for ${athleteFirst}` : `Add information about ${athleteFirst}`}</SheetTitle>
           <SheetDescription>
-            Training logs, programs, meet results, their coach's notes, warm-ups, attempts, cues. Cleo reads them into the forecast, attempts and gameplan, and only asks you something if it really matters.
+            Drop schedules, nominations, rules, training logs, programs, coach notes, warm-ups or attempt plans. Cleo organizes them, extracts relevant details and proposes changes to this meet.
           </SheetDescription>
         </SheetHeader>
 
@@ -216,7 +216,7 @@ export function AddInfoSheet({
           >
             <FileUp className="h-5 w-5 text-muted-foreground" />
             <span className="text-[14px] font-medium">Drop files, or tap to choose</span>
-            <span className="text-[12px] text-muted-foreground">Excel, CSV, PDF, Word, photos, screenshots, video · paste works too</span>
+            <span className="text-[12px] text-muted-foreground">Excel, CSV, PDF, Word, photos, screenshots · video kept for reference · paste works too</span>
           </button>
           <input ref={inputRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => (addFiles(e.target.files), (e.target.value = ""))} />
 

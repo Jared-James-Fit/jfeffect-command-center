@@ -18,6 +18,7 @@ export type Provider = "primary_coach" | "athlete" | "handler" | "other_coach" |
 export type Purpose =
   | "program"
   | "logs"
+  | "event_logistics"
   | "competition_history"
   | "coach_recommendations"
   | "warmups"
@@ -105,7 +106,7 @@ export type MeetData = {
 
 export type AttemptPlanData = { opener: number | null; second: number | null; third: number | null };
 export type WarmupData = { rows: Array<{ kg: number | null; pct: number | null; reps: number }> };
-export type TextData = { text: string };
+export type TextData = { text: string; meetLogistics?: { field: string; value: string } };
 export type EquipmentData = {
   rackHeight?: string | null;
   safety?: string | null;
@@ -212,6 +213,7 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
 export const PURPOSE_LABEL: Record<Purpose, string> = {
   program: "Training program",
   logs: "Completed training",
+  event_logistics: "Event schedule & rules",
   competition_history: "Competition history",
   coach_recommendations: "Coach recommendations",
   warmups: "Warm-ups",

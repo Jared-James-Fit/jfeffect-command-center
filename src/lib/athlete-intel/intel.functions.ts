@@ -29,7 +29,7 @@ async function sourceClient(sb: any, sourceId: string) {
 
 const uuid = z.string().uuid();
 const PROVIDERS = ["primary_coach", "athlete", "handler", "other_coach", "other", "unknown"] as const;
-const PURPOSES = ["program", "logs", "competition_history", "coach_recommendations", "warmups", "attempts", "technical", "other"] as const;
+const PURPOSES = ["program", "logs", "competition_history", "event_logistics", "coach_recommendations", "warmups", "attempts", "technical", "other"] as const;
 const fileMeta = z.object({
   name: z.string().trim().min(1).max(200),
   size: z.number().int().min(1).max(MAX_VIDEO_BYTES),
@@ -76,7 +76,7 @@ const addBase = z.object({
   competitionId: uuid.nullable().optional(),
   provider: z.enum(PROVIDERS).default("unknown"),
   providerName: z.string().trim().max(120).nullable().optional(),
-  purposes: z.array(z.enum(PURPOSES)).max(8).default([]),
+  purposes: z.array(z.enum(PURPOSES)).max(9).default([]),
   context: z.string().trim().max(1000).nullable().optional(),
 });
 
@@ -476,5 +476,21 @@ export const answerShareFn = createServerFn({ method: "POST" })
     const { data: q } = await sb.from("athlete_intel_questions").select("*").eq("id", data.questionId).eq("client_id", row.client_id).maybeSingle();
     if (!q || q.status !== "open" || !(q.ask_who ?? []).includes(row.role)) throw new Error("That question has already been settled");
     await s.answerQuestion(sb, q, data, { userId: null, role: row.role });
+    return { ok: true };
+  });
+
+/** Apply only a selected, still-current field from a private meet source. */
+export const applyMeetFileFactFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ competitionId: uuid, factId: uuid, before: z.string().max(200).nullable() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = await admin();
+    const { data: c } = await sb.from("competitions").select("client_id").eq("id", data.competitionId).maybeSingle();
+    if (!c) throw new Error("Competition not found");
+    await reach(context, c.client_id);
+    const { error } = await sb.rpc("apply_competition_file_fact", { _actor: context.userId, _competition: data.competitionId, _fact: data.factId, _before: data.before });
+    if (error) throw new Error(error.message);
+    const { applySchedule } = await import("@/lib/competition/worker.server");
+    await applySchedule(sb, data.competitionId);
     return { ok: true };
   });
