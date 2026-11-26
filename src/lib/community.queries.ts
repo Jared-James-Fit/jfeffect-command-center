@@ -283,6 +283,7 @@ function myCachedAuthor(qc: ReturnType<typeof useQueryClient>): CommunityAuthor 
 
 export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     // One post's likes go to the server one at a time, in the order tapped: a quick
     // like · unlike · like can never land out of order and leave the server on the
@@ -290,6 +291,7 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
     scope: { id: `community-react:${post.id}` },
     // `next` = the reaction to end up with (null removes it).
     mutationFn: async (next: ReactionKey | null) => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       const { error } = await db.rpc("community_react", { _post_id: post.id, _emoji: next });
       if (error) throw error;
       // "Your coach saw your training" from the coach; otherwise the author hears about it (grouped, rate limited).
@@ -297,6 +299,7 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       if (next && !post.is_mine) fireAppEvent("community_activity", post.id);
     },
     onMutate: async (next) => {
+      if (isPov) return undefined;
       // Stop a refresh that would paint over the like, but never a next page being
       // read while they scroll (cancelling it lost the page under their thumb).
       await qc.cancelQueries({
@@ -611,8 +614,10 @@ export type NewComment = {
 /** Post a comment or reply (words, a photo / video, or both). Shows instantly, uploads in the background. */
 export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine: boolean) {
   const qc = useQueryClient();
+  const { isPov } = usePovCrewRead();
   return useMutation({
     mutationFn: async (c: NewComment): Promise<CommunityComment> => {
+      if (isPov) throw new Error("Social actions are read-only in POV.");
       let media: { path: string; thumb: string | null; type: string; width: number | null; height: number | null; duration?: number } | null = null;
       if (c.media) {
         const up = await uploadPicked(c.media, c.userId, c.onProgress);
@@ -635,6 +640,7 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
       return data as CommunityComment;
     },
     onMutate: async (c) => {
+      if (isPov) return undefined;
       // the comment appears now: its tap lands with it
       feedback("comment");
       await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
