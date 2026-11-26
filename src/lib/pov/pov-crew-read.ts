@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
-type CrewRead = "feed" | "ranked" | "profile" | "post" | "follows" | "activity" | "crew_notices" | "follow_list" | "archived" | "saved_albums" | "saved_posts" | "reposts" | "direct_threads" | "crew_threads" | "chat_prefs" | "nav_data";
+type CrewRead = "feed" | "ranked" | "profile" | "post" | "follows" | "activity" | "crew_notices" | "follow_list" | "archived" | "saved_albums" | "saved_posts" | "reposts" | "direct_threads" | "crew_threads" | "chat_prefs" | "nav_data" | "comments" | "reactors" | "post_activity" | "hints";
 type Args = Record<string, unknown>;
 const db = supabase as any;
 
