@@ -480,8 +480,10 @@ export function ClientAnalyticsDashboard({
         today,
         coached,
         supportCredit,
+        plan: trainingLoad.plan,
       }),
     [
+      trainingLoad.plan,
       trainingLoad.load,
       periodLoadSets,
       allLoadSets,
@@ -1168,6 +1170,10 @@ export function ClientAnalyticsDashboard({
                       credit={supportCredit}
                       onCredit={setSupportCredit}
                       onExercise={setMuscleExercise}
+                      history={allLoadSets}
+                      start={startDay}
+                      end={endDay < today ? endDay : today}
+                      periods={blocks.map(b=>({id:b.id,name:b.name,start:b.start,end:b.end < today ? b.end : today}))}
                     />
                   </SectionErrorBoundary>
                 </Card>
