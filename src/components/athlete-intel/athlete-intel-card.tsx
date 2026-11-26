@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import {
   answerQuestionFn,
   applyRecommendationsFn,
-  applyMeetFileFactFn,
+  applyMeetFileFactsFn,
   factActionFn,
   getIntelFn,
   requestAnswerFn,
@@ -27,6 +27,7 @@ import {
   sourceFileFn,
 } from "@/lib/athlete-intel/intel.functions";
 import { MEET_LOGISTICS_LABELS } from "@/lib/competition/attachment-intake";
+import { defaultMeetFileSelection, validMeetFileValue, type MeetFileProposal } from "@/lib/athlete-intel/meet-files";
 import { factLine } from "@/lib/athlete-intel/findings";
 import { PROVIDER_LABEL, PURPOSE_LABEL, type Fact, type FactKind } from "@/lib/athlete-intel/types";
 import { AddInfoSheet } from "./add-info-sheet";
@@ -73,8 +74,6 @@ export function AthleteIntelCard({
   onChanged?: () => void;
 }) {
   const read = useServerFn(getIntelFn);
-  const applyMeet = useServerFn(applyMeetFileFactFn);
-  const [applyingFact, setApplyingFact] = useState<string | null>(null);
   const qc = useQueryClient();
   const [adding, setAdding] = useState<null | { replaces?: { id: string; name: string } | null; files?: File[] | null }>(null);
   const [openSource, setOpenSource] = useState<string | null>(null);
@@ -98,8 +97,8 @@ export function AthleteIntelCard({
   useEffect(() => {
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("intel") === "1") ref.current?.scrollIntoView({ block: "start" });
   }, []);
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["athlete-intel", clientId] });
+  const refresh = async () => {
+    await qc.invalidateQueries({ queryKey: ["athlete-intel", clientId] });
     onChanged?.();
   };
 
@@ -119,17 +118,17 @@ export function AthleteIntelCard({
   const shownFindings = showAll ? findings : findings.slice(0, 3);
 
   return (
-    <section ref={ref} className="rounded-2xl border border-border bg-card p-4" data-athlete-intel>
+    <section ref={ref} className="rounded-2xl border border-border bg-card p-3 sm:p-4" data-athlete-intel>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-[15px] font-semibold">{competitionId ? "Competition files" : "Athlete information"}</h3>
           <p className="text-[12.5px] text-muted-foreground">
             {sources.length
-              ? `${sources.length} item${sources.length === 1 ? "" : "s"} · read into the forecast, attempts and gameplan`
+              ? `${sources.length} item${sources.length === 1 ? "" : "s"} · used in meet preparation`
               : `Schedules, nominations, rules, logs and coach notes: Cleo reads them into ${athleteFirst}'s preparation.`}
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setAdding({})} data-intel-add-open>
+        <Button size="sm" className="shrink-0" onClick={() => setAdding({})} data-intel-add-open>
           <Plus /> {competitionId ? "Upload files" : "Add"}
         </Button>
       </div>
@@ -152,25 +151,7 @@ export function AthleteIntelCard({
       ) : null}
 
       {competitionId && data?.meetLogistics?.length ? (
-        <div className="mt-3 rounded-xl border border-border p-3" data-meet-file-proposals>
-          <p className="text-[14px] font-semibold">Meet details to confirm</p>
-          <p className="text-[12px] text-muted-foreground">Check each source before updating the schedule. Existing values stay until confirmed.</p>
-          {data.meetLogistics.map((p: any) => (
-            <div key={p.factId} className="mt-2 border-t border-border pt-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 text-[13px]"><span className="font-medium">{MEET_LOGISTICS_LABELS[p.field] ?? p.field}</span><div>{p.before ? <span className="text-muted-foreground">{p.before} → </span> : null}{p.value}</div></div>
-                <Button size="sm" variant="outline" disabled={!!applyingFact} onClick={async () => {
-                  if (p.before && !window.confirm("Replace " + p.before + " with " + p.value + "?")) return;
-                  setApplyingFact(p.factId);
-                  try { await applyMeet({ data: { competitionId, factId: p.factId, before: p.before } }); toast.success("Meet updated"); }
-                  catch (e: any) { toast.error(e?.message ?? "Could not update meet"); }
-                  finally { setApplyingFact(null); refresh(); }
-                }}>{applyingFact === p.factId ? "Saving…" : "Confirm"}</Button>
-              </div>
-              <details className="mt-1 text-[12px] text-muted-foreground"><summary className="cursor-pointer break-words">{p.source}{p.location ? " · " + p.location : ""}</summary><p className="break-words">{p.quote}</p></details>
-            </div>
-          ))}
-        </div>
+        <MeetFileReview key={competitionId} competitionId={competitionId} proposals={data.meetLogistics} onDone={refresh} />
       ) : null}
       {question ? <QuestionBlock q={question} more={data.questions.later} athleteFirst={athleteFirst} coachContactOk={coachContactOk} onDone={refresh} /> : null}
 
@@ -259,6 +240,129 @@ export function AthleteIntelCard({
 }
 
 /* ------------------------------------------------------------------ */
+
+
+/** One confirmation, with source evidence and coach overrides kept distinct. */
+function MeetFileReview({ competitionId, proposals, onDone }: {
+  competitionId: string;
+  proposals: MeetFileProposal[];
+  onDone: () => Promise<void>;
+}) {
+  const apply = useServerFn(applyMeetFileFactsFn);
+  // Only explicit user choices are stored. Newly read, non-conflicting fields
+  // default to selected; a changed source or before-value requires a fresh review.
+  const [choices, setChoices] = useState<Record<string, boolean>>({});
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string[]>([]);
+  const rowKey = (p: MeetFileProposal) => JSON.stringify([p.factId, p.before, p.value, p.conflict]);
+  const available = proposals.filter(p => !saved.includes(rowKey(p)));
+  const defaults = new Set(defaultMeetFileSelection(available));
+  const selected = available.filter(p => choices[rowKey(p)] ?? defaults.has(p.factId));
+  const safe = available.filter(p => !p.conflict);
+  const selectedSafe = safe.filter(p => selected.includes(p)).length;
+  const invalid = selected.some(p => !validMeetFileValue(p.field, edits[rowKey(p)] ?? p.value));
+  const pick = (p: MeetFileProposal, checked: boolean) => {
+    setChoices(old => {
+      const next = { ...old, [rowKey(p)]: checked };
+      if (checked) for (const other of available) {
+        if (other.field === p.field && other.factId !== p.factId) next[rowKey(other)] = false;
+      }
+      return next;
+    });
+  };
+  const selectAll = () => setChoices(old => {
+    const next = { ...old };
+    for (const p of safe) next[rowKey(p)] = true;
+    return next;
+  });
+  const clearAll = () => setChoices(Object.fromEntries(available.map(p => [rowKey(p), false])));
+  const run = useMutation({
+    mutationFn: () => apply({ data: {
+      competitionId,
+      updates: selected.map(p => ({
+        factId: p.factId,
+        before: p.before,
+        extracted: p.value,
+        value: (edits[rowKey(p)] ?? p.value).trim(),
+      })),
+    } }),
+    onSuccess: async (r) => {
+      const fields = new Set(selected.map(p => p.field));
+      setSaved(old => [...old, ...available.filter(p => fields.has(p.field)).map(rowKey)]);
+      setEditing(null);
+      toast.success(r.count === 1 ? "Meet detail updated" : `${r.count} meet details updated`);
+      if (r.scheduleWarning) toast.warning("Saved. Schedule refresh will be retried by the competition worker.");
+      await onDone();
+    },
+    onError: async (e: any) => {
+      toast.error(e?.message ?? "Couldn't save these updates");
+      await onDone();
+    },
+  });
+  if (!available.length) return null;
+  return (
+    <div className="mt-3 rounded-xl border border-primary/30 bg-muted/35" data-meet-file-proposals>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-3">
+        <div>
+          <p className="text-[14px] font-semibold">Review meet details <span className="font-normal text-muted-foreground">({available.length})</span></p>
+          <p className="text-[12px] text-muted-foreground">Edit or uncheck before confirming.</p>
+        </div>
+        <span className="text-[12px] font-medium tabular-nums">{selected.length} selected</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 text-[12px]">
+        <label className="flex cursor-pointer items-center gap-2 font-medium">
+          <Checkbox aria-label="Select all non-conflicting updates" disabled={run.isPending || !safe.length} checked={safe.length > 0 && selectedSafe === safe.length ? true : selectedSafe > 0 ? "indeterminate" : false} onCheckedChange={v => v === true ? selectAll() : setChoices(old => ({ ...old, ...Object.fromEntries(safe.map(p => [rowKey(p), false])) }))} />
+          {available.some(p => p.conflict) ? "Select all clear" : "Select all"}
+        </label>
+        <button type="button" disabled={run.isPending} onClick={clearAll} className="text-muted-foreground hover:text-foreground hover:underline">Deselect all</button>
+      </div>
+      {available.some(p => p.conflict) ? <p className="px-3 pt-2 text-[12px] text-warning">Sources disagree. Choose at most one value per field.</p> : null}
+      <div className="divide-y divide-border px-3">
+        {available.map(p => {
+          const k = rowKey(p);
+          const value = edits[k] ?? p.value;
+          const label = MEET_LOGISTICS_LABELS[p.field] ?? p.field;
+          const valid = validMeetFileValue(p.field, value);
+          return (
+            <div key={k} className="py-2.5" data-meet-file-row={p.field}>
+              <div className="flex items-start gap-2.5">
+                <Checkbox className="mt-1" aria-label={`Select ${label}: ${p.value}`} disabled={run.isPending} checked={selected.includes(p)} onCheckedChange={v => pick(p, v === true)} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+                    <span className="font-medium">{label}</span>
+                    {p.conflict ? <span className="text-[11px] text-warning">Conflict</span> : null}
+                    {value !== p.value ? <span className="text-[11px] text-muted-foreground">Edited</span> : null}
+                  </div>
+                  {editing === k ? (
+                    <div className="mt-1">
+                      <Input autoFocus disabled={run.isPending} aria-label={`Edit ${label}`} aria-invalid={!valid} className="h-8 w-full max-w-xs bg-background text-[13px]" type={["weigh_in_at", "lifting_start"].includes(p.field) ? "time" : "text"} value={value} onChange={e => setEdits(old => ({...old, [k]: e.target.value}))} onKeyDown={e => { if (e.key === "Enter" && valid) setEditing(null); }} />
+                      {!valid ? <p className="mt-1 text-[11px] text-destructive">Enter a valid value.</p> : null}
+                    </div>
+                  ) : (
+                    <div className="break-words text-[13px]"><span className="text-muted-foreground">{p.before || "Not set"} → </span><span className={cn("font-medium", !valid && "text-destructive")}>{value || "Empty"}</span></div>
+                  )}
+                  <details className="mt-0.5 text-[11.5px] text-muted-foreground">
+                    <summary className="cursor-pointer break-words">{p.source}{p.location ? " · " + p.location : ""}</summary>
+                    <p className="break-words">{p.quote}</p>
+                    {value !== p.value ? <p>Original extraction: {p.value}</p> : null}
+                  </details>
+                </div>
+                <Button type="button" size="sm" variant="ghost" className="h-8 shrink-0 px-2" disabled={run.isPending} aria-label={editing === k ? `Done editing ${label}` : `Edit ${label}`} onClick={() => setEditing(editing === k ? null : k)}>{editing === k ? "Done" : "Edit"}</Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-b-xl border-t border-border bg-card px-3 py-2.5">
+        <span className="text-[11.5px] text-muted-foreground">Only selected details will change.</span>
+        <Button size="sm" className="shrink-0" disabled={!selected.length || invalid} loading={run.isPending} onClick={() => run.mutate()} data-meet-file-confirm>
+          Confirm {selected.length} {selected.length === 1 ? "update" : "updates"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function QuestionBlock({ q, more, athleteFirst, coachContactOk, onDone }: { q: any; more: number; athleteFirst: string; coachContactOk: boolean; onDone: () => void }) {
   const answer = useServerFn(answerQuestionFn);

@@ -4,6 +4,10 @@ on:
     paths:
       - 'src/components/competition/**'
       - 'src/lib/competition/**'
+      - 'src/components/athlete-intel/**'
+      - 'src/lib/athlete-intel/**'
+      - 'src/styles.css'
+      - 'supabase/migrations/*apply_competition_file_facts.sql'
       - 'src/test/competition*'
       - '.github/workflows/competition-review-check.yml'
   workflow_dispatch:
@@ -16,8 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bun run test src/test/competition-handling-ui.test.tsx src/test/competition-handling.test.ts
+      - run: |
+          sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
+          bun install --frozen-lockfile --ignore-scripts
+      - run: bun run test src/test/competition-handling-ui.test.tsx src/test/competition-handling.test.ts src/test/competition-meet-files.test.ts
       - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
         if: ${{ !cancelled() }}
       - run: bun run build

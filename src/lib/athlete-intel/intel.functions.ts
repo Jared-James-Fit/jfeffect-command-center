@@ -494,3 +494,33 @@ export const applyMeetFileFactFn = createServerFn({ method: "POST" })
     await applySchedule(sb, data.competitionId);
     return { ok: true };
   });
+
+
+/** Coach-reviewed batch: one transaction, one schedule refresh, no AI write. */
+export const applyMeetFileFactsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    competitionId: uuid,
+    updates: z.array(z.object({
+      factId: uuid,
+      before: z.string().max(200).nullable(),
+      extracted: z.string().min(1).max(200),
+      value: z.string().trim().min(1).max(160),
+    })).min(1).max(30),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = await admin();
+    const { data: c } = await sb.from("competitions").select("client_id").eq("id", data.competitionId).maybeSingle();
+    if (!c) throw new Error("Competition not found");
+    await reach(context, c.client_id);
+    const { data: count, error } = await sb.rpc("apply_competition_file_facts", { _actor: context.userId, _competition: data.competitionId, _updates: data.updates });
+    if (error) throw new Error(error.message);
+    let scheduleWarning = false;
+    try {
+      const { applySchedule } = await import("@/lib/competition/worker.server");
+      await applySchedule(sb, data.competitionId);
+    } catch {
+      scheduleWarning = true;
+    }
+    return { ok: true, count: Number(count ?? 0), scheduleWarning };
+  });
