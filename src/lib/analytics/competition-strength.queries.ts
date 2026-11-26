@@ -46,7 +46,7 @@ async function loadCompetitionData(clientId: string): Promise<CompetitionData> {
   const athlete = athleteRes.data as { id: string; sex: string | null } | null;
   const { data: meetRows } = await supabase
     .from("athlete_powerlifting_results")
-    .select("squat_kg, bench_kg, deadlift_kg, total_kg, bodyweight_kg, meet_date, meet_name, sex, equipment, attempts")
+    .select("id, squat_kg, bench_kg, deadlift_kg, total_kg, bodyweight_kg, meet_date, meet_name, sex, equipment, attempts, weight_class_kg, federation, event")
     .or(
       athlete ? `client_id.eq.${clientId},athlete_id.eq.${athlete.id}` : `client_id.eq.${clientId}`,
     )
