@@ -79,7 +79,7 @@ export function AthleteMeet({
   const today: string = m.today;
   const meetDay = c.status === "upcoming" && today >= String(c.meet_date) && today <= String(c.meet_end_date ?? c.meet_date);
   const needsOnboarding = !!m.handling && m.handling.status !== "cancelled" && (!m.infoComplete || !m.handling.termsAcceptedAt);
-  const showWizard = !previewing && (onboarding || needsOnboarding) && c.status === "upcoming";
+  const showWizard = (onboarding || (!previewing && needsOnboarding)) && c.status === "upcoming";
   const plan = m.plan ? readGameplan(m.plan.doc) : null;
   const rules = readRules(c.rules, c.federation);
 
@@ -112,9 +112,9 @@ export function AthleteMeet({
         previewing={previewing}
         onDone={() => {
           setOnboarding(false);
-          refresh();
+          if (!previewing) refresh();
         }}
-        onClose={needsOnboarding ? undefined : () => setOnboarding(false)}
+        onClose={needsOnboarding && !previewing ? undefined : () => setOnboarding(false)}
       />
     );
 
@@ -168,7 +168,7 @@ export function AthleteMeet({
               Your gameplan is ready. Have a look and confirm it.
             </button>
           ) : null}
-          {c.status === "upcoming" && !previewing && !m.infoComplete ? (
+          {c.status === "upcoming" && (!m.infoComplete || needsOnboarding) ? (
             <button
               type="button"
               onClick={() => setOnboarding(true)}
@@ -178,7 +178,7 @@ export function AthleteMeet({
               <p className="text-[14.5px] font-medium">Add your meet details</p>
               <p className="text-[12.5px] text-muted-foreground">A few minutes: your lifts, warm-ups, racks and travel. Your plan is built from them.</p>
             </button>
-          ) : c.status === "upcoming" && !previewing ? (
+          ) : c.status === "upcoming" ? (
             <Button variant="outline" className="w-full" onClick={() => setOnboarding(true)} data-update-meet-info>
               <Pencil className="h-4 w-4" /> Update my meet details
             </Button>
