@@ -9,6 +9,8 @@
  * chart with nothing to show isn't drawn.
  */
 import { useMemo, useState } from "react";
+import { PlanEventTimeline } from "@/components/clients/plan-event-timeline";
+import { plansOnDate } from "@/lib/plan-event-timeline";
 import { Activity, CircleAlert, History as HistoryIcon, ListChecks, Pencil } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -78,6 +80,9 @@ export function CardioOverview({
   /** The multi-week program editor (only when they have one). */
   legacy?: React.ReactNode;
 }) {
+  const [selectedVersion, setSelectedVersion] = useState("");
+  const versions = view.versions.filter((v) => v.state !== "replaced").slice().sort((a, b) => b.effective_date.localeCompare(a.effective_date) || b.version_no - a.version_no);
+  const previous = versions.find((v) => v.id === selectedVersion) ?? versions.filter((v) => v.effective_date <= view.today)[1];
   const [chart, setChart] = useState<"weeks" | "weekday" | "bodyweight">("weeks");
   const [table, setTable] = useState(false);
   const kpi = useMemo(() => cardioKpis({ today: view.today, rows: view.rows as any, completions: view.completions as any, live: view.live, ctx: view.ctx }), [view]);
@@ -92,6 +97,29 @@ export function CardioOverview({
 
   return (
     <div className="space-y-4" data-cardio-overview>
+      <PlanEventTimeline clientId={view.clientId} renderMilestone={(m) => {
+        const matches = plansOnDate(view.outcomes.filter((o) => versions.some((v) => v.id === o.id)), m.date, (o) => ({ start: o.from, end: o.to }));
+        return matches.length ? <div className="space-y-2">{matches.map((o) => <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"><span>Version {o.versionNo} · {o.weeklyMinutes ?? "—"} min/week</span><Button type="button" size="sm" variant="outline" onClick={() => setSelectedVersion(o.id)}>Compare version</Button></div>)}</div> : <p className="text-muted-foreground">No published cardio version covers this date.</p>;
+      }} />
+      {versions.length > 1 && <details className="rounded-xl border border-border px-3 py-2 text-xs" open={selectedVersion ? true : undefined}>
+        <summary className="cursor-pointer font-medium">Compare cardio plan{previous ? " · v" + previous.version_no : ""}</summary>
+        <div className="space-y-3 pt-3">
+          <label className="block text-muted-foreground">Reference version
+            <select value={previous?.id ?? ""} onChange={(e) => setSelectedVersion(e.target.value)} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-foreground">
+              {!previous && <option disabled value="">Pick a version</option>}
+              {versions.map((v) => <option key={v.id} value={v.id}>v{v.version_no} · {v.effective_date}</option>)}
+            </select>
+          </label>
+          {previous && <>
+            <div className="grid grid-cols-3 gap-2 tabular-nums">
+              <span/><span className="text-right text-muted-foreground">Reference</span><span className="text-right text-muted-foreground">Current</span>
+              <span>Min/week</span><span className="text-right">{previous.weekly_minutes ?? "—"}</span><span className="text-right font-medium">{kpi.prescribedMinutes}</span>
+              <span>Sessions/week</span><span className="text-right">{previous.weekly_sessions ?? "—"}</span><span className="text-right font-medium">{kpi.prescribedSessions}</span>
+            </div>
+            <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={restoring === previous.id} onClick={() => onRestore(previous.id)}>Restore to draft</Button><Button type="button" size="sm" variant="outline" onClick={() => onAsk("Compare the current cardio with version " + previous.version_no + " effective " + previous.effective_date + " (ID " + previous.id + "). Use stored records and do not assume missing details.")}>Ask Cleo</Button></div>
+          </>}
+        </div>
+      </details>}
       {/* the six numbers */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-cardio-kpis>
         <Kpi label="Planned a week" value={`${kpi.prescribedMinutes} min`} sub={`${kpi.prescribedSessions} session${kpi.prescribedSessions === 1 ? "" : "s"}`} />
