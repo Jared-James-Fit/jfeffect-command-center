@@ -24,6 +24,10 @@ import {
 } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 import type { WorkoutItem } from "@/lib/workout-today";
+import { claimGesture, releaseGesture } from "@/lib/gesture-arena";
+
+/** Who holds the finger while a workout is dragged (the gesture arena). */
+const ARENA_ID = "calendar-drag";
 
 export type CalendarDnd = {
   dragging: boolean;
@@ -78,6 +82,7 @@ export function CalendarDndProvider({
   };
 
   const reset = () => {
+    releaseGesture(ARENA_ID);
     setActiveIso(null);
     setOverIso(null);
     setActiveLabel(null);
@@ -88,6 +93,8 @@ export function CalendarDndProvider({
       | { iso?: string; item?: WorkoutItem; label?: string }
       | undefined;
     if (!data?.iso || !data.item) return;
+    // the finger is the drag's now: swipe-back and pull-to-refresh stand down (the gesture arena)
+    claimGesture(ARENA_ID);
     suppressClickRef.current = Date.now();
     setActiveIso(data.iso);
     setActiveLabel(data.label ?? null);

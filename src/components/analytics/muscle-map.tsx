@@ -9,7 +9,7 @@
  * muscle counts (half a set by default) is a small settings menu, remembered
  * on the device.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FineMuscle } from "@/lib/analytics/training-load";
@@ -31,6 +31,7 @@ import { atlasView, type ViewKey } from "@/lib/pain/anatomy/atlas";
 import { muscleOfSite } from "@/lib/body3d/muscle-sites";
 import { BODY_THEME, muscleAt, paintView } from "@/lib/body3d/paint";
 import { Segmented } from "@/components/analytics/viz";
+import { claimGesture, heldByOther, isBackEdge, onGestureReset, releaseGesture } from "@/lib/gesture-arena";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -495,6 +496,8 @@ function ModeLegend({ mode, dark }: { mode: MuscleMode; dark: boolean }) {
 
 type ViewSnap = "front" | "side" | "back";
 const SNAP_YAW: Record<ViewSnap, number> = { front: 0.22, side: Math.PI / 2, back: Math.PI };
+/** Past this zoom a vertical drag moves the body instead of scrolling the page. */
+const PAN_ZOOM = 1.15;
 
 /**
  * The 3D body (2D where WebGL2 isn't there), coloured by `colorOf`. Shared by
@@ -531,6 +534,14 @@ export function BodyView({
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const [snap, setSnap] = useState<ViewSnap>("front");
+  // zoomed in, a drag up or down moves the body (it owns both directions); at full size up and
+  // down scroll the page and only sideways turns it (gesture arena)
+  const [zoomed, setZoomed] = useState(false);
+  const syncZoomed = useCallback(() => {
+    const r = rendRef.current;
+    setZoomed(!!r && r.cam.zoom > PAN_ZOOM);
+  }, []);
+  const arenaId = `body3d:${useId()}`;
 
   // build after the page paints: the mesh takes ~200 ms once, then it's cached
   useEffect(() => {
@@ -613,6 +624,7 @@ export function BodyView({
       if (reduced) {
         r.cam = to;
         draw();
+        syncZoomed();
         return;
       }
       const t0 = performance.now();
@@ -627,10 +639,11 @@ export function BodyView({
         };
         draw();
         if (k < 1) animRef.current = requestAnimationFrame(step);
+        else syncZoomed();
       };
       animRef.current = requestAnimationFrame(step);
     },
-    [draw, reduced],
+    [draw, reduced, syncZoomed],
   );
   useEffect(() => {
     if (mode3d === "3d" && !preview) animateTo({ yaw: SNAP_YAW.front }, 1100);
@@ -643,7 +656,9 @@ export function BodyView({
     return () => ro.disconnect();
   }, [draw, mode3d]);
 
-  // gestures: drag turns, pinch / wheel zooms, a still tap picks a muscle
+  // gestures: drag turns, pinch / wheel zooms, a still tap picks a muscle. The body holds the
+  // finger in the gesture arena while it turns, so swipe-back and the other screen gestures stand
+  // down; a touch that starts on the back edge (where the edge is the app's) is the back swipe's.
   const ptrs = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{
     x: number;
@@ -653,9 +668,25 @@ export function BodyView({
     dist: number | null;
     zoom: number;
   } | null>(null);
+  // the gesture is over without a pick: a cancel, lost capture, someone else took the finger, the app hidden
+  const endGesture = useCallback(() => {
+    ptrs.current.clear();
+    gesture.current = null;
+    releaseGesture(arenaId);
+    syncZoomed();
+  }, [arenaId, syncZoomed]);
+  useEffect(() => {
+    const stop = onGestureReset(endGesture);
+    return () => {
+      stop();
+      releaseGesture(arenaId);
+    };
+  }, [endGesture, arenaId]);
   const onDown = (e: React.PointerEvent) => {
     const r = rendRef.current;
     if (!r) return;
+    if (e.pointerType !== "mouse" && isBackEdge(e.clientX)) return;
+    if (!claimGesture(arenaId)) return;
     (e.target as Element).setPointerCapture?.(e.pointerId);
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (animRef.current) cancelAnimationFrame(animRef.current);
@@ -673,6 +704,8 @@ export function BodyView({
     const r = rendRef.current;
     const g = gesture.current;
     if (!r || !g || !ptrs.current.has(e.pointerId)) return;
+    // the back swipe (or another screen gesture) has the finger: stop turning
+    if (heldByOther(arenaId)) return endGesture();
     const prev = ptrs.current.get(e.pointerId)!;
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const pts = [...ptrs.current.values()];
@@ -688,7 +721,7 @@ export function BodyView({
     if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 6) g.moved = true;
     if (!g.moved) return;
     r.cam.yaw += dx * 0.012;
-    if (r.cam.zoom > 1.15)
+    if (r.cam.zoom > PAN_ZOOM)
       r.cam.panY = Math.max(-0.9, Math.min(0.9, r.cam.panY - dy * (0.004 / r.cam.zoom)));
     else r.cam.pitch = Math.max(-0.35, Math.min(0.35, r.cam.pitch + dy * 0.006));
     draw();
@@ -699,6 +732,8 @@ export function BodyView({
     ptrs.current.delete(e.pointerId);
     if (!r || !g || ptrs.current.size) return;
     gesture.current = null;
+    releaseGesture(arenaId);
+    syncZoomed();
     if (!g.moved && performance.now() - g.t < 400) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const hit = r.pick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
@@ -720,6 +755,11 @@ export function BodyView({
       onPick(m);
     }
   };
+  // a cancelled finger (the page started scrolling, the phone took the touch) never picks a muscle
+  const onCancel = (e: React.PointerEvent) => {
+    ptrs.current.delete(e.pointerId);
+    if (!ptrs.current.size) endGesture();
+  };
   // a trackpad pinch (ctrl + wheel) or ⌘ / shift + wheel zooms; a plain wheel scrolls the page
   useEffect(() => {
     const box = boxRef.current;
@@ -730,10 +770,11 @@ export function BodyView({
       e.preventDefault();
       r.cam.zoom = Math.max(1, Math.min(3.2, r.cam.zoom * Math.exp(-e.deltaY * 0.0025)));
       draw();
+      syncZoomed();
     };
     box.addEventListener("wheel", onWheel, { passive: false });
     return () => box.removeEventListener("wheel", onWheel);
-  }, [draw, mode3d]);
+  }, [draw, mode3d, syncZoomed]);
   const reset = () => animateTo({ yaw: SNAP_YAW[snap], zoom: 1, panY: 0, pitch: 0.04 });
 
   if (mode3d === "2d")
@@ -745,13 +786,16 @@ export function BodyView({
         className={cn(
           "relative w-full select-none overflow-hidden rounded-2xl",
           heightClass ?? "h-[420px] md:h-[480px]",
-          preview ? "pointer-events-none" : "touch-none",
+          // at full size up and down scroll the page; zoomed in they move the body
+          preview ? "pointer-events-none" : zoomed ? "touch-none" : "touch-pan-y",
           "bg-[radial-gradient(ellipse_at_50%_40%,var(--muted)_0%,transparent_70%)]",
         )}
         onPointerDown={preview ? undefined : onDown}
         onPointerMove={preview ? undefined : onMove}
         onPointerUp={preview ? undefined : onUp}
-        onPointerCancel={preview ? undefined : onUp}
+        onPointerCancel={preview ? undefined : onCancel}
+        onLostPointerCapture={preview ? undefined : onCancel}
+        data-gesture={preview ? undefined : zoomed ? "x y" : "x"}
         onDoubleClick={preview ? undefined : reset}
         role="img"
         aria-label={ariaLabel}

@@ -139,12 +139,13 @@ describe("carousel viewer", () => {
 });
 
 describe("swipe back", () => {
-  it("works from anywhere but the phone's own edge zone", () => {
-    expect(swipe).toMatch(/const EDGE_PX = 24;/);
-    expect(swipe).toMatch(/if \(t\.clientX < EDGE_PX \|\| sheetOpen\(\) \|\| blocked\(e\.target\)\) return;/);
+  it("works from anywhere; the edge is the browser's in Safari's tab and an intentional back swipe elsewhere", () => {
+    expect(swipe).toMatch(/if \(t\.clientX < BACK_EDGE_PX\) \{/);
+    expect(swipe).toContain("if (!isBackEdge(t.clientX) || typingOrDialog(e.target)) return;");
+    expect(swipe).toContain("} else if (blocked(e.target)) return;");
   });
   it("only takes sideways-right swipes, and only then stops scrolling", () => {
-    expect(swipe).toMatch(/if \(ddx > 0 && ddx > Math\.abs\(ddy\) \* DIRECTION\) \{\s*mode = "back";/);
+    expect(swipe).toMatch(/if \(ddx > 0 && ddx > Math\.abs\(ddy\) \* DIRECTION && claimGesture\(ARENA_ID\)\) \{\s*mode = "back";/);
     expect(swipe).toMatch(/const DIRECTION = 1\.4;/);
     expect(swipe).toMatch(/if \(e\.cancelable\) e\.preventDefault\(\);/);
     expect(swipe).toMatch(/document\.addEventListener\("touchmove", onMove, \{ passive: false \}\);/);
