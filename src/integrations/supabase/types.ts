@@ -23307,7 +23307,7 @@ export type Database = {
           reported_on: string
           same_issue: boolean | null
           score: number | null
-          severity: string
+          severity: string | null
           side: string | null
           site: string | null
           source: string
@@ -23336,7 +23336,7 @@ export type Database = {
           reported_on: string
           same_issue?: boolean | null
           score?: number | null
-          severity: string
+          severity?: string | null
           side?: string | null
           site?: string | null
           source: string
@@ -23365,7 +23365,7 @@ export type Database = {
           reported_on?: string
           same_issue?: boolean | null
           score?: number | null
-          severity?: string
+          severity?: string | null
           side?: string | null
           site?: string | null
           source?: string

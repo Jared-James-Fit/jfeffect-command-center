@@ -2,9 +2,8 @@
  * "Describe it" in a pain report, the server's two parts: reading a
  * description the app's own reader couldn't place (readPainDescriptionFn) and
  * turning a spoken one into words (transcribePainVoiceFn: OpenAI's
- * transcriber, then Whisper, then the gateway's Gemini). Signed in only:
- * the athlete, or their coach previewing them. Reading is on the OpenAI key;
- * voice reaches the gateway only when both OpenAI transcribers refuse.
+ * transcriber, then Whisper). Signed in only: the athlete, or their coach
+ * previewing them. Both are on the OpenAI key, never the Lovable gateway.
  *
  * Never metered with AI credits on purpose: reporting pain must never cost
  * anything or stop because credits ran out. Held to 20 a login per 10
@@ -49,7 +48,7 @@ export const readPainDescriptionFn = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z.object({
       text: z.string().trim().min(3).max(600),
-      exercises: z.array(z.object({ id: z.string().uuid().nullable(), name: z.string().max(120) })).max(40).optional(),
+      exercises: z.array(z.object({ id: z.string().uuid().nullable(), name: z.string().max(120) })).max(80).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }): Promise<ReadDescriptionResponse> => {
@@ -78,12 +77,13 @@ export const transcribePainVoiceFn = createServerFn({ method: "POST" })
       mime: z.string().max(80),
     }).parse(d),
   )
-  .handler(async ({ data, context }): Promise<{ ok: true; text: string } | { ok: false; reason: string }> => {
+  .handler(async ({ data, context }): Promise<{ ok: true; text: string } | { ok: false; reason: string; consent?: boolean }> => {
     const { userId } = context as { userId: string };
     if (!(await mayReport((context as any).supabase, userId))) return { ok: false, reason: "Voice is for reporting pain from your account." };
     if (await limited(userId, "pain_voice")) return { ok: false, reason: "That's a lot of recordings in a few minutes. Type it for now, or try again shortly." };
     if (!(await (await import("@/lib/ai-consent/consent.server")).userAllowsAi(userId)))
-      return { ok: false, reason: "Voice is turned into text by OpenAI or Google, which you haven't allowed (Account → Privacy & data). Type it instead." };
+      // the app asks in one line beside the mic and sends this same take again once allowed
+      return { ok: false, consent: true, reason: "Voice needs AI processing, which is off for your account. Type it instead, or allow it and try again." };
     try {
       const { transcribePainAudio } = await import("@/lib/pain/describe.server");
       const r = await transcribePainAudio(data.audio, data.mime);

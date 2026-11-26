@@ -7,7 +7,7 @@
 import { reasonWords, shortDay, sidesLine, type PainArea, type PainHistory } from "@/lib/pain/history";
 import { FEELS, TIMINGS, severityLabel } from "@/lib/pain/report";
 import { siteAnatomy, siteOf } from "@/lib/pain/sites";
-import { associations, associationLine, sessionContext, type PainSession } from "@/lib/pain/sessions";
+import { associations, associationLine, blockShift, blockShiftLine, sessionContext, type PainSession } from "@/lib/pain/sessions";
 import { redFlags, URGENT_SIGNS } from "@/lib/pain/safety";
 import type { RecoverySuggestion } from "@/lib/pain/recovery";
 
@@ -23,7 +23,7 @@ export function areaLines(a: PainArea, sessions: PainSession[] = []): string[] {
   const head = [
     `${a.label}${sidesLine(a) ? ` (${sidesLine(a)})` : ""}:`,
     a.days === 1 ? `reported once, ${shortDay(a.last)}` : `${a.days} reports since ${shortDay(a.first)}, ${a.recentDays} in the last 6 weeks across ${a.recentWeeks} week${a.recentWeeks === 1 ? "" : "s"}, last ${shortDay(a.last)}`,
-    a.latestScore != null ? `latest ${a.latestScore}/10` : a.latestSeverity ? `latest ${severityLabel(a.latestSeverity)!.toLowerCase()}` : null,
+    a.latestScore != null ? `latest ${a.latestScore}/10` : a.latestSeverity ? `latest ${severityLabel(a.latestSeverity)!.toLowerCase()}` : a.latestUnsure ? "latest: they weren't sure how bad" : null,
     a.status === "quiet" ? "nothing since (gone quiet)" : null,
   ].filter(Boolean).join(" ");
   const lines = [`- ${head}`];
@@ -40,6 +40,8 @@ export function areaLines(a: PainArea, sessions: PainSession[] = []): string[] {
   if (a.limiting.stopped || a.limiting.modified) facts.push(`in the last 4 weeks it ${[a.limiting.stopped ? `stopped ${a.limiting.stopped} session${a.limiting.stopped > 1 ? "s" : ""}` : null, a.limiting.modified ? `changed ${a.limiting.modified}` : null].filter(Boolean).join(" and ")}`);
   if (a.named.length) facts.push(`exercise they named: ${a.named.map((n) => `${n.name}${n.count > 1 ? ` ${n.count}×` : ""}`).join(", ")}`);
   for (const as of associations(a, sessions)) facts.push(associationLine(as));
+  const shift = blockShift(a, sessions);
+  if (shift) facts.push(blockShiftLine(shift));
   const ctx = sessionContext(a, sessions);
   if (ctx.sessions >= 2 && (ctx.shortSleep >= 2 || ctx.veryHard >= 2 || ctx.lowEnergy >= 2))
     facts.push(`of the ${ctx.sessions} sessions it came up in: ${[ctx.shortSleep ? `${ctx.shortSleep} after under 6h sleep` : null, ctx.veryHard ? `${ctx.veryHard} rated very hard or max` : null, ctx.lowEnergy ? `${ctx.lowEnergy} with low energy going in` : null].filter(Boolean).join(", ")}`);

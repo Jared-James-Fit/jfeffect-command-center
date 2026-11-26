@@ -57,7 +57,8 @@ import type { SleepBucket } from "@/lib/analytics/recovery-score";
 import { HapticTap } from "@/components/haptic-tap";
 import { PainReporter, type PainContext } from "@/components/pain/pain-reporter";
 import { getPainReportContextFn } from "@/lib/pain/pain.functions";
-import { picksFromEntries, picksFromLegacy, picksToReports, unrated, type PainPick } from "@/lib/pain/picks";
+import { needsScore, pickGaps, picksFromEntries, picksFromLegacy, picksToReports, type PainPick } from "@/lib/pain/picks";
+import { feedback } from "@/lib/feedback";
 import { forgetPainDraft, keepPainDraft, painDraftKey, readPainDraft } from "@/lib/pain/pain-draft";
 import { legacyColumns } from "@/lib/pain/report";
 
@@ -221,7 +222,9 @@ export function WorkoutReviewEditor({
     queryFn: () =>
       painContextFn({ data: { dayId: clientCtx!.dayId, scheduledWorkoutId: (clientCtx as any)?.scheduledWorkoutId ?? null, actAsClientId: actAsClientId ?? null } }),
   });
-  const painContext: PainContext | null = painCtx?.clientId ? { today: painCtx.today, entries: painCtx.entries, exercises: painCtx.exercises, feedbackId: painCtx.feedbackId } : null;
+  const painContext: PainContext | null = painCtx?.clientId
+    ? { today: painCtx.today, entries: painCtx.entries, exercises: painCtx.exercises, recentExercises: (painCtx as any).recentExercises ?? [], feedbackId: painCtx.feedbackId }
+    : null;
   // editing: the review's saved places, unless they've already started changing them
   useEffect(() => {
     if (!open || painTouched.current || !painCtx?.feedbackId) return;
@@ -272,14 +275,34 @@ export function WorkoutReviewEditor({
     painArea: painPicks.length ? storedArea : null,
     sleepBucket,
     recoveryToday,
-    painUnrated: painPicks.some((p) => unrated(p)),
+    painUnrated: painPicks.some((p) => needsScore(p)),
     painUnnamed: painPicks.some((p) => p.region === "other" && !p.note?.trim()),
+    painNoSide: painPicks.some((p) => pickGaps(p).includes("side")),
   });
+
+  // The button says what's still needed; a tap on it goes there and lights it (never a surprise step after it).
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const showMissing = () => {
+    const root = bodyRef.current;
+    if (!root || !cta.missing) return;
+    const gap = cta.missing === "pain-side" ? "side" : cta.missing === "pain-score" ? "score" : cta.missing === "pain-where" ? "where" : null;
+    const el =
+      cta.missing === "effort"
+        ? root.querySelector<HTMLElement>("[data-review-effort]")
+        : (gap && root.querySelector<HTMLElement>(`[data-pain-gaps~="${gap}"]`)) || root.querySelector<HTMLElement>("[data-pain-reporter]");
+    if (!el) return;
+    feedback("warning");
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.remove("jf-pain-flash");
+    void el.offsetWidth;
+    el.classList.add("jf-pain-flash");
+    window.setTimeout(() => el.classList.remove("jf-pain-flash"), 1200);
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (effort == null) throw new Error("Pick how hard it was");
-      if (pain && !painReports.length) throw new Error("Pick where it hurts");
+      if (pain && !painReports.length) throw new Error("Say where it hurts");
       const painCols = legacyColumns(painReports);
       savingRef.current = true;
       const wasEdit = isEdit;
@@ -380,12 +403,13 @@ export function WorkoutReviewEditor({
               {isEdit ? "Edit your review" : "How'd it go?"}
             </SheetTitle>
             <SheetDescription className="text-xs">
-              {coached ? "4 quick taps. Your coach sees this." : "4 quick taps. Tunes your next session."}
+              {pain ? (coached ? "Your coach sees this." : "Tunes your next session.") : coached ? "4 quick taps. Your coach sees this." : "4 quick taps. Tunes your next session."}
             </SheetDescription>
           </SheetHeader>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
+        <div ref={bodyRef} className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
+          <div className="rounded-xl" data-review-effort>
           <Row title="How hard was it?" hint={effort == null ? "Required" : undefined}>
             <div className="grid grid-cols-5 gap-1.5">
               {EFFORT_OPTIONS.map((o, i) => (
@@ -411,6 +435,7 @@ export function WorkoutReviewEditor({
               ))}
             </div>
           </Row>
+          </div>
 
           <Row title="Anything hurt?">
             <div className="grid grid-cols-2 gap-1.5">
@@ -518,7 +543,14 @@ export function WorkoutReviewEditor({
           <Button variant="ghost" className="flex-1" onClick={requestClose} disabled={mutation.isPending}>
             Close
           </Button>
-          <Button type="button" className="relative flex-1" onClick={() => mutation.mutate()} disabled={!cta.enabled || mutation.isPending}>
+          <Button
+            type="button"
+            className={cn("relative flex-1", !cta.enabled && "opacity-60")}
+            onClick={() => (cta.enabled ? mutation.mutate() : showMissing())}
+            aria-disabled={!cta.enabled || undefined}
+            disabled={mutation.isPending}
+            data-review-cta={cta.missing ?? "ready"}
+          >
             {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             {cta.label}
             {/* the iPhone's tap as the workout is finished (haptic-tap.tsx) */}

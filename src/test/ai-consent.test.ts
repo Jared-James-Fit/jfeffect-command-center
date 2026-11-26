@@ -167,7 +167,10 @@ describe("AI consent is asked in place, never by a popup (Nov 25 2026)", () => {
     ]) {
       expect(src(p), p).toContain("useAiConsentInline(");
     }
-    expect(src("src/components/pain/pain-map.tsx")).toContain("<AiConsentInline");
+    // the pain report's mic asks in one line, at the tap, before anything records
+    const pain = src("src/components/pain/pain-reporter.tsx");
+    expect(pain).toContain("if (consent.needsYes) {");
+    expect(pain).toContain("data-pain-voice-consent");
     // the weekly check-in asks once ever (server-side seen), never blocking Send
     expect(src("src/components/messages/messenger-checkin-card.tsx")).toContain("<AiConsentOnce");
     expect(AI_CONSENT_ONCE_KEY).toContain(`v${AI_CONSENT_VERSION}`);

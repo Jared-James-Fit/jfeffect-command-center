@@ -144,6 +144,7 @@ describe("every voice recording goes through the one system", () => {
       "src/components/cleo/cleo-composer.tsx",
       "src/components/program-ai/coach-voice.tsx",
       "src/components/pain/pain-map.tsx",
+      "src/components/pain/pain-reporter.tsx",
     ]) {
       const src = read(f);
       expect(src, f).not.toContain("new MediaRecorder(");
@@ -156,7 +157,7 @@ describe("every voice recording goes through the one system", () => {
   it("dictation everywhere is useVoiceDictation; voice messages are useVoiceCapture with the plain mic", () => {
     expect(read("src/components/cleo/cleo-composer.tsx")).toContain("useVoiceDictation({");
     expect(read("src/components/program-ai/coach-voice.tsx")).toContain("useVoiceDictation({");
-    expect(read("src/components/pain/pain-map.tsx")).toContain("useVoiceDictation({");
+    expect(read("src/components/pain/pain-reporter.tsx")).toContain("useVoiceDictation({");
     const shared = read("src/components/chat-shared.tsx");
     expect(shared).toContain("useVoiceCapture({ maxMs: (opts.maxSeconds ?? 300) * 1000, constraints: true })");
     expect(read("src/components/message-thread.tsx")).toContain("useVoiceRecorder({ onAutoStop: (take) => showPreviewRef.current(take) })");
