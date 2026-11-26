@@ -187,7 +187,6 @@ export function AssessmentSheet({
   const engine = a?.internal?.engine;
   const strategy = a?.internal?.strategy;
   const plan = a?.internal ? confirmedPlan(a.internal) : null;
-  const changed = (strategy?.adjusted?.changes ?? []).length > 0;
   // Cleo rewriting this version: its progress, never a second request on top of it
   const polled = rewrite?.liveFor(assessmentId) ?? null;
   const live = polled ?? (justSent && a?.status === "changes_requested" ? justSent : null);
@@ -201,18 +200,25 @@ export function AssessmentSheet({
     <Sheet open={!!assessmentId} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        className="w-full overflow-y-auto sm:max-w-2xl"
+        className="w-full overflow-y-auto pt-[calc(env(safe-area-inset-top)+4rem)] sm:max-w-2xl"
         data-assessment-sheet
       >
-        <SheetHeader className="text-left">
-          <div className="flex items-center gap-2">
+        <SheetHeader className="min-h-0 pl-0 text-left">
+          <div className="flex items-start gap-2">
             <CleoAvatar size="sm" />
             <div className="min-w-0">
               <SheetTitle className="text-[17px]">
-                {def ? `${def.title} · v${a.version}` : "Assessment"}
+                {def?.title ?? "Competition assessment"}
               </SheetTitle>
               <SheetDescription className="text-[12px]">
-                Prepared by Cleo {a ? `· ${fmt(a.created_at)}` : ""}
+                {a?.competition_context ? (
+                  <span className="block break-words font-medium text-foreground">
+                    {a.competition_context.name}
+                    {a.competition_context.weight_class ? ` · ${String(a.competition_context.weight_class).replace(/\s*kg$/i, "")} kg` : ""}
+                    {a.competition_context.meet_date ? ` · ${new Date(a.competition_context.meet_date + "T12:00:00Z").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` : ""}
+                  </span>
+                ) : a ? <span className="block text-warning">Competition details unavailable</span> : null}
+                {a ? <span className="block">Prepared by Cleo · {fmt(a.created_at)} · v{a.version}</span> : "Prepared by Cleo"}
               </SheetDescription>
             </div>
           </div>
@@ -232,39 +238,15 @@ export function AssessmentSheet({
           />
         ) : (
           <div className="mt-4 space-y-5">
-            <div className="flex flex-wrap gap-2 text-[12px]" data-assessment-states>
-              <span
-                className={cn(
-                  "rounded-full border px-2 py-0.5",
-                  a.urgency === "urgent"
-                    ? "border-destructive/40 text-destructive"
-                    : a.urgency === "attention"
-                      ? "border-warning/50 text-warning"
-                      : "border-border text-muted-foreground",
-                )}
-              >
-                {a.urgency === "urgent"
-                  ? "Needs you now"
-                  : a.urgency === "attention"
-                    ? "Worth a look"
-                    : "Routine"}
-              </span>
-              <span className="rounded-full border border-border px-2 py-0.5">
-                Coach: {COACH_STATE_WORD[coachState(row!)]}
-              </span>
-              <span className="rounded-full border border-border px-2 py-0.5">
-                Athlete: {ATHLETE_STATE_WORD[athleteState(row!, newerReleased)]}
-              </span>
-              {a.needs_approval ? (
-                <span className="rounded-full border border-border px-2 py-0.5">
-                  Needs your approval
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-assessment-states>
+              {a.urgency === "urgent" || a.urgency === "attention" ? (
+                <span className={cn("font-medium", a.urgency === "urgent" ? "text-destructive" : "text-warning")}>
+                  {a.urgency === "urgent" ? "Needs attention now" : "Review recommended"}
                 </span>
               ) : null}
-              {a.release_kind === "automated" ? (
-                <span className="rounded-full border border-border px-2 py-0.5">
-                  Released automatically
-                </span>
-              ) : null}
+              <span className="font-medium">{a.needs_approval && !a.approved_at ? "Awaiting approval" : COACH_STATE_WORD[coachState(row!)]}</span>
+              <span className="text-muted-foreground">Athlete: {ATHLETE_STATE_WORD[athleteState(row!, newerReleased)]}</span>
+              {a.release_kind === "automated" ? <span className="text-muted-foreground">Released automatically</span> : null}
             </div>
 
             {live && a.competition_id ? (
@@ -296,13 +278,13 @@ export function AssessmentSheet({
                     view === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground",
                   )}
                 >
-                  {v === "internal" ? "Coaching read" : "Athlete version"}
+                  {v === "internal" ? "Coach review" : "Athlete preview"}
                 </button>
               ))}
             </div>
 
             {view === "internal" ? (
-              <div className="space-y-5" data-assessment-internal>
+              <div className="space-y-4" data-assessment-internal>
                 {((engine?.watch ?? []) as any[])
                   .filter((w) => String(w.key ?? "").startsWith("class:note:"))
                   .map((w) => (
@@ -315,14 +297,17 @@ export function AssessmentSheet({
                       {w.text}
                     </p>
                   ))}
-                <section>
-                  <h3 className="text-[15px] font-semibold">{a.headline}</h3>
-                  {n?.coach_summary ? (
-                    <p className="mt-1.5 whitespace-pre-line text-[14px] leading-relaxed">
-                      {n.coach_summary}
-                    </p>
-                  ) : null}
+                <section className="rounded-xl border border-border bg-muted/20 p-3">
+                  <h3 className="mb-1 text-xs font-medium text-muted-foreground">Key takeaway</h3>
+                  <p className="text-[15px] font-semibold leading-snug">{a.headline}</p>
                 </section>
+                {n?.concerns?.length ? <ListBlock title="Issues to review" items={n.concerns} tone="warn" /> : null}
+                {engine && plan ? (
+                  <section>
+                    <h4 className="mb-1.5 text-[14px] font-semibold">Performance projection</h4>
+                    <ForecastTable forecast={plan.forecast} showBasis />
+                  </section>
+                ) : null}
                 <StrategyCalls
                   assessmentId={a.id}
                   clientId={clientId}
@@ -332,12 +317,6 @@ export function AssessmentSheet({
                   evidence={strategy?.evidence ?? []}
                   locked={a.status === "released" || a.status === "superseded"}
                 />
-                {n?.concerns?.length ? (
-                  <ListBlock title="Concerns" items={n.concerns} tone="warn" />
-                ) : null}
-                {n?.challenges?.length ? (
-                  <ListBlock title="Worth challenging" items={n.challenges} />
-                ) : null}
                 {n?.recommendations?.length ? (
                   <section>
                     <h4 className="text-[14px] font-semibold">Recommendations</h4>
@@ -383,22 +362,24 @@ export function AssessmentSheet({
                     </p>
                   </section>
                 ) : null}
-                {n?.sections
-                  ? Object.entries(n.sections as Record<string, string>).map(([k, v]) => (
-                      <section key={k}>
-                        <h4 className="text-[14px] font-semibold">{SECTION_TITLE[k] ?? k}</h4>
-                        <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed">{v}</p>
-                      </section>
-                    ))
-                  : null}
+                {(n?.coach_summary || n?.challenges?.length || Object.keys(n?.sections ?? {}).length) ? (
+                  <details className="rounded-xl border border-border p-3">
+                    <summary className="cursor-pointer text-sm font-medium">Detailed coaching analysis</summary>
+                    <div className="mt-3 space-y-3">
+                      {n?.coach_summary ? <p className="whitespace-pre-line text-[14px] leading-relaxed">{n.coach_summary}</p> : null}
+                      {n?.challenges?.length ? <ListBlock title="Additional considerations" items={n.challenges} /> : null}
+                      {Object.entries((n?.sections ?? {}) as Record<string, string>).map(([k, v]) => (
+                        <section key={k}>
+                          <h4 className="text-[14px] font-semibold">{SECTION_TITLE[k] ?? k.replaceAll("_", " ")}</h4>
+                          <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed">{v}</p>
+                        </section>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
                 {engine && plan ? (
                   <>
-                    <section>
-                      <h4 className="mb-1.5 text-[14px] font-semibold">
-                        {changed ? "The numbers (with Cleo's calls you kept)" : "The numbers"}
-                      </h4>
-                      <ForecastTable forecast={plan.forecast} showBasis />
-                    </section>
+
                     {a.kind === "forecast" || a.kind === "game_plan" || a.kind === "confirm" ? (
                       <section>
                         <h4 className="mb-1.5 text-[14px] font-semibold">Attempts</h4>
@@ -412,11 +393,7 @@ export function AssessmentSheet({
                     Written with your changes: “{a.internal.instructions}”
                   </p>
                 ) : null}
-                <p className="text-[12px] text-muted-foreground">
-                  {a.model ? `Model: ${a.model}. ` : ""}The engines work out the maths; Cleo's calls
-                  were checked by code before they changed anything, and every number in the words
-                  traces to the evidence, the engines or a call that passed.
-                </p>
+
               </div>
             ) : (
               <div className="space-y-4" data-assessment-athlete>
