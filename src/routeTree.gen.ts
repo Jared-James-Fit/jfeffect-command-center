@@ -42,6 +42,7 @@ import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
+import { Route as AuthenticatedSpecialistRouteRouteImport } from './routes/_authenticated/specialist/route'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AthletesHandleRouteImport } from './routes/athletes.$handle'
 import { Route as AutopayTokenRouteImport } from './routes/autopay.$token'
@@ -170,6 +171,10 @@ import { Route as AuthenticatedPortalScheduleRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalSupportRouteImport } from './routes/_authenticated/portal/support'
 import { Route as AuthenticatedPortalToolsRouteImport } from './routes/_authenticated/portal/tools'
 import { Route as AuthenticatedPortalUpgradeRouteImport } from './routes/_authenticated/portal/upgrade'
+import { Route as AuthenticatedSpecialistIndexRouteImport } from './routes/_authenticated/specialist/index'
+import { Route as AuthenticatedSpecialistAccountRouteImport } from './routes/_authenticated/specialist/account'
+import { Route as AuthenticatedSpecialistPerformanceRouteImport } from './routes/_authenticated/specialist/performance'
+import { Route as AuthenticatedSpecialistTrainingRouteImport } from './routes/_authenticated/specialist/training'
 import { Route as ApiPublicAppPulseRouteImport } from './routes/api/public/app-pulse'
 import { Route as ApiPublicBulkExerciseImportRouteImport } from './routes/api/public/bulk-exercise-import'
 import { Route as ApiPublicCalendarFeedRouteImport } from './routes/api/public/calendar-feed'
@@ -287,7 +292,6 @@ import { Route as ApiPublicHooksCompetitionSelfcheckRouteImport } from './routes
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
-import { Route as ApiPublicHooksVelocityWorkerRouteImport } from './routes/api/public/hooks/velocity-worker'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksGoalIntelTickRouteImport } from './routes/api/public/hooks/goal-intel-tick'
@@ -322,6 +326,7 @@ import { Route as ApiPublicHooksStripePortalConfigRouteImport } from './routes/a
 import { Route as ApiPublicHooksStripeSyncRouteImport } from './routes/api/public/hooks/stripe-sync'
 import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
 import { Route as ApiPublicHooksTrainingRoadmapTickRouteImport } from './routes/api/public/hooks/training-roadmap-tick'
+import { Route as ApiPublicHooksVelocityWorkerRouteImport } from './routes/api/public/hooks/velocity-worker'
 import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
 import { Route as ChallengesSlugRCodeRouteImport } from './routes/challenges.$slug.r.$code'
@@ -514,6 +519,12 @@ const AuthenticatedPortalRouteRoute =
   AuthenticatedPortalRouteRouteImport.update({
     id: '/portal',
     path: '/portal',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSpecialistRouteRoute =
+  AuthenticatedSpecialistRouteRouteImport.update({
+    id: '/specialist',
+    path: '/specialist',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
@@ -1251,6 +1262,30 @@ const AuthenticatedPortalUpgradeRoute =
     path: '/upgrade',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedSpecialistIndexRoute =
+  AuthenticatedSpecialistIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSpecialistRouteRoute,
+  } as any)
+const AuthenticatedSpecialistAccountRoute =
+  AuthenticatedSpecialistAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AuthenticatedSpecialistRouteRoute,
+  } as any)
+const AuthenticatedSpecialistPerformanceRoute =
+  AuthenticatedSpecialistPerformanceRouteImport.update({
+    id: '/performance',
+    path: '/performance',
+    getParentRoute: () => AuthenticatedSpecialistRouteRoute,
+  } as any)
+const AuthenticatedSpecialistTrainingRoute =
+  AuthenticatedSpecialistTrainingRouteImport.update({
+    id: '/training',
+    path: '/training',
+    getParentRoute: () => AuthenticatedSpecialistRouteRoute,
+  } as any)
 const ApiPublicAppPulseRoute = ApiPublicAppPulseRouteImport.update({
   id: '/api/public/app-pulse',
   path: '/api/public/app-pulse',
@@ -1942,12 +1977,6 @@ const ApiPublicHooksFeedCopiesTickRoute =
     path: '/api/public/hooks/feed-copies-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicHooksVelocityWorkerRoute =
-  ApiPublicHooksVelocityWorkerRouteImport.update({
-    id: '/api/public/hooks/velocity-worker',
-    path: '/api/public/hooks/velocity-worker',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
   id: '/api/public/hooks/fillout',
   path: '/api/public/hooks/fillout',
@@ -2151,6 +2180,12 @@ const ApiPublicHooksTrainingRoadmapTickRoute =
     path: '/api/public/hooks/training-roadmap-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksVelocityWorkerRoute =
+  ApiPublicHooksVelocityWorkerRouteImport.update({
+    id: '/api/public/hooks/velocity-worker',
+    path: '/api/public/hooks/velocity-worker',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksWearablesSyncRoute =
   ApiPublicHooksWearablesSyncRouteImport.update({
     id: '/api/public/hooks/wearables-sync',
@@ -2344,6 +2379,7 @@ export interface FileRoutesByFullPath {
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/specialist': typeof AuthenticatedSpecialistRouteRouteWithChildren
   '/book/': typeof BookRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -2471,6 +2507,9 @@ export interface FileRoutesByFullPath {
   '/portal/support': typeof AuthenticatedPortalSupportRoute
   '/portal/tools': typeof AuthenticatedPortalToolsRoute
   '/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
+  '/specialist/account': typeof AuthenticatedSpecialistAccountRoute
+  '/specialist/performance': typeof AuthenticatedSpecialistPerformanceRoute
+  '/specialist/training': typeof AuthenticatedSpecialistTrainingRoute
   '/api/public/app-pulse': typeof ApiPublicAppPulseRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
@@ -2483,6 +2522,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/m/': typeof AuthenticatedMIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
+  '/specialist/': typeof AuthenticatedSpecialistIndexRoute
   '/challenges/$slug/': typeof ChallengesSlugIndexRoute
   '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
   '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
@@ -2572,7 +2612,6 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
-  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -2607,6 +2646,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
@@ -2808,6 +2848,9 @@ export interface FileRoutesByTo {
   '/portal/support': typeof AuthenticatedPortalSupportRoute
   '/portal/tools': typeof AuthenticatedPortalToolsRoute
   '/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
+  '/specialist/account': typeof AuthenticatedSpecialistAccountRoute
+  '/specialist/performance': typeof AuthenticatedSpecialistPerformanceRoute
+  '/specialist/training': typeof AuthenticatedSpecialistTrainingRoute
   '/api/public/app-pulse': typeof ApiPublicAppPulseRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
@@ -2820,6 +2863,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/m': typeof AuthenticatedMIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
+  '/specialist': typeof AuthenticatedSpecialistIndexRoute
   '/challenges/$slug': typeof ChallengesSlugIndexRoute
   '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
   '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
@@ -2909,7 +2953,6 @@ export interface FileRoutesByTo {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
-  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -2944,6 +2987,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
@@ -3024,6 +3068,7 @@ export interface FileRoutesById {
   '/_authenticated/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
+  '/_authenticated/specialist': typeof AuthenticatedSpecialistRouteRouteWithChildren
   '/book/': typeof BookRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
@@ -3151,6 +3196,9 @@ export interface FileRoutesById {
   '/_authenticated/portal/support': typeof AuthenticatedPortalSupportRoute
   '/_authenticated/portal/tools': typeof AuthenticatedPortalToolsRoute
   '/_authenticated/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
+  '/_authenticated/specialist/account': typeof AuthenticatedSpecialistAccountRoute
+  '/_authenticated/specialist/performance': typeof AuthenticatedSpecialistPerformanceRoute
+  '/_authenticated/specialist/training': typeof AuthenticatedSpecialistTrainingRoute
   '/api/public/app-pulse': typeof ApiPublicAppPulseRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
@@ -3163,6 +3211,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/m/': typeof AuthenticatedMIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
+  '/_authenticated/specialist/': typeof AuthenticatedSpecialistIndexRoute
   '/challenges/$slug/': typeof ChallengesSlugIndexRoute
   '/_authenticated/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
   '/_authenticated/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
@@ -3252,7 +3301,6 @@ export interface FileRoutesById {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
-  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/goal-intel-tick': typeof ApiPublicHooksGoalIntelTickRoute
@@ -3287,6 +3335,7 @@ export interface FileRoutesById {
   '/api/public/hooks/stripe-sync': typeof ApiPublicHooksStripeSyncRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
+  '/api/public/hooks/velocity-worker': typeof ApiPublicHooksVelocityWorkerRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
@@ -3367,6 +3416,7 @@ export interface FileRouteTypes {
     | '/coach'
     | '/m'
     | '/portal'
+    | '/specialist'
     | '/book/'
     | '/finance'
     | '/notifications'
@@ -3494,6 +3544,9 @@ export interface FileRouteTypes {
     | '/portal/support'
     | '/portal/tools'
     | '/portal/upgrade'
+    | '/specialist/account'
+    | '/specialist/performance'
+    | '/specialist/training'
     | '/api/public/app-pulse'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
@@ -3506,6 +3559,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/m/'
     | '/portal/'
+    | '/specialist/'
     | '/challenges/$slug/'
     | '/admin/agreements-native/$packageId'
     | '/admin/agreements-native/new'
@@ -3595,7 +3649,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
-    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -3630,6 +3683,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/challenges/$slug/r/$code'
@@ -3831,6 +3885,9 @@ export interface FileRouteTypes {
     | '/portal/support'
     | '/portal/tools'
     | '/portal/upgrade'
+    | '/specialist/account'
+    | '/specialist/performance'
+    | '/specialist/training'
     | '/api/public/app-pulse'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
@@ -3843,6 +3900,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/m'
     | '/portal'
+    | '/specialist'
     | '/challenges/$slug'
     | '/admin/agreements-native/$packageId'
     | '/admin/agreements-native/new'
@@ -3932,7 +3990,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
-    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -3967,6 +4024,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/challenges/$slug/r/$code'
@@ -4046,6 +4104,7 @@ export interface FileRouteTypes {
     | '/_authenticated/coach'
     | '/_authenticated/m'
     | '/_authenticated/portal'
+    | '/_authenticated/specialist'
     | '/book/'
     | '/_authenticated/finance'
     | '/_authenticated/notifications'
@@ -4173,6 +4232,9 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/support'
     | '/_authenticated/portal/tools'
     | '/_authenticated/portal/upgrade'
+    | '/_authenticated/specialist/account'
+    | '/_authenticated/specialist/performance'
+    | '/_authenticated/specialist/training'
     | '/api/public/app-pulse'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
@@ -4185,6 +4247,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/'
     | '/_authenticated/m/'
     | '/_authenticated/portal/'
+    | '/_authenticated/specialist/'
     | '/challenges/$slug/'
     | '/_authenticated/admin/agreements-native/$packageId'
     | '/_authenticated/admin/agreements-native/new'
@@ -4274,7 +4337,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
-    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/goal-intel-tick'
@@ -4309,6 +4371,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/stripe-sync'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
+    | '/api/public/hooks/velocity-worker'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/challenges/$slug/r/$code'
@@ -4434,7 +4497,6 @@ export interface RootRouteChildren {
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
-  ApiPublicHooksVelocityWorkerRoute: typeof ApiPublicHooksVelocityWorkerRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksGoalIntelTickRoute: typeof ApiPublicHooksGoalIntelTickRoute
@@ -4469,6 +4531,7 @@ export interface RootRouteChildren {
   ApiPublicHooksStripeSyncRoute: typeof ApiPublicHooksStripeSyncRoute
   ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
   ApiPublicHooksTrainingRoadmapTickRoute: typeof ApiPublicHooksTrainingRoadmapTickRoute
+  ApiPublicHooksVelocityWorkerRoute: typeof ApiPublicHooksVelocityWorkerRoute
   ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
   ChallengesSlugRCodeRoute: typeof ChallengesSlugRCodeRoute
@@ -4712,6 +4775,13 @@ declare module '@tanstack/react-router' {
       path: '/portal'
       fullPath: '/portal'
       preLoaderRoute: typeof AuthenticatedPortalRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/specialist': {
+      id: '/_authenticated/specialist'
+      path: '/specialist'
+      fullPath: '/specialist'
+      preLoaderRoute: typeof AuthenticatedSpecialistRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/drive-upload': {
@@ -5610,6 +5680,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalUpgradeRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/specialist/': {
+      id: '/_authenticated/specialist/'
+      path: '/'
+      fullPath: '/specialist/'
+      preLoaderRoute: typeof AuthenticatedSpecialistIndexRouteImport
+      parentRoute: typeof AuthenticatedSpecialistRouteRoute
+    }
+    '/_authenticated/specialist/account': {
+      id: '/_authenticated/specialist/account'
+      path: '/account'
+      fullPath: '/specialist/account'
+      preLoaderRoute: typeof AuthenticatedSpecialistAccountRouteImport
+      parentRoute: typeof AuthenticatedSpecialistRouteRoute
+    }
+    '/_authenticated/specialist/performance': {
+      id: '/_authenticated/specialist/performance'
+      path: '/performance'
+      fullPath: '/specialist/performance'
+      preLoaderRoute: typeof AuthenticatedSpecialistPerformanceRouteImport
+      parentRoute: typeof AuthenticatedSpecialistRouteRoute
+    }
+    '/_authenticated/specialist/training': {
+      id: '/_authenticated/specialist/training'
+      path: '/training'
+      fullPath: '/specialist/training'
+      preLoaderRoute: typeof AuthenticatedSpecialistTrainingRouteImport
+      parentRoute: typeof AuthenticatedSpecialistRouteRoute
+    }
     '/api/public/app-pulse': {
       id: '/api/public/app-pulse'
       path: '/api/public/app-pulse'
@@ -6429,13 +6527,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksFeedCopiesTickRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/velocity-worker': {
-      id: '/api/public/hooks/velocity-worker'
-      path: '/api/public/hooks/velocity-worker'
-      fullPath: '/api/public/hooks/velocity-worker'
-      preLoaderRoute: typeof ApiPublicHooksVelocityWorkerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/hooks/fillout': {
       id: '/api/public/hooks/fillout'
       path: '/api/public/hooks/fillout'
@@ -6672,6 +6763,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/training-roadmap-tick'
       fullPath: '/api/public/hooks/training-roadmap-tick'
       preLoaderRoute: typeof ApiPublicHooksTrainingRoadmapTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/velocity-worker': {
+      id: '/api/public/hooks/velocity-worker'
+      path: '/api/public/hooks/velocity-worker'
+      fullPath: '/api/public/hooks/velocity-worker'
+      preLoaderRoute: typeof ApiPublicHooksVelocityWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/wearables-sync': {
@@ -7304,7 +7402,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminSettingsNutritionAutomationRoute:
       AuthenticatedAdminSettingsNutritionAutomationRoute,
     AuthenticatedAdminSettingsSmsRoute: AuthenticatedAdminSettingsSmsRoute,
-    AuthenticatedAdminSettingsVelocityRoute: AuthenticatedAdminSettingsVelocityRoute,
+    AuthenticatedAdminSettingsVelocityRoute:
+      AuthenticatedAdminSettingsVelocityRoute,
     AuthenticatedAdminAgreementsNativeIndexRoute:
       AuthenticatedAdminAgreementsNativeIndexRoute,
     AuthenticatedAdminAgreementsIndexRoute:
@@ -7521,11 +7620,33 @@ const AuthenticatedPortalRouteRouteWithChildren =
     AuthenticatedPortalRouteRouteChildren,
   )
 
+interface AuthenticatedSpecialistRouteRouteChildren {
+  AuthenticatedSpecialistAccountRoute: typeof AuthenticatedSpecialistAccountRoute
+  AuthenticatedSpecialistPerformanceRoute: typeof AuthenticatedSpecialistPerformanceRoute
+  AuthenticatedSpecialistTrainingRoute: typeof AuthenticatedSpecialistTrainingRoute
+  AuthenticatedSpecialistIndexRoute: typeof AuthenticatedSpecialistIndexRoute
+}
+
+const AuthenticatedSpecialistRouteRouteChildren: AuthenticatedSpecialistRouteRouteChildren =
+  {
+    AuthenticatedSpecialistAccountRoute: AuthenticatedSpecialistAccountRoute,
+    AuthenticatedSpecialistPerformanceRoute:
+      AuthenticatedSpecialistPerformanceRoute,
+    AuthenticatedSpecialistTrainingRoute: AuthenticatedSpecialistTrainingRoute,
+    AuthenticatedSpecialistIndexRoute: AuthenticatedSpecialistIndexRoute,
+  }
+
+const AuthenticatedSpecialistRouteRouteWithChildren =
+  AuthenticatedSpecialistRouteRoute._addFileChildren(
+    AuthenticatedSpecialistRouteRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
   AuthenticatedCoachRouteRoute: typeof AuthenticatedCoachRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
+  AuthenticatedSpecialistRouteRoute: typeof AuthenticatedSpecialistRouteRouteWithChildren
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
 }
@@ -7535,6 +7656,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCoachRouteRoute: AuthenticatedCoachRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
+  AuthenticatedSpecialistRouteRoute:
+    AuthenticatedSpecialistRouteRouteWithChildren,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
 }
@@ -7645,7 +7768,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
-  ApiPublicHooksVelocityWorkerRoute: ApiPublicHooksVelocityWorkerRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksGoalIntelTickRoute: ApiPublicHooksGoalIntelTickRoute,
@@ -7688,6 +7810,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
   ApiPublicHooksTrainingRoadmapTickRoute:
     ApiPublicHooksTrainingRoadmapTickRoute,
+  ApiPublicHooksVelocityWorkerRoute: ApiPublicHooksVelocityWorkerRoute,
   ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
   ChallengesSlugRCodeRoute: ChallengesSlugRCodeRoute,

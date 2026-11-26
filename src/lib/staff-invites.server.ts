@@ -2,12 +2,70 @@
  * Staff invite delivery: Messenger (from the admin, into the person's client
  * chat), SMS, or a link the admin copies. Server-only.
  */
+import { createHash, createHmac, randomInt, timingSafeEqual } from "crypto";
 import { STAFF_ROLE_INFO, staffInviteMessage, type InvitableRole } from "@/lib/staff-roles";
 
 export function genSetupToken(len = 32) {
   const arr = new Uint8Array(len);
   crypto.getRandomValues(arr);
   return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Only a token's hash is stored (staff_invites.setup_token_hash): a copy of
+ * the table can't be turned into a working link. The link itself goes out
+ * once, by the channel the admin picked; "Copy link" makes a new one.
+ */
+export function hashSetupToken(token: string): string {
+  return createHash("sha256").update(`staff-invite:v1:${token}`).digest("hex");
+}
+
+/* ---- The emailed code: proves the invite's email is theirs before any login exists ---- */
+
+export const INVITE_CODE_MINUTES = 15;
+export const INVITE_CODE_MAX_ATTEMPTS = 5;
+export const INVITE_CODE_RESEND_SECONDS = 45;
+
+function inviteSecret(): string {
+  const s = process.env.SETUP_INVITE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!s) throw new Error("Invites can't be checked: no server secret configured.");
+  return s;
+}
+
+export function newInviteCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+export function inviteCodeHash(inviteId: string, code: string): string {
+  return createHmac("sha256", inviteSecret()).update(`staff-invite-code:v1:${inviteId}:${code}`).digest("hex");
+}
+
+/** What the page holds once the code was right: tied to this invite and this email. */
+export function inviteEmailProof(inviteId: string, email: string): string {
+  return createHmac("sha256", inviteSecret())
+    .update(`staff-invite-proof:v1:${inviteId}:${email.trim().toLowerCase()}`)
+    .digest("hex")
+    .slice(0, 40);
+}
+
+export function inviteProofOk(inviteId: string, email: string | null | undefined, proof: string | null | undefined): boolean {
+  if (!email || !proof || !/^[0-9a-f]{40}$/i.test(proof)) return false;
+  const want = Buffer.from(inviteEmailProof(inviteId, email), "hex");
+  const got = Buffer.from(proof, "hex");
+  return want.length === got.length && timingSafeEqual(want, got);
+}
+
+/** "j***@gmail.com" */
+export function maskInviteEmail(email: string): string {
+  const [user, domain] = email.split("@");
+  if (!domain) return "your email";
+  return `${user.slice(0, 1)}${"*".repeat(Math.max(2, Math.min(6, user.length - 1)))}@${domain}`;
+}
+
+/** The role's name as the invite says it: a specialist's own title, else the staff role's. */
+export function inviteRoleLabel(role: string, title?: string | null): string {
+  if (title && title.trim()) return title.trim();
+  return (STAFF_ROLE_INFO as Record<string, { label: string } | undefined>)[role]?.label ?? "Team";
 }
 
 export function appOrigin() {
@@ -27,7 +85,9 @@ export type DeliveryResult = { sent: boolean; reason?: string };
 export async function sendInviteSms(opts: {
   toPhone: string | null | undefined;
   firstName: string | null | undefined;
-  role: InvitableRole;
+  role: string;
+  /** a specialist's title ("Game Day Coach") */
+  title?: string | null;
   link: string;
 }): Promise<DeliveryResult> {
   const toPhone = normalizePhone(opts.toPhone);
@@ -36,7 +96,7 @@ export async function sendInviteSms(opts: {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendSms } = await import("@/lib/sms-gateway.server");
     const name = (opts.firstName || "").trim();
-    const label = STAFF_ROLE_INFO[opts.role].label;
+    const label = inviteRoleLabel(opts.role, opts.title);
     // URL on its own line so phones render it as one tap target.
     const body = `${name ? `Hi ${name}, ` : ""}you're invited to a JF Effect team account (${label}). Tap to set it up:\n${opts.link}\n(Link expires in 7 days.)`;
     // Account access: its own switch, never stopped by the budget; the setup

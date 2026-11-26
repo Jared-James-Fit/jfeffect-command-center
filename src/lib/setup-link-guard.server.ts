@@ -16,11 +16,11 @@
 
 const PAGE_SIZE = 1000;
 
-export const STAFF_ROLES = ["admin", "coach", "media_manager", "finance"] as const;
+export const STAFF_ROLES = ["admin", "coach", "media_manager", "finance", "specialist"] as const;
 
 // Roles a staff invite link may grant. Admin is granted only by an existing
 // admin inside the app, never by a link. Coaches have their own invite flow.
-const LINK_REDEEMABLE_ROLES = new Set(["media_manager", "finance"]);
+const LINK_REDEEMABLE_ROLES = new Set(["media_manager", "finance", "specialist"]);
 
 export function assertInviteRoleRedeemable(role: string | null | undefined): void {
   if (!role || !LINK_REDEEMABLE_ROLES.has(role)) {

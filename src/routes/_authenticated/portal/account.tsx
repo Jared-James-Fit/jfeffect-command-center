@@ -82,7 +82,8 @@ import { useMyBilling } from "@/components/billing/use-my-billing";
 import { UpdateCardButton } from "@/components/billing/my-purchases-view";
 import type { MySummary } from "@/lib/my-purchases";
 import { HelpTutorialsHub } from "@/components/tutorials/tutorials";
-import { LifeBuoy } from "lucide-react";
+import { LifeBuoy, Users } from "lucide-react";
+import { TeamAccessList, useMyTeamAccess } from "@/components/account/team-access";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -111,6 +112,7 @@ type SectionId =
   | "billing"
   | "ai-credits"
   | "help"
+  | "team-access"
   | "deactivate";
 
 const SECTION_ALIASES: Record<string, SectionId> = {
@@ -160,6 +162,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   guidelines: "legal",
   deactivate: "deactivate",
   "deactivate-account": "deactivate",
+  // who on the team can see your footage, training and performance
+  "team-access": "team-access",
+  team: "team-access",
 };
 
 function accountSectionFromHash(hash: string | null | undefined): SectionId | null {
@@ -170,6 +175,8 @@ function accountSectionFromHash(hash: string | null | undefined): SectionId | nu
 function AccountPage() {
   const portalUserId = usePortalUserId();
   const { isImpersonating } = useClientImpersonation();
+  // never in "View as client": the read is the signed-in person's own
+  const teamAccess = useMyTeamAccess(!isImpersonating);
   const { user } = useAuth();
   const { tier, loading: tierLoading } = useServiceTier();
   const goalsOn = useEntitlement("goals_setup");
@@ -666,6 +673,23 @@ function AccountPage() {
                 account (Apple and Google ask for it in the app). Legal status
                 comes from the signed-in session, so in coach "View as client"
                 it'd be the coach's, not the client's: left out there. */}
+            {!isImpersonating && (teamAccess.data ?? []).length > 0 && (
+              <SettingsSection
+                id="team-access"
+                icon={Users}
+                title="Team access"
+                summary={
+                  (teamAccess.data ?? []).some((r) => !r.agreed)
+                    ? { text: "Waiting for you", warn: true }
+                    : { text: `${(teamAccess.data ?? []).length} can see your training` }
+                }
+              >
+                <SectionErrorBoundary label="Team access">
+                  <TeamAccessList rows={teamAccess.data ?? []} />
+                </SectionErrorBoundary>
+              </SettingsSection>
+            )}
+
             <SettingsSection id="legal" icon={ShieldCheck} title="Privacy & data">
               {!isImpersonating && (
                 <SectionErrorBoundary label="Legal & Safety">

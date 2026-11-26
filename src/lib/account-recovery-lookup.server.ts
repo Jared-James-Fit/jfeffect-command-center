@@ -14,7 +14,7 @@
 
 import { normalizePhoneE164 } from "./account-recovery.constants";
 
-export const STAFF_ROLES = ["admin", "coach", "finance", "media_manager"] as const;
+export const STAFF_ROLES = ["admin", "coach", "finance", "media_manager", "specialist"] as const;
 
 export type RecoveryTarget = {
   userId: string | null;

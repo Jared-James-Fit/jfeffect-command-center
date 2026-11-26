@@ -27,6 +27,8 @@ export function crewHome(role: LaunchRole, view: "client" | "staff" | null = nul
   if (view === "client" || role === "client" || role === "member") return CLIENT_VIEW_HOME;
   if (role === "admin" || role === "coach") return "/admin/community";
   if (role === "finance") return "/finance";
+  // a specialist (game day coach…) has no Crew: Footage is their home
+  if (role === "specialist") return "/specialist";
   return "/admin";
 }
 
@@ -47,6 +49,6 @@ export function cachedLaunchTarget(): string | null {
   const cached = cachedSessionRole();
   if (!cached) return null;
   if (hasStoredClientPov() || getViewMode(cached.uid)) return null;
-  if (!["client", "member", "admin", "coach", "finance"].includes(cached.role)) return null;
+  if (!["client", "member", "admin", "coach", "finance", "specialist"].includes(cached.role)) return null;
   return launchTarget(cached.uid, cached.role);
 }

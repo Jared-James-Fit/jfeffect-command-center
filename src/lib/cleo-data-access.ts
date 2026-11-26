@@ -40,6 +40,9 @@ export const CLEO_HIDDEN_TABLES = new Set([
   "email_unsubscribe_tokens",
   "coach_invites",
   "staff_invites",
+  // a specialist's notes are theirs (private unless shared with the athlete); never an AI's to read
+  "specialist_notes",
+  "specialist_video_views",
   "na_guest_tokens",
   "signnow_settings",
   "chat_user_blocks",

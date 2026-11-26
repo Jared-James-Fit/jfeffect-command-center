@@ -10,27 +10,35 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { getStaffInvitePreview, redeemStaffInvite } from "@/lib/staff-invites.functions";
+import { getStaffInvitePreview, redeemStaffInvite, sendStaffInviteCode, verifyStaffInviteCode } from "@/lib/staff-invites.functions";
+import { Input } from "@/components/ui/input";
 import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/staff-setup")({
-  validateSearch: (s: Record<string, unknown>) => ({ token: String(s.token ?? "") }),
+  validateSearch: (s: Record<string, unknown>) => ({ token: String(s.token ?? ""), p: typeof s.p === "string" ? s.p : undefined }),
   head: () => ({ meta: [{ title: "Set up your team account — JF Effect" }, ...shareMeta({ title: "Join the JF Effect team", description: "Set up your team account." })] }),
   component: StaffSetupPage,
 });
 
 function StaffSetupPage() {
-  const { token } = Route.useSearch();
+  const { token, p } = Route.useSearch();
   const preview = useServerFn(getStaffInvitePreview);
   const redeem = useServerFn(redeemStaffInvite);
+  const sendCode = useServerFn(sendStaffInviteCode);
+  const verifyCode = useServerFn(verifyStaffInviteCode);
+  // the emailed link carries the proof; a texted or copied one earns it with a code
+  const [proof, setProof] = useState<string | undefined>(p);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
 
   const { data: invite, isError, refetch } = useQuery({
-    queryKey: ["staff-invite-preview", token],
-    queryFn: () => preview({ data: { token } }),
+    queryKey: ["staff-invite-preview", token, proof ?? ""],
+    queryFn: () => preview({ data: { token, proof } }),
     enabled: token.length >= 20,
     retry: false,
   });
@@ -38,11 +46,36 @@ function StaffSetupPage() {
   const mismatch = confirm.length > 0 && confirm !== password;
   const ready = password.length >= 8 && confirm === password;
 
+  async function askForCode() {
+    setCodeBusy(true);
+    try {
+      const r = await sendCode({ data: { token } });
+      setSentTo(r.sentTo);
+      toast.success(`Code sent to ${r.sentTo}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't send the code");
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
+  async function confirmCode() {
+    setCodeBusy(true);
+    try {
+      const r = await verifyCode({ data: { token, code: code.trim() } });
+      setProof(r.proof);
+    } catch (e: any) {
+      toast.error(e?.message ?? "That code didn't work");
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
   async function submit() {
-    if (!invite?.valid || !ready) return;
+    if (!invite?.valid || !ready || !proof) return;
     setBusy(true);
     try {
-      const res = await redeem({ data: { token, password } });
+      const res = await redeem({ data: { token, password, proof } });
       // This device may be signed in to their client account (the link
       // usually arrives in its Messenger). Switch to the new team login.
       await supabase.auth.signOut();
@@ -82,10 +115,38 @@ function StaffSetupPage() {
             <SlowLoadHint />
           </div>
         )}
-        {invite?.valid && (
+        {invite?.valid && !invite.proven && (
+          <div className="space-y-5">
+            <div className="space-y-1">
+              <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold">{invite.roleLabel}</div>
+              <h1 className="text-2xl font-bold">{invite.firstName ? `Welcome, ${invite.firstName}` : "Welcome to the team"}</h1>
+              {invite.welcome && <p className="text-sm text-muted-foreground">{invite.welcome}</p>}
+            </div>
+            <p className="text-sm">
+              First, confirm it's your email. We'll send a 6-digit code to <span className="font-semibold">{sentTo ?? invite.emailHint}</span>.
+            </p>
+            {!sentTo ? (
+              <Button className="w-full" onClick={() => void askForCode()} disabled={codeBusy} loading={codeBusy}>
+                Email me a code
+              </Button>
+            ) : (
+              <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
+                <Label htmlFor="setup-code">Code from the email</Label>
+                <Input id="setup-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+                <Button type="submit" className="w-full" disabled={code.length !== 6 || codeBusy} loading={codeBusy}>
+                  Confirm
+                </Button>
+                <button type="button" className="w-full text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => void askForCode()} disabled={codeBusy}>
+                  Send a new code
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+        {invite?.valid && invite.proven && (
           <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <div className="space-y-1">
-              <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{invite.roleLabel}</div>
+              <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold">{invite.roleLabel}</div>
               <h1 className="text-2xl font-bold">{invite.firstName ? `Welcome, ${invite.firstName}` : "Welcome to the team"}</h1>
               {invite.welcome && <p className="text-sm text-muted-foreground">{invite.welcome}</p>}
             </div>

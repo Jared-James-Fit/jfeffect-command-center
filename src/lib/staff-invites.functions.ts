@@ -59,7 +59,7 @@ export const listTeam = createServerFn({ method: "GET" })
     const [{ data: roleRows }, { data: owners }, { data: invites }] = await Promise.all([
       sb.from("user_roles").select("user_id, role, created_at").in("role", TEAM_ROLES),
       sb.from("business_owners").select("user_id"),
-      sb.from("staff_invites").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+      sb.from("staff_invites").select("*").eq("status", "pending").neq("role", "specialist").order("created_at", { ascending: false }),
     ]);
     const byUser = new Map<string, { roles: string[]; since: string | null }>();
     for (const r of (roleRows ?? []) as any[]) {
@@ -149,12 +149,13 @@ const InviteInput = z.object({
 
 async function deliver(
   context: any,
-  invite: { id: string; email: string; first_name: string | null; role: string; setup_token: string; setup_token_expires_at: string; phone?: string | null },
+  invite: { id: string; email: string; first_name: string | null; role: string; setup_token_expires_at: string; phone?: string | null },
+  token: string,
   delivery: z.infer<typeof DeliveryInput>,
 ) {
   const { appOrigin, setupPath, sendInviteInMessenger, sendInviteSms } = await import("@/lib/staff-invites.server");
   const role = invite.role as (typeof INVITABLE_ROLES)[number];
-  const link = `${appOrigin()}${setupPath(invite.setup_token)}`;
+  const link = `${appOrigin()}${setupPath(token)}`;
   let result: { sent: boolean; reason?: string } = { sent: false, reason: "link_only" };
   if (delivery.method === "messenger") {
     result = await sendInviteInMessenger({
@@ -164,7 +165,7 @@ async function deliver(
       firstName: invite.first_name ?? "",
       role,
       email: invite.email,
-      token: invite.setup_token,
+      token,
       expiresAt: invite.setup_token_expires_at,
     });
   } else if (delivery.method === "sms") {
@@ -197,20 +198,20 @@ export const inviteStaff = createServerFn({ method: "POST" })
       if (!c?.user_id) throw new Error("That client has no app login to receive a Messenger message. Send by text or copy the link.");
     }
 
-    const { genSetupToken } = await import("@/lib/staff-invites.server");
-    const setup_token = genSetupToken();
+    const { genSetupToken, hashSetupToken } = await import("@/lib/staff-invites.server");
+    const token = genSetupToken();
     const setup_token_expires_at = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await sb.from("staff_invites").insert({
       email: data.email,
       first_name: data.first_name,
       last_name: data.last_name || null,
       role: data.role,
-      setup_token,
+      setup_token_hash: hashSetupToken(token),
       setup_token_expires_at,
       created_by: context.userId,
     }).select("*").single();
     if (error) throw new Error(error.message);
-    return deliver(context, row, data.delivery);
+    return deliver(context, row, token, data.delivery);
   });
 
 export const resendStaffInvite = createServerFn({ method: "POST" })
@@ -222,30 +223,42 @@ export const resendStaffInvite = createServerFn({ method: "POST" })
     const { data: inv } = await sb.from("staff_invites").select("*").eq("id", data.inviteId).maybeSingle();
     if (!inv || inv.status !== "pending") throw new Error("That invite isn't pending anymore.");
     if (!isInvitableRole(inv.role)) throw new Error("That role can't be invited anymore. Revoke this invite.");
-    const { genSetupToken } = await import("@/lib/staff-invites.server");
-    const setup_token = genSetupToken();
+    const { genSetupToken, hashSetupToken } = await import("@/lib/staff-invites.server");
+    const token = genSetupToken();
     const setup_token_expires_at = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await sb.from("staff_invites")
-      .update({ setup_token, setup_token_expires_at }).eq("id", inv.id).select("*").single();
+      .update({ setup_token: null, setup_token_hash: hashSetupToken(token), setup_token_expires_at, code_hash: null, code_attempts: 0 })
+      .eq("id", inv.id).select("*").single();
     if (error) throw new Error(error.message);
     const delivery =
       row.delivery_method === "messenger" && row.delivery_client_id ? { method: "messenger" as const, clientId: row.delivery_client_id as string }
       : row.delivery_method === "sms" && row.phone ? { method: "sms" as const, phone: row.phone as string }
       : { method: "link" as const };
-    return deliver(context, row, delivery);
+    return deliver(context, row, token, delivery);
   });
 
-/** The current setup link for a pending invite (no new token, nothing sent). */
+/**
+ * A fresh setup link for a pending invite, to copy. Only a link's hash is
+ * kept, so the old one can't be shown again: this makes a new one and the
+ * old one stops working. Nothing is sent.
+ */
 export const getStaffInviteLink = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ inviteId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = await admin();
-    const { data: inv } = await sb.from("staff_invites").select("status, setup_token").eq("id", data.inviteId).maybeSingle();
-    if (!inv || inv.status !== "pending" || !inv.setup_token) throw new Error("That invite isn't pending anymore.");
-    const { appOrigin, setupPath } = await import("@/lib/staff-invites.server");
-    return { link: `${appOrigin()}${setupPath(inv.setup_token)}` };
+    const { data: inv } = await sb.from("staff_invites").select("status, role").eq("id", data.inviteId).maybeSingle();
+    if (!inv || inv.status !== "pending") throw new Error("That invite isn't pending anymore.");
+    const { appOrigin, setupPath, genSetupToken, hashSetupToken } = await import("@/lib/staff-invites.server");
+    const token = genSetupToken();
+    const { error } = await sb.from("staff_invites").update({
+      setup_token: null,
+      setup_token_hash: hashSetupToken(token),
+      setup_token_expires_at: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 3600 * 1000).toISOString(),
+    }).eq("id", data.inviteId).eq("status", "pending");
+    if (error) throw new Error(error.message);
+    return { link: `${appOrigin()}${setupPath(token)}` };
   });
 
 export const revokeStaffInvite = createServerFn({ method: "POST" })
@@ -255,7 +268,8 @@ export const revokeStaffInvite = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const sb = await admin();
     const { error } = await sb.from("staff_invites")
-      .update({ status: "revoked", setup_token: null }).eq("id", data.inviteId).eq("status", "pending");
+      .update({ status: "revoked", setup_token: null, setup_token_hash: null, code_hash: null })
+      .eq("id", data.inviteId).in("status", ["pending", "draft"]);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -308,35 +322,111 @@ export const linkTeamMemberClient = createServerFn({ method: "POST" })
 
 /* ---------- Public: the setup link ---------- */
 
-const TokenInput = z.object({ token: z.string().min(20).max(128) });
+const TokenInput = z.object({ token: z.string().min(20).max(128), proof: z.string().max(80).optional() });
 
-/** What the setup page shows before anyone types a password. */
+/** The invite a link names: by its hash (a link from before hashing by its token). */
+async function inviteForToken(sb: any, token: string): Promise<any | null> {
+  const { hashSetupToken } = await import("@/lib/staff-invites.server");
+  const { data: byHash } = await sb.from("staff_invites").select("*").eq("setup_token_hash", hashSetupToken(token)).maybeSingle();
+  if (byHash) return byHash;
+  const { data: legacy } = await sb.from("staff_invites").select("*").eq("setup_token", token).maybeSingle();
+  return legacy ?? null;
+}
+
+function linkProblem(inv: any): string | null {
+  if (!inv) return "This setup link isn't valid anymore. Ask for a new one.";
+  if (inv.status !== "pending" || !inv.email) return "This invite was already used or revoked.";
+  if (inv.setup_token_expires_at && Date.parse(inv.setup_token_expires_at) < Date.now()) {
+    return "This setup link expired. Ask for a new one.";
+  }
+  return null;
+}
+
+/** What the setup page shows before anyone types anything. The email shows in full only once it's proven theirs. */
 export const getStaffInvitePreview = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => TokenInput.parse(i))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { data: inv } = await sb
-      .from("staff_invites").select("first_name, email, role, status, setup_token_expires_at")
-      .eq("setup_token", data.token).maybeSingle();
-    if (!inv) return { valid: false as const, reason: "This setup link isn't valid anymore. Ask for a new one." };
-    if (inv.status !== "pending") return { valid: false as const, reason: "This invite was already used or revoked." };
-    if (inv.setup_token_expires_at && Date.parse(inv.setup_token_expires_at) < Date.now()) {
-      return { valid: false as const, reason: "This setup link expired. Ask for a new one." };
-    }
+    const inv = await inviteForToken(sb, data.token);
+    const problem = linkProblem(inv);
+    if (problem) return { valid: false as const, reason: problem };
+    const { inviteProofOk, maskInviteEmail, inviteRoleLabel } = await import("@/lib/staff-invites.server");
+    const proven = inviteProofOk(inv.id, inv.email, data.proof);
     const info = STAFF_ROLE_INFO[inv.role as keyof typeof STAFF_ROLE_INFO];
     return {
       valid: true as const,
       firstName: (inv.first_name as string | null) ?? null,
-      email: inv.email as string,
+      email: proven ? (inv.email as string) : null,
+      emailHint: maskInviteEmail(inv.email as string),
+      proven,
       role: inv.role as string,
-      roleLabel: info?.label ?? "Staff",
-      welcome: info?.welcome ?? null,
+      roleLabel: inviteRoleLabel(inv.role, inv.title),
+      welcome:
+        inv.role === "specialist"
+          ? "It's view-only: footage, training and performance for the athletes you're given. Nothing you do changes anyone's training."
+          : info?.welcome ?? null,
     };
+  });
+
+/** Email a 6-digit code to the invite's email (a texted or copied link). */
+export const sendStaffInviteCode = createServerFn({ method: "POST" })
+  .inputValidator((i: unknown) => TokenInput.parse(i))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const inv = await inviteForToken(sb, data.token);
+    const problem = linkProblem(inv);
+    if (problem) throw new Error(problem);
+    const m = await import("@/lib/staff-invites.server");
+    if (inv.code_sent_at && Date.now() - Date.parse(inv.code_sent_at) < m.INVITE_CODE_RESEND_SECONDS * 1000) {
+      return { sentTo: m.maskInviteEmail(inv.email), waitSeconds: m.INVITE_CODE_RESEND_SECONDS };
+    }
+    const code = m.newInviteCode();
+    const { error } = await sb.from("staff_invites").update({
+      code_hash: m.inviteCodeHash(inv.id, code),
+      code_expires_at: new Date(Date.now() + m.INVITE_CODE_MINUTES * 60_000).toISOString(),
+      code_attempts: 0,
+      code_sent_at: new Date().toISOString(),
+    }).eq("id", inv.id);
+    if (error) throw new Error("Couldn't send the code. Try again.");
+    const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
+    const sent = await sendTemplateEmail(sb, {
+      template: "team-code",
+      to: inv.email,
+      data: { first_name: inv.first_name ?? "", code },
+      sensitive: true,
+    });
+    if (!sent.sent) throw new Error("Couldn't email the code. Try again in a minute.");
+    return { sentTo: m.maskInviteEmail(inv.email), waitSeconds: m.INVITE_CODE_RESEND_SECONDS };
+  });
+
+/** The code from the email: proves the inbox is theirs. Returns the proof the emailed link carries. */
+export const verifyStaffInviteCode = createServerFn({ method: "POST" })
+  .inputValidator((i: unknown) =>
+    TokenInput.extend({ code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code from the email.") }).parse(i),
+  )
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const inv = await inviteForToken(sb, data.token);
+    const problem = linkProblem(inv);
+    if (problem) throw new Error(problem);
+    const m = await import("@/lib/staff-invites.server");
+    if (!inv.code_hash || !inv.code_expires_at || Date.parse(inv.code_expires_at) < Date.now()) {
+      throw new Error("That code has expired. Tap Send a new code.");
+    }
+    if ((inv.code_attempts ?? 0) >= m.INVITE_CODE_MAX_ATTEMPTS) throw new Error("Too many tries. Tap Send a new code.");
+    if (m.inviteCodeHash(inv.id, data.code) !== inv.code_hash) {
+      await sb.from("staff_invites").update({ code_attempts: (inv.code_attempts ?? 0) + 1 }).eq("id", inv.id);
+      throw new Error("That code didn't work. Check it, or tap Send a new code.");
+    }
+    await sb.from("staff_invites").update({ code_hash: null, code_expires_at: null, code_attempts: 0 }).eq("id", inv.id);
+    return { proof: m.inviteEmailProof(inv.id, inv.email), email: inv.email as string };
   });
 
 const RedeemInput = z.object({
   token: z.string().min(20).max(128),
   password: z.string().min(8).max(72),
+  /** from the emailed link or the code: the email is theirs */
+  proof: z.string().max(80).optional(),
 });
 
 export const redeemStaffInvite = createServerFn({ method: "POST" })
@@ -345,30 +435,60 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
     const sb = await admin();
     const { assertInviteRoleRedeemable, assertEmailFreeForStaffInvite, finalizeStaffOnlyUser } =
       await import("@/lib/setup-link-guard.server");
-    const { data: invite, error } = await sb
-      .from("staff_invites").select("*").eq("setup_token", data.token).maybeSingle();
-    if (error || !invite) throw new Error("This setup link isn't valid anymore. Ask for a new one.");
+    const invite = await inviteForToken(sb, data.token);
+    const problem = linkProblem(invite);
+    if (problem) throw new Error(problem);
     assertInviteRoleRedeemable(invite.role);
-    if (invite.status !== "pending") throw new Error("This invite was already used or revoked.");
-    if (invite.setup_token_expires_at && new Date(invite.setup_token_expires_at) < new Date()) {
-      throw new Error("This setup link expired. Ask for a new one.");
+    const { inviteProofOk } = await import("@/lib/staff-invites.server");
+    // nobody gets a login on an email they haven't shown is theirs
+    if (!inviteProofOk(invite.id, invite.email, data.proof)) {
+      throw new Error("Confirm your email first: enter the code we sent you.");
     }
+    // claim the invite first, so a second tap can't make a second login
+    const { data: claimed } = await sb.from("staff_invites")
+      .update({ status: "redeemed", redeemed_at: new Date().toISOString(), setup_token: null, setup_token_hash: null, code_hash: null })
+      .eq("id", invite.id).eq("status", "pending").select("id");
+    if (!claimed?.length) throw new Error("This invite was already used or revoked.");
 
-    // Staff accounts are separate from personal ones: an invite always
-    // creates a brand-new staff-only login, never reuses an existing one.
-    await assertEmailFreeForStaffInvite(sb, invite.email);
-    const { data: created, error: cErr } = await sb.auth.admin.createUser({
-      email: invite.email, password: data.password, email_confirm: true,
-      app_metadata: { account_kind: "staff" },
-      user_metadata: { full_name: `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() },
-    });
-    if (cErr) throw new Error(cErr.message);
-    await finalizeStaffOnlyUser(sb, created.user.id, invite.role);
-
-    await sb.from("staff_invites").update({
-      status: "redeemed", redeemed_user_id: created.user.id, redeemed_at: new Date().toISOString(),
-      setup_token: null,
-    }).eq("id", invite.id);
-
+    let uid: string | null = null;
+    try {
+      // Staff accounts are separate from personal ones: an invite always
+      // creates a brand-new staff-only login, never reuses an existing one.
+      await assertEmailFreeForStaffInvite(sb, invite.email);
+      const { data: created, error: cErr } = await sb.auth.admin.createUser({
+        email: invite.email, password: data.password, email_confirm: true,
+        app_metadata: { account_kind: "staff" },
+        user_metadata: { full_name: `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() },
+      });
+      if (cErr) throw new Error(cErr.message);
+      uid = created.user.id as string;
+      if (invite.role === "specialist") {
+        // the specialist record and their athletes first, then the role that makes them count
+        const { cleanAccess } = await import("@/lib/team-access/presets");
+        const { error: sErr } = await sb.from("team_specialists").insert({
+          user_id: uid,
+          preset: invite.preset,
+          title: invite.title,
+          display_name: invite.first_name ?? null,
+          invite_id: invite.id,
+          invited_by: invite.created_by ?? null,
+        });
+        if (sErr) throw new Error(sErr.message);
+        const access = cleanAccess(invite.access);
+        if (access.length) {
+          const { error: aErr } = await sb.from("specialist_access").insert(
+            access.map((a) => ({ ...a, specialist_user_id: uid, granted_by: invite.created_by ?? null })),
+          );
+          if (aErr) throw new Error(aErr.message);
+        }
+      }
+      await finalizeStaffOnlyUser(sb, uid, invite.role);
+      await sb.from("staff_invites").update({ redeemed_user_id: uid }).eq("id", invite.id);
+    } catch (e) {
+      // undo the half-made login and put the invite back so the link works again
+      if (uid) await sb.auth.admin.deleteUser(uid).catch(() => undefined);
+      await sb.from("staff_invites").update({ status: "pending", redeemed_at: null }).eq("id", invite.id).eq("status", "redeemed");
+      throw e;
+    }
     return { ok: true, email: invite.email as string, role: invite.role as string };
   });

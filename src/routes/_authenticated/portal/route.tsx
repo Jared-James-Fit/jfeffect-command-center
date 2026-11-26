@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav, selfServeNav, selfServeBottomNav } from "@/lib/admin-nav";
@@ -21,12 +21,20 @@ import { useCommunityActivity } from "@/lib/community.queries";
 import { AiCreditsReturn } from "@/components/ai-credits/ai-credits";
 import { MembershipPendingGate } from "@/components/member/membership-pending-gate";
 import { TutorialGate } from "@/components/tutorials/tutorials";
+import { useAuth } from "@/lib/auth";
 import { navForShell, useNativeShell } from "@/lib/native-purchases";
 import { isNative } from "@/platform";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
 function PortalLayout() {
+  const { accountRole } = useAuth();
+  // a specialist (game day coach…) has no portal, Crew or messages: their own area
+  if (accountRole === "specialist") return <Navigate to={"/specialist" as any} replace />;
+  return <ClientPortalLayout />;
+}
+
+function ClientPortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
   // Coaching client or JF member: one portal, the coach's screens only for coaching.

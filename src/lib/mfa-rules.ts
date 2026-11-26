@@ -8,7 +8,7 @@
 // password alone (a stolen one included) gets no staff rights anywhere: the
 // app shows the confirm screen, every server function refuses (src/start.ts →
 // mfa-guard.server.ts) and the database's role checks say no (caller_mfa_ok,
-// 20270512090000_two_step_sms_passkeys.sql). The admin, finance and coach
+// 20270512090000_two_step_sms_passkeys.sql). The admin, finance, coach and specialist
 // logins are asked to set one up the first time they open the app; nothing
 // changes for anyone else.
 //
@@ -18,7 +18,7 @@
  * Account roles that must have a way to confirm before the app opens: the
  * ones that see client records or the business's money.
  */
-export const MFA_REQUIRED_ROLES: ReadonlySet<string> = new Set(["admin", "finance", "coach"]);
+export const MFA_REQUIRED_ROLES: ReadonlySet<string> = new Set(["admin", "finance", "coach", "specialist"]);
 
 export function roleRequiresMfa(role: string | null | undefined): boolean {
   return !!role && MFA_REQUIRED_ROLES.has(role);

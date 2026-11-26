@@ -305,3 +305,128 @@ Both need the coach's own eyes, so neither can be set to send by itself at any
 level (the database refuses it, whatever a grant says), and the owner's My Voice
 profile is readable and editable only by the owner: another coach's drafts use
 the plain coach voice.
+
+## 7. Specialists: game day coaches and performance specialists (Nov 26 2026)
+
+`20270603090000_specialist_login_kind.sql` + `20270603090100_team_specialists.sql`,
+`src/lib/team-access/`, `src/components/specialist/`, `src/components/team/specialists-section.tsx`.
+Database tests: `supabase/tests/team-specialists/` (60 checks on real Postgres,
+as each kind of login). Unit tests: `src/test/team-specialists.test.ts`.
+
+The first team role built on the target model instead of the global `coach`
+role: identity, membership, explicit athlete assignment and per-category
+permission, checked in the database on every read.
+
+| Piece | How |
+| --- | --- |
+| Identity | A staff-only login (its own email, never a client's) with the app role `specialist`. It never holds `coach` or `admin`, so none of the ~38 policies and 75 functions that trust those roles let it in. Two-step sign-in is required (`MFA_REQUIRED_ROLES`). |
+| Membership | `organization_members.role = 'specialist'`, kept in step by `_jf_member_sync` like every staff role. Removing the role revokes the membership at once. |
+| The person | `team_specialists`: preset (`game_day_coach`, `performance_specialist`), the role's title in the owner's words, status (active / suspended), display name, phone, time zone, headshot, and the confidentiality promise's exact words and time. |
+| Athletes | `specialist_access`: one row per athlete, `footage` / `training` / `performance` switches, active / revoked, and the athlete's consent (`athlete_ok_at`; automatic only when the person granting it is the athlete: the owner sharing their own athlete account). |
+| The one rule | `specialist_can_view(client, category)`: the role (with its two-step session), an active record, an active membership in an active organization, an active access row with that category on, the athlete's consent, and an open athlete account (not archived, deactivated or deleted). |
+| Reads | `specialist.functions.ts`: every handler asks `specialist_can_view` with the caller's own login, then reads with the service role only the columns that category allows (never `coach_notes`, a day's or a row's notes, goals, messages, nutrition, check-ins or recovery). Media links are signed for 30 minutes. |
+| Notes | `specialist_notes`: the author reads their own; the athlete reads only shared ones through `my_shared_team_notes()`; no admin, coach, staff or Cleo path reads them (`CLEO_HIDDEN_TABLES`). Writes only through the server after the same check. Nothing notifies anyone. |
+| Footage the owner keeps back | `specialist_hidden_videos` (per clip, for every specialist). |
+| Audit | Every grant, change, consent, revocation, suspension and title change is a line in `organization_audit_log`. |
+| Invites | `staff_invites` (one invite system): `draft` until it has an email; the setup link's token is stored only as a SHA-256 hash; the invitee proves the email is theirs (the emailed link carries an HMAC proof; a texted or copied link asks for a 6-digit emailed code) before any login is created; redeeming claims the invite first, and a failure deletes the half-made login. The finance invite flow got the same hardening. |
+
+What a specialist sees: Footage (set videos, competition lifts first, weight
+in both units, reps, logged against planned effort, measured bar speed;
+slow motion, frame step, full screen, compare with an earlier set, watched
+marks), Training (the program as the athlete sees it, read-only, main lifts
+up front, accessories folded, coming up and recently done), Performance
+(the athlete's own strength chart and estimates, estimated total only when
+all three lifts are current, heavy singles, weight against RPE, measured
+bar speed and a load-velocity line only with enough spread, meet history
+with made / missed attempts, next meet countdown), and their account
+(profile, two-step, sign out). No Crew, messages, Cleo, programming, POV,
+billing or admin: the admin and portal layouts send a specialist to
+`/specialist`, and every server read refuses anything else.
+
+The athlete's side: Account → Team access lists who can see what, with Allow
+/ Don't allow / Stop sharing; shared notes show there and under the clip in
+their own set video sheet.
+
+Jesse: the migration seeds a `draft` Game Day Coach invite named Jesse with
+the owner's own athlete account (all three categories). It has no email and
+no link until the owner adds his email on Team → Staff access → Game day
+coaches and specialists → Edit, and sends it.
+
+## 8. The Nov 26 2026 multi-tenant specification: where each part stands
+
+The owner's specification asks for a full multi-organization SaaS: platform
+console, self-serve purchase links, automatic provisioning, branding, Stripe
+Connect, a global Crew across brands, feed intelligence, team rankings and
+public organization profiles. The audit (§1) holds: **nothing that lets a
+second business in can ship before the isolation gate (§3, Phase 3)**. An
+outside organization today would either see nothing (no global role) or, if
+given `coach`, see JF Effect's business. Selling access before isolation
+would be selling either an empty app or a data leak, and the specification
+itself says not to enable external onboarding until isolation is verified.
+
+So the order is: build what the owner needs now inside JF Effect on the
+target model (specialists, done), then isolation, then everything external.
+
+### Threat model (what the platform must stop)
+
+| Threat | Today's control | Gap for multi-tenant |
+| --- | --- | --- |
+| A team member sees an athlete they weren't given | Coaches: `coached_client_ids()` on core tables; specialists: `specialist_can_view` on every read | The 59 tables / 75 functions that trust the bare `coach` role (§1) |
+| A role is escalated from the client | Roles live in `user_roles` (no client writes); org admin checks are server-side (`is_org_admin`) | Per-org permission keys (`has_org_permission`) not built |
+| A stale or stolen link gets an account | Hashed, expiring, one-time invite tokens; email proven before a login exists; two-step for staff | Org-owner invites for other businesses not built |
+| A revoked person keeps access | Role and record checked on every read; membership revoked with the role; suspension and per-athlete revoke immediate | Signed media already handed out lives up to 30 minutes; downloads and screenshots can't be recalled |
+| An admin of one org reads another org | n/a (one org) | The tenant fence (§3 layer 1) over every client-keyed table, and `assertOrgAccess` on ~190 service-role paths |
+| AI reads private notes or another org | Cleo reads with the caller's login; specialist notes hidden from the catalog | Per-org Cleo (Phase 4) |
+| Payments cross businesses | One Stripe account | Connect with per-account webhooks (Phase 5, `STRIPE_CONNECT_DECISION.md`) |
+
+### Authorization matrix (live today)
+
+| Data | Owner / admin | JF coach | Specialist | Finance (view-only) | Athlete |
+| --- | --- | --- | --- | --- | --- |
+| Assigned athlete's footage | ✓ | ✓ (assigned) | ✓ if given + footage on + athlete agreed | read via admin view | own |
+| Training program & logs | ✓ | ✓ (assigned) | read-only, no notes, if training on | read | own |
+| Performance analytics | ✓ | ✓ (assigned) | engine read only, if performance on | read | own |
+| A specialist's notes | – | – | own only | – | shared ones only |
+| Messages, nutrition, check-ins, recovery | ✓ | ✓ (assigned) | – | read | own |
+| Crew | ✓ | ✓ | – (no route; see limits) | feed only | ✓ |
+| Billing, books | ✓ | – | – | ✓ | own purchases |
+| Team management | ✓ | – | – | – | Team access (consent) |
+| Cleo | ✓ | if switched on | – | if switched on | – |
+
+### Status of every part of the specification
+
+| # | Requirement | Status | Why / next step |
+| --- | --- | --- | --- |
+| 1 | Audit, plan, dependency map | **Done** | §1–§8 here; the plan survives context resets |
+| 3 | Multi-org architecture: orgs, memberships, roles | **Partly done** | Orgs, memberships, audit (Nov 22) and specialist role + assignments (Nov 26). `organization_clients`, per-org permission keys and the tenant fence are Phase 3 |
+| 4 | Platform owner console | **Not started** | Nothing to administer until a second org can exist; `/admin` remains the owner's console |
+| 5 | Self-serve purchase links + automatic provisioning | **Blocked** | Isolation gate; Stripe product for the founding price not created; counsel review |
+| 6 | Organization onboarding | **Blocked** | Same gate |
+| 7 | Organization branding | **Blocked** | Same gate; also needs per-org theming tokens |
+| 8 | Platform subscriptions | **Blocked** | Same gate; `plan_changes` engine (Nov 23) is the base to reuse |
+| 9 | Independent coaching payments (Connect) | **Blocked** | Decision recorded (Standard accounts, direct charges, 0% fee). Needs Connect enabled and approved on JF Effect's Stripe account, then Phase 5 |
+| 10 | Team management: invite, role, athletes, summary, suspend, revoke | **Done for specialists**; coaches as before (Team → People) | Head coach / assistant coach / custom roles with programming rights wait for Phase 3 step 2 (they would otherwise get the global `coach` role's reach) |
+| 11 | Jesse, Game Day Coach | **Done in code, waiting on deploy and his email** | Draft invite seeded; Footage / Training / Performance; private and shared notes; minimal account; every listed restriction enforced server-side |
+| 12 | Organization coaching operations | **Blocked** | Phase 3 step 2 (org-scope staff access) |
+| 13–18 | Global Crew, Everyone⌄/My Crew, feed ranking, 4-level auto-post privacy, org recaps, stories | **Deferred, by design** | With one organization "Everyone" and "My Crew" are the same audience. Crew already stores `community` / `followers` / `close_friends` / `coach` / `private`; a platform-wide `everyone` level is added with the second org, never by widening existing posts. The ranked "new to you first" feed (Nov 5) is the base for the recommendation work |
+| 19 | Rankings Global / My Crew / Teams | **Deferred** | Rankings already have JF Effect Athletes / Community audiences (Nov 25); Teams needs a second org |
+| 20 | Public organization profiles | **Deferred** | Second org |
+| 21 | Platform feed intelligence | **Deferred** | `/admin/insights` and post scores exist for one org |
+| 22 | Centralized updates, flags | **Exists** | One codebase; quiet build pickup (`app-freshness.ts`); per-account Cleo capability grants |
+| 23 | Security and tenant isolation | **Partly done** | Specialist isolation done and tested; tenant isolation is Phase 3 |
+| 24 | AI isolation | **Partly done** | Specialists have no AI; notes hidden from Cleo; per-org Cleo is Phase 4 |
+| 25 | Data governance | **Partly done** | Athlete consent for specialist sharing, confidentiality promise recorded; a team-member agreement document and organization agreements need counsel |
+| 26 | Existing JF Effect migration | **N/A yet** | Nothing moved: every change is additive (expand only) |
+| 29 | Testing | **Done for specialists** | 60 database checks, 18 unit tests, 6 screen render tests, existing suites |
+| 30 | Production deployment | See the PR / session report | Migrations are applied by hand (§3) |
+
+### Known limits of the specialist role
+
+- A specialist login can call the Crew's database functions directly through
+  the API like any signed-in account (the app never routes them there). The
+  Crew shows nothing private to them, but it isn't fenced off at the database.
+  Fencing Crew functions behind a "may use Crew" check belongs with Phase 3.
+- A signed clip link stays valid up to 30 minutes after access is revoked.
+- Revoking access can't recall a clip someone downloaded or recorded.
+- There is no team-member agreement in Admin → Legal yet; the confidentiality
+  promise is recorded on the specialist's record with its exact words.

@@ -12,7 +12,7 @@ import { stopTeamPreview, useTeamPreview, type TeamPreview } from "@/lib/team-pr
 
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-export type AppRole = "admin" | "coach" | "media_manager" | "finance" | "client" | "member";
+export type AppRole = "admin" | "coach" | "media_manager" | "finance" | "specialist" | "client" | "member";
 
 // ── Role cache helpers ────────────────────────────────────────────────────────
 // Persist the resolved role to localStorage so PWA resume is instant.
@@ -411,6 +411,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : roles.includes("coach") ? "coach"
           : roles.includes("media_manager") ? "media_manager"
           : roles.includes("finance") ? "finance"
+          // a game day coach / performance specialist: their own three tabs, nothing else
+          : roles.includes("specialist") ? "specialist"
           : roles.includes("client") ? "client"
           : null;
 

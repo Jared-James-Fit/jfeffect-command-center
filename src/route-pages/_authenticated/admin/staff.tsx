@@ -28,6 +28,7 @@ import {
   searchInviteRecipients, type TeamInvite, type TeamMember,
 } from "@/lib/staff-invites.functions";
 import { ClientLinkDialog } from "@/components/tasks/client-link-dialog";
+import { SpecialistsSection } from "@/components/team/specialists-section";
 import {
   INVITE_TTL_DAYS, STAFF_ROLE_INFO, STAFF_ROLE_ORDER, inviteExpiryLabel, staffInviteMessage, staffRoleLabel,
   type InvitableRole, type InviteDelivery, type StaffRoleKey,
@@ -138,6 +139,8 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
           {members.map((m) => <MemberCard key={m.user_id} m={m} onChanged={refresh} />)}
         </div>
       </section>
+
+      {!viewOnly && <SpecialistsSection />}
 
       <section>
         <SectionLabel>What each role can do</SectionLabel>

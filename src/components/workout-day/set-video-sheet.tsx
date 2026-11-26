@@ -9,6 +9,7 @@
  * didn't send. Under a clip, its bar path & speed (lift-analysis-entry.tsx:
  * read by itself after a barbell set is sent, one line, the full view a tap).
  */
+import { SharedNotesForVideo } from "@/components/account/team-access";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -253,6 +254,8 @@ export default function SetVideoSheet({
                   name={`${exerciseName} ${setWord(setIndex)}`}
                   className="mx-auto w-[220px]"
                 />
+                {/* what a game day coach / specialist chose to share about this clip (never their private notes) */}
+                <SharedNotesForVideo videoId={v.id} />
                 <div className="flex items-center gap-2">
                   {v.message_id ? (
                     <button

@@ -9,6 +9,7 @@ import { twoStepCodeTemplate } from './two-step-code'
 import { template as applicationReceived } from './application-received'
 import { template as paymentLink } from './payment-link'
 import { template as planChangeTemplate } from './plan-change'
+import { teamCodeTemplate, teamInviteTemplate } from './team-emails'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -41,4 +42,6 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'application-received': applicationReceived,
   'payment-link': paymentLink,
   'plan-change': planChangeTemplate,
+  'team-invite': teamInviteTemplate,
+  'team-code': teamCodeTemplate,
 }

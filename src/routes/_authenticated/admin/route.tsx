@@ -35,6 +35,11 @@ function AdminLayout() {
   useEffect(() => {
     if (loading || !role) return;
     if (role === "admin" || role === "coach") return;
+    // a specialist (game day coach…): their own view-only area, never the admin app
+    if (role === "specialist") {
+      navigate({ to: "/specialist" as any, replace: true });
+      return;
+    }
     // Members, clients and any other role (unknown / the retired media_manager): the client app, on Crew
     navigate({ to: CLIENT_VIEW_HOME, replace: true });
   }, [role, loading, navigate]);
