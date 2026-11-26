@@ -106,6 +106,7 @@ export async function storeFacts(sb: Db, src: any, raws: RawFact[], actorId: str
     const hinted = src.provider === "unknown" && raw.providerHint && raw.kind !== "attempt_plan" && raw.kind !== "warmup";
     const provider: Provider = hinted ? raw.providerHint! : src.provider;
     const scope = raw.scope ?? "athlete";
+    if ((raw.data as any)?.meetLogistics && !src.competition_id) continue;
     const competition_id = scope === "meet" ? src.competition_id ?? null : null;
     const key = dedupeKey({ kind: raw.kind, lift: raw.lift, date: raw.date, data: raw.data, scope }, competition_id);
     if (byKey.has(key)) continue;
@@ -593,11 +594,11 @@ export async function loadIntel(sb: Db, clientId: string, competitionId: string 
     loadFacts(sb, clientId, ["active", "superseded", "dismissed"]),
     sb.from("athlete_intel_questions").select("*").eq("client_id", clientId).order("priority", { ascending: false }).limit(200),
     sb.from("athlete_intel_links").select("id, role, name, expires_at, revoked_at, opened_at, last_used_at, uploads, competition_id, created_at").eq("client_id", clientId).order("created_at", { ascending: false }).limit(20),
-    competitionId ? sb.from("competitions").select("id, name, meet_date, status").eq("id", competitionId).maybeSingle().then((r: any) => r.data) : Promise.resolve(null),
+    competitionId ? sb.from("competitions").select("id, name, meet_date, status, session_label, flight, weigh_in_at, lifting_start, location, division, equipment_event, weight_class").eq("id", competitionId).eq("client_id", clientId).maybeSingle().then((r: any) => r.data) : Promise.resolve(null),
   ]);
   const active = facts.filter((f) => f.status === "active" && (f.competition_id == null || f.competition_id === competitionId));
-  const sources = ((srcRows ?? []) as any[]).filter((s) => s.status !== "deleted");
-  const deleted = ((srcRows ?? []) as any[]).filter((s) => s.status === "deleted");
+  const sources = ((srcRows ?? []) as any[]).filter((s) => s.status !== "deleted" && (!competitionId || !s.competition_id || s.competition_id === competitionId));
+  const deleted = ((srcRows ?? []) as any[]).filter((s) => s.status === "deleted" && (!competitionId || !s.competition_id || s.competition_id === competitionId));
   const findings = buildFindings(active, today, { meetDate: comp?.status === "upcoming" ? String(comp.meet_date).slice(0, 10) : null });
   let recommendations: Recommendation[] = [];
   if (competitionId) {
@@ -628,6 +629,7 @@ export async function loadIntel(sb: Db, clientId: string, competitionId: string 
     facts: facts.filter((f) => f.competition_id == null || f.competition_id === competitionId).slice(-600),
     findings,
     recommendations,
+    meetLogistics: o.staffView && comp ? (await import("./meet-files")).meetFileProposals(active, sources, comp) : [],
     questions: { now: shown.now, later: shown.later, deferred: shown.deferred },
     answered: qs.filter((q) => q.status === "answered").slice(0, 20).map((q) => ({ id: q.id, text: q.text, answer: q.answer, answered_at: q.answered_at, answered_role: q.answered_role })),
     links: o.staffView ? ((links ?? []) as any[]).filter((l) => !l.revoked_at && Date.parse(l.expires_at) > Date.now()) : [],
