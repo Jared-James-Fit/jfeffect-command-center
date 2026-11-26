@@ -33,6 +33,7 @@ import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
 import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
+import { manageScheduledNutrition, scheduledNutritionQuery, scheduledNutritionKey, type ScheduledNutrition } from "@/lib/nutrition-targets/scheduled-plans";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 
 export function NutritionTargetsPanel({
@@ -49,6 +50,9 @@ export function NutritionTargetsPanel({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [copySource, setCopySource] = useState<PlanRow | null>(null);
+  const [scheduledDraft, setScheduledDraft] = useState<ScheduledNutrition | null>(null);
+  const scheduledQ = useQuery(scheduledNutritionQuery(clientId));
+  const [cancelling, setCancelling] = useState<string | null>(null);
   const [waterOpen, setWaterOpen] = useState(false);
   const [groceryOpen, setGroceryOpen] = useState(false);
   const { user, role } = useAuth();
@@ -158,6 +162,7 @@ export function NutritionTargetsPanel({
   };
 
   const startNewPlan = () => {
+    setScheduledDraft(null);
     setEditing(null);
     setOpen(true);
   };
@@ -361,10 +366,23 @@ export function NutritionTargetsPanel({
         )}
       </div>
 
+      {scheduledQ.isError ? <p className="text-xs text-muted-foreground">Scheduled plans unavailable. <button type="button" onClick={() => void scheduledQ.refetch()} className="underline">Retry</button></p> : !!scheduledQ.data?.length && (
+        <details className="min-w-0 rounded-xl border border-border px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-medium">Scheduled plans · {scheduledQ.data.length}</summary>
+          <div className="space-y-2 pt-3">
+            {scheduledQ.data.map((draft) => <div key={draft.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2">
+              <div className="min-w-0"><p className="font-medium">{draft.payload.phase ?? "Nutrition"} · {planDate(draft.start_date)}</p><p className="text-muted-foreground">{draft.start_date <= todayLocalISO() ? "Due for review · not live" : "Awaiting start date"}</p></div>
+              <div className="flex flex-wrap gap-1"><Button type="button" size="sm" variant="outline" onClick={() => {setEditing(null);setCopySource(null);setScheduledDraft(draft);setOpen(true);}}>Review</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={!!cancelling} onClick={async () => {if (!confirm("Cancel this scheduled draft? The current plan stays unchanged.")) return;setCancelling(draft.id);try {await manageScheduledNutrition(clientId,draft,"cancel");void qc.invalidateQueries({queryKey:scheduledNutritionKey(clientId)});toast.success("Draft cancelled");}catch(e:any){toast.error(e?.message ?? "Couldn't cancel draft");}finally{setCancelling(null);}}}>Cancel</Button></div>
+            </div>)}
+            <p className="text-muted-foreground">Review and publish on or after the start date. Nothing changes automatically.</p>
+          </div>
+        </details>
+      )}
       {groceryOpen && (
         <GroceryListSheet open={groceryOpen} onOpenChange={setGroceryOpen} clientId={clientId} viewAsUserId={clientUserId} coachPreview />
       )}
-      <NutritionTargetDialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setCopySource(null); }} clientId={clientId} initial={editing ?? undefined} copyFrom={copySource ?? undefined} />
+      <NutritionTargetDialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setCopySource(null); setScheduledDraft(null); } }} clientId={clientId} initial={editing ?? undefined} copyFrom={copySource ?? undefined} scheduled={scheduledDraft ?? undefined} />
       {clientUserId && user?.id && (
         <WaterTargetDialog open={waterOpen} onOpenChange={setWaterOpen} userId={clientUserId} currentUserId={user.id} viewerRole={viewerRole} />
       )}
