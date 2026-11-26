@@ -41,7 +41,7 @@ create table competitions (
 create table program_intel_profiles (
   client_id uuid primary key references clients(id) on delete cascade, long_term_goal jsonb,
   updated_by uuid default auth.uid(), updated_at timestamptz not null default now());
-create table app_settings (key text unique not null, value jsonb);
+create table app_settings (key text unique not null, value text); -- text holding JSON, as in production
 create table coaching_sessions (id uuid primary key default gen_random_uuid(), client_id uuid, analysis_status text, updated_at timestamptz not null default now());
 create table messenger_checkins (id uuid primary key default gen_random_uuid(), client_id uuid, task_type text, status text, submitted_at timestamptz);
 create table messages (id uuid primary key default gen_random_uuid(), client_id uuid, sender_role text, created_at timestamptz not null default now());

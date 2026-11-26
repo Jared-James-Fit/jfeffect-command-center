@@ -6,7 +6,7 @@
  * the coach), and read every open goal again when it's due (6 hours), which
  * also settles a passed goal's outcome. Deterministic: no model is called.
  */
-import { assessDueClients, deliverOutbox, extractFromCheckin, extractFromMeeting, extractFromMessages } from "./goals.server";
+import { assessDueClients, deliverOutbox, extractFromCheckin, extractFromMeeting, extractFromMessages, settingJson } from "./goals.server";
 
 type Db = any;
 
@@ -90,7 +90,7 @@ export async function runGoalIntelTick(sb: Db, opts: { budgetMs?: number } = {})
 
   // 4. clients' own messages, at most every 30 minutes
   const { data: setting } = await sb.from("app_settings").select("value").eq("key", "goal_intel_scan").maybeSingle();
-  const lastAt = Date.parse((setting?.value as any)?.messages_at ?? "") || 0;
+  const lastAt = Date.parse(settingJson(setting?.value).messages_at ?? "") || 0;
   if (left() > 15_000 && Date.now() - lastAt >= 30 * 60_000) report.messages = await extractFromMessages(sb).catch(() => null);
 
   // 5. open goals due a read (new, or 6 hours old)

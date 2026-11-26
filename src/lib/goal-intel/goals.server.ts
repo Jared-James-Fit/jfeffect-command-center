@@ -394,7 +394,8 @@ export async function extractFromCheckin(sb: Db, checkin: { id: string; client_i
 /** Clients' own chat messages since the last read: strict, numbers only, coaching clients only. */
 export async function extractFromMessages(sb: Db): Promise<number> {
   const { data: setting } = await sb.from("app_settings").select("value").eq("key", "goal_intel_scan").maybeSingle();
-  const since = (setting?.value as any)?.messages_at ?? new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const scan = settingJson(setting?.value);
+  const since = typeof scan.messages_at === "string" ? scan.messages_at : new Date(Date.now() - 7 * 86_400_000).toISOString();
   const startedAt = new Date().toISOString();
   const { data: msgs } = await sb
     .from("messages")
@@ -424,7 +425,7 @@ export async function extractFromMessages(sb: Db): Promise<number> {
     await sb.from("client_goal_sources").upsert({ source_kind: "message", source_id: m.id, client_id: m.client_id, goals: cands.length, scanned_at: new Date().toISOString() });
   }
   const last = (msgs ?? []).length === 500 ? (msgs as any[])[499].created_at : startedAt;
-  await sb.from("app_settings").upsert({ key: "goal_intel_scan", value: { ...(setting?.value as any), messages_at: last } }, { onConflict: "key" });
+  await sb.from("app_settings").upsert({ key: "goal_intel_scan", value: JSON.stringify({ ...scan, messages_at: last }) }, { onConflict: "key" });
   return n;
 }
 
@@ -655,9 +656,21 @@ export async function decideRecommendation(
 
 export type GoalUpdateSettings = { reviewMinutes: number; autoSend: boolean };
 
+/** app_settings.value is text holding JSON (an older row may already be an object): read it either way. */
+export function settingJson(value: unknown): Record<string, any> {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, any>;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const v = JSON.parse(value);
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function readUpdateSettings(sb: Db): Promise<GoalUpdateSettings> {
   const { data } = await sb.from("app_settings").select("value").eq("key", "goal_updates").maybeSingle();
-  const v = (data?.value ?? {}) as any;
+  const v = settingJson(data?.value);
   const m = Number(v.review_minutes);
   return {
     reviewMinutes: Number.isFinite(m) ? Math.min(MAX_REVIEW_MINUTES, Math.max(MIN_REVIEW_MINUTES, Math.round(m))) : DEFAULT_REVIEW_MINUTES,

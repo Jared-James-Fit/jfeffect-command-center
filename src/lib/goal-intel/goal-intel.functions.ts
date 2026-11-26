@@ -143,7 +143,7 @@ export const setGoalUpdateSettingsFn = createServerFn({ method: "POST" })
     const { data: admin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
     if (!admin) throw new Error("Only the admin can change this.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await (supabaseAdmin as any).from("app_settings").upsert({ key: "goal_updates", value: { review_minutes: data.reviewMinutes, auto_send: data.autoSend } }, { onConflict: "key" });
+    const { error } = await (supabaseAdmin as any).from("app_settings").upsert({ key: "goal_updates", value: JSON.stringify({ review_minutes: data.reviewMinutes, auto_send: data.autoSend }) }, { onConflict: "key" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
