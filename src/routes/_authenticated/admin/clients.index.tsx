@@ -28,6 +28,7 @@ import { filtersFromSearch, matchFromSearch, type DirectoryFilterKey } from "@/l
 import { STATUS_META } from "@/components/clients/clients-status";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { RecentlyDeletedRow } from "@/components/account/recently-deleted";
+import { HandlingDirectory } from "@/components/competition/prep/handling-directory";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
@@ -359,6 +360,10 @@ function ClientsDirectoryPage() {
         )}
 
         {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
+        {/* athletes being handled at a meet (a service on their account, by where it stands) */}
+        <div className="mt-3">
+          <HandlingDirectory />
+        </div>
         {/* accounts waiting out their 30 days, with Restore (iMessage's Recently Deleted) */}
         <RecentlyDeletedRow />
       </div>

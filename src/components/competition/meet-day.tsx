@@ -34,6 +34,7 @@ import { LIFT_LABEL, type Lift } from "@/lib/competition/types";
 import { readRules, toLb } from "@/lib/competition/rules";
 import { ordinal } from "@/lib/competition/landscape";
 import { cn } from "@/lib/utils";
+import { MeetDayNow } from "./prep/meet-day-now";
 
 const LIFTS: Lift[] = ["squat", "bench", "deadlift"];
 type Entry = {
@@ -391,6 +392,15 @@ export function MeetDayCommandCentre({ competitionId }: { competitionId: string 
 
       <div className="flex-1 overflow-y-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
         <div className="mx-auto max-w-2xl space-y-4">
+          {/* what's on now and next (the timeline, the gameplan's warm-ups and racks, what's logged) */}
+          <MeetDayNow
+            competitionId={competitionId}
+            clientId={comp.client_id ?? null}
+            who="coach"
+            logged={[...merged.values()]
+              .filter((e) => e.entrant === "us" && e.result)
+              .map((e) => ({ lift: e.lift, attempt: e.attempt, kg: e.kg, result: e.result }))}
+          />
           <div className="grid grid-cols-3 gap-1 rounded-xl bg-secondary p-1" role="tablist">
             {LIFTS.map((l) => (
               <button

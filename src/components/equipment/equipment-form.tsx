@@ -68,8 +68,8 @@ export function EquipmentForm({
   onUseExisting?: (id: string) => void;
   /** Whether anything's typed or picked that Save would keep (the sheet asks before it closes on it). */
   onDirtyChange?: (dirty: boolean) => void;
-  /** Set to this form's Save (true once saved), so the sheet's "Save changes?" can run it. */
-  saveRef?: MutableRefObject<(() => Promise<boolean>) | null>;
+  /** Set to this form's Save (true once saved), so the sheet can keep it when it closes (quiet: no "Give it a name" nag). */
+  saveRef?: MutableRefObject<((opts?: { quiet?: boolean }) => Promise<boolean>) | null>;
 }) {
   const actions = useEquipmentActions(clientId);
   const gyms = useMemo(() => data.gyms.filter((g) => !g.archived_at).sort((a, b) => a.name.localeCompare(b.name)), [data.gyms]);
@@ -134,10 +134,10 @@ export function EquipmentForm({
     }
   };
 
-  const save = async (): Promise<boolean> => {
+  const save = async (opts: { quiet?: boolean } = {}): Promise<boolean> => {
     if (saving) return false;
     if (!trimmed) {
-      toast.error("Give it a name first");
+      if (!opts.quiet) toast.error("Give it a name first");
       return false;
     }
     if (duplicate && !initial && onUseExisting) {

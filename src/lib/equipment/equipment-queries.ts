@@ -19,12 +19,25 @@ import {
   type Gym,
   type Setting,
 } from "./equipment";
+import { flushOutbox, type OutboxEntry } from "./setup-outbox";
 
 const sb = supabase as any;
 
 export const EQUIPMENT_BUCKET = "equipment-photos";
 export const equipmentKey = (clientId: string | null | undefined) => ["athlete-equipment", clientId ?? null] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const SETUP_COLUMNS = "id, client_id, exercise_id, equipment_id, settings, notes, photo_path, photo_paths, source, last_used_at, updated_at";
+/** The columns before photo_paths (a database a migration behind still answers). */
+const SETUP_COLUMNS_V1 = "id, client_id, exercise_id, equipment_id, settings, notes, photo_path, source, last_used_at, updated_at";
+
+async function fetchSetups(clientId: string) {
+  const r = await sb.from("athlete_exercise_setups").select(SETUP_COLUMNS).eq("client_id", clientId);
+  if (r.error && /photo_paths/.test(String(r.error.message ?? ""))) {
+    return sb.from("athlete_exercise_setups").select(SETUP_COLUMNS_V1).eq("client_id", clientId);
+  }
+  return r;
+}
 
 export async function fetchEquipment(clientId: string): Promise<EquipmentData> {
   const [g, e, s] = await Promise.all([
@@ -33,10 +46,7 @@ export async function fetchEquipment(clientId: string): Promise<EquipmentData> {
       .from("athlete_equipment")
       .select("id, client_id, gym_id, kind, name, brand, model, notes, photo_path, favorite, last_used_at, archived_at, created_at")
       .eq("client_id", clientId),
-    sb
-      .from("athlete_exercise_setups")
-      .select("id, client_id, exercise_id, equipment_id, settings, notes, photo_path, source, last_used_at, updated_at")
-      .eq("client_id", clientId),
+    fetchSetups(clientId),
   ]);
   const err = g.error ?? e.error ?? s.error;
   if (err) throw err;
@@ -49,6 +59,12 @@ export async function fetchEquipment(clientId: string): Promise<EquipmentData> {
 
 /** An athlete's gyms, equipment and setups (EMPTY while it loads or when it can't be read). */
 export function useAthleteEquipment(clientId: string | null | undefined, opts: { enabled?: boolean } = {}) {
+  const qc = useQueryClient();
+  const on = !!clientId && opts.enabled !== false;
+  // a setup change that couldn't be sent goes as soon as it can (setup-outbox.ts)
+  useEffect(() => {
+    if (on && clientId) ensureOutboxFlush(clientId, qc);
+  }, [on, clientId, qc]);
   const q = useQuery({
     queryKey: equipmentKey(clientId),
     enabled: !!clientId && opts.enabled !== false,
@@ -62,8 +78,104 @@ export function useAthleteEquipment(clientId: string | null | undefined, opts: {
 
 async function rpc<T = any>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await sb.rpc(fn, args);
-  if (error) throw new Error(error.message ?? "Couldn't save");
+  if (error) {
+    const e = new Error(error.message ?? "Couldn't save") as Error & { code?: string };
+    e.code = error.code;
+    throw e;
+  }
   return data as T;
+}
+
+/** The save itself (the sheet's autosave and the outbox both send through it). */
+export async function sendSetup(input: {
+  clientId: string;
+  exerciseId: string;
+  equipmentId: string | null;
+  settings: Setting[];
+  notes: string | null;
+  photos: string[];
+  makeCurrent?: boolean;
+}): Promise<ExerciseSetup> {
+  const row = await rpc("equipment_setup_save", {
+    _client_id: input.clientId,
+    _exercise_id: input.exerciseId,
+    _equipment_id: input.equipmentId,
+    _settings: cleanSettings(input.settings),
+    _notes: input.notes ?? null,
+    _photo_path: input.photos[0] ?? null,
+    _make_current: !!input.makeCurrent,
+    _photo_paths: input.photos,
+  });
+  return { ...row, settings: cleanSettings(row?.settings) } as ExerciseSetup;
+}
+
+const flushingFor = new Set<string>();
+
+/**
+ * Send a client's waiting setup changes now, when the phone comes back online
+ * and when the app comes back to the screen (installed once per athlete).
+ */
+export function ensureOutboxFlush(clientId: string, qc: QueryClient) {
+  if (typeof window === "undefined" || flushingFor.has(clientId)) return;
+  flushingFor.add(clientId);
+  const go = () => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    void flushOutbox(clientId, async (e: OutboxEntry) => {
+      const saved = await sendSetup({ clientId: e.clientId, exerciseId: e.exerciseId, equipmentId: e.equipmentId, settings: e.settings, notes: e.notes, photos: e.photos });
+      patch(qc, clientId, (d) => ({ ...d, setups: [...d.setups.filter((s) => s.id !== saved.id), saved] }));
+    }).then((n) => {
+      if (n > 0) void qc.invalidateQueries({ queryKey: equipmentKey(clientId) });
+    });
+  };
+  window.addEventListener("online", go);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") go();
+  });
+  go();
+}
+
+export type SetupRevision = {
+  id: string;
+  setup_id: string;
+  exercise_id: string;
+  equipment_id: string | null;
+  settings: Setting[];
+  notes: string | null;
+  photo_paths: string[];
+  source: "athlete" | "coach";
+  saved_by: string | null;
+  saved_at: string | null;
+  reason: "edit" | "restore" | "removed";
+  created_at: string;
+};
+
+export const setupRevisionsKey = (clientId: string | null | undefined, exerciseId: string | null | undefined) =>
+  ["athlete-setup-revisions", clientId ?? null, exerciseId ?? null] as const;
+
+/** Earlier versions of an exercise's setups, newest first (empty until the history migration is in). */
+export function useSetupRevisions(clientId: string | null | undefined, exerciseId: string | null | undefined, enabled = true) {
+  const q = useQuery({
+    queryKey: setupRevisionsKey(clientId, exerciseId),
+    enabled: !!clientId && !!exerciseId && enabled,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: async (): Promise<SetupRevision[]> => {
+      const { data, error } = await sb
+        .from("athlete_exercise_setup_revisions")
+        .select("id, setup_id, exercise_id, equipment_id, settings, notes, photo_paths, source, saved_by, saved_at, reason, created_at")
+        .eq("client_id", clientId)
+        .eq("exercise_id", exerciseId)
+        .order("created_at", { ascending: false })
+        .limit(60);
+      if (error) {
+        // a database without the table yet: no history, never an error on screen
+        if (/athlete_exercise_setup_revisions|does not exist|schema cache/i.test(String(error.message ?? ""))) return [];
+        throw error;
+      }
+      return ((data ?? []) as any[]).map((r) => ({ ...r, settings: cleanSettings(r.settings), photo_paths: Array.isArray(r.photo_paths) ? r.photo_paths : [] }));
+    },
+  });
+  return { revisions: q.data ?? [], loaded: q.isSuccess };
 }
 
 function patch(qc: QueryClient, clientId: string, fn: (d: EquipmentData) => EquipmentData) {
@@ -86,7 +198,8 @@ export type SetupInput = {
   equipmentId: string | null;
   settings: Setting[];
   notes?: string | null;
-  photoPath?: string | null;
+  /** Its photos, in order (the first is the cover). */
+  photos?: string[];
   /** Put it on their workout card from now on. */
   makeCurrent?: boolean;
 };
@@ -165,28 +278,39 @@ export function useEquipmentActions(clientId: string | null | undefined) {
 
     async saveSetup(input: SetupInput): Promise<ExerciseSetup> {
       const c = need();
-      const row = await rpc("equipment_setup_save", {
-        _client_id: c,
-        _exercise_id: input.exerciseId,
-        _equipment_id: input.equipmentId,
-        _settings: cleanSettings(input.settings),
-        _notes: input.notes ?? null,
-        _photo_path: input.photoPath ?? null,
-        _make_current: !!input.makeCurrent,
+      const saved = await sendSetup({
+        clientId: c,
+        exerciseId: input.exerciseId,
+        equipmentId: input.equipmentId,
+        settings: input.settings,
+        notes: input.notes ?? null,
+        photos: input.photos ?? [],
+        makeCurrent: input.makeCurrent,
       });
-      const saved = { ...row, settings: cleanSettings(row?.settings) } as ExerciseSetup;
       patch(qc, c, (d) => ({ ...d, setups: [...d.setups.filter((s) => s.id !== saved.id), saved] }));
+      void qc.invalidateQueries({ queryKey: setupRevisionsKey(c, input.exerciseId) });
       return saved;
     },
 
-    async removeSetup(id: string) {
+    async removeSetup(id: string, exerciseId?: string | null) {
       const c = need();
       patch(qc, c, (d) => ({ ...d, setups: d.setups.filter((s) => s.id !== id) }));
       try {
         await rpc("equipment_setup_remove", { _id: id });
       } finally {
         void refresh();
+        if (exerciseId) void qc.invalidateQueries({ queryKey: setupRevisionsKey(c, exerciseId) });
       }
+    },
+
+    /** Put an earlier version back (what it replaces is kept, so this can be undone too). */
+    async restoreSetup(revisionId: string, exerciseId: string): Promise<ExerciseSetup> {
+      const c = need();
+      const row = await rpc("equipment_setup_restore", { _revision_id: revisionId });
+      const saved = { ...row, settings: cleanSettings(row?.settings) } as ExerciseSetup;
+      patch(qc, c, (d) => ({ ...d, setups: [...d.setups.filter((s) => s.id !== saved.id), saved] }));
+      void qc.invalidateQueries({ queryKey: setupRevisionsKey(c, exerciseId) });
+      return saved;
     },
 
     /**
@@ -210,6 +334,7 @@ export function useEquipmentActions(clientId: string | null | undefined) {
                 settings: [],
                 notes: null,
                 photo_path: null,
+                photo_paths: [],
                 source: "athlete" as const,
                 last_used_at: at,
                 updated_at: at,
@@ -275,10 +400,13 @@ export function useEquipmentPhotoUrl(path: string | null | undefined): string | 
   return url;
 }
 
-/** Upload a photo (shrunk on the phone first) into the athlete's folder; its path. */
+/**
+ * Upload a photo (shrunk on the phone first: 1280 px on its long side, about
+ * 150–300 KB, which still reads a pin number) into the athlete's folder; its path.
+ */
 export async function uploadEquipmentPhoto(clientId: string, file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("That isn't a photo");
-  const small = await compressImage(file, { maxDimension: 1280, quality: 0.8, skipUnder: 250 * 1024 });
+  if (file.type && !file.type.startsWith("image/")) throw new Error("That isn't a photo");
+  const small = await compressImage(file, { maxDimension: 1280, quality: 0.78, skipUnder: 200 * 1024 });
   const type = (small as File).type || file.type || "image/jpeg";
   const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : type.includes("hei") ? "heic" : "jpg";
   const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.round(Math.random() * 1e9)}`;

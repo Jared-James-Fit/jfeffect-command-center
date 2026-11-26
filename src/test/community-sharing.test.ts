@@ -416,7 +416,8 @@ describe("community is the first tab and a shelf on Home; Nutrition keeps its ta
     expect(entry).not.toContain("PostDetailDialog");
     // the feed scrolls to the post you tapped (or opens it if it's older than what's loaded)
     expect(screen).toContain('const el = document.querySelector(`[data-post-id="${jumpTo}"]`);');
-    expect(screen).toContain("} else setDetailId(jumpTo);");
+    // (an older post: on its own screen, as the feed shows it; post-open.ts)
+    expect(screen).toContain("} else showPost(jumpTo);");
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");

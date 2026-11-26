@@ -142,6 +142,8 @@ export async function clearAllAppCaches() {
   void import("@/components/user-avatar").then((m) => m.clearAvatarSignedUrls()).catch(() => {});
   // Chat videos kept on the phone belong to them too.
   void import("@/lib/chat-video-store").then((m) => m.clearChatVideos()).catch(() => {});
+  // Setup changes waiting to be sent are theirs too.
+  void import("@/lib/equipment/setup-outbox").then((m) => m.clearSetupOutbox()).catch(() => {});
   try {
     if ("caches" in window) {
       const keys = await caches.keys();

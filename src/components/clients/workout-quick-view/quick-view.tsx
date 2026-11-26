@@ -51,7 +51,9 @@ import { peekClientQuery, peekDayQuery, peekProfileQuery, peekScheduleQuery, typ
 import { usePeekLoadGuides } from "./load-guides";
 import type { CardGuide } from "@/lib/workouts/card-suggestion";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
-import { cardSetupView, type EquipmentData } from "@/lib/equipment/equipment";
+import { cardSetupView, setupPhotos, type EquipmentData } from "@/lib/equipment/equipment";
+import { useEquipmentPhotoUrl } from "@/lib/equipment/equipment-queries";
+import { useMediaViewer } from "@/components/media-viewer";
 import { restWords } from "@/lib/rest-timer-store";
 
 export type QuickViewClient = { id: string; full_name: string | null; profile_picture_url: string | null };
@@ -778,7 +780,7 @@ function ExerciseList({ day, name, entry, today, guides, equipment }: { day: Pee
           flagShort={flagShort}
           guide={guides.get(ex.id) ?? null}
           // what their card is on, and how it's set up (cardSetupView: the logged sets', else today's pick)
-          setup={ex.exerciseId && !ex.cardio ? cardSetupView(equipment, ex.exerciseId, ex.sets) : null}
+          setup={ex.exerciseId ? cardSetupView(equipment, ex.exerciseId, ex.sets) : null}
         />
       ))}
     </ol>
@@ -834,6 +836,7 @@ function ExerciseItem({ ex, n, name, flagShort, guide, setup }: {
                     </span>
                   ))}
                   {setup.equipment?.archived_at && <span className="text-xs text-muted-foreground"> · retired</span>}
+                  {setupPhotos(setup.setup).length > 0 && <SetupPhotoLink path={setupPhotos(setup.setup)[0]} count={setupPhotos(setup.setup).length} />}
                 </dd>
               </>
             )}
@@ -1200,5 +1203,23 @@ function Card({ title, action, children }: { title: string; action?: ReactNode; 
       </div>
       {children}
     </section>
+  );
+}
+
+/** The athlete's setup photo, a tap from big: how the rack or machine looks set up. */
+function SetupPhotoLink({ path, count }: { path: string; count: number }) {
+  const url = useEquipmentPhotoUrl(path);
+  const viewer = useMediaViewer();
+  return (
+    <button
+      type="button"
+      onClick={(e) => url && viewer.open(url, { alt: "Setup photo", from: (e.currentTarget as HTMLElement).getBoundingClientRect() })}
+      className="ml-1.5 inline-flex h-6 items-center gap-1 rounded-md align-middle text-xs text-muted-foreground hover:text-foreground"
+      aria-label={count > 1 ? `See the setup photos (${count})` : "See the setup photo"}
+      data-setup-photo-link
+    >
+      <span className="inline-block h-5 w-5 overflow-hidden rounded bg-muted">{url && <img src={url} alt="" className="h-full w-full object-cover" />}</span>
+      {count > 1 && <span className="tabular-nums">{count}</span>}
+    </button>
   );
 }
