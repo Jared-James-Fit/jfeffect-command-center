@@ -29,6 +29,30 @@ export type VirtualAccount = {
   likes_total: number;
   followers: number;
   last_like_at: string | null;
+  /** The person's gender the name was made for ('u' when the pool uses it for both), its surname's origin. */
+  name_gender: "f" | "m" | "u" | null;
+  name_origin: string | null;
+  /** How it got its name: a starter, generated, typed by an admin, or a placeholder replaced automatically. */
+  name_source: "starter" | "generated" | "admin" | "corrected" | null;
+  name_set_at: string | null;
+  /** What's wrong with the name now (a member who joined since goes by it, say), else null. Never fixed on its own. */
+  name_problem: string | null;
+};
+
+/** A generated name: never a placeholder, a member's, a famous person's or another virtual account's. */
+export type SuggestedName = {
+  first_name: string;
+  last_name: string;
+  gender: "f" | "m";
+  origin: string;
+  username: string;
+};
+
+export type NameCheck = {
+  problem: string | null;
+  username: string | null;
+  gender: "f" | "m" | "u" | null;
+  origin: string | null;
 };
 
 export type VirtualSettings = {
@@ -85,6 +109,7 @@ export const createStarterVirtualAccountsFn = createServerFn({ method: "POST" })
         _bio: p.bio,
         _background: p.background,
         _disciplines: p.disciplines,
+        _name_source: "starter",
       });
       if (e) skipped.push(`${p.slug}: ${e.message}`);
       else made++;
@@ -149,4 +174,84 @@ export const setVirtualSettingsFn = createServerFn({ method: "POST" })
     const { data: s, error } = await (context.supabase as any).rpc("admin_virtual_settings_set", { _patch: data });
     if (error) throw new Error(error.message);
     return s as VirtualSettings;
+  });
+
+const genderSchema = z.enum(["f", "m"]).nullable().optional();
+
+/** Fresh names from the database's one generator (for a new account, or to rename `userId`). */
+export const suggestVirtualNamesFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ count: z.number().int().min(1).max(12).default(3), gender: genderSchema, userId: z.string().uuid().nullable().optional() }).parse(i ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<SuggestedName[]> => {
+    const { data: rows, error } = await (context.supabase as any).rpc("admin_virtual_name_suggestions", {
+      _count: data.count,
+      _gender: data.gender ?? null,
+      _uid: data.userId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as SuggestedName[];
+  });
+
+/** The database's check of a typed name, and a free username for it. */
+export const checkVirtualNameFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z.object({ first: z.string().max(80), last: z.string().max(80), userId: z.string().uuid().nullable().optional() }).parse(i),
+  )
+  .handler(async ({ data, context }): Promise<NameCheck> => {
+    const { data: r, error } = await (context.supabase as any).rpc("admin_virtual_name_check", {
+      _first: data.first,
+      _last: data.last,
+      _uid: data.userId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return r as NameCheck;
+  });
+
+const nameInput = z.object({
+  first: z.string().trim().min(1).max(40),
+  last: z.string().trim().min(1).max(40),
+  username: z.string().trim().toLowerCase().max(24).nullable().optional(),
+  gender: z.enum(["f", "m", "u"]).nullable().optional(),
+  origin: z.string().max(40).nullable().optional(),
+  source: z.enum(["generated", "admin"]).default("admin"),
+});
+
+/** Rename a virtual account (checked by the database), optionally with a new username. Keeps its id and history. */
+export const renameVirtualAccountFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => nameInput.extend({ userId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { error } = await (context.supabase as any).rpc("admin_virtual_account_rename", {
+      _uid: data.userId,
+      _first: data.first,
+      _last: data.last,
+      _username: data.username ?? null,
+      _gender: data.gender ?? null,
+      _origin: data.origin ?? null,
+      _source: data.source,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+/** Add one virtual account with a generated (or typed) name. Words only: no bio, photo or media. */
+export const addVirtualAccountFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => nameInput.extend({ username: z.string().trim().toLowerCase().min(3).max(24) }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { data: id, error } = await (context.supabase as any).rpc("admin_virtual_account_create", {
+      _slug: data.username,
+      _first: data.first,
+      _last: data.last,
+      _bio: "",
+      _background: null,
+      _disciplines: [],
+      _name_source: data.source,
+      _name_gender: data.gender ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { userId: id as string };
   });

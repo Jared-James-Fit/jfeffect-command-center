@@ -159,6 +159,11 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             <NameMarks person={profile.author} userId={profile.author.user_id} size={16} />
           </div>
           {profile.username && <div className="mt-1 truncate text-[13px] font-semibold text-muted-foreground" data-profile-username>@{profile.username}</div>}
+          {profile.author.virtual && (
+            <div className="mt-1 text-[12px] text-muted-foreground" data-virtual-disclosure>
+              Virtual account run by JF Effect · not a real person
+            </div>
+          )}
           {profile.author.is_coach && <div className="mt-1 text-[12px] font-bold text-foreground/80">{profile.author.title || "Coach · JF Effect"}</div>}
           <div className="mt-1 flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
             {profile.is_private && <Lock className="h-3 w-3" aria-label="Private account" />}
