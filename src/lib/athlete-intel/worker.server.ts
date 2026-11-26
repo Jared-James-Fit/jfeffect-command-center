@@ -82,7 +82,7 @@ async function unitContext(sb: Db, clientId: string) {
   }
   const preferred: Unit | null = client?.weight_unit_confirmed_at && (client.preferred_weight_unit === "kg" || client.preferred_weight_unit === "lb") ? client.preferred_weight_unit : null;
   const first = String(client?.preferred_name || client?.first_name || String(client?.full_name ?? "").split(" ")[0] || "the athlete");
-  return { meetBestKg, bw, preferred, first, hasLogin: !!client?.user_id };
+  return { meetBestKg, bw, preferred, first, fullName: String(client?.full_name ?? first), hasLogin: !!client?.user_id };
 }
 
 function alreadyReadLine(r: ReadResult): string | null {
@@ -123,7 +123,7 @@ export async function runIntelTick(sb: Db, sourceId: string | null): Promise<Tic
     { kind: row.kind, name: row.file_name, text, sheets: Array.isArray(row.sheets) ? row.sheets : undefined },
     { today, declared, preferredUnit: ctx.preferred, meetBestKg: ctx.meetBestKg, bodyweightKg: ctx.bw },
   );
-  const wantsAi = fileKind || needsAiRead(row.kind, read) || (!read.facts.length && text.trim().length > 40);
+  const wantsAi = fileKind || needsAiRead(row.kind, read) || (!read.facts.length && text.trim().length > 40) || (!!row.competition_id && /\b(weigh.in|session|flight|nominations|schedule|lifting starts|meet day|venue)\b/i.test(`${row.file_name ?? ""} ${text.slice(0, 30000)}`));
   const detected = detectPurposes({ name: row.file_name, text: text || read.narrative, sheetNames: (row.sheets ?? []).map((s: any) => s?.name) });
   const notes: string[] = [];
   if (read.completionWhy) notes.push(read.completionWhy);
@@ -264,6 +264,7 @@ async function aiRead(sb: Db, row: any, o: { today: string; read: ReadResult; te
     purposes: row.purposes ?? [],
     today: o.today,
     athleteFirst: o.ctx.first,
+    athleteFullName: o.ctx.fullName,
     meet,
     alreadyRead: alreadyReadLine(o.read),
   });
