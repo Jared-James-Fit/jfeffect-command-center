@@ -18,7 +18,7 @@ describe("compact goal weight", () => {
   });
 });
 
-import { discussedKg, nearestMeetTarget, validMeetIncrement, inferredUnitKey, reviewedSourceUnit } from "@/lib/goal-intel/competition-review";
+import { discussedKg, nearestMeetTarget, validMeetIncrement, inferredUnitKey, reviewedSourceUnit, reviewTarget } from "@/lib/goal-intel/competition-review";
 describe("competition review", () => {
   it("rounds draft targets without altering the original pounds", () => {
     const source = { client_unit: "lb" as const, client_value: 220, client_value_max: 225 };
@@ -36,4 +36,12 @@ describe("competition review", () => {
     expect(reviewedSourceUnit(g,{[key]:true})).toBe("lb");
     expect(reviewedSourceUnit({...g,version:2},{[key]:true})).toBeUndefined();
   });
+});
+
+import type { GoalRow } from "@/lib/goal-intel/types";
+it("distinguishes a supported Cleo option from the discussed fallback", () => {
+  const g = {client_unit:"lb",client_value:220,client_value_max:225,feasibility:{confidence:"medium",recommended:"moderate",recommendedWhy:"Training supports this target",approaches:[{key:"moderate",label:"Moderate",targetKg:100,line:"Supported"}]}} as unknown as GoalRow;
+  expect(reviewTarget(g,2.5,"cleo")).toMatchObject({kg:100,basis:"Cleo suggested",approach:"Moderate",reason:"Training supports this target"});
+  expect(reviewTarget(g,2.5,"discussed").kg).toBe(102.5);
+  expect(reviewTarget({...g,feasibility:{...g.feasibility!,confidence:"low"}},2.5,"cleo").basis).toBe("Discussed range");
 });

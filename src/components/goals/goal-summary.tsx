@@ -270,8 +270,8 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
     </div>
     {proposed.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-1.5">
       {hasCleo && <Button size="sm" variant={mode === "cleo" ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("cleo")}>Cleo suggested</Button>}
-      <Button size="sm" variant={mode === "discussed" || !hasCleo ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("discussed")}>Discussed targets</Button>
-      <span className="text-[11px] text-muted-foreground">Drafts rounded to nearest meet increment. Edit to override.</span>
+      <Button size="sm" variant={mode === "discussed" || !hasCleo ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("discussed")}>Discussed upper end</Button>
+      <span className="text-[11px] text-muted-foreground">Drafts rounded to nearest meet increment. Review any target to edit.</span>
     </div>}
     <div className="mt-2 overflow-x-auto">
       <table className="w-full min-w-[460px] text-left text-xs tabular-nums">
@@ -281,7 +281,8 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
             const discussed = goalWeight(discussedKg(g, false), "kg", discussedKg(g), g.client_unit ?? undefined);
             const proj = goalWeight(projected[i], "kg");
             const target = goalWeight(targets[i], "kg", null, g.status === "proposed" ? draftFor(g).unit : g.approved_unit ?? undefined);
-            const source = drafts[g.id]?.version === g.version ? "Edited draft" : reviewTarget(g, increment, mode).basis;
+            const suggestion = reviewTarget(g, increment, mode);
+            const source = drafts[g.id]?.version === g.version ? "Edited draft" : suggestion.approach ? `Cleo · ${suggestion.approach}` : suggestion.basis;
             return <tr key={g.id} className="border-t border-border align-top">
               <th className="py-2 pr-2 font-medium capitalize">{g.lift}<span className="block text-[10px] font-normal normal-case text-muted-foreground">{g.title.toLowerCase().includes("third attempt") ? "Third attempt goal" : "Lift goal"}</span></th>
               <td className="py-2 pr-2">{discussed ? <>{discussed.primary}<span className="block text-muted-foreground">{discussed.secondary}{g.client_unit_source === "inferred" ? " · inferred" : ""}</span></> : fmtClientTarget(g) ?? "—"}</td>
@@ -294,6 +295,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
         </tbody>
       </table>
     </div>
+    {hasCleo && proposed.length > 0 && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">Why these targets?</summary><div className="mt-1 space-y-1">{proposed.map(g => { const r = reviewTarget(g, increment, mode); return <p key={g.id}><span className="font-medium capitalize text-foreground">{g.lift}: </span>{r.reason ?? (r.kg != null ? "Upper end of the discussed range, rounded to the nearest meet increment." : "Enter a target; no usable source value.")}</p>; })}</div></details>}
     {selected && goals.some(g => g.id === selected) && (() => {
       const g = goals.find(g => g.id === selected)!;
       return g.status === "proposed" ? <div className="mt-2 rounded-lg border border-border p-2 space-y-2">
@@ -301,6 +303,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
         {(g.source_quote || g.source_context) && <p className="text-xs text-muted-foreground">Meeting note: {g.source_quote ?? g.source_context}</p>}
         {g.feasibility?.recommendedWhy && <p className="text-xs text-muted-foreground">Cleo: {g.feasibility.recommendedWhy}</p>}
         {g.feasibility?.projection?.basis?.length ? <p className="text-xs text-muted-foreground">Projection: {g.feasibility.projection.basis.slice(0, 2).join(" · ")}</p> : null}
+        {g.feasibility?.approaches?.length ? <Select disabled={batch.isPending} onValueChange={key => { const a = g.feasibility?.approaches.find(o => o.key === key); if (!a) return; const kg = reviewTarget({...g, feasibility: {...g.feasibility!, recommended: a.key, confidence: "medium"}}, increment, "cleo").kg; if (kg != null) setDrafts(old => ({...old, [g.id]: {draft: {value: String(kg), unit: "kg"}, version: g.version}})); }}><SelectTrigger className="h-8 w-fit text-xs"><SelectValue placeholder="Choose another approach" /></SelectTrigger><SelectContent>{g.feasibility.approaches.map(a => <SelectItem key={a.key} value={a.key}>{a.label} · {dualLoadText(a.targetKg, "kg")}</SelectItem>)}</SelectContent></Select> : null}
         <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({ ...old, [g.id]: { draft, rounded, version: g.version } }))} incrementKg={increment} confirmed={rulesReady} disabled={batch.isPending} />
         {!validMeetIncrement(draftKg(draftFor(g)), increment) && <p className="text-xs text-muted-foreground">Choose a positive multiple of {increment} kg.</p>}
         <div className="flex flex-wrap gap-2"><Button size="sm" className="h-9" disabled={batch.isPending || !isValid(g)} onClick={() => batch.mutate([g])}>Approve this target</Button><Button size="sm" variant="ghost" disabled={batch.isPending} onClick={async () => { try { await decide({ data: { goalId: g.id, decision: { action: "dismiss" } } }); setSelected(null); await qc.invalidateQueries({queryKey: clientGoalsKey(g.client_id)}); } catch(e) { toast.error(e instanceof Error ? e.message : "Couldn't dismiss goal"); } }}>Dismiss</Button></div>
