@@ -31,7 +31,7 @@ import {
   meetCompositions,
   shareContext,
 } from "@/lib/analytics/sbd-composition";
-import { buildMuscleRead, musclesNamed, muscleRoles } from "@/lib/analytics/muscle-read";
+import { buildMuscleRead, musclesNamed, muscleRoles, compareMuscleWindows } from "@/lib/analytics/muscle-read";
 import { recoveryPatterns } from "@/lib/analytics/recovery-intel";
 import { pickObservation, type ObservationInput } from "@/lib/analytics/performance-observation";
 import { blockRows, defaultBlockType } from "@/lib/analytics/block-comparison";
@@ -899,5 +899,19 @@ describe("the 3D body", () => {
     expect(new Set(Object.values(SITE_MUSCLE)).size).toBe(16);
     expect(muscleOfSite("vmo")).toBe("Quads");
     expect(muscleOfSite("kneecap")).toBeNull();
+  });
+});
+
+describe("historical muscle maps", () => {
+  it("compares equal elapsed periods, excluding future or extra days", () => {
+    const a={start:"2026-11-01",end:"2026-11-07"},b={start:"2026-10-01",end:"2026-10-14"};
+    const history=[ls("2026-11-01","Competition Bench","bench",true,200,3),ls("2026-11-03","Competition Bench","bench",true,200,3),ls("2026-10-01","Competition Bench","bench",true,200,3),ls("2026-10-10","Competition Bench","bench",true,200,3)];
+    const read=buildMuscleRead({muscles:[],sets:history,history,weeks:1,partial:false,profile:"powerlifting",start:a.start,end:a.end,coached:false,today:a.end});
+    const mapped=compareMuscleWindows(read,history,a,b,0.5);
+    const chest=mapped.rows.find(r=>r.muscle==="Chest")!;
+    expect(chest.period.total).toBe(2);
+    expect(chest.period.before?.total).toBe(1);
+    expect(chest.period.changePct).toBe(100);
+    expect(compareMuscleWindows(read,history,a,{start:"2026-09-01",end:"2026-09-07"},0.5).rows.find(r=>r.muscle==="Chest")?.period.before).toBeNull();
   });
 });

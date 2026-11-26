@@ -9,6 +9,16 @@ import { format } from "date-fns";
 import { ChevronDown, Search, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/today";
+import { dualLoad } from "@/lib/analytics/units";
+import { normalizeWeights, weightReferences, weightContextAt, weightPeriods } from "@/lib/analytics/weight-context";
+import type { BodyweightPoint } from "@/lib/bodyweight";
+import { comparableE1rm } from "@/lib/analytics/strength-read";
+import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
+import { compLiftOfResult } from "@/lib/analytics/competition-strength";
+import { localDay, isMeetLog } from "@/lib/analytics/lift-strength";
+import { officialClass } from "@/lib/analytics/performance-ring";
+import { attemptStats, compareInsights, type PerformanceVersion } from "@/lib/analytics/coach-analysis";
+import { competitionRing } from "@/lib/analytics/performance-ring";
 import { Input } from "@/components/ui/input";
 import {
   isHeadlineRecord,
@@ -39,7 +49,15 @@ export function RecordsView({
   byExercise,
   meets,
   unit,
+  bodyweights = [],
+  sex = null,
+  results = [],
+  today = new Date().toISOString().slice(0,10),
 }: {
+  bodyweights?: readonly BodyweightPoint[];
+  sex?: "male"|"female"|null;
+  results?: any[];
+  today?: string;
   lifetime: Lifetime;
   records: PersonalRecord[];
   byExercise: ExerciseRecords[];
@@ -61,9 +79,59 @@ export function RecordsView({
       .slice(0, 4);
   }, [records]);
 
+  const [section,setSection]=useState<"gym"|"competitions"|"lifetime">("gym");
+  const [category,setCategory]=useState("all");
+  const [period,setPeriod]=useState("all");
+  const [kind,setKind]=useState<"single"|"estimated"|"rep">("rep");
+  const [query,setQuery]=useState("");
+  const [limit,setLimit]=useState(12);
+  const weights=useMemo(()=>normalizeWeights(bodyweights),[bodyweights]);
+  const refs=useMemo(()=>weightReferences(meets,sex),[meets,sex]);
+  const periods=useMemo(()=>weightPeriods(weights,refs),[weights,refs]);
+  const grouped=useMemo(()=>{
+    const selected=periods.find(p=>p.start===period);
+    const best=new Map<string,{name:string;day:string;lb:number;load:number;reps:number;rpe:number|null;category:string|null;bw:number|null}>();
+    const contexts=new Map<string,ReturnType<typeof weightContextAt>>();
+    const clean=neutralizeObviousLoadOutliers(results.map(r=>({...r,est_1rm:Number(r.est_1rm)||0})));
+    const meetDays=new Set<string>();
+    for(const r of clean){const lift=compLiftOfResult(r);if(!lift||!r.date)continue;const day=localDay(r.date);if(meets.some(m=>isMeetLog({day,heaviest:Number(r.load)},{day:m.date,lb:m.lifts[lift]})))meetDays.add(lift+"|"+day)}
+    for(const r of clean){
+      const load=Number(r.load),reps=Number(r.reps);
+      if(!r.date||!(load>0)||!(reps>0)||r.counts_load===false||r.analytics_load_outlier)continue;
+      const day=localDay(r.date);const lift=compLiftOfResult(r);if(lift&&meetDays.has(lift+"|"+day))continue;if(day>today||selected&&(day<selected.start||day>selected.end))continue;
+      let ctx=contexts.get(day);if(!ctx){ctx=weightContextAt(weights,refs,day);contexts.set(day,ctx)}
+      const cat=ctx.category?.label??null;
+      if(category!=="all"&&(cat??"unknown")!==category)continue;
+      if(kind==="single"&&reps!==1)continue;
+      const name=String(r.exercise_name??"Exercise");
+      if(!name.toLowerCase().includes(query.trim().toLowerCase()))continue;
+      const lb=kind==="estimated"?comparableE1rm({load,reps,rpe:r.rpe,rir:r.rir}):load;
+      if(lb==null||!Number.isFinite(lb)||lb<=0)continue;
+      const key=String(r.exercise_id??name)+(kind==="rep"?":"+reps:"");
+      const old=best.get(key);
+      if(!old||lb>old.lb)best.set(key,{name,day,lb,load,reps,rpe:r.rpe==null?null:Number(r.rpe),category:cat,bw:ctx.averageKg});
+    }
+    return [...best.values()].sort((a,b)=>b.day.localeCompare(a.day)||a.name.localeCompare(b.name));
+  },[results,weights,refs,periods,category,period,kind,query,today,meets]);
   return (
-    <div className="space-y-8" data-records-view>
-      {/* lifetime: big numbers, nothing else */}
+    <div className="space-y-5" data-records-view>
+      <div className="flex gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Record type">
+        {(["gym","competitions","lifetime"] as const).filter(k=>k!=="competitions"||meets.length>0).map(k=><button type="button" key={k} aria-pressed={section===k} onClick={()=>setSection(k)} className={cn("min-h-10 flex-1 rounded-lg text-xs font-medium",section===k?"bg-background text-foreground":"text-muted-foreground")}>{k==="gym"?"Gym PRs":k==="competitions"?"Competitions":"Lifetime"}</button>)}
+      </div>
+      {section==="gym"&&<>
+        {results.length>0&&<section className="space-y-3" aria-label="Historical gym bests">
+          <div className="flex gap-1">{(["rep","single","estimated"] as const).map(k=><button type="button" key={k} aria-pressed={kind===k} onClick={()=>{setKind(k);setLimit(12)}} className={cn("min-h-10 flex-1 rounded-lg border border-border text-xs",kind===k&&"bg-muted font-semibold")}>{k==="rep"?"Rep bests":k==="single"?"Singles":"e1RM"}</button>)}</div>
+          <Input value={query} onChange={e=>{setQuery(e.target.value);setLimit(12)}} placeholder="Search exercises" aria-label="Search records" />
+          {weights.length>0&&<div className="flex gap-2"><select aria-label="Training weight class" className="min-h-10 min-w-0 flex-1 rounded-lg border bg-background px-2 text-xs" value={category} onChange={e=>{setCategory(e.target.value);setPeriod("all");setLimit(12)}}><option value="all">All classes</option>{refs.map(c=><option key={c.label}>{c.label}</option>)}<option value="unknown">Uncategorized</option></select><select aria-label="Historical period" className="min-h-10 min-w-0 flex-1 rounded-lg border bg-background px-2 text-xs" value={period} onChange={e=>{setPeriod(e.target.value);setLimit(12)}}><option value="all">All dates</option>{periods.filter(p=>category==="all"||p.category===category).map(p=><option value={p.start} key={p.start}>{p.category} · {p.start} – {p.end}</option>)}</select></div>}
+          <div className="divide-y divide-border">{grouped.slice(0,limit).map((row,i)=><details key={row.name+":"+row.reps+":"+i} className="py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-2 min-h-10"><div className="min-w-0"><div className="text-sm font-medium">{row.name}</div><div className="text-xs text-muted-foreground">{fmt(row.day)}{row.category?" · "+row.category:""}</div></div><div className="shrink-0 text-right"><div className="text-sm font-semibold">{dualLoad(row.lb,unit).main}{kind!=="estimated"?" × "+row.reps:""}</div><div className="text-xs text-muted-foreground">{dualLoad(row.lb,unit).other}</div></div></summary><div className="text-xs text-muted-foreground pt-2">Source set: {dualLoad(row.load,unit).main} · {dualLoad(row.load,unit).other} × {row.reps}{row.rpe?" @ RPE "+row.rpe:""}{row.bw?" · BW "+dualLoad(row.bw*LB_PER_KG,unit).main:""}. {kind==="estimated"?"Estimated, not achieved.":""}</div></details>)}</div>
+          {!grouped.length&&<p className="text-sm text-muted-foreground">No qualifying records for this selection.</p>}
+          {grouped.length>limit&&<button type="button" className="min-h-10 text-sm font-medium" onClick={()=>setLimit(n=>n+12)}>Show more ({grouped.length-limit})</button>}
+        </section>}
+        <details><summary className="min-h-10 cursor-pointer text-sm font-medium">Record progression history</summary><ExerciseRecordList rows={byExercise} unit={unit}/></details>
+      </>}
+      {section==="competitions"&&<MeetTimeline meets={meets} unit={unit}/>}
+      {section==="lifetime"&&<>
+
       <section aria-label="Lifetime">
         <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4" data-lifetime>
           <div className="col-span-2 sm:col-span-2">
@@ -165,9 +233,7 @@ export function RecordsView({
         </section>
       )}
 
-      {meets.length > 0 && <MeetTimeline meets={meets} unit={unit} />}
-
-      <ExerciseRecordList rows={byExercise} unit={unit} />
+      </>}
     </div>
   );
 }
@@ -187,79 +253,22 @@ function Counter({ label, value, sub }: { label: string; value: string; sub?: st
 function MeetTimeline({ meets, unit }: { meets: MeetResult[]; unit: "lb" | "kg" }) {
   const conv = (lb: number) => (unit === "kg" ? lb / LB_PER_KG : lb);
   const w = (lb: number) => (unit === "kg" ? Math.round(conv(lb) * 2) / 2 : Math.round(lb));
-  const [all, setAll] = useState(false);
-  const shown = all ? meets : meets.slice(0, 5);
-  return (
-    <section aria-label="Competitions">
-      <SectionTitle
-        title="Competitions"
-        sub={`${meets.length} meet${meets.length === 1 ? "" : "s"} on file`}
-      />
-      <ol className="relative ml-1.5 border-l border-border pl-5" data-meet-timeline>
-        {shown.map((m, i) => {
-          const prev = meets[i + 1];
-          const diff = prev ? conv(m.total) - conv(prev.total) : null;
-          return (
-            <li key={`${m.date}-${m.name}`} className="relative pb-5 last:pb-0">
-              <span
-                className="absolute -left-[26px] top-1 h-3 w-3 rounded-full border-2 border-foreground bg-card"
-                aria-hidden
-              />
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-[14px] font-semibold text-foreground">
-                  {m.name ?? "Competition"}
-                </span>
-                <span className="shrink-0 text-[12px] text-muted-foreground">
-                  {fmt(m.date, "MMM d, yyyy")}
-                </span>
-              </div>
-              <div className="mt-0.5 flex items-baseline gap-2 tabular-nums">
-                <span className="text-[20px] font-semibold text-foreground">
-                  {w(m.total).toLocaleString()}{" "}
-                  <span className="text-[12px] font-medium text-muted-foreground">
-                    {unit} total
-                  </span>
-                </span>
-                {diff != null && Math.abs(diff) >= 0.5 && (
-                  <span
-                    className={cn(
-                      "text-[12px]",
-                      diff > 0 ? "text-success" : "text-muted-foreground",
-                    )}
-                  >
-                    {diff > 0 ? "up" : "down"} {Math.abs(Math.round(diff))} {unit} from the meet
-                    before
-                  </span>
-                )}
-              </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 text-[12px] tabular-nums text-muted-foreground">
-                {COMP_LIFTS.map((l) => (
-                  <span key={l} className="inline-flex items-center gap-1">
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ background: LIFT_SERIES[l] }}
-                      aria-hidden
-                    />
-                    {COMP_LIFT_LABEL[l]} {w(m.lifts[l])}
-                  </span>
-                ))}
-                {m.bodyweightLb ? <span>Bodyweight {w(m.bodyweightLb)}</span> : null}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-      {meets.length > shown.length && (
-        <button
-          type="button"
-          onClick={() => setAll(true)}
-          className="mt-2 min-h-10 text-[13px] font-medium text-foreground"
-        >
-          Show all {meets.length} meets
-        </button>
-      )}
-    </section>
-  );
+  const [all,setAll]=useState(false);
+  const [category,setCategory]=useState("all");
+  const [compare,setCompare]=useState(false);
+  const [a,setA]=useState(0),[b,setB]=useState(1);
+  const classes=[...new Set(meets.map(officialClass).filter((x):x is string=>!!x))];
+  const filtered=meets.filter(m=>category==="all"||officialClass(m)===category);
+  const shown=all?filtered:filtered.slice(0,5);
+  const best=filtered.reduce<MeetResult|null>((a,m)=>!a||m.total>a.total?m:a,null);
+  const version=(m:MeetResult):PerformanceVersion=>({key:m.id??m.date,label:m.name??"Competition",kind:"official",lifts:competitionRing([m],"all","latest").lifts,totalLb:m.total,bodyweightKg:m.bodyweightLb?m.bodyweightLb/LB_PER_KG:null,category:officialClass(m),end:m.date});
+  return <section aria-label="Competitions" className="space-y-3">
+    <div className="flex items-center gap-2"><select className="min-h-10 flex-1 rounded-lg border bg-background px-2 text-xs" aria-label="Official weight class" value={category} onChange={e=>{setCategory(e.target.value);setAll(false);setA(0);setB(1)}}><option value="all">All official classes</option>{classes.map(k=><option key={k}>{k}</option>)}</select>{filtered.length>1&&<button type="button" className="min-h-10 text-xs font-medium" onClick={()=>setCompare(!compare)}>{compare?"Close":"Compare"}</button>}</div>
+    {best&&<div className="border-b border-border pb-3"><div className="text-xs text-muted-foreground">Best official total</div><div className="text-2xl font-semibold">{dualLoad(best.total,unit).main} <span className="text-sm text-muted-foreground">{dualLoad(best.total,unit).other}</span></div><div className="text-xs text-muted-foreground">{officialClass(best)??"Class unknown"} · {fmt(best.date)}</div></div>}
+    {compare&&filtered.length>1&&<div className="space-y-2 rounded-xl bg-muted/40 p-3"><div className="grid grid-cols-2 gap-2">{[a,b].map((v,i)=><select key={i} aria-label={"Meet "+(i===0?"A":"B")} className="min-h-10 min-w-0 rounded-lg bg-background text-xs" value={v} onChange={e=>(i===0?setA:setB)(Number(e.target.value))}>{filtered.map((m,j)=><option value={j} key={j}>{m.date} · {m.name}</option>)}</select>)}</div>{a!==b&&filtered[a]&&filtered[b]?<>{COMP_LIFTS.map(l=><div key={l} className="flex justify-between text-xs"><span>{COMP_LIFT_LABEL[l]}</span><span>{dualLoad(filtered[a].lifts[l],unit).main} vs {dualLoad(filtered[b].lifts[l],unit).main}</span></div>)}{compareInsights(version(filtered[a]),version(filtered[b])).map(i=><p key={i.label} className="text-xs"><strong>{i.label}: </strong>{i.text}</p>)}</>:<p className="text-xs text-muted-foreground">Choose two different meets.</p>}</div>}
+    <ol className="divide-y divide-border" data-meet-timeline>{shown.map(m=><li key={m.id??m.date+"-"+m.name}><details className="py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-2 min-h-12"><div className="min-w-0"><div className="text-sm font-medium">{m.name??"Competition"}</div><div className="text-xs text-muted-foreground">{fmt(m.date,"MMM d, yyyy")} · {officialClass(m)??"Class unknown"}</div></div><div className="shrink-0 text-right"><div className="font-semibold text-sm">{dualLoad(m.total,unit).main}</div><div className="text-xs text-muted-foreground">{dualLoad(m.total,unit).other}</div></div></summary><div className="space-y-2 py-2 text-xs">{m.bodyweightLb&&<p>Bodyweight: {dualLoad(m.bodyweightLb,unit).main} / {dualLoad(m.bodyweightLb,unit).other}</p>}{COMP_LIFTS.map(l=>{const s=attemptStats([m],l);return <div key={l} className="flex justify-between gap-2"><span>{COMP_LIFT_LABEL[l]}{s.attempts?" · "+s.success+"/"+s.attempts+" good":""}</span><span>{dualLoad(m.lifts[l],unit).main} / {dualLoad(m.lifts[l],unit).other}</span></div>})}</div></details></li>)}</ol>
+    {filtered.length>shown.length&&<button type="button" className="min-h-10 text-sm" onClick={()=>setAll(true)}>Show all {filtered.length} meets</button>}
+  </section>;
 }
 
 function ExerciseRecordList({ rows, unit }: { rows: ExerciseRecords[]; unit: "lb" | "kg" }) {

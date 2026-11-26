@@ -45,11 +45,15 @@ export function nearestWeightReference(kg: number, refs: readonly WeightReferenc
  * category; sparse/stale logs remain uncategorized rather than guessing. */
 export function weightContextAt(points: readonly WeightSample[], refs: readonly WeightReference[], day: string): WeightContext {
   if (!Number.isFinite(ms(day))) return { latest: null, averageKg: null, samples: 0, category: null };
-  const eligible = points.filter((p) => p.day <= day);
+  const eligible = points.filter((p) => p.day <= day).sort((a,b)=>a.day.localeCompare(b.day));
   const latest = eligible[eligible.length - 1] ?? null;
   const week = eligible.filter((p) => p.day >= dateAt(day, -6));
   const averageKg = week.length >= 2 ? week.reduce((s, p) => s + p.kg, 0) / week.length : null;
-  return { latest, averageKg, samples: week.length, category: averageKg == null ? null : nearestWeightReference(averageKg, refs) };
+  let category = averageKg == null ? null : nearestWeightReference(averageKg, refs);
+  // Hysteresis: require a 0.5 kg margin beyond a class midpoint when a recent
+  // prior average establishes another reference. No future weigh-ins enter this read.
+  if(category&&averageKg!=null){const prior=eligible.filter(p=>p.day<day&&p.day>=dateAt(day,-7));if(prior.length>=2){const priorAvg=prior.reduce((s,p)=>s+p.kg,0)/prior.length;const previous=nearestWeightReference(priorAvg,refs);if(previous&&previous.label!==category.label&&Math.abs(previous.kg-averageKg)-Math.abs(category.kg-averageKg)<1)category=previous;}}
+  return { latest, averageKg, samples: week.length, category };
 }
 
 export type WeightPeriod = { category: string; start: string; end: string; averageKg: number; lowKg: number; highKg: number; samples: number };
