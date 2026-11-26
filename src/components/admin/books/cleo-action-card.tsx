@@ -118,7 +118,11 @@ export function CleoActionCard({
         </p>
         {mode === "mine" && <span className={cn("shrink-0 text-[11px] font-medium", TONE[action.status])}>{statusLabel(action.status, ownerName)}</span>}
       </div>
-      <p className="whitespace-pre-wrap text-sm text-foreground/90">{action.summary}</p>
+      {action.status === "done" ? (
+        <div className="space-y-1 text-sm text-muted-foreground">
+          {action.summary.split("\n").filter(Boolean).map((line, i) => <div key={i} className="flex items-start gap-1.5"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" /><span className="line-through">{line}</span></div>)}
+        </div>
+      ) : <p className="whitespace-pre-wrap text-sm text-foreground/90">{action.summary}</p>}
       {action.status === "done" && action.result && <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> {action.result}</p>}
       {action.status === "done" && ((action.link && onOpen) || action.undo) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
