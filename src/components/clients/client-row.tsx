@@ -252,14 +252,7 @@ export function ClientRow({
       )}
 
       {/* Program: what's running, its dates and how far through */}
-      {r.service_kind === "nutrition" ? (
-        <div className="min-w-0 space-y-1 text-sm">
-          <ClientNameLink clientId={r.id} tab="nutrition" className="font-medium hover:underline">Nutrition coaching</ClientNameLink>
-          <p className={cn("text-xs", r.f_missing_nutrition ? "text-warning" : "text-muted-foreground")}>
-            {r.f_missing_nutrition ? "Nutrition targets need attention" : r.nut_end ? `Targets through ${fmtRange(null, r.nut_end)?.replace("? → ", "")}` : "Targets assigned"}
-          </p>
-        </div>
-      ) : <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />}
+      <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />
 
       {/* Open client is the way in; Client view shows their app as they see it; the dumbbell is the
           workout quick view (today's session, a drawer over the list); everything else is in ⋯ */}
