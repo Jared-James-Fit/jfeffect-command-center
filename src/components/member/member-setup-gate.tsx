@@ -11,7 +11,7 @@ import { AlertCircle } from "lucide-react";
 
 const ALLOW = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade", "/portal/plan", "/m/billing", "/m/account", "/m/welcome", "/m/support"];
 
-export function MemberSetupGate() {
+export function MemberSetupGate({ autoPrompt = true }: { autoPrompt?: boolean } = {}) {
   const fetchStatus = useServerFn(getMySetupStatus);
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -30,8 +30,8 @@ export function MemberSetupGate() {
   const isAllowed = isHome || ALLOW.some((p) => location.pathname.startsWith(p));
 
   useEffect(() => {
-    if (needsSetup && !isAllowed) setOpen(true);
-  }, [needsSetup, isAllowed]);
+    if (autoPrompt && needsSetup && !isAllowed) setOpen(true);
+  }, [autoPrompt, needsSetup, isAllowed]);
 
   // Home has the universal setup checklist, including its existing member wizard.
   if (!needsSetup || isHome) return null;

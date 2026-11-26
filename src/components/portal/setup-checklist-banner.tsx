@@ -1,9 +1,11 @@
+import { accountSetupProgress } from "@/lib/account-setup-scope";
 import { MemberSetupWizard } from "@/components/member/member-setup-wizard";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -24,6 +26,8 @@ import { useHeadshotCamera, useMyHeadshot } from "@/components/headshots/headsho
 type Props = {
   clientId: string;
   userId: string;
+  /** Portal-wide launch reminder; the same checklist stays on Home. */
+  reminderOnly?: boolean;
   onOpenMeet?: (meetId: string) => void;
   onOpenGoals?: () => void;
   /**
@@ -37,9 +41,14 @@ type Props = {
 type ItemKey = `meet:${string}` | "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup" | "member_setup";
 type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
-export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals, whenHidden = null }: Props) {
+export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals, whenHidden = null, reminderOnly = false }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [launch, setLaunch] = useState(0);
+  const shownLaunch = useRef<number | null>(null);
+  const { pathname, search } = useLocation();
+  const setupRoute = pathname === "/portal/goals-setup" || (pathname === "/portal/competition" && Boolean((search as { onboard?: boolean }).onboard));
   const { isImpersonating } = useClientImpersonation();
   const agreement = useCoachingAgreement();
   const scope = useGoalsServiceScope(clientId);
@@ -74,7 +83,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
     queryFn: () => calFn({ data: {} }),
   });
   // the account headshot step: a new client's first one (an update someone asked for is Home's own card)
-  const { data: headshot } = useMyHeadshot();
+  const { data: headshot, isFetched: headshotFetched, isError: headshotError } = useMyHeadshot();
   const camera = useHeadshotCamera();
   const headshotNeeded = !!headshot?.outstanding && headshot.status === "missing";
   const headshotDone = !!headshot && (!headshot.applies || headshot.status === "pending" || headshot.status === "verified" || headshot.status === "previous" || headshot.status === "retake_requested");
@@ -135,15 +144,75 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
   }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow, headshot, headshotDone, headshotNeeded, camera.open, isImpersonating, scope.nutritionOnly, scope.handlingMeets, scope.requirements, memberApplies, memberFree, scope.membership?.complete, memberEnabled, onOpenMeet, onOpenGoals]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
-  const required = items.filter((i) => !i.optional);
-  const done = required.filter((i) => i.done).length;
-  if (!clientId || !userId) return null;
-  if (scope.error || clientError || (needsGoals && goalsError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
-  if (!scope.ready || clientPending || !clientFetched || (needsGoals && (goalsPending || !goalsFetched))) return null;
-  // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
-  const open = required.filter((i) => !i.done);
-  if ((!isImpersonating && (open.length === 0 || open.every((i) => i.key === "agreement"))) || required.length === 0) return <>{whenHidden}{camera.element}</>;
+  const { required, done, open, needsReminder: incomplete } = accountSetupProgress(items);
   const nextItem = open[0] ?? required[0];
+  const failed = scope.error || clientError || (needsGoals && goalsError);
+  const ready = scope.ready && !clientPending && clientFetched && (!needsGoals || (!goalsPending && goalsFetched));
+  // Optional sync and the separate mandatory agreement gate do not trigger this reminder.
+  const needsReminder = !!clientId && !!userId && ready && !failed && incomplete && (!scope.requirements?.headshot || (headshotFetched && !headshotError));
+
+  // Fresh portal mounts and actual foreground transitions are app openings.
+  useEffect(() => {
+    if (!reminderOnly || isImpersonating) return;
+    let wasHidden = document.visibilityState === "hidden";
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") { wasHidden = true; return; }
+      if (wasHidden && document.visibilityState === "visible") {
+        wasHidden = false;
+        setLaunch(value => value + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [reminderOnly, isImpersonating]);
+
+  useEffect(() => {
+    if (!reminderOnly || isImpersonating || !needsReminder) { setReminderOpen(false); return; }
+    if (reminderOpen) { shownLaunch.current = launch; return; }
+    if (setupRoute || shownLaunch.current === launch) return;
+    let timer: number;
+    const attempt = () => {
+      if (document.visibilityState !== "visible" || document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-vaul-drawer][data-state="open"]')) {
+        timer = window.setTimeout(attempt, 1200);
+        return;
+      }
+      shownLaunch.current = launch;
+      setReminderOpen(true);
+    };
+    timer = window.setTimeout(attempt, 1500);
+    return () => window.clearTimeout(timer);
+  }, [reminderOnly, isImpersonating, needsReminder, setupRoute, launch, reminderOpen]);
+  if (!clientId || !userId) return null;
+  if (failed) return reminderOnly ? null : <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(needsGoals ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
+  if (!ready) return null;
+  // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
+  if ((!isImpersonating && (open.length === 0 || open.every((i) => i.key === "agreement"))) || required.length === 0) return <>{whenHidden}{camera.element}</>;
+
+  const stepSurfaces = <>{camera.element}{memberEnabled && <MemberSetupWizard key={clientId} open={memberOpen} onClose={() => setMemberOpen(false)} />}<SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} preview={isImpersonating} onOpenChange={(o) => { if (!o) setOpenStep(null); }} /></>;
+  if (reminderOnly) {
+    if (isImpersonating || !needsReminder) return null;
+    const next = open.find(i => i.key !== "agreement")!;
+    const dismiss = () => setReminderOpen(false);
+    const action = next.onClick ?? (next.sheet ? () => setOpenStep(next.sheet!) : undefined);
+    return <>
+      <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
+        <DialogContent showBackButton={false} className="max-w-sm rounded-2xl p-5" data-testid="setup-launch-reminder">
+          <DialogHeader className="min-h-0 pl-0">
+            <DialogTitle>Finish your account setup</DialogTitle>
+            <DialogDescription>{done} of {required.length} required steps complete. Pick up where you left off.</DialogDescription>
+          </DialogHeader>
+          <Progress value={Math.round(done / required.length * 100)} />
+          <div className="space-y-2">{open.filter(i => i.key !== "agreement").map(i => <div key={i.key} className="flex items-center gap-2 text-sm"><Circle className="h-4 w-4 shrink-0 text-muted-foreground" />{i.label}</div>)}</div>
+          <div className="grid gap-2">
+            {action ? <Button className="h-11" onClick={() => { dismiss(); action(); }}>Continue setup</Button> : <Button asChild className="h-11"><Link to={next.to!} search={next.search as any} onClick={dismiss}>Continue setup</Link></Button>}
+            <Button variant="ghost" className="h-11" onClick={dismiss}>Do it later</Button>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">Your setup stays at the top of Home until you finish.</p>
+        </DialogContent>
+      </Dialog>
+      {stepSurfaces}
+    </>;
+  }
 
   return (
     <>
@@ -163,9 +232,7 @@ export function SetupChecklistBanner({ clientId, userId, onOpenMeet, onOpenGoals
         </ul>
         {open.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{(nextItem.key === "agreement" && !isImpersonating) || nextItem.onClick ? <Button className="h-10" onClick={nextItem.onClick} disabled={!nextItem.onClick}>Continue setup</Button> : nextItem.sheet ? <Button className="h-10" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild className="h-10"><Link to={nextItem.to!} search={nextItem.search as any}>Continue setup</Link></Button>}</div>}
       </Card>
-      {camera.element}
-      {memberEnabled && <MemberSetupWizard key={clientId} open={memberOpen} onClose={() => setMemberOpen(false)} />}
-      <SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} preview={isImpersonating} onOpenChange={(o) => { if (!o) setOpenStep(null); }} />
+      {stepSurfaces}
     </>
   );
 }
