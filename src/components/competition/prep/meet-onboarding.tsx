@@ -110,6 +110,7 @@ export function MeetOnboarding({
       });
     },
     onSuccess: (r: any) => {
+      if (previewing) { if (last) onDone(); else setI(i + 1); return; }
       if (last) {
         toast.success(
           r?.changes ? "Saved. Your handler can see what changed." : "Saved. Your handler has everything.",
@@ -140,6 +141,7 @@ export function MeetOnboarding({
 
   return (
     <section className="rounded-2xl border border-border bg-card p-4" data-meet-onboarding>
+      {previewing && <p className="mb-3 text-xs text-muted-foreground">Client preview · nothing is saved or signed.</p>}
       <div className="mb-3 flex items-center gap-2">
         {i > 0 ? (
           <button type="button" onClick={() => setI(i - 1)} className="-ml-1 rounded-full p-1.5 hover:bg-muted" aria-label="Back">
@@ -454,7 +456,7 @@ export function MeetOnboarding({
               <p className="text-[13px] text-muted-foreground">You agreed to these on {String(meet.handling.termsAcceptedAt).slice(0, 10)}.</p>
             ) : (
               <label className="flex items-start gap-2 text-[13.5px]">
-                <Checkbox checked={termsOk} onCheckedChange={(v) => setTermsOk(v === true)} className="mt-0.5" data-accept-terms />
+                <Checkbox checked={termsOk} disabled={previewing} onCheckedChange={(v) => setTermsOk(v === true)} className="mt-0.5" data-accept-terms />
                 I agree to these terms
               </label>
             )}
@@ -471,7 +473,7 @@ export function MeetOnboarding({
       </div>
 
       <Button className="mt-4 w-full" loading={run.isPending} onClick={() => run.mutate()} data-onboarding-next>
-        {last ? (previewing ? "They tap Done here" : "Done") : "Next"}
+        {last ? (previewing ? "Close preview" : "Done") : "Next"}
       </Button>
       {!last && step !== "event" ? (
         <button type="button" className="mt-2 w-full text-center text-[13px] text-muted-foreground" onClick={() => setI(i + 1)}>
