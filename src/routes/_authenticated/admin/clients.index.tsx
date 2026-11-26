@@ -19,7 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, Plus, Star, Users } from "lucide-react";
+import { ChevronRight, Copy, ExternalLink, Plus, Star, Users } from "lucide-react";
+import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
@@ -323,6 +324,25 @@ function ClientsDirectoryPage() {
           loading={isFetching && !data}
         />
 
+        {/* A quiet shortcut to the existing public catalogue; no new navigation or dashboard. */}
+        {!viewOnly && (
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Services &amp; packages
+            </a>
+            <Button variant="ghost" size="sm" className="h-9 px-2 text-xs text-muted-foreground" onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(PACKAGES_PAGE_URL);
+                toast.success("Packages link copied");
+              } catch {
+                toast.error("Couldn't copy the link. Open Services & packages to share it.");
+              }
+            }}><Copy className="h-3.5 w-3.5" aria-hidden /> Copy link</Button>
+          </div>
+        )}
+        {/* Handling stays on the same page but is no longer hidden under pagination. */}
+        <HandlingDirectory />
+
         {isError ? (
           <Card className="p-8 text-center">
             <div className="mb-2 text-sm font-semibold text-destructive">Couldn't load clients</div>
@@ -360,10 +380,6 @@ function ClientsDirectoryPage() {
         )}
 
         {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
-        {/* athletes being handled at a meet (a service on their account, by where it stands) */}
-        <div className="mt-3">
-          <HandlingDirectory />
-        </div>
         {/* accounts waiting out their 30 days, with Restore (iMessage's Recently Deleted) */}
         <RecentlyDeletedRow />
       </div>
