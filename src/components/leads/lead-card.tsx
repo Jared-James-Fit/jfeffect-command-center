@@ -10,6 +10,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { Check, Copy, Instagram, Loader2, MessageSquare, MoreHorizontal, Phone, RefreshCw } from "lucide-react";
+import { PackageShareDialog } from "@/components/sales/package-share-dialog";
 import { PACKAGES_PAGE_URL } from "@/lib/coaching-packages/packages";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -206,6 +207,7 @@ function RewriteDialog({ open, onOpenChange, onWrite }: { open: boolean; onOpenC
 export function LeadCard({ app, reply, focused = false }: { app: LeadApplication; reply: LeadReplyRow | null; focused?: boolean }) {
   const { act, rewrite } = useLeadActions(app.id);
   const [rewriteOpen, setRewriteOpen] = useState(false);
+  const [packageShareOpen, setPackageShareOpen] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
   const needs = leadNeeds(app);
   const stage = leadStage(app);
@@ -255,9 +257,7 @@ export function LeadCard({ app, reply, focused = false }: { app: LeadApplication
             <DropdownMenuItem onSelect={() => act("not_a_fit", "Set aside")}>Not a fit</DropdownMenuItem>
             {stage.label !== "New" && <DropdownMenuItem onSelect={() => act("reopen", "Back to new")}>Back to new</DropdownMenuItem>}
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer">Present services &amp; packages</a>
-            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setPackageShareOpen(true)}>Choose packages to present…</DropdownMenuItem>
             <DropdownMenuItem onSelect={async () => {
               if (await copyText(PACKAGES_PAGE_URL)) toast.success("Packages link copied");
               else toast.error("Couldn't copy the link. Open packages to share it.");
@@ -361,6 +361,7 @@ export function LeadCard({ app, reply, focused = false }: { app: LeadApplication
           </>
         )}
       </div>
+      <PackageShareDialog open={packageShareOpen} onOpenChange={setPackageShareOpen} />
       <RewriteDialog open={rewriteOpen} onOpenChange={setRewriteOpen} onWrite={(note) => void rewrite(note)} />
     </Card>
   );
