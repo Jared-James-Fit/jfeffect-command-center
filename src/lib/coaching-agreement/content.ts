@@ -548,7 +548,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "AI tools (optional).",
-        text: "Some features send what they need to outside AI services (OpenAI and Google), for example to estimate a meal, read a program or meal plan you import, turn a voice memo into text, or help your coach prepare a draft from your records. This happens only if you give separate permission, which is never part of signing this Agreement: a box you can tick when you sign, a short request the first time a feature needs it, or Account, then Privacy & data. You can withdraw it at any time; those features then stay off, your coach does that work by hand, and the rest of the Services are unaffected. Your coach remains responsible for the coaching you receive.",
+        text: "Some features send what they need to outside AI services (OpenAI and Google), for example to estimate a meal, read a program or meal plan you import, turn a voice memo into text, or help your coach prepare a draft from your records. This happens only if you give separate permission, which is never part of signing this Agreement: a one-time choice when you create your account, a short request if you have not answered and a feature needs it, or Account, then Privacy & data. You can withdraw it at any time; those features then stay off, your coach does that work by hand, and the rest of the Services are unaffected. Your coach remains responsible for the coaching you receive.",
       },
       {
         label: "Your choices.",
@@ -919,6 +919,7 @@ export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.4": "77fae52a80171c522cf0e2f637407855ec809f5e5299b8b7baff2ac65e97201f",
   "3.0": "21bb52730789bcdd840e40c8a207939a8a7a6e6c8dc3cd6349f579fe8d1c061b",
   "3.1": "c7d73ed301b7329edcb997dee4fce99a574331daad212b487b14930c598f8859",
+  "3.2": "17d0db935f1a89d4c59528271ae119ae682054921691bed0b1c3f309d099209b",
 };
 
 export function sectionNumber(id: string): number {
