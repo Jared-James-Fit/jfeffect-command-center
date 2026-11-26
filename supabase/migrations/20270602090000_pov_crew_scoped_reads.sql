@@ -10,6 +10,7 @@ DECLARE
   v_actor uuid := auth.uid();
   v_auth_session uuid := nullif(auth.jwt()->>'session_id', '')::uuid;
   v_target uuid;
+  v_client uuid;
   v_old_claims text := current_setting('request.jwt.claims', true);
   v_old_sub text := current_setting('request.jwt.claim.sub', true);
   v_result jsonb;
@@ -17,7 +18,7 @@ BEGIN
   IF v_actor IS NULL OR v_auth_session IS NULL THEN
     RAISE EXCEPTION 'Account view unavailable' USING ERRCODE = '42501';
   END IF;
-  SELECT s.target_user_id INTO v_target
+  SELECT s.target_user_id, s.client_id INTO v_target, v_client
     FROM public.admin_pov_sessions s
     JOIN public.clients c ON c.id = s.client_id AND c.user_id = s.target_user_id
    WHERE s.id = _session AND s.staff_user_id = v_actor
@@ -33,7 +34,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Client account preview unavailable' USING ERRCODE = '42501';
   END IF;
-  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts')
+  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts', 'direct_threads', 'crew_threads', 'chat_prefs', 'nav_data')
      OR jsonb_typeof(_args) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Unknown account view read' USING ERRCODE = '22023';
   END IF;
@@ -65,6 +66,37 @@ BEGIN
     WHEN 'reposts' THEN v_result := public.community_user_reposts(
       (_args->>'_user_id')::uuid, coalesce((_args->>'_limit')::integer, 24),
       (_args->>'_before_at')::timestamptz, (_args->>'_before_id')::uuid);
+    WHEN 'direct_threads' THEN v_result := public.chat_direct_threads();
+    WHEN 'crew_threads' THEN v_result := public.chat_crew_threads();
+    WHEN 'chat_prefs' THEN
+      SELECT coalesce(jsonb_agg(to_jsonb(p)), '[]'::jsonb) INTO v_result FROM (
+        SELECT thread_key, pinned_at, muted, hidden_at, unread_at
+          FROM public.chat_thread_prefs WHERE user_id=v_target
+      ) p;
+    WHEN 'nav_data' THEN
+      -- Same inputs and caps as useClientNavBadges; every table is explicitly
+      -- constrained to the authorized client or that person's group membership.
+      WITH memberships AS (
+        SELECT m.group_id, m.last_read_at FROM public.chat_group_members m
+        JOIN public.chat_groups g ON g.id=m.group_id
+        WHERE m.user_id=v_target AND g.kind='group' AND NOT coalesce(g.archived,false)
+      )
+      SELECT jsonb_build_object(
+        'client', (SELECT to_jsonb(c) FROM (SELECT id,last_program_update FROM public.clients WHERE id=v_client) c),
+        'msgs', (SELECT coalesce(jsonb_agg(to_jsonb(m)), '[]'::jsonb) FROM (
+          SELECT created_at FROM public.messages WHERE client_id=v_client
+            AND sender_role='admin' AND is_internal_note=false AND deleted_at IS NULL
+          ORDER BY created_at DESC LIMIT 50) m),
+        'state', (SELECT to_jsonb(st) FROM (SELECT client_last_read_at FROM public.conversation_state WHERE client_id=v_client LIMIT 1) st),
+        'nut', (SELECT coalesce(jsonb_agg(to_jsonb(n)), '[]'::jsonb) FROM (
+          SELECT updated_at,last_updated_at FROM public.nutrition_targets WHERE client_id=v_client ORDER BY updated_at DESC LIMIT 5) n),
+        'groupMemberships', (SELECT coalesce(jsonb_agg(to_jsonb(m)), '[]'::jsonb) FROM memberships m),
+        'groupMsgs', (SELECT coalesce(jsonb_agg(to_jsonb(gm)), '[]'::jsonb) FROM (
+          SELECT group_id,sender_id,created_at FROM public.group_messages WHERE group_id IN (SELECT group_id FROM memberships)
+            AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 200) gm),
+        'supportUnread', coalesce((SELECT unread_for_member FROM public.member_support_threads
+          WHERE id IN (SELECT public.support_own_thread_ids()) OR member_id=public.current_member_id() LIMIT 1),0)
+      ) INTO v_result;
     WHEN 'crew_notices' THEN
       SELECT coalesce(jsonb_agg(n || jsonb_build_object('unread',
         NOT EXISTS (SELECT 1 FROM public.notification_state st
