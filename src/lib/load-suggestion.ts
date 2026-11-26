@@ -1,4 +1,8 @@
 import { logLoadInUnit } from "@/lib/workout-pr";
+import { percentOf1RM } from "@/lib/analytics/e1rm";
+
+// The RPE chart lives in e1rm.ts (one reps × RPE model for suggestions and every estimated max).
+export { percentOf1RM };
 import { parseRepTarget } from "@/lib/set-input-cascade";
 import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 
@@ -144,15 +148,6 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 // Pure: no I/O, fully unit tested.
 // ───────────────────────────────────────────────────────────────────────────
 
-/** RTS chart: %1RM at RPE 10 for 1..12 reps. */
-const PCT_AT_RPE10 = [1.0, 0.955, 0.922, 0.892, 0.863, 0.837, 0.811, 0.786, 0.762, 0.739, 0.707, 0.68];
-/**
- * Effective reps (reps + RIR) the chart still answers for. Past 12 it is an
- * Epley-shaped tail: rough as an absolute %1RM, but the model only uses it to
- * move between nearby rep counts (shrunk by ALPHA), which is what a 10–20 rep
- * calf raise or a 25-rep pump set needs.
- */
-const MAX_EFFECTIVE_REPS = 30;
 /**
  * Highest rep count a set (or a plan) is read at. Was 15, which threw out every
  * 16–30 rep accessory set — 470 real sets in 8 weeks — so a 10–20 @ 9–10 calf
@@ -216,22 +211,6 @@ export function bodyweightScale(nowKg: number | null | undefined, thenKg: number
   const r = nowKg / thenKg;
   if (Math.abs(r - 1) > BODYWEIGHT_MAX_RATIO_SHIFT) return 1;
   return Math.pow(r, BODYWEIGHT_EXPONENT);
-}
-
-/** Fraction of 1RM for `reps` performed with `rir` reps left in the tank. */
-export function percentOf1RM(reps: number, rir: number): number | null {
-  const e = reps + Math.max(0, rir);
-  if (!Number.isFinite(e) || e < 1 || e > MAX_EFFECTIVE_REPS) return null;
-  if (e <= PCT_AT_RPE10.length) {
-    const lo = Math.floor(e);
-    const hi = Math.ceil(e);
-    const a = PCT_AT_RPE10[lo - 1];
-    const b = PCT_AT_RPE10[hi - 1];
-    return a + (b - a) * (e - lo);
-  }
-  // Past 12 reps, continue from the chart with an Epley-shaped tail.
-  const n = PCT_AT_RPE10.length;
-  return PCT_AT_RPE10[n - 1] * ((1 + n / 30) / (1 + e / 30));
 }
 
 export function parseRpe(value: number | string | null | undefined): number | null {

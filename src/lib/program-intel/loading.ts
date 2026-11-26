@@ -32,15 +32,27 @@ export type LoadingRefs = Record<LiftFamily, LiftRefs>;
 const LIFTS: LiftFamily[] = ["squat", "bench", "deadlift"];
 const LIFT_LABEL: Record<LiftFamily, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift" };
 
-/** What's on file per competition lift: the athlete's own maxes, and whether their logs give a recent e1RM (2+ sessions in 6 weeks). */
-export function loadingRefsFrom(maxes: RawMax[], lifts: Pick<LiftReport, "lift" | "compTrend">[], now: number = Date.now()): LoadingRefs {
+/**
+ * What's on file per competition lift: the athlete's own maxes, and whether
+ * the strength read has a current estimate a program may plan from (`e1rmFromLogs`:
+ * strength-intel/planning.ts, the same the logger reads, so a % of e1RM the
+ * generator writes always shows a weight). Without that read (older callers,
+ * tests), their logs' recent hard sets: 2+ sessions in 6 weeks.
+ */
+export function loadingRefsFrom(
+  maxes: RawMax[],
+  lifts: Pick<LiftReport, "lift" | "compTrend">[],
+  now: number = Date.now(),
+  e1rmFromLogs?: Partial<Record<LiftFamily, unknown>> | null,
+): LoadingRefs {
   const out = {} as LoadingRefs;
   for (const fam of LIFTS) {
     const live = maxes.filter((m) => m.active !== false && isCompetitionMaxName(String(m.lift ?? ""), fam));
     const has = (k: "training_max" | "one_rm" | "estimated_1rm") => live.some((m) => Number(m[k]) > 0);
     const points = lifts.find((l) => l.lift === fam)?.compTrend.points ?? [];
     const recent = points.filter((p) => now - Date.parse(p.date) <= E1RM_WINDOW_DAYS * 86_400_000);
-    out[fam] = { tm: has("training_max"), oneRm: has("one_rm"), e1rm: has("estimated_1rm") || new Set(recent.map((p) => p.date)).size >= E1RM_MIN_SESSIONS };
+    const logs = e1rmFromLogs ? !!e1rmFromLogs[fam] : new Set(recent.map((p) => p.date)).size >= E1RM_MIN_SESSIONS;
+    out[fam] = { tm: has("training_max"), oneRm: has("one_rm"), e1rm: has("estimated_1rm") || logs };
   }
   return out;
 }
