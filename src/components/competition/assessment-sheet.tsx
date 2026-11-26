@@ -213,7 +213,7 @@ export function AssessmentSheet({
               <SheetDescription className="text-[12px]">
                 {a?.competition_context ? (
                   <span className="block break-words font-medium text-foreground">
-                    {a.competition_context.internal_test ? "Practice test — " : ""}{a.competition_context.name}
+                    {a.competition_context.internal_test && /^Validation rehearsal:/i.test(a.competition_context.name) ? "Practice test — " : ""}{a.competition_context.name}
                     {a.competition_context.weight_class ? ` · ${String(a.competition_context.weight_class).replace(/\s*kg$/i, "")} kg` : ""}
                     {a.competition_context.meet_date ? ` · ${new Date(a.competition_context.meet_date + "T12:00:00Z").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` : ""}
                   </span>
