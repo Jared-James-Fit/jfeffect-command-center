@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useViewingAsClient, usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
-import { getMySetupStatus, updateMyMemberProfile } from "@/lib/member-setup.functions";
+import { getMySetupStatus, previewMemberSetup, updateMyMemberProfile } from "@/lib/member-setup.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,15 +59,18 @@ export function MemberSetupWizard({
   onClose: () => void;
 }) {
   const { user } = useAuth();
+  const preview = useViewingAsClient();
+  const portalUserId = usePortalUserId();
   const qc = useQueryClient();
   const { clientId } = useServiceTier();
   const fetchStatus = useServerFn(getMySetupStatus);
   const update = useServerFn(updateMyMemberProfile);
-  const { data } = useQuery({ queryKey: ["m-setup-status"], queryFn: () => fetchStatus(), enabled: open });
+  const previewRead = useServerFn(previewMemberSetup);
+  const { data, isPending, isError } = useQuery<Awaited<ReturnType<typeof fetchStatus>> | Awaited<ReturnType<typeof previewRead>>>({ queryKey: preview ? ["m-setup-status-preview", clientId] : ["m-setup-status"], queryFn: async () => preview ? await previewRead({ data: { clientId: clientId! } }) : await fetchStatus(), enabled: open && (!preview || !!clientId) });
   const m = data?.member as any;
   const { data: unitRow } = useQuery({
-    ...weightUnitSetupQuery(user?.id),
-    enabled: open && !!user?.id,
+    ...weightUnitSetupQuery(portalUserId),
+    enabled: open && !!portalUserId,
     staleTime: 5 * 60_000,
   });
   // never chosen: the last step asks, so no second popup follows setup
@@ -140,6 +144,7 @@ export function MemberSetupWizard({
   const missingLabel = stepValidation[step].missing.join(", ");
 
   const saveStep = async (next?: Step) => {
+    if (preview) { if (next) setStep(next); else onClose(); return; }
     if (!stepValidation[step].ok) {
       toast.error(`Please fill: ${stepValidation[step].missing.join(", ")}`);
       return;
@@ -175,6 +180,7 @@ export function MemberSetupWizard({
       if (Object.keys(patch).length) {
         const r = await update({ data: patch });
         await qc.invalidateQueries({ queryKey: ["m-setup-status"] });
+        void qc.invalidateQueries({ queryKey: ["goals-service-scope", clientId] });
         void qc.invalidateQueries({ queryKey: ["account-setup-prefill", clientId] });
         void qc.invalidateQueries({ queryKey: ["setup-banner-client"] });
         await qc.invalidateQueries({ queryKey: ["current-member-access"] });
@@ -215,13 +221,15 @@ export function MemberSetupWizard({
               : "We need a few details before you get full access — same as our coaching clients."}
           </DialogDescription>
         </DialogHeader>
+        {preview && <p className="text-xs text-muted-foreground">Client preview · nothing is saved.</p>}
+        {isPending || isError ? <p className="text-sm text-muted-foreground">{isError ? "Could not load client setup." : "Loading setup…"}</p> : <>
         <Progress value={progress} className="h-1.5" />
         <div className="mt-2 text-xs text-muted-foreground">Step {stepIdx + 1} of {STEPS.length}</div>
 
         {step === "photo" && (
           <div className="space-y-3">
             <Label>Profile picture <span className="text-destructive">*</span></Label>
-            {user?.id && (
+            {preview ? <div className="rounded-lg border p-4 text-sm text-muted-foreground">{value("avatar_url") ? "Photo on file" : "Client takes or uploads their profile picture here."}</div> : user?.id && (
               <ProfilePictureCapture
                 userId={user.id}
                 currentUrl={value("avatar_url") || null}
@@ -395,16 +403,17 @@ export function MemberSetupWizard({
           </Button>
           <div className="flex gap-2">
             {stepIdx < STEPS.length - 1 ? (
-              <Button disabled={busy || !canAdvance} onClick={() => saveStep(STEPS[stepIdx + 1])}>
-                Save & continue
+              <Button disabled={busy || (!preview && !canAdvance)} onClick={() => saveStep(STEPS[stepIdx + 1])}>
+                {preview ? "Next" : "Save & continue"}
               </Button>
             ) : (
-              <Button disabled={busy || !canAdvance} onClick={() => saveStep()}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Finish setup
+              <Button disabled={busy || (!preview && !canAdvance)} onClick={() => saveStep()}>
+                <CheckCircle2 className="mr-2 h-4 w-4" /> {preview ? "Close preview" : "Finish setup"}
               </Button>
             )}
           </div>
         </DialogFooter>
+        </>}
       </DialogContent>
     </Dialog>
   );

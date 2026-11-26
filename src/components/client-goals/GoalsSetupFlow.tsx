@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -56,6 +57,7 @@ const STEPS = [
 ] as const;
 
 export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = false }: Props) {
+  const preview = useViewingAsClient();
   const steps = nutritionOnly ? [STEPS[5], STEPS[7]] : STEPS;
   const activeStepIndex = (index: number) => nutritionOnly ? (index === 0 ? 5 : 7) : index;
   const qc = useQueryClient();
@@ -117,7 +119,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
     // wins so a tab reload doesn't lose unsaved typing.
     let draft: Partial<ClientGoalsSetupRow> | null = null;
     try {
-      if (typeof window !== "undefined") {
+      if (!preview && typeof window !== "undefined") {
         const raw = window.localStorage.getItem(draftKey);
         if (raw) draft = JSON.parse(raw);
       }
@@ -134,17 +136,17 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
     setTrainingDays(live);
     setLocal(merged);
     hydratedClientRef.current = clientId;
-  }, [row, isLoading, committedDays, scheduleLoading, clientId, draftKey, prefill.isPending, prefill.data, nutritionOnly]);
+  }, [row, isLoading, committedDays, scheduleLoading, clientId, draftKey, prefill.isPending, prefill.data, nutritionOnly, preview]);
 
   // Persist working copy as a draft on this device — survives reload, tab
   // close, and network failures. Cleared after a successful save.
   useEffect(() => {
-    if (hydratedClientRef.current !== clientId) return;
+    if (preview || hydratedClientRef.current !== clientId) return;
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(draftKey, JSON.stringify(local));
     } catch { /* quota: ignore */ }
-  }, [local, clientId, draftKey]);
+  }, [local, clientId, draftKey, preview]);
 
   // When the user toggles "No" to a conditional question, drop any stale
   // free-text detail so they're not confused by a hidden value.
@@ -208,6 +210,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
   });
 
   const saveAndAdvance = async (extra?: Partial<ClientGoalsSetupRow>) => {
+    if (preview) { setStep(s => Math.min(steps.length - 1, s + 1)); return; }
     try {
       setSaveFailed(null);
       setStepSaveFailed(null);
@@ -226,6 +229,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
   };
 
   const saveAndExit = async () => {
+    if (preview) { if (onComplete) onComplete(); else await navigate({ to: "/portal" }); return; }
     try {
       await upsert.mutateAsync(buildPatch() as any);
       toast.success("Saved — you can finish later");
@@ -238,6 +242,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
   };
 
   const finish = async () => {
+    if (preview) { if (onComplete) onComplete(); else await navigate({ to: "/portal" }); return; }
     if (upsert.isPending) return; // dedupe double-taps
     if (nutritionOnly && !local.nutrition_goal) { toast.error("Choose your nutrition goal first"); setStep(0); return; }
     setSaveFailed(null);
@@ -271,6 +276,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
 
   return (
     <div className="space-y-4">
+      {preview && <p className="text-xs text-muted-foreground">Client preview · nothing is saved.</p>}
       {!compact && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
@@ -296,7 +302,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
         )}
         {activeStepIndex(step) === 2 && <ExperienceStep value={local} setField={setField} />}
         {activeStepIndex(step) === 3 && (
-          <LifestyleStep clientId={clientId} requireEmployment={!row?.completed_at} onReady={setLifestyleReady} onSkip={() => void saveAndAdvance()} />
+          <LifestyleStep preview={preview} clientId={clientId} requireEmployment={!row?.completed_at} onReady={setLifestyleReady} onSkip={() => void saveAndAdvance()} />
         )}
         {activeStepIndex(step) === 4 && <EquipmentStep value={local} setField={setField} />}
         {activeStepIndex(step) === 5 && <NutritionStep value={local} setField={setField} />}
@@ -371,15 +377,15 @@ export function GoalsSetupFlow({ clientId, onComplete, compact, nutritionOnly = 
           </Button>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={saveAndExit} disabled={upsert.isPending}>
-              Save & continue later
+              {preview ? "Close preview" : "Save & continue later"}
             </Button>
             {step < steps.length - 1 ? (
-              <Button onClick={() => saveAndAdvance()} disabled={upsert.isPending || (steps[step] === "Work & lifestyle" && !lifestyleReady)}>
+              <Button onClick={() => saveAndAdvance()} disabled={upsert.isPending || (!preview && steps[step] === "Work & lifestyle" && !lifestyleReady)}>
                 {upsert.isPending ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving</> : <>Next <ChevronRight className="ml-1 h-4 w-4" /></>}
               </Button>
             ) : (
               <Button onClick={finish} disabled={upsert.isPending}>
-                {upsert.isPending ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving</> : <>Finish <CheckCircle2 className="ml-1 h-4 w-4" /></>}
+                {upsert.isPending ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Saving</> : <>{preview ? "Close preview" : "Finish"} <CheckCircle2 className="ml-1 h-4 w-4" /></>}
               </Button>
             )}
           </div>

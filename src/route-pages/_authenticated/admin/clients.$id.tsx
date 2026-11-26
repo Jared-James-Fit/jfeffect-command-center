@@ -1958,8 +1958,8 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
   const steps: Step[] = [
     { label: "Account access", state: form.portal_access_disabled || form.needs_admin_help ? "Needs review" : signedIn ? "Completed" : access.stage === "setup_expired" || (!invite && !form.user_id) ? "Not sent" : "Awaiting client", tab: "account" },
   ];
-  if (!coaching && memberSetup?.applies) steps.push({ label: "Membership setup", state: memberSetup.missing.length ? "Awaiting client" : "Completed", tab: "info" });
-  if (!coaching && memberSetupUnknown) steps.push({ label: "Membership setup", state: "Check status", tab: "account" });
+  if (!coaching && !scope.ready && memberSetup?.applies) steps.push({ label: "Membership setup", state: memberSetup.missing.length ? "Awaiting client" : "Completed", tab: "info" });
+  if (!coaching && !scope.ready && memberSetupUnknown && !memberSetup?.applies) steps.push({ label: "Membership setup", state: "Check status", tab: "account" });
   if (coaching) {
     const a = agreement.data;
     steps.push({ label: "Coaching agreement", state: !a ? "Check status" : a.state.state !== "needs_signature" ? "Completed" : !form.user_id ? "Not sent" : a.resignRequestedAt ? "Awaiting client" : "Not sent", tab: "documents" });
@@ -1974,12 +1974,15 @@ function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup
       steps.push({ label: "Nutrition setup", state: !goals.isSuccess ? "Check status" : isGoalsSetupComplete(goals.data, true) ? "Completed" : "Awaiting client", tab: "goals-setup" });
     }
   }
-  if (!coaching && scope.handlingMeets.length) {
-    steps.push({ label: "Basic information", state: isBasicInfoComplete(form) ? "Completed" : "Awaiting client", tab: "info" });
-    steps.push({ label: "Account photo", state: form.profile_picture_url ? "Completed" : "Awaiting client", tab: "info" });
-    steps.push({ label: "Goals & setup", state: !goals.isSuccess ? "Check status" : isGoalsSetupComplete(goals.data) ? "Completed" : "Awaiting client", tab: "goals-setup" });
+  if (scope.membership?.applicable) {
+    steps.push({ label: scope.membership.free ? "Training setup" : "Membership setup", state: scope.membership.complete ? "Completed" : "Awaiting client", tab: "info" });
   }
-  if (!scope.ready && !coaching && form.source === "competition_handling") steps.push({ label: "Competition setup", state: "Check status", tab: "competition" });
+  if (!coaching && scope.requirements?.basicInfo) {
+    steps.push({ label: "Basic information", state: isBasicInfoComplete(form) ? "Completed" : "Awaiting client", tab: "info" });
+    if (scope.requirements?.headshot) steps.push({ label: "Account photo", state: form.profile_picture_url ? "Completed" : "Awaiting client", tab: "info" });
+  }
+  if (!coaching && scope.requirements?.generalGoals) steps.push({ label: "Goals & setup", state: !goals.isSuccess ? "Check status" : isGoalsSetupComplete(goals.data, scope.nutritionOnly) ? "Completed" : "Awaiting client", tab: "goals-setup" });
+  if (!scope.ready && !coaching) steps.push({ label: "Service setup", state: "Check status", tab: "account" });
   for (const meet of scope.handlingMeets) {
     steps.push({ label: `Competition details · ${meet.name}`, state: meet.intakeDone ? "Completed" : "Awaiting client", tab: "competition" });
     steps.push({ label: `Handling terms · ${meet.name}`, state: meet.termsDone ? "Completed" : "Awaiting client", tab: "competition" });

@@ -147,7 +147,7 @@ export function OccupationInput({ value, onCommit, autoFocus, placeholder = "Sea
  * the whole step skips in one tap. Employment is the one a new client answers
  * (Prefer not to say counts); `onReady` says when the step can move on.
  */
-export function LifestyleStep({ clientId, requireEmployment, onReady, onSkip }: { clientId: string; requireEmployment: boolean; onReady: (ready: boolean) => void; onSkip: () => void }) {
+export function LifestyleStep({ clientId, requireEmployment, onReady, onSkip, preview = false }: { preview?: boolean; clientId: string; requireEmployment: boolean; onReady: (ready: boolean) => void; onSkip: () => void }) {
   const { data, isLoading } = useLifestyle(clientId);
   const save = useSaveLifestyle(clientId);
   const l = data?.lifestyle ?? EMPTY_LIFESTYLE;
@@ -170,6 +170,7 @@ export function LifestyleStep({ clientId, requireEmployment, onReady, onSkip }: 
   }
 
   const pick = (f: LifestyleField, v: string | null) => {
+    if (preview) { setEditing(null); setPassed(p => [...p, f]); return; }
     feedback("tap");
     setEditing(null);
     save.mutate({ patch: { [f]: v } });

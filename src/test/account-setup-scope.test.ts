@@ -50,3 +50,19 @@ describe("guided handling intake", () => {
 it("uses the full shared questionnaire for nutrition plus handling without changing the service tier", () => {
   expect(accountSetupRequirements("coaching", ["nutrition"], true)).toMatchObject({generalGoals: true, nutritionOnly: false});
 });
+
+import { memberSetupSummary } from "../lib/member-setup-steps";
+describe("shared membership status", () => {
+  it("does not assign unrelated membership intake to program-only handling", () => {
+    expect(memberSetupSummary({ account_type: "program_only" }).applicable).toBe(false);
+  });
+  it("reports exactly the lightweight free requirements and completed status", () => {
+    const free = { account_type: "jf_member", subscription_status: "Free" };
+    expect(memberSetupSummary(free).missing).toEqual(["goals", "training_background", "committed_training_days"]);
+    expect(memberSetupSummary({ ...free, goals: "Powerlifting", experience_level: "intermediate", committed_training_days: ["Monday"] })).toMatchObject({ applicable: true, complete: true, free: true, missing: [] });
+  });
+  it("preserves full paid member setup and excludes sandbox", () => {
+    expect(memberSetupSummary({ account_type: "jf_member", stripe_subscription_id: "paid" }).missing).toContain("emergency_contact_phone");
+    expect(memberSetupSummary({ account_type: "jf_member", is_admin_sandbox: true }).applicable).toBe(false);
+  });
+});

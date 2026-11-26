@@ -36,6 +36,7 @@ type Client = {
 type Props = {
   client: Client;
   editable?: boolean;
+  preview?: boolean;
   compact?: boolean;
   defaultEditing?: boolean;
   /** Inside a sheet: just the editor (the sheet has the title), no card around it. */
@@ -46,7 +47,7 @@ type Props = {
   coach?: boolean;
 };
 
-export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false, embedded = false, onDone, coach = false }: Props) {
+export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false, embedded = false, onDone, coach = false, preview = false }: Props) {
   const qc = useQueryClient();
   const reschedule = useServerFn(rescheduleFromCommittedDays);
   const saveSchedule = useServerFn(saveCommittedSchedule);
@@ -64,6 +65,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
   };
 
   const save = async () => {
+    if (preview) return;
     if (!committedFreq) {
       toast.error("Select how many days per week you're committed to training");
       return;
@@ -180,7 +182,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
             <Button size="sm" variant="ghost" onClick={() => { reset(); setEditing(false); onDone?.(); }}>
               <X className="mr-1 h-3.5 w-3.5" /> Cancel
             </Button>
-            <Button size="sm" onClick={save} disabled={saving || !dayCountValid} className="bg-primary font-semibold">
+            <Button size="sm" onClick={save} disabled={preview || saving || !dayCountValid} className="bg-primary font-semibold">
               <Save className="mr-1 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>

@@ -21,10 +21,11 @@ type Props = {
   clientId: string;
   userId: string;
   client: any;
+  preview?: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }: Props) {
+export function SetupStepSheet({ step, clientId, userId, client, preview = false, onOpenChange }: Props) {
   const open = step !== null;
   const title = step === "profile_picture" ? "Add your account headshot" : step === "basic_info" ? "Confirm your basic info" : step === "training_schedule" ? "Set your training schedule" : "";
   const description = step === "profile_picture"
@@ -45,22 +46,23 @@ export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }:
           </SheetHeader>
         </div>
         <div className="px-4 pb-8 pt-4">
-          {step === "profile_picture" && <ProfilePictureStep userId={userId} clientId={clientId} currentUrl={client?.profile_picture_url ?? null} onDone={() => onOpenChange(false)} />}
-          {step === "basic_info" && <BasicInfoStep client={client} clientId={clientId} onDone={() => onOpenChange(false)} />}
-          {step === "training_schedule" && <TrainingScheduleStep client={client} onDone={() => onOpenChange(false)} />}
+          {preview && <p className="mb-3 text-xs text-muted-foreground">Client preview · nothing is saved.</p>}
+          {step === "profile_picture" && <ProfilePictureStep userId={userId} clientId={clientId} currentUrl={client?.profile_picture_url ?? null} preview={preview} onDone={() => onOpenChange(false)} />}
+          {step === "basic_info" && <BasicInfoStep client={client} clientId={clientId} preview={preview} onDone={() => onOpenChange(false)} />}
+          {step === "training_schedule" && <TrainingScheduleStep client={client} preview={preview} onDone={() => onOpenChange(false)} />}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function ProfilePictureStep({ onDone }: { userId: string; clientId: string; currentUrl: string | null; onDone: () => void }) {
+function ProfilePictureStep({ onDone, preview }: { userId: string; clientId: string; currentUrl: string | null; preview: boolean; onDone: () => void }) {
   // the account headshot is taken with its own live camera (headshot-capture.tsx), never a file
   const camera = useHeadshotCamera();
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">A quick live photo so your coach can recognize you. Only your coach and JF Effect admins see it.</p>
-      <Button className="w-full" onClick={camera.open}>Take my headshot</Button>
+      <Button className="w-full" disabled={preview} onClick={camera.open}>Take my headshot</Button>
       <Button variant="outline" className="w-full" onClick={onDone}>Done</Button>
       {camera.element}
     </div>
@@ -74,7 +76,7 @@ const BASIC_FIELDS = [
   "emergency_contact_phone", ...SOCIAL_FIELDS,
 ] as const;
 
-function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: string; onDone: () => void }) {
+function BasicInfoStep({ client, clientId, onDone, preview }: { client: any; clientId: string; preview: boolean; onDone: () => void }) {
   const qc = useQueryClient();
   const readPrefill = useServerFn(getAccountSetupPrefillFn);
   const prefill = useQuery({ queryKey: ["account-setup-prefill", clientId], queryFn: () => readPrefill({ data: { clientId } }), retry: false });
@@ -91,6 +93,7 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
 
   const remaining = useMemo(() => (form ? missingBasicFields(form) : []), [form]);
   const save = async (closeAfter: boolean) => {
+    if (preview) return;
     const targetId = form?.id ?? clientId;
     if (!targetId) return toast.error("Couldn't identify your account — please close and reopen this step.");
     setSaving(true);
@@ -128,7 +131,7 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
       <BasicInfoForm values={form} onChange={(p) => setForm({ ...form, ...p })} />
       <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
         <Button variant="outline" className="flex-1" onClick={onDone} disabled={saving}>Close</Button>
-        <Button className="flex-1" onClick={() => save(true)} disabled={saving}>
+        <Button className="flex-1" onClick={() => save(true)} disabled={saving || preview}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Save & Finish
         </Button>
       </div>
@@ -153,14 +156,14 @@ function missingBasicFields(c: any): string[] {
   return m;
 }
 
-function TrainingScheduleStep({ client, onDone }: { client: any; onDone: () => void }) {
+function TrainingScheduleStep({ client, onDone, preview }: { client: any; preview: boolean; onDone: () => void }) {
   const qc = useQueryClient();
   useEffect(() => {
     if (client?.training_schedule_completed) qc.invalidateQueries({ queryKey: ["setup-banner-client"] });
   }, [client?.training_schedule_completed, qc]);
   return (
     <div className="space-y-4">
-      <TrainingScheduleCard client={client} editable defaultEditing />
+      <TrainingScheduleCard client={client} editable defaultEditing preview={preview} />
       <Button variant="outline" className="w-full" onClick={onDone}>Done</Button>
     </div>
   );
