@@ -49,7 +49,7 @@ export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, w
     },
   });
   const { data: goals, isPending: goalsPending, isFetched: goalsFetched, isError: goalsError, refetch: retryGoals } = useQuery({
-    queryKey: ["client-goals-setup", clientId], enabled: !!clientId, staleTime: 60_000,
+    queryKey: ["client-goals-setup", clientId], enabled: !!clientId && !handlingOnly, staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("client_goals_setup").select("*").eq("client_id", clientId).maybeSingle();
       if (error) throw error;
@@ -113,8 +113,8 @@ export function SetupChecklistBanner({ clientId, userId, handlingOnly = false, w
   const required = items.filter((i) => !i.optional);
   const done = required.filter((i) => i.done).length;
   if (!clientId || !userId) return null;
-  if (scope.error || clientError || goalsError) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), retryGoals()]); }}>Try again</Button></Card>;
-  if (!scope.ready || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
+  if (scope.error || clientError || (!handlingOnly && goalsError)) return <Card className="space-y-2 p-4" data-testid="setup-checklist-error"><h2 className="text-base font-semibold">Complete your setup</h2><p className="text-sm text-muted-foreground">We couldn't load your setup details. Try again to see what is left.</p><Button size="sm" variant="outline" onClick={() => { void Promise.all([scope.retry(), retryClient(), ...(!handlingOnly ? [retryGoals()] : [])]); }}>Try again</Button></Card>;
+  if (!scope.ready || clientPending || !clientFetched || (!handlingOnly && (goalsPending || !goalsFetched))) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
   if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;
