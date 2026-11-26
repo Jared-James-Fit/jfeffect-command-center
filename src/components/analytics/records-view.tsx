@@ -12,7 +12,10 @@ import { parseLocalDate } from "@/lib/today";
 import { dualLoad } from "@/lib/analytics/units";
 import { normalizeWeights, weightReferences, weightContextAt, weightPeriods } from "@/lib/analytics/weight-context";
 import type { BodyweightPoint } from "@/lib/bodyweight";
-import { localDay } from "@/lib/analytics/lift-strength";
+import { comparableE1rm } from "@/lib/analytics/strength-read";
+import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
+import { compLiftOfResult } from "@/lib/analytics/competition-strength";
+import { localDay, isMeetLog } from "@/lib/analytics/lift-strength";
 import { officialClass } from "@/lib/analytics/performance-ring";
 import { attemptStats, compareInsights, type PerformanceVersion } from "@/lib/analytics/coach-analysis";
 import { competitionRing } from "@/lib/analytics/performance-ring";
@@ -89,24 +92,27 @@ export function RecordsView({
     const selected=periods.find(p=>p.start===period);
     const best=new Map<string,{name:string;day:string;lb:number;load:number;reps:number;rpe:number|null;category:string|null;bw:number|null}>();
     const contexts=new Map<string,ReturnType<typeof weightContextAt>>();
-    for(const r of results){
+    const clean=neutralizeObviousLoadOutliers(results.map(r=>({...r,est_1rm:Number(r.est_1rm)||0})));
+    const meetDays=new Set<string>();
+    for(const r of clean){const lift=compLiftOfResult(r);if(!lift||!r.date)continue;const day=localDay(r.date);if(meets.some(m=>isMeetLog({day,heaviest:Number(r.load)},{day:m.date,lb:m.lifts[lift]})))meetDays.add(lift+"|"+day)}
+    for(const r of clean){
       const load=Number(r.load),reps=Number(r.reps);
       if(!r.date||!(load>0)||!(reps>0)||r.counts_load===false||r.analytics_load_outlier)continue;
-      const day=localDay(r.date);if(day>today||selected&&(day<selected.start||day>selected.end))continue;
+      const day=localDay(r.date);const lift=compLiftOfResult(r);if(lift&&meetDays.has(lift+"|"+day))continue;if(day>today||selected&&(day<selected.start||day>selected.end))continue;
       let ctx=contexts.get(day);if(!ctx){ctx=weightContextAt(weights,refs,day);contexts.set(day,ctx)}
       const cat=ctx.category?.label??null;
       if(category!=="all"&&(cat??"unknown")!==category)continue;
-      if(kind==="single"&&reps!==1||kind==="estimated"&&(reps>10||Number(r.rpe)<7||!Number.isFinite(Number(r.rpe))))continue;
+      if(kind==="single"&&reps!==1)continue;
       const name=String(r.exercise_name??"Exercise");
       if(!name.toLowerCase().includes(query.trim().toLowerCase()))continue;
-      const lb=kind==="estimated"?Number(r.est_1rm):load;
-      if(!Number.isFinite(lb)||lb<=0)continue;
+      const lb=kind==="estimated"?comparableE1rm({load,reps,rpe:r.rpe,rir:r.rir}):load;
+      if(lb==null||!Number.isFinite(lb)||lb<=0)continue;
       const key=String(r.exercise_id??name)+(kind==="rep"?":"+reps:"");
       const old=best.get(key);
       if(!old||lb>old.lb)best.set(key,{name,day,lb,load,reps,rpe:r.rpe==null?null:Number(r.rpe),category:cat,bw:ctx.averageKg});
     }
     return [...best.values()].sort((a,b)=>b.day.localeCompare(a.day)||a.name.localeCompare(b.name));
-  },[results,weights,refs,periods,category,period,kind,query,today]);
+  },[results,weights,refs,periods,category,period,kind,query,today,meets]);
   return (
     <div className="space-y-5" data-records-view>
       <div className="flex gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Record type">
