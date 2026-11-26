@@ -183,6 +183,7 @@ const TOOL_PROGRESS: Array<[RegExp, string]> = [
   [/^propose_/, "Setting up a card"],
   [/ask_choice/, "Checking which one you mean"],
   [/training_log|personal_records|team_training/, "Reading the training log"],
+  [/^strength$/, "Reading their strength"],
   [/training_program|program_detail|program_history|program_templates/, "Reading the program"],
   [/exercise_library/, "Searching the exercise library"],
   [/nutrition/, "Reading the nutrition plan"],

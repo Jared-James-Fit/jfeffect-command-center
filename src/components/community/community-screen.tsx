@@ -150,7 +150,15 @@ const CrewActivity = lazyWithRetry(() => import("@/components/community/crew-act
 const ReelsViewer = lazyWithRetry(() => import("@/components/community/reels-viewer").then((m) => ({ default: m.ReelsViewer })));
 const PostDetailDialog = lazyWithRetry(() => import("@/components/community/post-detail").then((m) => ({ default: m.PostDetailDialog })));
 function preloadCrewViews() {
-  preloadWhenIdle("crew-views", () => Promise.all([RankingsHub.preload(), CrewActivity.preload(), PostDetailDialog.preload(), ReelsViewer.preload()]));
+  preloadWhenIdle("crew-views", () =>
+    Promise.all([
+      // Rankings' music file too (fetched, not decoded), once Rankings' own code is in
+      RankingsHub.preload().then(() => import("@/components/community/rankings-music").then((m) => m.prefetchRankingsMusicIfOn())),
+      CrewActivity.preload(),
+      PostDetailDialog.preload(),
+      ReelsViewer.preload(),
+    ]),
+  );
 }
 
 

@@ -262,7 +262,7 @@ export function PlannedLoadCell({ view, onApply = null }: {
     return (
       <div className={REF_CELL} data-testid="load-planned">
         <span className={cn(REF_LABEL, "justify-between")}>
-          <span className="truncate">{view.label}</span>
+          <span className="line-clamp-2 min-w-0 break-words" data-load-planned-label>{view.label}</span>
           <InfoButton label="How this weight is worked out" testId="load-planned-info">{why}</InfoButton>
         </span>
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-capped={view.capped ? "" : undefined}>
@@ -284,7 +284,7 @@ export function PlannedLoadCell({ view, onApply = null }: {
       cell={
         <>
           <span className={REF_LABEL}>
-            <span className="truncate">{view.label}</span>
+            <span className="line-clamp-2 min-w-0 break-words" data-load-planned-label>{view.label}</span>
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </span>
           {view.value ? (

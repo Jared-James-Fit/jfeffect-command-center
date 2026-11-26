@@ -61,8 +61,8 @@ describe("competition strength: estimates, meets and training maxes stay apart",
       res("2026-10-20", "bench", 200, 12, "9"), // too many reps
     ]);
     expect(points.map((p) => [p.lift, p.day])).toEqual([["squat", "2026-10-26"]]);
-    // 335 × (1 + (5 + 2) / 30): Epley on the reps done plus the reps left
-    expect(points[0].e1rm).toBeCloseTo(413.2, 1);
+    // 335 ÷ 0.811: the RPE chart's share of a max for 5 reps with 2 left
+    expect(points[0].e1rm).toBeCloseTo(413.1, 1);
     // counted, never plotted: the 12-rep bench and the RPE 6 squat day
     expect(light.map((l) => l.day)).toEqual(["2026-10-20", "2026-11-16"]);
   });
@@ -91,8 +91,8 @@ describe("competition strength: estimates, meets and training maxes stay apart",
       trainingMaxes: { deadlift: { lb: 600, date: "2026-10-07" } },
       today: "2026-11-22",
     });
-    expect(st.lifts.squat.current?.lb).toBeCloseTo(413.2, 1);
-    expect(st.lifts.deadlift.current?.lb).toBeCloseTo(561, 0);
+    expect(st.lifts.squat.current?.lb).toBeCloseTo(413.1, 1);
+    expect(st.lifts.deadlift.current?.lb).toBeCloseTo(554.9, 0);
     expect(st.lifts.bench.current).toBeNull();
     expect(st.lifts.bench.latest?.day).toBe("2026-09-21");
     expect(st.missing).toEqual(["bench"]);

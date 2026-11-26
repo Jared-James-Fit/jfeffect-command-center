@@ -47,9 +47,38 @@ export function rpeToRir(rpe: number | string | null | undefined): number | null
 }
 
 /**
- * RPE-adjusted e1RM. If RPE is provided, treat the set as if the lifter had
- * done `reps + rir` reps at the same load. Falls back to plain Epley when no
- * RPE is supplied.
+ * The app's one reps × reps-in-reserve model (the RTS chart): %1RM at RPE 10
+ * for 1..12 reps, an effort read as reps + RIR. The suggested weights are
+ * backtested on it (load-suggestion.ts) and every estimated max reads it, so a
+ * suggestion and an estimate never read the same set two ways.
+ */
+export const PCT_AT_RPE10 = [1.0, 0.955, 0.922, 0.892, 0.863, 0.837, 0.811, 0.786, 0.762, 0.739, 0.707, 0.68];
+/**
+ * Effective reps (reps + RIR) the chart still answers for. Past 12 it is an
+ * Epley-shaped tail: rough as an absolute %1RM, but only used to move between
+ * nearby rep counts.
+ */
+export const MAX_EFFECTIVE_REPS = 30;
+
+/** Fraction of 1RM for `reps` performed with `rir` reps left in the tank. */
+export function percentOf1RM(reps: number, rir: number): number | null {
+  const e = reps + Math.max(0, rir);
+  if (!Number.isFinite(e) || e < 1 || e > MAX_EFFECTIVE_REPS) return null;
+  if (e <= PCT_AT_RPE10.length) {
+    const lo = Math.floor(e);
+    const hi = Math.ceil(e);
+    const a = PCT_AT_RPE10[lo - 1];
+    const b = PCT_AT_RPE10[hi - 1];
+    return a + (b - a) * (e - lo);
+  }
+  const n = PCT_AT_RPE10.length;
+  return PCT_AT_RPE10[n - 1] * ((1 + n / 30) / (1 + e / 30));
+}
+
+/**
+ * RPE-adjusted e1RM on the chart (`percentOf1RM`): the load over the share of
+ * a max that reps × reps-left means. With no RPE, the formula named (Epley by
+ * default) on the reps done.
  */
 export function estimate1RMWithRpe(
   load: number,
@@ -58,8 +87,10 @@ export function estimate1RMWithRpe(
   formula: E1RMFormula = "epley",
 ): number {
   const rir = rpeToRir(rpe);
-  const effectiveReps = rir == null ? reps : reps + rir;
-  return estimate1RM(load, effectiveReps, formula);
+  if (rir == null) return estimate1RM(load, reps, formula);
+  if (!load || !reps || reps < 1) return 0;
+  const pct = percentOf1RM(reps, rir);
+  return pct && pct > 0 ? Math.round((load / pct) * 10) / 10 : 0;
 }
 
 /**

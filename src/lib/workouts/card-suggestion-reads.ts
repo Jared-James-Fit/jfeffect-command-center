@@ -7,12 +7,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { normalizeWarmupRow, type WarmupSetRow } from "@/lib/final-warmup";
-import { parseRpe } from "@/lib/load-suggestion";
 import { resolveLoadType } from "@/lib/workout-load-type";
 import type { PreviousLiftIdentity, PreviousLiftLog } from "@/lib/workout-previous-lift";
 import { trainedOn } from "@/lib/workouts/exercise-history";
 import { instanceDates } from "@/lib/workouts/history-reads";
-import { loggedE1rm, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
+import { fetchStrengthInputs, strengthIntelFrom, type StrengthReadInputs } from "@/lib/strength-intel/read";
+import { dailyRead } from "@/lib/strength-intel/profile";
+import { isStrengthBasis, planningRefs, type StrengthRefs } from "@/lib/strength-intel/planning";
+import { todayLocalISO, toLocalISO } from "@/lib/today";
 
 const sb = supabase as any;
 
@@ -120,50 +122,49 @@ export function liftHistoryKey(ownerId: string | null, identities: PreviousLiftI
   return ["workout-previous-lifts", "client", ownerId, null, ids] as const;
 }
 
-/** "% of e1RM" rows with no e1RM stored: one worked out from their logged competition sets in the last 6 weeks (loggedE1rm). */
-export async function fetchLoggedE1rmByFamily(
-  clientId: string,
-  families: LiftFamily[],
-): Promise<Partial<Record<LiftFamily, number>>> {
-  const since = new Date(Date.now() - 42 * 86_400_000).toISOString();
-  const { data, error } = await sb
-    .from("pl_row_results")
-    .select(
-      "normalized_kg, actual_load, actual_load_unit, actual_reps, actual_rpe_num, actual_rpe, completed_at, load_type, is_bodyweight, pl_exercise_rows!inner(exercises!inner(competition_lift_type))",
-    )
-    .eq("client_id", clientId)
-    .not("completed_at", "is", null)
-    .gte("completed_at", since)
-    .in("pl_exercise_rows.exercises.competition_lift_type", families)
-    .order("completed_at", { ascending: false })
-    .limit(600);
-  if (error) throw error;
-  const byFamily = new Map<LiftFamily, LoggedSet[]>();
-  for (const x of (data ?? []) as any[]) {
-    if (resolveLoadType(x.load_type, x.is_bodyweight) !== "external") continue;
-    const fam = String(x.pl_exercise_rows?.exercises?.competition_lift_type ?? "") as LiftFamily;
-    const kg =
-      x.normalized_kg != null
-        ? Number(x.normalized_kg)
-        : x.actual_load_unit === "lb"
-          ? Number(x.actual_load) * 0.45359237
-          : Number(x.actual_load);
-    byFamily.set(fam, [
-      ...(byFamily.get(fam) ?? []),
-      {
-        kg,
-        reps: Number(x.actual_reps),
-        rpe: parseRpe(x.actual_rpe_num ?? x.actual_rpe),
-        at: x.completed_at,
-      },
-    ]);
+/**
+ * The strength read behind every "% of …" a card works out (a % of Est. 1RM, a
+ * competition PR, a variation's own e1RM): src/lib/strength-intel, one read of
+ * a year of their squat, bench and deadlift sets, meets, phases, weigh-ins and
+ * pain, the same the Strength tab, Program Intelligence and Cleo read. Fetched
+ * once per athlete; `strengthRefsAsOf` reads it on any day, so a finished
+ * workout keeps the reference it was planned from. Every read throws on error:
+ * a failed read is never "no estimate".
+ */
+export function fetchStrengthReadInputs(clientId: string): Promise<StrengthReadInputs> {
+  return fetchStrengthInputs(sb, clientId);
+}
+
+/**
+ * The planning references for a workout's day: planned from what was known
+ * BEFORE that day (so today's sets never move today's % mid-session, and a
+ * finished workout keeps the reference it was planned from), with what that
+ * day's own sets said against it alongside, as information only.
+ */
+export function strengthRefsAsOf(inputs: StrengthReadInputs | null | undefined, day: string): StrengthRefs | null {
+  if (!inputs) return null;
+  const before = new Date(Date.parse(`${day}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const refs = planningRefs(strengthIntelFrom(inputs, before));
+  const onDay = strengthIntelFrom(inputs, day);
+  for (const fam of ["squat", "bench", "deadlift"] as const) {
+    const ref = refs.e1rm[fam];
+    const d = ref ? dailyRead(onDay.lifts[fam], day) : null;
+    if (ref && d && d.word !== "normal") ref.today = { ratio: d.ratio, word: d.word };
   }
-  const out: Partial<Record<LiftFamily, number>> = {};
-  for (const [fam, sets] of byFamily) {
-    const e = loggedE1rm(sets);
-    if (e) out[fam] = e.kg;
-  }
-  return out;
+  return refs;
+}
+
+/** Rows whose % reads the strength read: the athlete's read is fetched only when a workout has one. */
+export function rowsReadStrength(rows: Array<{ percentage?: unknown; percentage_basis?: string | null; manual_override?: boolean | null }>): boolean {
+  return rows.some((r) => !!r?.percentage && !r.manual_override && isStrengthBasis(r.percentage_basis));
+}
+
+/** The day a workout's planned % is read on: a finished workout's own day, else today. */
+export function strengthDayFor(completedAt: string | null | undefined): string {
+  const today = todayLocalISO();
+  if (!completedAt) return today;
+  const d = toLocalISO(new Date(completedAt));
+  return d < today ? d : today;
 }
 
 /** The athlete's most recent workout review of another day (what readiness is predicted from). */

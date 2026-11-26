@@ -54,6 +54,7 @@ import {
 import { trustedSessionRpe } from "@/lib/workout-review";
 import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
 import { plannedLoadView, type PlannedLoadView } from "@/lib/workouts/planned-load";
+import { isStrengthBasis, strengthLoadInputs, type StrengthRefs } from "@/lib/strength-intel/planning";
 import {
   capAdjustedLoad,
   hasRpeCap,
@@ -555,7 +556,10 @@ export type DayGuideInput = {
   warmups: Map<string, WarmupSetRow[]>;
   maxes: ClientMaxRow[];
   maxesPending: boolean;
-  loggedE1rmByFamily: Partial<Record<LiftFamily, number>> | null;
+  /** what a "% of …" reads from the strength read (strength-intel/planning.ts) */
+  strengthRefs: StrengthRefs | null;
+  /** that read is still loading */
+  e1rmPending?: boolean;
 };
 
 /**
@@ -593,8 +597,8 @@ export function dayGuides(x: DayGuideInput): Map<string, CardGuide> {
       firstHeavySet: firstHeavy.has(row.id),
       followsSameExercise: backoffs.has(row.id),
       maxIndex,
-      maxesPending: x.maxesPending,
-      loggedE1rmByFamily: x.loggedE1rmByFamily,
+      maxesPending: x.maxesPending || (isStrengthBasis(row.percentage_basis) && !!x.e1rmPending),
+      strengthRefs: x.strengthRefs,
     });
     if (guide) out.set(row.id, guide);
   });
@@ -617,7 +621,7 @@ function cardGuide(c: {
   followsSameExercise: boolean;
   maxIndex: ReturnType<typeof buildMaxIndex>;
   maxesPending: boolean;
-  loggedE1rmByFamily: Partial<Record<LiftFamily, number>> | null;
+  strengthRefs: StrengthRefs | null;
 }): CardGuide | null {
   const { row, unit } = c;
   if (row.cardio_target_id) return null;
@@ -647,7 +651,7 @@ function cardGuide(c: {
           maxesIndex: c.maxIndex,
           family: refFamily,
           ownCompetition,
-          loggedE1rmKg: refFamily ? (c.loggedE1rmByFamily?.[refFamily] ?? null) : null,
+          ...(({ ref: _r, ...kgs }) => kgs)(strengthLoadInputs(c.strengthRefs, row.percentage_basis, refFamily, exercise?.id ?? row.exercise_id ?? null)),
         })
       : null;
   const plannedFromMax =

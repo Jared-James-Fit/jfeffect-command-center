@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  capAdjustedLoad, competitionMax, hasRpeCap, isCompetitionMaxName, loggedE1rm, plannedLoadLabel, referenceFamily, rpeCapValue, shortLiftName,
+  capAdjustedLoad, competitionMax, hasRpeCap, isCompetitionMaxName, plannedLoadLabel, referenceFamily, rpeCapValue, shortLiftName,
 } from "@/lib/workouts/load-reference";
 import { buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 
@@ -77,28 +77,19 @@ describe("which max a % reads", () => {
     const lb = computeRowLoad({ exerciseName: "Competition Squat", basis: "est_1rm", percentage: 80, manualLoadKg: null, manualLoadLb: null, unit: "lb", maxesIndex: none, family: "squat", ownCompetition: true, loggedE1rmKg: 200 });
     expect(lb.load).toBe(355); // 352.7 lb → nearest 5
   });
-});
 
-describe("a logged e1RM worth programming from", () => {
-  const now = Date.parse("2026-11-14T12:00:00Z");
-  const day = (d: number) => new Date(now - d * 86_400_000).toISOString();
-
-  it("needs two sessions of RPE-rated sets in the last 6 weeks", () => {
-    expect(loggedE1rm([{ kg: 180, reps: 3, rpe: 8, at: day(3) }], now)).toBeNull();
-    const two = loggedE1rm([{ kg: 180, reps: 3, rpe: 8, at: day(3) }, { kg: 175, reps: 3, rpe: 8, at: day(10) }], now);
-    expect(two?.sessions).toBe(2);
-    // 180 / 0.863 = 208.6, 175 / 0.863 = 202.8 → median 205.7
-    expect(two?.kg).toBeCloseTo(205.5, 0);
-  });
-
-  it("ignores unrated sets, high reps, light RPE and anything older than 6 weeks", () => {
-    const r = loggedE1rm([
-      { kg: 300, reps: 3, rpe: null, at: day(2) },
-      { kg: 100, reps: 15, rpe: 9, at: day(4) },
-      { kg: 250, reps: 3, rpe: 5, at: day(5) },
-      { kg: 400, reps: 1, rpe: 9, at: day(60) },
-    ], now);
-    expect(r).toBeNull();
+  it("an estimate from their training is said by its lift in the card's unit, never as the max row beside it", () => {
+    // Jared: a 600 lb Competition Deadlift 1RM typed in, no e1RM stored, a 270 kg estimate from training
+    const idx = buildMaxIndex([max("Competition Deadlift", { one_rm: 600, unit: "lb" })]);
+    const r = computeRowLoad({ exerciseName: "Paused Deadlift", basis: "est_1rm", percentage: 60, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: idx, family: "deadlift", ownCompetition: false, loggedE1rmKg: 270 });
+    expect(r.status).toBe("ok");
+    expect(r.load).toBe(162.5); // 162 → 2.5 kg plates
+    expect(r.fromTraining).toBe(true);
+    expect(r.max).toBeNull();
+    expect(r.refLift).toBe("Competition Deadlift");
+    expect(r.label).toBe("60% Comp Deadlift e1RM");
+    // a training max or a 1RM is never stood in for by an estimate
+    expect(computeRowLoad({ exerciseName: "Paused Deadlift", basis: "training_max", percentage: 60, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: idx, family: "deadlift", ownCompetition: false, loggedE1rmKg: 270 }).status).toBe("no-max");
   });
 });
 
@@ -147,6 +138,6 @@ describe("the athlete's workout card (source)", () => {
   });
   it("reads the reference lift and the logged e1RM", () => {
     expect(wdv).toContain("family: refFamily,");
-    expect(wdv).toContain("loggedE1rmByFamily={loggedE1rmByFamily}");
+    expect(wdv).toContain("strengthRefs={strengthRefs}");
   });
 });

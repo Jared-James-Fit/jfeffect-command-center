@@ -23,7 +23,7 @@ describe("Program Intelligence: reading one logged set", () => {
     expect(setLine({ ...base, actual_load: 225, actual_reps: 5 }, settings, null).kg).toBeNull();
   });
   it("e1RM uses the app's formula with RPE as reps in reserve, only for external loads of 12 reps or fewer", () => {
-    expect(setLine({ ...base, normalized_kg: 140, actual_reps: 5, actual_rpe_num: 7 }, settings, null).e1rm).toBe(177.3);
+    expect(setLine({ ...base, normalized_kg: 140, actual_reps: 5, actual_rpe_num: 7 }, settings, null).e1rm).toBe(178.1);
     expect(setLine({ ...base, normalized_kg: 40, actual_reps: 15, actual_rpe_num: 8 }, settings, null).e1rm).toBeNull();
     expect(setLine({ ...base, normalized_kg: 10, actual_reps: 8, load_type: "bodyweight" }, settings, null).e1rm).toBeNull();
     // RIR only: read as RPE 10 - RIR
@@ -87,11 +87,11 @@ describe("Program Intelligence: the report from a known program", () => {
     expect(w1.hardSetsByMuscle.Glutes).toBe(1.5);
     expect(w1.hardSetsByMuscle.Chest).toBe(3);
   });
-  it("squat: e1RM 177.3 → 185 (+4.3%) is a fact with its sets as evidence; bench has too few exposures (missing)", () => {
+  it("squat: e1RM 178.1 → 185 (+3.9%) is a fact with its sets as evidence; bench has too few exposures (missing)", () => {
     const sq = r.lifts.find((l) => l.lift === "squat")!;
-    expect(sq.compTrend.first).toBe(177.3);
+    expect(sq.compTrend.first).toBe(178.1);
     expect(sq.compTrend.last).toBe(185);
-    expect(sq.compTrend.changePct).toBe(4.3);
+    expect(sq.compTrend.changePct).toBe(3.9);
     const imp = r.findings.find((f) => f.id === "pl:squat:improved")!;
     expect(imp.kind).toBe("fact");
     expect(imp.evidence.join(" ")).toContain("150kg×5 @8");

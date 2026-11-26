@@ -244,7 +244,7 @@ export function blockEvidence(rows: RowLike[], weeks = 1): BlockEvidence {
     }
     const basis = String(r.percentage_basis ?? "");
     const pct = firstNumber(r.percentage);
-    if (pct != null && pct >= 30 && pct <= 110 && ["1rm", "training_max", "est_1rm"].includes(basis)) {
+    if (pct != null && pct >= 30 && pct <= 110 && ["1rm", "training_max", "est_1rm", "comp_pr", "var_e1rm"].includes(basis)) {
       pctSum += pct * n;
       pctN += n;
     }

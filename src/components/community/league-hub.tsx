@@ -102,8 +102,9 @@ export function RankingsHub() {
   const tabsRef = useRef<HTMLDivElement | null>(null);
   // which way the new board slides in (from a swipe or a tab tap)
   const [enterFrom, setEnterFrom] = useState<"left" | "right" | null>(null);
-  // each board's theme (off until they turn it on, on this phone), following the board
-  const music = useRankingsMusic(board === "strength" ? "hall" : "league");
+  // Rankings' theme: on by default (a mute is kept on this phone), one track for
+  // every board and audience, so switching never restarts it
+  const music = useRankingsMusic();
   const setBoard = (next: RankingsBoard) => {
     if (next === board) return;
     // the board slides in with a soft swish
@@ -166,7 +167,7 @@ export function RankingsHub() {
           </button>
         ))}
       </div>
-      <RankingsMusicButton theme={board === "strength" ? "hall" : "league"} on={music.on} playing={music.playing} onToggle={music.toggle} />
+      <RankingsMusicButton on={music.on} status={music.status} onToggle={music.toggle} />
       </div>
       <AudienceSwitch audience={audience} onChange={changeAudience} />
       {/* last month's recap: up here in recap week (news); the rest of the month it's a row under the Monthly board */}

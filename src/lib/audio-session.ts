@@ -10,6 +10,7 @@
  * No-ops where the API doesn't exist (everything except recent WebKit).
  */
 
+import { holdBackgroundMusic } from "@/lib/music-hold";
 import { clipIsSilent } from "@/lib/video-silent";
 
 export type AudioSessionType = "auto" | "playback" | "transient" | "transient-solo" | "ambient" | "play-and-record";
@@ -100,13 +101,19 @@ export function setBaseAudioSessionType(type: AudioSessionType) {
   else setAudioSessionType(type);
 }
 
-/** Hold "playback" while media with sound is up. Returns the release (safe to call twice). */
+/**
+ * Hold "playback" while media with sound is up. Returns the release (safe to
+ * call twice). Background music (the Rankings theme) waits while it's held:
+ * a voice memo or a demo is never played over music.
+ */
 export function holdPlaybackSession(): () => void {
   if (holds++ === 0) baseType = setAudioSessionType("playback");
+  const releaseMusic = holdBackgroundMusic();
   let released = false;
   return () => {
     if (released) return;
     released = true;
+    releaseMusic();
     holds = Math.max(0, holds - 1);
     if (holds === 0) {
       if (baseType && baseType !== "playback") setAudioSessionType(baseType);

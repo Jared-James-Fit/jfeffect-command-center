@@ -274,7 +274,7 @@ function blockColumns(pdf: PdfDoc, b: FullTrainingReportBlock): BlockCols {
   };
 }
 
-const MAX_BASES = new Set(["training_max", "1rm", "est_1rm"]);
+const MAX_BASES = new Set(["training_max", "1rm", "est_1rm", "comp_pr", "var_e1rm"]);
 
 export function generateProgramPdf(data: FullTrainingReportData, opts: BuildOpts = {}): PdfDoc {
   const audience = data.audience ?? "client";

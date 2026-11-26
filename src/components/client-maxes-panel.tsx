@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import { MeetBestsRow } from "@/components/openipf/meet-bests";
+import { MaxHistory, StrengthReference } from "@/components/strength-intel/strength-reference";
 
 const COMMON_LIFTS = [
   "Competition Squat", "Competition Bench Press", "Competition Deadlift",
@@ -89,6 +90,11 @@ export function ClientMaxesPanel({ clientId, embedded = false }: { clientId: str
         <MeetBestsRow clientId={clientId} />
       </div>
 
+      {/* the strength read beside the coach's numbers: what a % of Est. 1RM reads, and pinning it */}
+      <div className="mb-4 empty:hidden">
+        <StrengthReference clientId={clientId} />
+      </div>
+
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
       ) : maxes.length === 0 ? (
@@ -110,6 +116,10 @@ export function ClientMaxesPanel({ clientId, embedded = false }: { clientId: str
           )}
         </div>
       )}
+
+      <div className="mt-4 empty:hidden">
+        <MaxHistory clientId={clientId} />
+      </div>
 
       <MaxEditorDialog
         clientId={clientId}
