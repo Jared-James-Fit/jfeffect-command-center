@@ -32,6 +32,7 @@ import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
+import { nutritionRevisionQuery, orderPlanReferences } from "@/lib/nutrition-targets/revision-history";
 import { NutritionWeekSummary } from "@/components/nutrition/nutrition-week-summary";
 
 export function NutritionTargetsPanel({
@@ -84,6 +85,8 @@ export function NutritionTargetsPanel({
   // (a coach building a second plan over one that just didn't load).
   const plansState = queryView(plansQ as any).kind;
   const { current, previous } = splitPlans(targets);
+  const revisions = useQuery(nutritionRevisionQuery(clientId));
+  const comparisonReferences = orderPlanReferences(previous, revisions.data ?? []);
   const [reusing, setReusing] = useState<string | null>(null);
 
   const refresh = () => {
@@ -252,7 +255,8 @@ export function NutritionTargetsPanel({
             key={clientId}
             clientId={clientId}
             days={plan.nutrition_target_days ?? []}
-            references={previous}
+            references={comparisonReferences}
+            historyUnavailable={revisions.isError}
             currentId={plan.id}
             showCleo={!cleoEntry}
             anchor={plan.start_date && plan.start_date > todayLocalISO() ? plan.start_date : undefined}
