@@ -207,9 +207,42 @@ function groupCompetitionGoals(goals: GoalRow[]): GoalRow[][] {
 function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: GoalRow[]; view: View; unit: Unit; onOpenTraining?: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const first = goals[0];
+  const qc = useQueryClient();
+  const decide = useServerFn(decideGoalFn);
+  const [drafts, setDrafts] = useState<Record<string, { draft: WeightDraft; version: number; rounded?: boolean }>>({});
+  const proposed = goals.filter(g => g.status === "proposed");
+  const draftFor = (g: GoalRow): WeightDraft => drafts[g.id]?.version === g.version ? drafts[g.id].draft : {
+    value: String(g.client_value_max ?? g.client_value ?? ""),
+    unit: g.client_unit ?? "kg",
+  };
+  const isValid = (g: GoalRow) => {
+    const d = draftFor(g);
+    const kg = draftKg(d);
+    return kg != null && kg > 0 && kg <= 1500 && Number(d.value) <= 3000 && (g.client_unit != null || drafts[g.id]?.version === g.version);
+  };
+  const batch = useMutation({
+    mutationFn: async (items: Array<{ g: GoalRow; draft: WeightDraft; rounded?: boolean }>) => {
+      let saved = 0;
+      for (const { g, draft, rounded } of items) {
+        try {
+          await decide({ data: { goalId: g.id, decision: { action: "approve", value: Number(draft.value), unit: draft.unit, expectedVersion: g.version, changeReason: rounded ? "round_up" : undefined, clientFacing: g.client_facing } } });
+          saved++;
+        } catch (error) {
+          throw new Error(`${saved} of ${items.length} targets saved. ${error instanceof Error ? error.message : "Refresh and review the remaining targets."}`);
+        }
+      }
+      return saved;
+    },
+    onSuccess: n => { setSelected(null); toast.success(`${n} targets approved`); },
+    onError: error => toast.error(error.message),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: clientGoalsKey(first.client_id) });
+      qc.invalidateQueries({ queryKey: ["competition-workspace", first.client_id] });
+    },
+  });
   const comp = view.competitions.find(c => c.id === first.competition_id);
   const projected = goals.map(g => g.feasibility?.projection?.expectedKg ?? null);
-  const approved = goals.map(g => g.status === "active" ? sourceKg(g.approved_value, g.approved_unit, g.approved_kg) : null);
+  const proposedKg = goals.map(g => g.status === "proposed" && isValid(g) ? draftKg(draftFor(g)) : g.status === "active" ? sourceKg(g.approved_value, g.approved_unit, g.approved_kg) : null);
   const total = (xs: Array<number | null>) => goals.length === 3 && xs.every(x => x != null)
     ? goalWeight(xs.reduce<number>((sum, x) => sum + (x ?? 0), 0), "kg") : null;
   const sources = [...new Set(goals.map(g => g.source_kind ? (SOURCE_WORD[g.source_kind] ?? "On file") + (g.source_at ? " · " + ago(g.source_at) : "") : null).filter(Boolean))];
@@ -223,26 +256,39 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
     </div>
     <div className="mt-2 overflow-x-auto">
       <table className="w-full min-w-[300px] text-left text-xs tabular-nums">
-        <thead className="text-muted-foreground"><tr><th className="py-1 font-normal">Lift</th><th className="py-1 font-normal">Discussed</th><th className="py-1 font-normal">Projected</th><th className="py-1 font-normal">Approved</th><th><span className="sr-only">Review</span></th></tr></thead>
+        <thead className="text-muted-foreground"><tr><th className="py-1 font-normal">Lift</th><th className="py-1 font-normal">Discussed</th><th className="py-1 font-normal">Projected</th><th className="py-1 font-normal">Proposed / approved</th><th><span className="sr-only">Review</span></th></tr></thead>
         <tbody>
           {goals.map((g, i) => {
             const discussed = g.client_unit ? goalWeight(sourceKg(g.client_value, g.client_unit, g.client_kg), "kg", sourceKg(g.client_value_max, g.client_unit, g.client_kg_max), g.client_unit) : null;
             const proj = goalWeight(projected[i], "kg");
-            const target = goalWeight(approved[i], "kg");
+            const target = goalWeight(proposedKg[i], "kg");
             return <tr key={g.id} className="border-t border-border align-top">
-              <th className="py-2 pr-2 font-medium capitalize">{g.lift}</th>
+              <th className="py-2 pr-2 font-medium capitalize">{g.lift}{g.feasibility?.headline && <span className="block text-[10px] font-normal normal-case text-muted-foreground" title={g.feasibility.headline}>{g.feasibility.score == null ? "Unscored" : g.feasibility.score >= 70 ? "Supported" : g.feasibility.score >= 30 ? "Stretch" : "High risk"}</span>}</th>
               <td className="py-2 pr-2">{discussed ? <>{discussed.primary}<span className="block text-muted-foreground">{discussed.secondary}{g.client_unit_source === "inferred" ? " · inferred" : ""}</span></> : fmtClientTarget(g) ?? "—"}</td>
               <td className="py-2 pr-2">{proj ? <>{proj.primary}<span className="block text-muted-foreground">{proj.secondary}</span></> : "—"}</td>
-              <td className="py-2 pr-2">{target ? <>{target.primary}<span className="block text-muted-foreground">{target.secondary}</span></> : "Pending"}</td>
-              <td className="py-1 text-right"><Button variant="ghost" size="sm" className="h-8 px-2" aria-expanded={selected === g.id} onClick={() => setSelected(selected === g.id ? null : g.id)}>{selected === g.id ? "Close" : g.status === "proposed" ? "Review" : "Edit"}</Button></td>
+              <td className="py-2 pr-2">{target ? <>{target.primary}<span className="block text-muted-foreground">{target.secondary} · {g.status === "active" ? "Approved" : "Proposed"}</span></> : "Needs review"}</td>
+              <td className="py-1 text-right"><Button variant="ghost" size="sm" className="h-8 px-2" disabled={batch.isPending} aria-expanded={selected === g.id} onClick={() => setSelected(selected === g.id ? null : g.id)}>{selected === g.id ? "Close" : g.status === "proposed" ? "Edit / review" : "Edit"}</Button></td>
             </tr>;
           })}
-          {goals.length === 3 && <tr className="border-t border-border"><th className="py-2 font-semibold">Total</th><td>—</td><td><WeightWords weight={total(projected)} /></td><td><WeightWords weight={total(approved)} /></td><td /></tr>}
+          {goals.length === 3 && <tr className="border-t border-border"><th className="py-2 font-semibold">Total</th><td>—</td><td><WeightWords weight={total(projected)} /></td><td><WeightWords weight={total(proposedKg)} /></td><td /></tr>}
         </tbody>
       </table>
     </div>
-    {selected && goals.some(g => g.id === selected) && <ul className="mt-1 rounded-lg border border-border px-3"><GoalItem key={selected} g={goals.find(g => g.id === selected)!} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul>}
-    {comp && <p className="mt-1 text-[11px] text-muted-foreground">Review each target before approval. Projections are not confirmed attempts.</p>}
+    {selected && goals.some(g => g.id === selected) && (() => {
+      const g = goals.find(g => g.id === selected)!;
+      return g.status === "proposed" ? <div className="mt-2 rounded-lg border border-border p-2 space-y-2">
+        <p className="text-xs font-medium">{g.title}</p>
+        {(g.source_quote || g.source_context) && <p className="text-xs text-muted-foreground">{g.source_quote ?? g.source_context}</p>}
+        {g.feasibility?.headline && <p className="text-xs text-muted-foreground">{g.feasibility.headline}</p>}
+        <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({ ...old, [g.id]: { draft, rounded, version: g.version } }))} incrementKg={comp?.incrementKg ?? 2.5} confirmed={comp?.rulesConfirmed} disabled={batch.isPending} />
+        <Button size="sm" className="h-9" disabled={batch.isPending || !isValid(g)} onClick={() => batch.mutate([{ g, draft: draftFor(g), rounded: drafts[g.id]?.rounded }])}>Approve this target</Button>
+        <details><summary className="cursor-pointer text-xs text-muted-foreground">Other options and history</summary><ul><GoalItem key={g.id} g={g} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul></details>
+      </div> : <ul className="mt-1 rounded-lg border border-border px-3"><GoalItem key={g.id} g={g} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul>;
+    })()}
+    {proposed.length > 0 && <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <p className="text-[11px] text-muted-foreground">Proposed targets use the discussed range's upper end unless edited. Confirm inferred units before approval.</p>
+      <Button size="sm" className="h-9" disabled={batch.isPending || !proposed.every(isValid)} onClick={() => batch.mutate(proposed.map(g => ({ g, draft: draftFor(g), rounded: drafts[g.id]?.rounded })))}>{batch.isPending ? "Saving…" : `Approve ${proposed.length} pending target${proposed.length === 1 ? "" : "s"}`}</Button>
+    </div>}
   </li>;
 }
 
