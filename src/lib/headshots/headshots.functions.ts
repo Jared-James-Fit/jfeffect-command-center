@@ -92,6 +92,10 @@ export const submitHeadshotCapture = createServerFn({ method: "POST" })
     if (!h || h.user_id !== userId) return { ok: false as const, reason: "missing", message: "That capture isn't there any more. Please try again." };
     // a coach-assisted photo is the coach's own (taken in person) and accepted as they send it
     if (h.method === "coach_assisted") await assertStaffFor(supabase, userId, h.client_id);
+    else {
+      const c = await s.clientById(db, h.client_id);
+      if (!c || c.user_id !== userId || !s.headshotApplies(c)) throw new Error("This capture is no longer linked to your account.");
+    }
     return s.submitCapture(db, { headshotId: data.headshotId, actor: userId, device: data.device as any, staffAccepts: h.method === "coach_assisted" });
   });
 
