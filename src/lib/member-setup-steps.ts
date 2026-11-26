@@ -124,3 +124,10 @@ export function setupStillOpen(
     d?.complete === false && d.member?.account_type === "jf_member" && !d.member?.is_admin_sandbox
   );
 }
+
+/** Shared status for a member's setup across staff review, Home and Cleo. */
+export function memberSetupSummary(m: (SetupMember & { account_type?: string | null; is_admin_sandbox?: boolean | null }) | null | undefined) {
+  if (!m || m.account_type !== "jf_member" || m.is_admin_sandbox) return { applicable: false, complete: true, missing: [] as string[], free: false };
+  const missing = setupMissing(m);
+  return { applicable: true, complete: missing.length === 0, missing, free: isFreeAccount(m) };
+}
