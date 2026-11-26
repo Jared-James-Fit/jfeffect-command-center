@@ -108,7 +108,7 @@ export function SetupChecklistBanner({ clientId, userId, whenHidden = null }: Pr
   if (!clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched) return null;
   // Nothing left, or only the agreement: the agreement card (whenHidden) asks for it on its own.
   const open = required.filter((i) => !i.done);
-  if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}</>;
+  if (open.length === 0 || open.every((i) => i.key === "agreement")) return <>{whenHidden}{camera.element}</>;
   const nextItem = open[0] ?? required[0];
 
   return (
