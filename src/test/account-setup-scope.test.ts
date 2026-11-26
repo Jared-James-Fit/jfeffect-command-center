@@ -66,3 +66,22 @@ describe("shared membership status", () => {
     expect(memberSetupSummary({ account_type: "jf_member", is_admin_sandbox: true }).applicable).toBe(false);
   });
 });
+
+import { accountSetupProgress } from "../lib/account-setup-scope";
+describe("shared setup progress", () => {
+  it("prompts for incomplete required steps but not optional calendar sync", () => {
+    const items = [{ key: "basic_info", done: false }, { key: "goals_setup", done: true }, { key: "calendar", done: false, optional: true }];
+    const progress = accountSetupProgress(items);
+    expect(progress).toMatchObject({ done: 1, needsReminder: true, open: [items[0]] });
+    expect(progress.required).toHaveLength(2);
+    expect(accountSetupProgress(items.map(i => i.key === "basic_info" ? { ...i, done: true } : i))).toMatchObject({ done: 2, open: [], needsReminder: false });
+  });
+  it("uses the mandatory agreement surface rather than a dismissible reminder when that is the only pending step", () => {
+    expect(accountSetupProgress([{ key: "agreement", done: false }]).needsReminder).toBe(false);
+    expect(accountSetupProgress([{ key: "agreement", done: false }, { key: "member_setup", done: false }]).needsReminder).toBe(true);
+  });
+  it("includes competition and membership steps in the same completion calculation", () => {
+    expect(accountSetupProgress([{ key: "member_setup", done: true }, { key: "meet:abc", done: false }])).toMatchObject({ done: 1, needsReminder: true });
+    expect(accountSetupProgress([]).needsReminder).toBe(false);
+  });
+});
