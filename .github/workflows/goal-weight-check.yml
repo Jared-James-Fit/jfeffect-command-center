@@ -4,6 +4,8 @@ on:
     paths:
       - 'src/components/goals/**'
       - 'src/components/compact-weight-input.tsx'
+      - 'src/components/workout-day/weight-value-input.tsx'
+      - 'src/test/workout-dual-weight.test.ts'
       - 'src/lib/dual-weight.ts'
       - 'src/lib/goal-intel/**'
       - 'src/lib/cleo-actions*'
@@ -30,6 +32,6 @@ jobs:
         run: |
           sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
           bun install --frozen-lockfile --ignore-scripts
-      - run: bun run test src/test/compact-goal-weight.test.ts src/test/goal-intel.test.ts src/test/goal-intel-worker.test.ts src/test/post-dual-weights.test.ts src/test/coaching-sessions.test.ts src/test/cleo-chats.test.ts src/test/client-workspace-tabs.test.ts src/test/cleo-actions-run-as-requester.test.ts src/test/cleo-goal-actions.test.ts
+      - run: bun run test src/test/workout-dual-weight.test.ts src/test/weight-unit-audit.test.ts src/test/weight-over-cap.test.ts src/test/compact-goal-weight.test.ts src/test/goal-intel.test.ts src/test/goal-intel-worker.test.ts src/test/post-dual-weights.test.ts src/test/coaching-sessions.test.ts src/test/cleo-chats.test.ts src/test/client-workspace-tabs.test.ts src/test/cleo-actions-run-as-requester.test.ts src/test/cleo-goal-actions.test.ts
       - run: node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc --noEmit
       - run: npm run build
