@@ -98,7 +98,12 @@ export function unpackPose(p: unknown): PoseTrack | null {
   const w = Number(q.w);
   const h = Number(q.h);
   if (!(w > 0) || !(h > 0)) return null;
-  const bytes = fromBase64(q.f);
+  let bytes: Uint8Array;
+  try {
+    bytes = fromBase64(q.f);
+  } catch {
+    return null;
+  }
   const n = q.t.length;
   if (bytes.length !== n * PER_FRAME * 2) return null;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

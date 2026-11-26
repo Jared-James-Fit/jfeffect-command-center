@@ -66,7 +66,12 @@ import { canvasToPng, grabFrame, renderAnnotatedClip } from "@/lib/lift-analysis
 import { runPose, type PoseProgress } from "@/lib/lift-analysis/pose/pose-run";
 import { nearSide, smoothTrack, viewOf, type PoseTrack } from "@/lib/lift-analysis/pose/skeleton";
 import { readTechnique, type TechniqueRead } from "@/lib/lift-analysis/pose/technique";
-import { poseBarSeries, storedPoseCovers, unpackPose } from "@/lib/lift-analysis/pose/pose-pack";
+import {
+  POSE_ENGINE,
+  poseBarSeries,
+  storedPoseCovers,
+  unpackPose,
+} from "@/lib/lift-analysis/pose/pose-pack";
 import { useStoredPose } from "@/lib/lift-analysis/pose/pose-queries";
 import { isViewingAsClient } from "@/lib/pov-guard";
 import { cn } from "@/lib/utils";
@@ -206,33 +211,57 @@ export function useTechnique(input: {
   }, []);
 
   useEffect(() => () => ctrl.current?.abort(), []);
-  // opening Technique starts the read (once): the server's stored read when it covers the set,
+
+  // the server's stored read, when it's this engine's, covers the set and is finished
+  const stored = storedQ.data;
+  const storedFits =
+    !!stored &&
+    stored.engine === POSE_ENGINE &&
+    !!stored.window &&
+    storedPoseCovers(stored.window, analysis);
+  const storedTrack = useMemo(
+    () => (storedFits && stored?.status === "done" ? unpackPose(stored.track) : null),
+    [storedFits, stored],
+  );
+  // whether the question has been asked since Technique opened (a copy from earlier in the visit can be old)
+  const storedSettled = !setVideoId || storedQ.isFetchedAfterMount || storedQ.isError;
+
+  // opening Technique starts the read, once per opening: the server's stored read when it covers the set,
   // else the device's own (a stored read still being made, or none, never holds Technique up)
+  const started = useRef(false);
   useEffect(() => {
-    if (!active || status !== "idle" || raw || !src) return;
-    if (setVideoId && storedQ.isLoading) return;
-    const stored = storedQ.data;
-    if (stored && stored.window && storedPoseCovers(stored.window, analysis)) {
-      if (stored.status === "done") {
-        const track = unpackPose(stored.track);
-        if (track) {
-          setRaw(track);
-          setFromServer(true);
-          setStatus("done");
-          return;
-        }
-      }
-      if (stored.status === "no_body") {
-        setFailure(
-          "No one was found in this video. The whole body needs to be in the frame, side-on.",
-        );
-        setStatus("failed");
-        return;
-      }
+    if (!active) {
+      started.current = false;
+      return;
+    }
+    if (started.current || status !== "idle" || raw || !src || !storedSettled) return;
+    started.current = true;
+    if (storedTrack) {
+      setRaw(storedTrack);
+      setFromServer(true);
+      setStatus("done");
+      return;
+    }
+    if (storedFits && stored?.status === "no_body") {
+      setFailure(
+        "No one was found in this video. The whole body needs to be in the frame, side-on.",
+      );
+      setStatus("failed");
+      return;
     }
     start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, src, storedQ.isLoading, storedQ.data]);
+  }, [active, src, storedSettled, storedTrack]);
+
+  // the server finished while the phone was still reading: its read takes over (the same model, done)
+  useEffect(() => {
+    if (!active || !storedTrack || fromServer || status !== "running") return;
+    ctrl.current?.abort();
+    setProgress(null);
+    setRaw(storedTrack);
+    setFromServer(true);
+    setStatus("done");
+  }, [active, storedTrack, fromServer, status]);
 
   const track = useMemo(() => (raw ? smoothTrack(raw) : null), [raw]);
   const read = useMemo(

@@ -25,7 +25,13 @@ export function useStoredPose(setVideoId: string | null | undefined, enabled = t
   return useQuery({
     queryKey: storedPoseKey(setVideoId),
     enabled: !!setVideoId && enabled,
-    staleTime: 60_000,
+    // asked again every time Technique opens (the server may have read it since), and every 15 s while
+    // the server is still reading, so a read that lands mid-way takes over from the phone's
+    staleTime: 0,
+    refetchInterval: (q) => {
+      const s = (q.state.data as StoredPose | null | undefined)?.status;
+      return s === "queued" || s === "running" ? 15_000 : false;
+    },
     queryFn: async (): Promise<StoredPose | null> => {
       const { data, error } = await (supabase.from as any)("pl_set_video_poses")
         .select(

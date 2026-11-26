@@ -5,7 +5,7 @@
  * is the ruler (450 mm at any yaw), so the speed is an estimate and labelled one.
  */
 import { describe, expect, it } from "vitest";
-import { estimateRead } from "@/lib/lift-analysis/estimate";
+import { BLEND_FROM, estimateRead, plateSize } from "@/lib/lift-analysis/estimate";
 import { movementOf } from "@/lib/lift-analysis/exercise";
 import type { Frame } from "@/lib/lift-analysis/image";
 import { interp, squatSet, trajectory, type Scene } from "./synthetic";
@@ -78,5 +78,40 @@ describe("estimate: front-on plates (edge-on stacks)", { timeout: 90_000 }, () =
     const { frames } = frontOnSquat(2, 5);
     const res = estimateRead(frames, { movement: movementOf("Mystery lift"), expectedReps: 2 });
     expect(res.ok).toBe(false);
+  });
+});
+
+describe("the plate's size from its two measurements", () => {
+  const seed = { hw: 15, hh: 18 };
+  const edges = (b: number) => ({ a: 0.7 * b, b, relA: 0.05, relB: 0.02, frames: 8, faint: false });
+  const motion = (b: number) => ({ b, relB: 0.02, pairs: 9 });
+
+  it("takes motion's size when the edges agree, or say smaller (motion is only ever read short)", () => {
+    expect(plateSize(motion(27), edges(27.5), seed).ext!.b).toBe(27);
+    expect(plateSize(motion(27), edges(22), seed).ext!.b).toBe(27);
+    expect(plateSize(motion(27), edges(27), seed).ext!.relB).toBe(0.02);
+  });
+
+  it("is honest when they disagree: between the two, with half the gap as its margin", () => {
+    // Dwayne's front-on squat: one stack's edges ran on to 77 px against motion's 55 (the plate was 54)
+    const r = plateSize(motion(27.5), edges(38.75), seed);
+    expect(r.blend).toBe(true);
+    expect(r.ext!.b).toBeCloseTo(Math.sqrt(27.5 * 38.75), 6);
+    // the truth can be at either end: over the 12 % scale gate, so this candidate isn't logged
+    expect(r.ext!.relB).toBeCloseTo(Math.log(38.75 / 27.5) / 2, 6);
+    expect(r.ext!.relB).toBeGreaterThan(0.12);
+    // a small gap still reads, its margin covering both ends
+    const small = plateSize(motion(30), edges(34), seed);
+    expect(small.ext!.relB).toBeLessThan(0.12);
+    expect(Math.exp(small.ext!.relB) * small.ext!.b).toBeGreaterThanOrEqual(34 - 1e-9);
+    expect(small.ext!.b / Math.exp(small.ext!.relB)).toBeLessThanOrEqual(30 + 1e-9);
+    expect(BLEND_FROM).toBe(1.1);
+  });
+
+  it("falls back to the edges with no motion read, and the seed's shape with no edge read", () => {
+    expect(plateSize(null, edges(30), seed).ext!.b).toBe(30);
+    const m = plateSize(motion(36), null, seed).ext!;
+    expect(m.b).toBe(36);
+    expect(m.a).toBeCloseTo(15 * (36 / 18), 6);
   });
 });

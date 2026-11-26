@@ -199,7 +199,8 @@ BEGIN
      WHERE s.deleted_at IS NULL AND s.storage_path IS NOT NULL
        AND p.attempts < 3 AND p.available_at <= now()
        AND (p.status = 'queued' OR (p.status = 'running' AND p.lease_until < now()))
-     ORDER BY p.available_at, p.created_at
+     -- the newest uploads first, so a set filmed today never waits behind the backfill of old ones
+     ORDER BY p.created_at DESC
      LIMIT greatest(1, least(coalesce(_limit, 1), 5))
      FOR UPDATE OF p SKIP LOCKED
   ), claimed AS (

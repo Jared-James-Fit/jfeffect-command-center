@@ -284,6 +284,21 @@ describe("a deadlift whose hips rise first", () => {
     expect(read.reps[0].m.kneesStraight!).toBeGreaterThan(0);
     expect(read.reps[0].m.kneesStraight!).toBeLessThanOrEqual(100);
   });
+  it("reads the same when the bar was read at working size and the body at the clip's own", () => {
+    // the bar read's frame is a quarter the size (its scale per pixel four times as many mm), as on a
+    // phone or the server: every number must come out as it does with one frame for both
+    const small = {
+      ...a,
+      frame: { w: W / 4, h: H / 4 },
+      calibration: { ...a.calibration, mmPerPxY: 4 },
+    } as LiftAnalysis;
+    const scaled = readTechnique(track, small, "deadlift");
+    for (const [k, v] of Object.entries(read.reps[0].m)) {
+      if (v == null) expect(scaled.reps[0].m[k]).toBeNull();
+      else expect(scaled.reps[0].m[k]).toBeCloseTo(v, 6);
+    }
+    expect(scaled.observations.map((o) => o.id)).toEqual(read.observations.map((o) => o.id));
+  });
 });
 
 describe("what a camera that isn't side-on can't show", () => {

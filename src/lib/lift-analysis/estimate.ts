@@ -771,8 +771,8 @@ export const ESTIMATE_ROM_MM: Record<Movement["kind"], [number, number] | null> 
 export const ESTIMATE_ROM_SPREAD = 0.15;
 /** Two candidates that both read the set (left and right stacks, a stack and a circle) agree within this. */
 export const ESTIMATE_AGREE = 0.12;
-/** Motion and edge heights within this ratio are blended (geometric mean), see estimateRead. */
-export const BLEND_MAX = 1.45;
+/** Motion and edge heights further apart than this are blended (geometric mean, half the gap as margin), see estimateRead. */
+export const BLEND_FROM = 1.1;
 
 /** Evenly spread frames, about `perSecond` a second. */
 export function everyNth(frames: Frame[], perSecond: number): Frame[] {
@@ -842,6 +842,39 @@ export function plainlyTheSet(a: LiftAnalysis, movement: Movement, expectedReps:
   return [...new Set(why)];
 }
 
+/**
+ * The plate's size for a candidate from its two measurements (pure). The two disagree on real stacks
+ * both ways: what moves with the plate stops short of its rim (blur, shadow, a lit edge), its edges run
+ * on into whatever is beside it (an upright, a lit wall). Measured by hand on Dwayne's front-on squats:
+ * one set's stacks were 54 px through the set, read 53–55 by motion and 54 / 77 by their edges (the
+ * edges ran on); another's were 60, read 43 by motion and 60 by its edges (motion stopped short). Either
+ * can be the one that's right, so when the edges say more than 10 % bigger the size is their geometric
+ * mean and its margin half the gap (in log terms: the truth can be at either end). A gap over ~27 % is
+ * then past the scale gate (quality.ts TOLERANT 12 %) and the candidate isn't logged: never a size
+ * picked from two that disagree. Edges smaller than motion found an inner step (motion is only ever
+ * read short), and motion stands.
+ */
+export function plateSize(
+  motion: { b: number; relB: number; pairs: number } | null,
+  prof: Extent | null,
+  seed: Pick<BoxSeed, "hw" | "hh">,
+): { ext: Extent | null; blend: boolean } {
+  const blend = !!motion && !!prof && prof.b > BLEND_FROM * motion.b;
+  if (!motion) return { ext: prof, blend: false };
+  const b = blend ? Math.sqrt(prof!.b * motion.b) : motion.b;
+  return {
+    blend,
+    ext: {
+      b,
+      relB: blend ? Math.max(motion.relB, prof!.relB, Math.log(prof!.b / motion.b) / 2) : motion.relB,
+      a: prof ? Math.min(prof.a, 1.4 * b) : seed.hw * (b / seed.hh),
+      relA: prof?.relA ?? 0.1,
+      frames: motion.pairs,
+      faint: false,
+    },
+  };
+}
+
 export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateResult {
   const tried: EstimateTry[] = [];
   if (frames.length < 10) return { ok: false, why: "no_candidates", tried, best: null };
@@ -871,26 +904,7 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     // can't be read, from its edges
     const motion = measureByMotion(frames, points, seed);
     const prof = measureExtent(frames, points, seed, opts.hiRes);
-    // the two disagree on real stacks both ways: what moves with the plate stops short of its rim
-    // (blur, shadow, a lit edge), its edges run on into whatever dark is beside it (an upright, a hand).
-    // Measured on Dwayne's front-on squats: motion 55 px, edges 77, the plate 63; another set, motion 43,
-    // edges 60, the plate 60. When they're within 1.45× of each other the size is their geometric mean,
-    // its margin the spread of a size known only to lie between them (the gap ÷ √12, in log terms: the
-    // truth lay between in every set checked); further apart, the edges have run into something and
-    // motion stands. 1.45× keeps that margin inside the scale gate (quality.ts TOLERANT 12 %), so a
-    // blended size is never one that can't be logged while a wider gap would be (motion alone)
-    const blend = !!motion && !!prof && prof.b > 1.1 * motion.b && prof.b <= BLEND_MAX * motion.b;
-    const bB = blend ? Math.sqrt(prof!.b * motion!.b) : motion?.b ?? 0;
-    const ext: Extent | null = motion
-      ? {
-          b: bB,
-          relB: blend ? Math.max(motion.relB, prof!.relB, Math.log(prof!.b / motion.b) / Math.sqrt(12)) : motion.relB,
-          a: prof ? Math.min(prof.a, 1.4 * bB) : seed.hw * (bB / seed.hh),
-          relA: prof?.relA ?? 0.1,
-          frames: motion.pairs,
-          faint: false,
-        }
-      : prof;
+    const { ext, blend } = plateSize(motion, prof, seed);
     // edge-on: a stack front-on is clearly narrower than it is tall (a plate's face turned that far isn't read)
     const edgeOn = !!ext && (seed.from === "stack" || seed.from === "wide" ? ext.a / ext.b < 0.75 : ext.a / ext.b < 0.62);
     const pts = ext ? points.map((p) => (p.found ? { ...p, a: ext.a, b: ext.b, r: Math.sqrt(ext.a * ext.b) } : p)) : points;
@@ -910,7 +924,7 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     const complete = a.reps.filter((r) => r.complete).length;
     const ok = !why.length;
     // speed ∝ 1 / plate height: undo the blend for the comparison between candidates
-    const agree = ok && a.velocity.value != null ? a.velocity.value * (blend ? bB / motion!.b : 1) : null;
+    const agree = ok && a.velocity.value != null ? a.velocity.value * (blend && motion ? ext!.b / motion.b : 1) : null;
     tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: ok ? a.velocity.value : null, agree, why });
     const exact = opts.expectedReps != null && complete === opts.expectedReps ? 1 : 0;
     const score = (ok ? 10 : 0) + exact * 2 + a.quality.tracked + (a.units === "mm" ? Math.max(0, 1 - a.calibration.relErr * 5) : 0);

@@ -182,8 +182,12 @@ function jointY(track: PoseTrack, j: number, t: number): number | null {
   return p ? p.y * track.frame.h : null;
 }
 
-/** The bar's (plate's) position in frame px at time t, when it was followed. */
-function barAt(a: LiftAnalysis, t: number): { x: number; y: number } | null {
+/**
+ * The bar's (plate's) position at time t, when it was followed, in the body track's pixels: the bar
+ * read's series are shares of its own (smaller, working-size) frame, the body's landmarks of the clip
+ * as shown, so both are put in the track's frame before they're compared.
+ */
+function barAt(a: LiftAnalysis, t: number, frame: { w: number; h: number }): { x: number; y: number } | null {
   const { t: ts, x, y, ok } = a.series;
   let best = -1;
   let bd = Infinity;
@@ -195,7 +199,7 @@ function barAt(a: LiftAnalysis, t: number): { x: number; y: number } | null {
     }
   }
   if (best < 0 || bd > 0.1 || !ok[best]) return null;
-  return { x: x[best] * a.frame.w, y: y[best] * a.frame.h };
+  return { x: x[best] * frame.w, y: y[best] * frame.h };
 }
 
 const r1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10);
@@ -224,8 +228,10 @@ export function readTechnique(raw: PoseTrack, a: LiftAnalysis, lift: GuideLift):
     limits.push("The body wasn't seen well enough to tell where the camera was.");
   if (lift === "other") limits.push("Lift-specific reads are for the squat, bench and deadlift.");
 
-  // pixels → mm at the plate's distance (the body is further away: approximate)
-  const mmPerPx = a.units === "mm" ? a.calibration.mmPerPxY : null;
+  // track pixels → mm at the plate's distance (the body is further away: approximate); the bar read's
+  // scale is per pixel of its own working frame, the same picture at a.frame.h / track.frame.h the size
+  const frameK = a.frame.h > 0 && track.frame.h > 0 ? a.frame.h / track.frame.h : 1;
+  const mmPerPx = a.units === "mm" ? a.calibration.mmPerPxY * frameK : null;
   const mmToCm = (px: number | null) =>
     px == null || mmPerPx == null ? null : Math.round((px * mmPerPx) / 10);
 
@@ -265,7 +271,7 @@ export function readTechnique(raw: PoseTrack, a: LiftAnalysis, lift: GuideLift):
         } else m.forearmTouch = null;
         const sh = seen(f, sj.shoulder);
         const hp = seen(f, sj.hip);
-        const bar = barAt(a, turn);
+        const bar = barAt(a, turn, track.frame);
         if (sh && hp && bar) {
           // along the body: positive toward the hips
           const dir = Math.sign(hp.x - sh.x) || 1;
@@ -278,9 +284,10 @@ export function readTechnique(raw: PoseTrack, a: LiftAnalysis, lift: GuideLift):
         // hips against bar over the first third of the pull (both read in picture px)
         const hip0 = jointY(track, sj.hip, turn);
         const hip1 = jointY(track, sj.hip, early);
-        const bar0 = barAt(a, turn);
-        const bar1 = barAt(a, early);
-        if (hip0 != null && hip1 != null && bar0 && bar1 && bar0.y - bar1.y > 4)
+        const bar0 = barAt(a, turn, track.frame);
+        const bar1 = barAt(a, early, track.frame);
+        // the bar must have moved: 4 px of the bar read's working frame
+        if (hip0 != null && hip1 != null && bar0 && bar1 && bar0.y - bar1.y > 4 / frameK)
           m.hipRise = Math.round(((hip0 - hip1) / (bar0.y - bar1.y)) * 100);
         else m.hipRise = null;
         // when the knees finished straightening (knee bend under 12°), as a share of the pull
