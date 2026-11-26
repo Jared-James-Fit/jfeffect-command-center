@@ -8,6 +8,8 @@ import { communityKeys, invalidateCommunity, useFullMediaUrl } from "@/lib/commu
 import { useQueryClient } from "@tanstack/react-query";
 import type { CommunityPost } from "@/lib/community";
 import { GifPicker } from "@/components/gif-picker";
+import { MediaView } from "@/components/media/media-view";
+import { postMediaKind, postMediaUrl } from "@/lib/media/media";
 import { RecordingBar, VoiceMemoPlayer, useVoiceMemoRecorder } from "@/components/community/voice-memo";
 
 const db = supabase as any;
@@ -119,7 +121,7 @@ export function AttachButtons({ a, dark, small, className }: { a: PostAttach; da
   return (
     <div className={cn("flex shrink-0 gap-2", className)}>
       {!a.gif && (
-        <button type="button" onClick={() => a.setGifOpen(true)} className={chip} aria-label="Add a GIF">
+        <button type="button" onClick={() => a.setGifOpen(true)} className={chip} aria-label="Add a GIF or sticker">
           GIF
         </button>
       )}
@@ -148,8 +150,8 @@ export function AttachPreview({ a, dark, className }: { a: PostAttach; dark?: bo
       )}
       {a.gif && (
         <div className="relative">
-          <img src={a.gif} alt="GIF" className="h-16 w-16 rounded-xl object-cover" />
-          <button type="button" onClick={a.removeGif} className={x} aria-label="Remove GIF">
+          <MediaView kind={postMediaKind(a.gif)} src={a.gif} max={64} />
+          <button type="button" onClick={a.removeGif} className={x} aria-label={postMediaKind(a.gif) === "sticker" ? "Remove sticker" : "Remove GIF"}>
             <X className="h-3.5 w-3.5" strokeWidth={3} />
           </button>
         </div>
@@ -168,7 +170,7 @@ export function AttachPreview({ a, dark, className }: { a: PostAttach; dark?: bo
 
 /** The library, opened from the GIF button. */
 export function AttachGifPicker({ a }: { a: PostAttach }) {
-  return <GifPicker hideTrigger asDialog showSounds={false} controlledOpen={a.gifOpen} onControlledOpenChange={a.setGifOpen} onPick={(g) => a.pickGif(g.media_url)} />;
+  return <GifPicker hideTrigger asDialog showSounds={false} controlledOpen={a.gifOpen} onControlledOpenChange={a.setGifOpen} onPick={(m) => a.pickGif(postMediaUrl(m))} />;
 }
 
 /** Buttons, previews and the picker together, for a sheet or dialog. */
@@ -191,7 +193,7 @@ export function PostExtras({ post, className }: { post: Pick<CommunityPost, "id"
   if (!post.gif_url && !post.audio) return null;
   return (
     <div data-post-extras className={cn("flex flex-col items-start gap-2", className)} onClick={(e) => e.stopPropagation()}>
-      {post.gif_url && <img src={post.gif_url} alt="GIF" loading="lazy" className="max-h-[220px] max-w-[240px] rounded-2xl object-cover" />}
+      {post.gif_url && <MediaView kind={postMediaKind(post.gif_url)} src={post.gif_url} max={240} />}
       {post.audio && <VoiceMemoPlayer src={src} duration={post.audio.duration} seed={hashSeed(post.id)} />}
     </div>
   );

@@ -1,7 +1,7 @@
 /**
  * Member Management's server calls. Every read and write is a database function that checks the
  * caller itself (admins; the view-only admin login reads), run with the caller's own session, never
- * the service role. See 20270531090000_accounts_directory_badges_pov_virtual.sql.
+ * the service role. See 20270601090000_accounts_directory_badges_pov_virtual.sql.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";

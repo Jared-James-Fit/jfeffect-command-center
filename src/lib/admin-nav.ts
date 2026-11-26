@@ -35,7 +35,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   // The Coaching Agreement is a section of Account (the old Agreements page lands there).
-  { to: "/portal/account", label: "Account Settings", icon: Settings, keywords: ["account","settings","agreement","coaching agreement","contract","signed","password","units","notifications","privacy"] },
+  { to: "/portal/account", label: "Account Settings", icon: Settings, keywords: ["account","settings","appearance","dark mode","light mode","theme","agreement","coaching agreement","contract","signed","password","units","notifications","privacy"] },
 ];
 
 // Mobile bottom-tab nav for the client portal: five equal tabs (Instagram's /

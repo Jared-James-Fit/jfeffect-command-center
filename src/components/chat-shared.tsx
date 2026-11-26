@@ -9,8 +9,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ChatSoundCard } from "@/components/chat-sound-card";
-import { GifThumb } from "@/components/gif-thumb";
-import { fallbackEmoji } from "@/lib/gif-fallback";
+import { SentMediaView } from "@/components/media/media-view";
 import { PaymentRequestCard } from "@/components/payment-request-card";
 import { AutoPaySetupCard } from "@/components/billing/auto-pay-setup-card";
 import {
@@ -50,8 +49,10 @@ export type SharedAttachment = {
   width?: number;
   height?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite" | "booking_invite";
+  kind?: "sound" | "gif" | "sticker" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite" | "booking_invite";
   fallback_emoji?: string;
+  preview?: string | null;
+  still?: string | null;
   // community_post: the post it opens (a reply from the post's Message button)
   post_id?: string;
   reply?: boolean;
@@ -714,23 +715,9 @@ export function AttachmentView({
       />
     );
   }
-  if (att.kind === "gif") {
-    return (
-      <a href={att.url} target="_blank" rel="noreferrer"
-        className="block w-[220px] max-w-full overflow-hidden rounded-xl border border-border bg-secondary/40">
-        <GifThumb
-          src={att.url}
-          title={att.name}
-          category={att.category}
-          fallback={att.fallback_emoji}
-          className="aspect-square w-full"
-          emojiClassName="text-7xl"
-        />
-        {att.name && (
-          <div className="truncate px-2 py-1 text-[11px] text-muted-foreground">{att.name}</div>
-        )}
-      </a>
-    );
+  if (att.kind === "gif" || att.kind === "sticker") {
+    // a GIF / sticker: its own shape, no link-out (a tap shouldn't leave the chat)
+    return <SentMediaView m={att as any} max={220} className={att.kind === "gif" ? "border border-border" : undefined} />;
   }
   if (att.type === "image") return <ImageAttachment att={att} messageId={messageId ?? undefined} />;
   if (att.type === "video") return <VideoAttachment att={att} />;

@@ -172,6 +172,6 @@ describe("one photo viewer, everywhere", () => {
     // the client's chat header: their coach's photo opens big
     const msgs = read("src/routes/_authenticated/portal/messages.tsx");
     // (no decorative ring: a ring around a photo only ever means a story)
-    expect(msgs).toMatch(/src=\{coach\?\.profile_picture_url \?\? null\}\s*name=\{coachName\}\s*size=\{40\}\s*\/>/);
+    expect(msgs).toMatch(/src=\{coach\?\.photo \?\? null\}\s*name=\{coachName\}\s*size=\{40\}\s*\/>/);
   });
 });

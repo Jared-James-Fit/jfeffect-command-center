@@ -7,6 +7,7 @@ import { UserCog } from "lucide-react";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
+import { AppearanceSection } from "@/components/appearance-section";
 import { TwoStepCard } from "@/components/two-step/two-step-card";
 
 export const Route = createFileRoute("/_authenticated/admin/account")({
@@ -20,7 +21,7 @@ function AdminAccountPage() {
   return (
     <>
       <SettingsTabs />
-      <PageHeader title="My Account" subtitle="Manage your contact info, profile picture, password and two-step sign-in." />
+      <PageHeader title="My Account" subtitle="Appearance, contact info, profile picture, password and two-step sign-in." />
       <div className="grid gap-6 p-6 md:p-8">
         <Card className="border-border bg-card p-6 space-y-2">
           <div className="flex items-center gap-2">
@@ -30,6 +31,8 @@ function AdminAccountPage() {
           <div className="text-sm font-semibold">{user.email}</div>
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Role: {role ?? "—"}</div>
         </Card>
+
+        <Card className="border-border bg-card p-6"><AppearanceSection /></Card>
 
         <AccountProfileSettings roleLabel={role ?? undefined} />
 

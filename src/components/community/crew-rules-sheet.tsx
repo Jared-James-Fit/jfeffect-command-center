@@ -49,8 +49,8 @@ export function CrewRulesHost() {
     <Sheet open={open} onOpenChange={(o) => !o && answerCrewRules(false)}>
       <SheetContent
         side="bottom"
-        hideCloseButton
         swipeToClose
+        hideCloseButton
         className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),12px)]"
         data-crew-rules
       >

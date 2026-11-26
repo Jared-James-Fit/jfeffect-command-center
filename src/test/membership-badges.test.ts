@@ -60,7 +60,7 @@ describe("membership emblems", () => {
 });
 
 describe("the badge is decided from actual access, in one place", () => {
-  const sql = readFileSync("supabase/migrations/20270531090000_accounts_directory_badges_pov_virtual.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20270601090000_accounts_directory_badges_pov_virtual.sql", "utf8");
   const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public._membership_badge"), sql.indexOf("REVOKE ALL ON FUNCTION public._membership_badge"));
   it("coaching first, then premium, then a paid or complimentary membership, else free", () => {
     const order = ["'coaching'", "'premium'", "THEN 'member'", "ELSE 'free'"].map((s) => fn.indexOf(s));

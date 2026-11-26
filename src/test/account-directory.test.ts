@@ -131,7 +131,7 @@ describe("Member Management lists every account that isn't a coaching client", (
 });
 
 describe("the directory is the database's, never app_members alone", () => {
-  const sql = readFileSync("supabase/migrations/20270531090000_accounts_directory_badges_pov_virtual.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20270601090000_accounts_directory_badges_pov_virtual.sql", "utf8");
   it("reads every login and every record, and checks the caller", () => {
     expect(sql).toContain("FROM auth.users u");
     expect(sql).toContain("WHERE u.deleted_at IS NULL AND u.id NOT IN (SELECT id FROM staff)");

@@ -71,7 +71,8 @@ describe("the status bar's colour is right from the first frame", () => {
     const { THEME_COLOR_SCRIPT } = await import("@/lib/theme");
     const root = read("src/routes/__root.tsx");
     expect(root.indexOf("__html: THEME_COLOR_SCRIPT")).toBeGreaterThan(root.indexOf("<HeadContent />"));
-    expect(root).toContain('{ name: "theme-color", content: "#f6f7f8" },');
+    // dark is the default appearance, so the tag the page ships with is dark; the boot script sets the real one
+    expect(root).toContain('{ name: "theme-color", content: THEME_COLOR.dark },');
     expect(THEME_COLOR_SCRIPT).toContain('classList.contains("dark")?"#0d0d0f":"#f6f7f8"');
   });
 });

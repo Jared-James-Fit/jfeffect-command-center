@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { classifyDbRequest, povPath, startStatusWords, timeLeft, POV_OWN_FNS } from "@/lib/pov/pov-rules";
 import { STARTER_PERSONAS } from "@/lib/virtual-accounts/personas";
 
-const SQL = readFileSync("supabase/migrations/20270531090000_accounts_directory_badges_pov_virtual.sql", "utf8");
+const SQL = readFileSync("supabase/migrations/20270601090000_accounts_directory_badges_pov_virtual.sql", "utf8");
 const fnBody = (name: string) => {
   const start = SQL.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
   expect(start, `${name} exists`).toBeGreaterThan(-1);

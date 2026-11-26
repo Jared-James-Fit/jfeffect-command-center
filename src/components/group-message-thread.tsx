@@ -37,9 +37,8 @@ import {
 } from "@/lib/group-chats";
 import { useGroupPresence } from "@/hooks/use-group-presence";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
-import { markRecent } from "@/lib/chat-gifs";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
-import { fallbackEmoji } from "@/lib/gif-fallback";
+import { mediaAttachment } from "@/lib/media/attachment";
 import {
   AttachmentView, WaveformBars, useVoiceRecorder, type RecordedVoiceTake,
   attachIcon, fakePeaks, fmtDuration, fmtTime,
@@ -1145,33 +1144,37 @@ export function GroupMessageThread({
                     toast.error(e?.message ?? "Failed to send");
                   }
                 } : undefined}
-                onPickGif={async (g) => {
+                onPickGif={async (m) => {
                   if (!user) return;
-                  if (!(await povGuard.confirm(`GIF: ${g.title}`))) return;
-                  setSending(true);
-                  try {
-                    await sendGroupMessage({
-                      groupId,
-                      senderId: user.id,
-                      senderRole: canManage ? "admin" : "member",
-                      body: "",
-                      attachments: [{
-                        type: g.media_type.startsWith("video") ? "video" : "image",
-                        url: g.media_url,
-                        name: g.title,
-                        mime: g.media_type,
-                        kind: "gif",
-                        category: g.category,
-                        fallback_emoji: fallbackEmoji(g.title, g.category),
-                      }],
-                    });
-                    qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-                    try { await markRecent(user.id, g.id); } catch {}
-                  } catch (e: any) {
-                    toast.error(e?.message ?? "Failed to send GIF");
-                  } finally {
-                    setSending(false);
-                  }
+                  if (!(await povGuard.confirm(m.kind === "sticker" ? `Sticker: ${m.title}` : `GIF: ${m.title}`))) return;
+                  // optimistic: it's in the thread now; taken back with a retry if it can't send
+                  const att = mediaAttachment(m) as unknown as GroupAttachment;
+                  const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                  const key = ["group-messages", groupId];
+                  qc.setQueryData<GroupMessage[]>(key, (prev) => [...(prev ?? []), {
+                    id: tempId, group_id: groupId, sender_id: user.id, sender_role: canManage ? "admin" : "member",
+                    body: "", attachments: [att], edited_at: null, deleted_at: null, created_at: new Date().toISOString(),
+                  }]);
+                  const attempt = async () => {
+                    try {
+                      const row = await sendGroupMessage({ groupId, senderId: user.id, senderRole: canManage ? "admin" : "member", body: "", attachments: [att] });
+                      feedback("send");
+                      qc.setQueryData<GroupMessage[]>(key, (prev) => {
+                        const list = prev ?? [];
+                        // realtime may have brought the real row already
+                        return row?.id && list.some((x) => x.id === row.id) ? list.filter((x) => x.id !== tempId) : list.map((x) => (x.id === tempId ? { ...x, ...(row ?? {}) } : x));
+                      });
+                      qc.invalidateQueries({ queryKey: ["chat-groups"] });
+                    } catch (e: any) {
+                      qc.setQueryData<GroupMessage[]>(key, (prev) => (prev ?? []).filter((x) => x.id !== tempId));
+                      feedback("error");
+                      toast.error(e?.message ?? "That didn't send", { action: { label: "Retry", onClick: () => {
+                        qc.setQueryData<GroupMessage[]>(key, (prev) => [...(prev ?? []), { id: tempId, group_id: groupId, sender_id: user.id, sender_role: canManage ? "admin" : "member", body: "", attachments: [att], edited_at: null, deleted_at: null, created_at: new Date().toISOString() }]);
+                        void attempt();
+                      } } });
+                    }
+                  };
+                  await attempt();
                 }}
                 onPickSound={!canSendSounds ? undefined : async (s) => {
                   if (!user) return;

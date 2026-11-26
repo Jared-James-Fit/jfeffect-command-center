@@ -32,15 +32,15 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     expect(visible[4].to).toBe(MORE_BAR_TO);
   });
 
-  it("the client top bar: search and light / dark on the left, More on the right (the account at the top of More; light / dark only in the bar)", () => {
+  it("the client top bar: search on the left, More on the right (the account at the top of More; appearance only in Account)", () => {
     expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>');
     // Crew draws its own bar, so the shell's steps aside there (one bar, not two) and its ☰ opens More by event
     expect(portal).toContain('const CREW_OWN_BAR = ["/portal/community"] as const;');
     expect(shell).toContain("const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);");
     expect(shell).toContain("{!pageBar && <header");
     expect(shell).toContain("window.addEventListener(OPEN_MORE_EVENT, open);");
-    // search and the light / dark switch are in every shell bar, clients included; a client's search is More's
-    expect(shell).not.toContain("{!simpleHeader && <ThemeToggle");
+    // search is in every shell bar, clients included (a client's is More's); appearance is not up here
+    expect(shell).not.toContain("<ThemeToggle");
     expect(shell).toContain("if (isStaffRole) return setPaletteOpen(true);");
     expect(shell).toContain("focusSearch={moreSearch}");
     expect(shell).toContain("searchRef.current.focus();");

@@ -33,7 +33,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { CleoMark } from "@/components/summer/cleo-mark";
 import { openSummer } from "@/lib/cleo-open";
 import type { AdminRole } from "@/lib/admin-route-registry";
@@ -782,9 +781,7 @@ export function AppShell({
               <TooltipContent side="right">Cleo (⌘⇧S)</TooltipContent>
             </Tooltip>
           ) : null}
-          {iconOnly ? (
-            <div className="mt-1.5 flex justify-center"><ThemeToggle className="origin-center scale-[0.8]" /></div>
-          ) : (
+          {iconOnly ? null : (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPaletteOpen(true)}
@@ -806,7 +803,6 @@ export function AppShell({
                   <CleoMark size={16} />
                 </button>
               )}
-              <ThemeToggle />
             </div>
           )}
         </div>
@@ -995,8 +991,9 @@ export function AppShell({
           data-shell-bar
           data-hidden={shellBarHidden ? "" : undefined}
         >
-          {/* search and light / dark on every screen, clients included: staff search everything
-              (the palette), anyone else the app's pages (More, its search field ready) */}
+          {/* search on the left and the menu on the right, the same size and the same inset, with the
+              brand centred between them (appearance lives in Account, never up here): staff search
+              everything (the palette), anyone else the app's pages (More, its search field ready) */}
           <div className="flex h-12 min-w-0 items-center justify-start gap-1">
             <Button
               variant="ghost"
@@ -1010,16 +1007,15 @@ export function AppShell({
               className="h-10 w-10 shrink-0 rounded-full px-0"
               data-bar-search
             >
-              <Search className="h-[18px] w-[18px]" />
+              <Search className="h-5 w-5" />
             </Button>
-            <ThemeToggle />
           </div>
           <ShellBrand title={title} compact={!simpleHeader} />
-          <div className="flex h-12 min-w-0 items-center justify-end gap-1.5">
+          <div className="flex h-12 min-w-0 items-center justify-end gap-1">
             {moreInHeader ? (
               // Big enough to find and hit without looking: every account opens More here.
               <Button variant="ghost" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-full px-0">
-                <Menu className="h-[22px] w-[22px]" />
+                <Menu className="h-5 w-5" />
               </Button>
             ) : (
               <SettingsMenu
@@ -1029,7 +1025,7 @@ export function AppShell({
                 onSignOut={handleSignOut}
                 trigger={
                   <Button variant="ghost" size="sm" aria-label="Settings" className="h-10 w-10 shrink-0 rounded-full px-0">
-                    <SettingsIcon className="h-4 w-4" />
+                    <SettingsIcon className="h-5 w-5" />
                   </Button>
                 }
               />
@@ -1124,7 +1120,7 @@ export function AppShell({
                   </button>
                 }
               />
-              {/* no Appearance row: light / dark is the switch in the top bar */}
+              {/* no Appearance row here: it's chosen once, in Account → Appearance */}
             </div>
           ) : null
         }

@@ -62,7 +62,7 @@ describe("the interaction bar", () => {
   });
 
   it("a message goes through the existing direct path with its request rules; a comment is the post's own thread", () => {
-    expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true });");
+    expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true, media: media ? mediaAttachment(media) : null });");
     expect(viewer).toContain("const full = !!thread?.outgoing && thread.left === 0;");
     expect(viewer).toContain("<CommentsSheet story open={commentsOpen} post={post}");
     const sheet = read("src/components/community/comments-sheet.tsx");
