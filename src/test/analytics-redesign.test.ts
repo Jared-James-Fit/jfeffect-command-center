@@ -496,6 +496,28 @@ describe("SBD workload", () => {
     });
     expect(p[0].prescribed?.squat).toBe(4);
   });
+  it("excludes future and incomplete weeks without hiding planned buckets", () => {
+    const logged = ["2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"].map(
+      (day) => ls(day, "Competition Squat", "squat", true, 400, 3),
+    );
+    const input = {
+      sets: logged,
+      metric: "sets" as const,
+      scope: "comp" as const,
+      grain: "week" as const,
+      start: "2026-11-02",
+      end: "2026-12-06",
+      today: "2026-11-26",
+    };
+    const buckets = buildWorkload(input);
+    expect(buckets).toHaveLength(5);
+    expect(buckets[3].current).toBe(true);
+    expect(buckets[4].future).toBe(true);
+    expect(buckets[4].values.squat).toBeNull();
+    expect(workloadShifts(buckets, ["squat"])[0].pct).toBe(0);
+    const tooEarly = buildWorkload({ ...input, start: "2026-11-15" });
+    expect(workloadShifts(tooEarly, ["squat"])).toEqual([]);
+  });
   it("shifts compare the last third with the first third of finished buckets", () => {
     const many = [0, 7, 14, 21, 28, 35].flatMap((d, i) =>
       Array.from({ length: 2 + i }, () =>
