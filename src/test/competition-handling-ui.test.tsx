@@ -158,6 +158,13 @@ describe("wiring", () => {
     expect(route).toContain('content: "no-referrer"');
     expect(route).toContain("<SetupInviteStep");
   });
+  it("a link cut short or mistyped reads as one that doesn't work, never as an error", () => {
+    const fns = readFileSync("src/lib/competition/handling.functions.ts", "utf8");
+    const invite = fns.slice(fns.indexOf("export const getHandlingInviteFn"), fns.indexOf("export const getHandlingInviteFn") + 900);
+    expect(invite).toContain("z.string().max(200)");
+    expect(invite).not.toMatch(/z\.string\(\)\.regex/);
+    expect(invite).toMatch(/if \(!\/\^\[A-Za-z0-9_-\]\{32\}\$\/\.test\(data\.token\)\) return \{ state: "invalid" as const \}/);
+  });
   it("the phone app never pays for handling", () => {
     const fns = readFileSync("src/lib/competition/handling.functions.ts", "utf8");
     expect(fns).toMatch(/myHandlingPayUrlFn[\s\S]{0,400}nativeAppRequest\(\)\) return \{ url: null \}/);

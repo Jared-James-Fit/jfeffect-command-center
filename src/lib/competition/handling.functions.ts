@@ -793,8 +793,11 @@ async function viewerUserId(): Promise<string | null> {
 
 /** What the invite page shows: the first name and the meet, and how they get in (sign in, set up, or carry on). */
 export const getHandlingInviteFn = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{32}$/) }).parse(d))
+  // any text up to a length: a link cut short or mistyped in a text message is
+  // "this link doesn't work", never an error with a Try again that can't help
+  .inputValidator((d: unknown) => z.object({ token: z.string().max(200) }).parse(d))
   .handler(async ({ data }) => {
+    if (!/^[A-Za-z0-9_-]{32}$/.test(data.token)) return { state: "invalid" as const };
     const sb = await admin();
     const { rateOk, callerIp } = await import("@/lib/public-rate-limit.server");
     const ip = callerIp();
