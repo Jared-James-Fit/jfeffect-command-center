@@ -690,7 +690,7 @@ export function ClientProfileWorkspace({
         />
 
         <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
-          <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} />
+          <ClientSetupStatus form={data ?? form} clientId={id} onGoToTab={setTab} onSendSetup={sendSetup} onCopySetup={copySetupLink} />
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
@@ -1862,7 +1862,7 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 
 /** Coach-facing progress from the same saved account, agreement, and intake records
  * used by the athlete's Home setup checklist. Unknown reads never count as complete. */
-function ClientSetupStatus({ form, clientId, onGoToTab }: { form: any; clientId: string; onGoToTab: (tab: TabValue) => void }) {
+function ClientSetupStatus({ form, clientId, onGoToTab, onSendSetup, onCopySetup }: { form: any; clientId: string; onGoToTab: (tab: TabValue) => void; onSendSetup: () => Promise<void>; onCopySetup: () => Promise<void> }) {
   const coaching = form.service_tier !== "self_serve";
   const agreementFn = useServerFn(adminClientAgreementDetail);
   const planFn = useServerFn(adminGetClientPlan);
@@ -1918,6 +1918,14 @@ function ClientSetupStatus({ form, clientId, onGoToTab }: { form: any; clientId:
         </div>
         <a href={PACKAGES_PAGE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-muted-foreground underline underline-offset-4">Compare packages</a>
       </div>
+      {!signedIn && !form.portal_access_disabled && (
+        <div className="flex flex-wrap items-center gap-2">
+          {form.email && <ActionButton variant="outline" size="sm" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+            {invite ? "Resend setup email" : "Send setup email"}
+          </ActionButton>}
+          <ActionButton variant="outline" size="sm" onAction={onCopySetup} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
+        </div>
+      )}
       <ul className="divide-y divide-border">
         {incomplete.map((step) => (
           <li key={step.label}>
