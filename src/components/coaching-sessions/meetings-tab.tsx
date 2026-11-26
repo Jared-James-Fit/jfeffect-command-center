@@ -9,9 +9,10 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarClock, ChevronDown, ChevronRight, History, Plus } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronRight, History, Info, Plus } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -19,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/loading";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import { cn } from "@/lib/utils";
+import { dualRange, inputKg } from "@/lib/dual-weight";
 import {
   commitmentFn,
   getSessionsHomeFn,
@@ -29,6 +31,20 @@ import type { SessionEvent } from "@/lib/coaching-sessions/events";
 import { MemoryPanel } from "./memory-panel";
 import { STATE_WORDS, type AppointmentState } from "@/lib/coaching-sessions/lifecycle";
 import { meetingsKey } from "./keys";
+import { extractMeetingGoalsFn } from "@/lib/goal-intel/goal-intel.functions";
+
+function MeetingHelp({ label, text }: { label: string; text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" title={text} aria-label={label} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 text-xs" align="start">{text}</PopoverContent>
+    </Popover>
+  );
+}
 
 const FORMAT_WORDS: Record<string, string> = {
   call: "Call",
@@ -54,12 +70,25 @@ const day = (iso: string | null | undefined) =>
 
 export function MeetingsWorkspace({
   clientId,
+  onOpenTab,
 }: {
   clientId: string;
   onOpenTab?: (tab: string) => void;
 }) {
   const read = useServerFn(getSessionsHomeFn);
   const qc = useQueryClient();
+  const extractGoals = useServerFn(extractMeetingGoalsFn);
+  const scan = useMutation({
+    mutationFn: (sessionId: string) => extractGoals({ data: { sessionId } }),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: meetingsKey(clientId) });
+      void qc.invalidateQueries({ queryKey: ["client-goals", clientId] });
+      void qc.invalidateQueries({ queryKey: ["competition-workspace", clientId] });
+      const count = result.created + result.updated;
+      toast.success(count ? `${count} goal proposal${count === 1 ? "" : "s"} ready for review` : "Meeting checked — no new proposals");
+    },
+    onError: (error: Error) => toast.error(error.message || "Could not read meeting goals"),
+  });
   const navigate = useNavigate();
   const q = useQuery({
     queryKey: meetingsKey(clientId),
@@ -149,7 +178,7 @@ export function MeetingsWorkspace({
             className="h-9"
             onClick={() => setPrepare({ format: level === "touch_base" ? "touch_base" : "call" })}
           >
-            <Plus className="mr-1 h-4 w-4" /> Prepare a meeting
+            <Plus className="mr-1 h-4 w-4" /> New meeting
           </Button>
           <Button
             size="sm"
@@ -157,8 +186,9 @@ export function MeetingsWorkspace({
             className="h-9"
             onClick={() => setPrepare({ format: "retrospective" })}
           >
-            <History className="mr-1 h-4 w-4" /> Add a past meeting
+            <History className="mr-1 h-4 w-4" /> Log meeting
           </Button>
+          <MeetingHelp label="About meeting actions" text="New meeting creates an agenda for an upcoming conversation. Log meeting records a completed conversation using notes or a transcript." />
         </div>
       </section>
 
@@ -195,7 +225,7 @@ export function MeetingsWorkspace({
                         s.changedSinceReview && s.status !== "done"
                           ? `${s.changedSinceReview} new in the plan`
                           : null,
-                        s.openRecommendations ? `${s.openRecommendations} to act on` : null,
+                        s.openRecommendations ? `${s.openRecommendations} follow-ups` : null,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -213,6 +243,42 @@ export function MeetingsWorkspace({
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
+                {s.status === "done" && (
+                  <div className="space-y-1.5 px-4 pb-3 pl-11 text-xs">
+                    {s.summary ? <p className="whitespace-pre-wrap text-muted-foreground">{s.summary}</p> : null}
+                    {s.discussedGoals?.length ? (
+                      <div className="rounded-lg border border-border px-3 py-2 space-y-1" data-meeting-discussed-goals>
+                        <p className="font-medium">Discussed targets</p>
+                        {s.discussedGoals.map((g: any) => {
+                          const w = g.client_value != null && (g.client_unit === "kg" || g.client_unit === "lb")
+                            ? dualRange(inputKg(Number(g.client_value), g.client_unit), g.client_value_max != null ? inputKg(Number(g.client_value_max), g.client_unit) : null, "kg", g.client_unit) : null;
+                          return <div key={g.id} className="flex flex-wrap justify-between gap-x-3">
+                            <span>{g.title}</span>
+                            <span className="tabular-nums">{w ? <>{w.primary} <span className="text-muted-foreground">({w.secondary})</span></> : g.client_value != null ? `${g.client_value} (unit unconfirmed)` : g.client_text ?? "—"}{g.client_unit_source === "inferred" ? <span className="text-muted-foreground"> · unit inferred</span> : null}</span>
+                          </div>;
+                        })}
+                        <p className="text-muted-foreground">Source: this meeting · discussed, not necessarily approved.</p>
+                      </div>
+                    ) : null}
+                    {s.discussion?.length ? (
+                      <details className="text-muted-foreground">
+                        <summary className="cursor-pointer">Discussion notes ({s.discussion.length})</summary>
+                        <div className="mt-1 space-y-1">
+                          {s.discussion.map((i: any, index: number) => <p key={index}><span className="font-medium">{i.basis === "interpretation" ? "Cleo interpretation" : i.basis === "tentative" || i.kind === "tentative" ? "Tentative" : i.kind === "agreement" ? "Recorded agreement" : i.speaker === "athlete" ? "Athlete" : i.speaker === "coach" ? "Coach" : "Discussed"}:</span> {i.text}</p>)}
+                        </div>
+                      </details>
+                    ) : null}
+                    {s.analysis_status === "ready" && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" disabled={scan.isPending} onClick={() => scan.mutate(s.id)}>{scan.isPending && scan.variables === s.id ? "Checking…" : "Check for goal proposals"}</Button>
+                        {onOpenTab && s.discussedGoals?.length > 0 && <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => onOpenTab("summary")}>Review goals <ChevronRight className="ml-1 h-3 w-3" /></Button>}
+                      </div>
+                    )}
+                    {(d.intelligence as any[]).filter((i) => i.source_session_id === s.id && i.status !== "archived" && ["goal", "decision", "commitment"].includes(i.kind)).slice(0, 6).map((i) => (
+                      <p key={i.id} className="leading-snug"><span className="font-medium">{i.status === "confirmed" ? "Saved note" : "For review"}:</span> {i.text}</p>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -234,6 +300,7 @@ export function MeetingsWorkspace({
       {/* What Cleo remembers from conversations */}
       <MemoryPanel
         clientId={clientId}
+        title="Client memory"
         rows={(d.intelligence as any[]).filter((i) => i.status !== "archived")}
         today={d.today}
         onChange={() => qc.invalidateQueries({ queryKey: meetingsKey(clientId) })}
@@ -418,7 +485,7 @@ function PrepareSheet({
       >
         <SheetHeader>
           <SheetTitle>
-            {format === "retrospective" ? "Add a past meeting" : "Prepare a meeting"}
+            {format === "retrospective" ? "Log meeting" : "New meeting"}
           </SheetTitle>
         </SheetHeader>
         <div className="mt-3 space-y-5 pb-4" data-prepare-sheet>
@@ -501,7 +568,7 @@ function PrepareSheet({
           </div>
           <div className="space-y-2">
             <p className="text-[13px] font-medium text-muted-foreground">
-              What you want to decide (one a line, optional)
+              What you want to decide (one per line, optional)
             </p>
             <Textarea
               value={priorities}
@@ -516,7 +583,7 @@ function PrepareSheet({
             loading={go.isPending}
             onClick={() => go.mutate()}
           >
-            {format === "retrospective" ? "Add it" : "Prepare"}
+            {format === "retrospective" ? "Log meeting" : "Create agenda"}
           </Button>
         </div>
       </SheetContent>

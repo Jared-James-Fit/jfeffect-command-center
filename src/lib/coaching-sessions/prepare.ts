@@ -988,6 +988,17 @@ export function recommendIntervention(x: InterventionInput): Intervention {
     };
   }
 
+  const daysSinceCall = x.lastCallOn ? daysBetween(x.lastCallOn, x.today) : null;
+  if (daysSinceCall != null && daysSinceCall >= 0 && daysSinceCall < 7 && !x.seriousConcern && !x.athleteAsked) {
+    return {
+      level: decisions || x.prep.missing.length || x.prep.improve.length ? "message" : "none",
+      minutes: null,
+      reasons: ["Recent meeting: review and resolve open follow-ups before suggesting another call"],
+      timing: null,
+      coverage,
+    };
+  }
+
   if (meetWeek) {
     if (x.seriousConcern) {
       reasons.push("Meet week, with a serious concern on file: settle it briefly");

@@ -61,6 +61,7 @@ export function ClientProfileOverlayMount() {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
+          data-client-profile-dialog=""
           className={[
             "fixed z-50 flex flex-col bg-background text-foreground shadow-2xl outline-none",
             // Mobile: full-screen sheet with safe-area padding.

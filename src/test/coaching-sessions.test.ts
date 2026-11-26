@@ -154,6 +154,14 @@ describe("the lowest effective intervention", () => {
     expect(r.reasons.join(" ")).toMatch(/2 decisions/);
   });
 
+  it("recent call follow-ups do not justify another meeting unless the athlete asks or a concern is serious", () => {
+    const prep = buildSessionPrep({ ...base, event: ev, coachPriorities: ["Openers", "Taper"] });
+    const recent = { prep, lastCallOn: TODAY };
+    expect(recommendIntervention(input(recent)).level).toBe("message");
+    expect(recommendIntervention(input({ ...recent, seriousConcern: true })).level).toBe("call");
+    expect(recommendIntervention(input({ ...recent, athleteAsked: true })).level).toBe("call");
+  });
+
   it("meet week is for executing: a message, unless something serious or they asked", () => {
     const week = { ...ev, daysOut: 4, phase: "Meet week" };
     const prep = buildSessionPrep({ ...base, event: week, coachPriorities: ["Openers", "Taper"] });

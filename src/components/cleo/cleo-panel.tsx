@@ -76,6 +76,17 @@ const FINANCE_STARTERS = ["How much should be set aside for taxes right now?", "
 
 function clientStarters(first: string, section: string | null): string[] {
   switch (section) {
+    case "meetings": return ["Summarize the last meeting", "What decisions and follow-ups are on file?", "Show the attempts we discussed"];
+    case "competition": return ["Review competition readiness", "Show discussed and approved attempts", "What needs a decision?"];
+    case "billing": return ["Review payment history", "Explain the current plan", "Show outstanding payments"];
+    case "goals": return ["Review pending goals", "Where did these proposals come from?", "Show approved targets"];
+    case "forms": return ["Review recent forms", "Show missing responses"];
+    case "notes": return ["Summarize relevant coach notes", "Find past decisions"];
+    case "sessions": return ["Review session history", "What is coming up?"];
+    case "details": return ["Review client information", "What is missing?"];
+    case "coaching": return ["Review coaching setup", "What is still outstanding?"];
+    case "documents": return ["Find client documents", "What is on file?"];
+    case "account": return ["Review account setup", "What access issues are outstanding?"];
     case "nutrition":
       return [`How is ${first} doing on their nutrition plan?`, `Is ${first}'s bodyweight trend on track?`, `What would you change in ${first}'s plan?`];
     case "cardio":
@@ -350,7 +361,8 @@ export function CleoPanel() {
   // ---- the page makes room on a computer
   const expanded = mode === "expanded" && !phone;
   const width = expanded ? Math.max(PANEL_DOCKED_W, Math.min(980, vw - 360)) : Math.min(PANEL_DOCKED_W, vw);
-  const pushes = !phone && open && vw - width >= PAGE_MIN_W;
+  const [inClientOverlay, setInClientOverlay] = useState(false);
+  const pushes = !inClientOverlay && !phone && open && vw - width >= PAGE_MIN_W;
   useEffect(() => {
     const root = document.documentElement;
     if (pushes) {
@@ -397,11 +409,15 @@ export function CleoPanel() {
     return () => el.remove();
   }, []);
   useLayoutEffect(() => {
-    if (!open || !host || !host.nextSibling) return;
-    // never while something inside it has focus (moving it would drop the focus)
-    if (host.contains(document.activeElement)) return;
-    document.body.appendChild(host);
-  }, [open, pathname, host]);
+    if (!host) return;
+    // Keep the shared assistant inside the modal's focus scope when a client
+    // is opened as an overlay; move it back to the shell when that closes.
+    const overlay = open ? document.querySelector<HTMLElement>("[data-client-profile-dialog]") : null;
+    const target = overlay ?? document.body;
+    setInClientOverlay(!!overlay);
+    if (host.parentElement !== target) target.appendChild(host);
+    else if (open && host.nextSibling && !host.contains(document.activeElement)) target.appendChild(host);
+  }, [open, pathname, place.clientId, host]);
   const sidebar = expanded && vw >= 1000;
 
   const [settingDays, setSettingDays] = useState<number | null>(null);
@@ -517,11 +533,11 @@ export function CleoPanel() {
       hidden={!open}
       data-cleo-panel={phone ? "phone" : expanded ? "expanded" : "docked"}
       className={cn(
-        "fixed z-50 flex flex-col bg-background text-foreground",
+        inClientOverlay ? "absolute z-50 flex flex-col bg-background text-foreground" : "fixed z-50 flex flex-col bg-background text-foreground",
         phone ? "phone-column inset-0" : "bottom-0 right-0 top-0 border-l border-border",
         !phone && !pushes && "shadow-[-16px_0_40px_-24px_rgba(0,0,0,0.45)]",
       )}
-      style={panelStyle}
+      style={inClientOverlay ? (phone ? undefined : { width: expanded ? "100%" : `min(${width}px, 100%)` }) : panelStyle}
     >
       <header
         className={cn("flex shrink-0 items-center gap-1 border-b border-border px-2 pb-2", phone ? "pt-[calc(env(safe-area-inset-top)+0.5rem)]" : "pt-[calc(env(safe-area-inset-top)+0.5rem)]")}
