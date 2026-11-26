@@ -28,7 +28,7 @@ export const MEMBERSHIP_AGREEMENT_SUMMARY = [
   "Plans, nutrition targets and app tools are general guides, not medical advice.",
   "Training carries risk. You train within your limits and accept that risk.",
   "Crew is a community: be decent, and what you post is seen by the audience you pick.",
-  "Monthly billing until you cancel from Membership in the app. Cancelling keeps access to the end of the period.",
+  "JF Membership is free. Optional paid services have their own terms and are never charged without your agreement.",
 ] as const;
 
 export function membershipAckText(ids: readonly string[]): string | null {
