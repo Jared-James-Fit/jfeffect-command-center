@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ChangePlanSheet } from "@/components/admin/intel/change-plan-sheet";
+import { HandlingInviteSheet } from "@/components/competition/prep/handling-sheets";
 import { getPlanChangeReviewFn } from "@/lib/admin-intel/membership.functions";
 import { listCoachingPackages, listEnrollments, switchClientServicePackageFn } from "@/lib/coaching-packages/packages.functions";
 
@@ -31,6 +32,7 @@ export function ChangeServiceSheet({ clientId, clientName, open, onOpenChange }:
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
   const [tierOpen, setTierOpen] = useState(false);
+  const [handlingOpen, setHandlingOpen] = useState(false);
   const target = choices.find(p => p.id === selected);
   const canSwitch = review.data?.tier === "coaching" && !review.data.inactive && !!target && target.id !== current?.package_id;
   const change = async () => {
@@ -48,6 +50,12 @@ export function ChangeServiceSheet({ clientId, clientName, open, onOpenChange }:
   };
   if (tierOpen) return <ChangePlanSheet clientId={clientId} open={tierOpen} onOpenChange={setTierOpen}
     onDone={() => { setTierOpen(false); setSelected(""); }} />;
+  if (handlingOpen) return <HandlingInviteSheet open={handlingOpen} onClose={() => setHandlingOpen(false)}
+    defaults={{ clientId, first: clientName ?? undefined }}
+    onCreated={() => {
+      void qc.invalidateQueries({ queryKey: ["competition-handling-list"] });
+      void qc.invalidateQueries({ queryKey: ["clients-directory"] });
+    }} />;
   const error = review.error || enrollments.error || packages.error;
   return <Sheet open={open} onOpenChange={value => { if (!busy) onOpenChange(value); }}>
     <SheetContent side="bottom" swipeToClose className="max-h-[88dvh] overflow-y-auto rounded-t-[24px] sm:mx-auto sm:max-w-[520px]">
@@ -71,10 +79,13 @@ export function ChangeServiceSheet({ clientId, clientName, open, onOpenChange }:
           <Button className="w-full" disabled={!canSwitch || busy} onClick={change}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ArrowRight className="h-4 w-4" /> Change service</>}</Button>
         </div>}
         <div className="space-y-2 border-t pt-3">
-          <Button asChild variant="outline" className="w-full justify-between">
-            <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "competition" } as any} onClick={() => onOpenChange(false)}>Competition handling <ArrowRight className="h-4 w-4" /></Link>
+          <Button variant="outline" className="w-full justify-between" onClick={() => setHandlingOpen(true)} disabled={busy || review.data.inactive}>
+            Add competition handling <ArrowRight className="h-4 w-4" />
           </Button>
-          <p className="text-xs text-muted-foreground">Add, complete or cancel the actual meet service. Existing meet records stay on this account.</p>
+          <Button asChild variant="ghost" className="w-full justify-between">
+            <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: "competition" } as any} onClick={() => onOpenChange(false)}>Manage existing handling <ArrowRight className="h-4 w-4" /></Link>
+          </Button>
+          <p className="text-xs text-muted-foreground">Handling follows the actual meet service. Existing meet records stay on this account.</p>
           <Button variant="outline" className="w-full justify-between" onClick={() => setTierOpen(true)} disabled={busy}>
             {review.data.tier === "coaching" ? "Move to self-serve / handling only" : "Move to coaching"} <ArrowRight className="h-4 w-4" />
           </Button>

@@ -188,7 +188,7 @@ export function ClientRow({
 }) {
   const { primary, more } = rowStatusSummary(r);
   const meta = rowMetaLine(r, { showCoach, primary });
-  const { role } = useAuth();
+  const { role, viewOnly } = useAuth();
   const isAdmin = role === "admin";
   const pov = useEnterClientPov();
   const enterPov = () => pov.enter(r.id, { fallbackName: r.full_name });
@@ -297,7 +297,7 @@ export function ClientRow({
           onArchive={onArchive}
           onAssignProgram={openAssign}
           onOpenPanel={setSheet}
-          onChangePlan={isAdmin ? () => setPlanOpen(true) : undefined}
+          onChangePlan={isAdmin && !viewOnly ? () => setPlanOpen(true) : undefined}
           trigger={
             <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="More client actions">
               <MoreHorizontal className="h-4 w-4" />
@@ -308,7 +308,7 @@ export function ClientRow({
 
       <ClientQuickSheet kind={sheet} clientId={r.id} clientName={r.full_name} onClose={() => setSheet(null)} />
       <AssignProgramDialog open={assignOpen} onOpenChange={setAssignOpen} clientId={r.id} clientName={r.full_name} />
-      {isAdmin && planOpen && <ChangeServiceSheet clientId={r.id} clientName={r.full_name} open={planOpen} onOpenChange={setPlanOpen} />}
+      {isAdmin && !viewOnly && planOpen && <ChangeServiceSheet clientId={r.id} clientName={r.full_name} open={planOpen} onOpenChange={setPlanOpen} />}
     </li>
   );
 }

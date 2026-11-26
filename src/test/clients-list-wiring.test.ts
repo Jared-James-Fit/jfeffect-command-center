@@ -158,6 +158,8 @@ describe("service transfer on the shared client card", () => {
     const sheet = read("src/components/clients/change-service-sheet.tsx");
     expect(sheet).toContain("switchClientServicePackageFn");
     expect(sheet).toContain("<ChangePlanSheet");
+    expect(sheet).toContain("<HandlingInviteSheet");
+    expect(sheet).toContain("defaults={{ clientId");
     expect(sheet).toContain("competition");
     expect(sheet).toContain('["clients-directory"]');
     expect(sheet).toContain("expectedEnrollmentId");
