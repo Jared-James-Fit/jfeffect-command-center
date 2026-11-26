@@ -97,18 +97,14 @@ export async function archiveReplacedPlans(clientId: string, keepId: string, new
 }
 
 /** A plan and its days, or nothing at all (a day that can't be written takes the plan back out). */
-async function insertPlan(payload: Record<string, any>, days: Array<Record<string, any>>): Promise<string> {
-  const { data, error } = await db.from("nutrition_targets").insert(payload).select("id").single();
-  if (error || !data) throw new Error(error?.message ?? "Couldn't save the plan");
-  if (days.length) {
-    const rows = days.map((d, i) => ({ ...d, notes: plainOrNull(d.notes ?? null), target_id: data.id, sort_order: i }));
-    const { error: e } = await db.from("nutrition_target_days").insert(rows);
-    if (e) {
-      await db.from("nutrition_targets").delete().eq("id", data.id);
-      throw new Error(e.message);
-    }
-  }
-  return data.id as string;
+export async function publishNutritionPlanAtomic(payload: Record<string, any>, days: Array<Record<string, any>>): Promise<{ targetId: string; archived: number }> {
+  const { data, error } = await db.rpc("publish_nutrition_plan_atomic", {
+    _client_id: payload.client_id,
+    _payload: payload,
+    _days: days.map((d, i) => ({ ...d, notes: plainOrNull(d.notes ?? null), sort_order: i })),
+  });
+  if (error || !data?.targetId) throw new Error(error?.message ?? "Couldn't save the plan");
+  return { targetId: data.targetId, archived: Number(data.archived ?? 0) };
 }
 
 /** The plan the client is on now (newest live one), with its days. */
@@ -169,8 +165,7 @@ export async function publishAiPlan(input: {
     last_updated_at: now,
   };
   const days = aiPlanDays(input.days, input.targetsText, current?.nutrition_target_days);
-  const targetId = await insertPlan(payload, days);
-  const archived = await archiveReplacedPlans(input.clientId, targetId, dates.start_date);
+  const { targetId, archived } = await publishNutritionPlanAtomic(payload, days);
 
   // Cardio and steps move with the calories (the same sync as the editor's save).
   let cardio: PublishResult["cardio"] = null;
@@ -193,9 +188,8 @@ export async function publishAiPlan(input: {
 export async function reuseEarlierPlan(clientId: string, old: PlanRow): Promise<{ targetId: string; archived: number }> {
   const now = new Date().toISOString();
   const dates = nextPlanDates(todayLocalISO());
-  const targetId = await insertPlan(reusePlanPayload(old, dates, now), copyPlanDays(old.nutrition_target_days));
-  const archived = await archiveReplacedPlans(clientId, targetId, dates.start_date);
-  return { targetId, archived };
+  if (old.client_id !== clientId) throw new Error("Reference belongs to a different client");
+  return publishNutritionPlanAtomic(reusePlanPayload(old, dates, now), copyPlanDays(old.nutrition_target_days));
 }
 
 /** Every plan a client has had, with its days: one cache entry for the Nutrition Plan and Plans panels. */
