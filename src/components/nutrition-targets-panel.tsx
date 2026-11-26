@@ -91,6 +91,7 @@ export function NutritionTargetsPanel({
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["nutrition-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["nutrition-plan-revisions", clientId] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     void invalidateGroceryList(qc, clientId);
   };
@@ -178,9 +179,9 @@ export function NutritionTargetsPanel({
   const d = plan ? deriveTarget(plan) : null;
   const chip =
     !d ? null
-    : d.state === "past-due" ? <StatusChip tone="attention">Update overdue</StatusChip>
-    : d.state === "due-today" ? <StatusChip tone="attention">Update due today</StatusChip>
-    : d.state === "ending-soon" ? <StatusChip tone="attention">Update due in {d.daysRemaining} {d.daysRemaining === 1 ? "day" : "days"}</StatusChip>
+    : d.state === "past-due" ? <StatusChip tone="attention">Review overdue</StatusChip>
+    : d.state === "due-today" ? <StatusChip tone="attention">Review due today</StatusChip>
+    : d.state === "ending-soon" ? <StatusChip tone="attention">Review due in {d.daysRemaining} {d.daysRemaining === 1 ? "day" : "days"}</StatusChip>
     : d.state === "upcoming" && plan.start_date ? <StatusChip>Starts {planDate(plan.start_date)}</StatusChip>
     : null;
 
@@ -189,6 +190,7 @@ export function NutritionTargetsPanel({
       <CardHeader
         icon={Apple}
         title="Current plan"
+        info="The client’s live prescription. The review date is a check-in deadline, not an expiry. The plan stays active until you replace it."
         chip={chip}
         actions={
           <DropdownMenu>
@@ -244,10 +246,10 @@ export function NutritionTargetsPanel({
               <p className="flex items-start gap-2 text-[13px]">
                 <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 {/* A plan past its date is still the client's plan: nothing takes it away but a new one. */}
-                <span>They keep this plan until you update it. The Nutrition Update asks them how it went.</span>
+                <span>This plan stays active. Request feedback before deciding whether to change it.</span>
               </p>
               <Button variant="outline" className="h-10 shrink-0 gap-1.5" disabled={requesting} onClick={() => sendRequest(plan)}>
-                <Send className="h-4 w-4" /> Send the update now
+                <Send className="h-4 w-4" /> Request nutrition check-in
               </Button>
             </div>
           )}
@@ -370,7 +372,7 @@ export function NutritionTargetsPanel({
   );
 }
 
-/** "Fat Loss · Nov 9 – Dec 9, 2026 · updated Nov 9 · next update in 29 days": the plan in one line. */
+/** "Fat Loss · Nov 9 – Dec 9, 2026 · updated Nov 9 · review in 29 days": the plan in one line. */
 function planLine(t: any, opts: { dates?: boolean } = {}): string {
   const d = deriveTarget(t);
   const updated = planUpdatedAt(t);
