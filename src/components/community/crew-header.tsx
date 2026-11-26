@@ -149,6 +149,10 @@ export const CREW_TABS: readonly (readonly [CrewTab, string])[] = [
  * icons' soft shadow (styles.css). Sized to fit three across a 320px phone
  * between Crew's buttons.
  */
+function warmRankingsMusic() {
+  void import("@/components/community/rankings-music").then((m) => m.warmRankingsMusicIfOn(), () => {});
+}
+
 export function CrewFeedTabs({ tab, onPick, compact = false }: {
   tab: CrewTab;
   onPick: (t: CrewTab) => void;
@@ -171,6 +175,8 @@ export function CrewFeedTabs({ tab, onPick, compact = false }: {
             role="tab"
             aria-selected={on}
             onClick={() => onPick(k)}
+            // Rankings' music is decoded as the finger lands, so it's ready as the tab opens
+            onPointerDown={k === "rankings" ? warmRankingsMusic : undefined}
             // both bold, so picking one never shifts the other; the one you're off is quieter
             className={cn(
               "relative h-10 px-0.5 font-bold leading-none tracking-[-0.01em] transition-colors active:opacity-70",
