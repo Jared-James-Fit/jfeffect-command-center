@@ -178,7 +178,7 @@ export async function runIntelTick(sb: Db, sourceId: string | null): Promise<Tic
     ...(read.unitUnknown && !row.unit_answer ? { unitUnknown: true } : {}),
   } as SourceSummary & { unitUnknown?: boolean };
   if (stored.merged && !stored.added) summary.notes.push("Everything in it was already on file");
-  const purposes = [...new Set([...detected])].slice(0, 8);
+  const purposes = [...new Set([...detected, ...(raws.some(f => (f.data as any)?.meetLogistics) ? ["event_logistics" as Purpose] : [])])].slice(0, 9);
 
   if (aiProblem) {
     await done({
