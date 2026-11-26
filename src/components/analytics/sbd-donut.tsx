@@ -92,7 +92,7 @@ export function SbdDonut({
   const radius = 87;
   const sum = ringTotal(lifts);
   const selectedKind = view === "current" ? "projected" : view === "competition" && meetPick !== "individual" ? "official" : view === "gym" && metric === "estimated" ? "estimated" : "actual";
-  const selectedVersion: PerformanceVersion = {key:"selected",label:title,kind:selectedKind,lifts,totalLb:total,bodyweightKg:view==="current"?bw.averageKg: view==="competition"&&competition.meet?.bodyweightLb?competition.meet.bodyweightLb/LB_PER_KG:null,category:view==="current"?bw.category?.label:classFilter==="all"?null:classFilter};
+  const selectedVersion: PerformanceVersion = {key:"selected",label:title,kind:selectedKind,lifts,totalLb:total,end:view==="current"?today:competition.meet?.date,bodyweightKg:view==="current"?bw.averageKg: view==="competition"&&competition.meet?.bodyweightLb?competition.meet.bodyweightLb/LB_PER_KG:null,category:view==="current"?bw.category?.label:classFilter==="all"?null:classFilter};
   const compareChoices: PerformanceVersion[] = compareOpen ? [
     selectedVersion,
     {key:"current",label:"Current projection",kind:"projected",lifts:projection.lifts,totalLb:projection.totalLb,end:today,bodyweightKg:bw.averageKg,category:bw.category?.label},
@@ -107,7 +107,7 @@ export function SbdDonut({
     })),
   ].filter(v=>COMP_LIFTS.some(l=>v.lifts[l]&&!v.lifts[l]?.stale)||v.key==="selected"||v.key==="current") : [];
   const versionA=compareChoices.find(c=>c.key===compareA)??compareChoices[0];
-  const compatible=compareChoices.filter(c=>c.key!==versionA?.key&&(allowMixed||c.kind===versionA?.kind));
+  const compatible=compareChoices.filter(c=>c.key!==versionA?.key&&!(c.kind==="projected"&&versionA?.kind==="projected"&&((c.key==="selected"&&versionA.key==="current")||(c.key==="current"&&versionA.key==="selected")))&&(allowMixed||c.kind===versionA?.kind));
   const comparison=compatible.find(c=>c.key===comparePick)??compatible[0];
   const insights=versionA&&comparison?compareInsights(versionA,comparison):[];
   const delta = (a: number, b: number) => (a >= b ? "+" : "−") + dualLoad(Math.abs(a-b),unit).main;
