@@ -740,6 +740,12 @@ export type EstimateTry = {
   tracked: number;
   accepted: boolean;
   value: number | null;
+  /**
+   * The speeds this candidate's read allows, for the agreement check (speed ∝ 1 / plate height): a
+   * blended size lies somewhere between its two measurements, so its speed is anywhere from the edges'
+   * (low) to motion's (high); one measured size is its own value at both ends.
+   */
+  range?: { lo: number; hi: number } | null;
   why: string[];
 };
 
@@ -766,6 +772,8 @@ export const ESTIMATE_ROM_MM: Record<Movement["kind"], [number, number] | null> 
 export const ESTIMATE_ROM_SPREAD = 0.15;
 /** Two candidates that both read the set (left and right stacks, a stack and a circle) agree within this. */
 export const ESTIMATE_AGREE = 0.12;
+/** Motion and edge heights further apart than this are blended (geometric mean, half the gap as margin), see estimateRead. */
+export const BLEND_FROM = 1.1;
 
 /** Evenly spread frames, about `perSecond` a second. */
 export function everyNth(frames: Frame[], perSecond: number): Frame[] {
@@ -835,6 +843,58 @@ export function plainlyTheSet(a: LiftAnalysis, movement: Movement, expectedReps:
   return [...new Set(why)];
 }
 
+/**
+ * The plate's size for a candidate from its two measurements (pure). The two disagree on real stacks
+ * both ways: what moves with the plate stops short of its rim (blur, shadow, a lit edge), its edges run
+ * on into whatever is beside it (an upright, a lit wall). Measured by hand on Dwayne's front-on squats:
+ * one set's stacks were 54 px through the set, read 53–55 by motion and 54 / 77 by their edges (the
+ * edges ran on); another's were 60, read 43 by motion and 60 by its edges (motion stopped short). Either
+ * can be the one that's right, so when the edges say more than 10 % bigger the size is their geometric
+ * mean and its margin half the gap (in log terms: the truth can be at either end). A gap over ~26 % is
+ * then past the scale gate (quality.ts TOLERANT 12 %, with calibrate.ts's plate and edge-on terms) and the candidate isn't logged: never a size
+ * picked from two that disagree. Edges smaller than motion found an inner step (motion is only ever
+ * read short), and motion stands.
+ */
+export function plateSize(
+  motion: { b: number; relB: number; pairs: number } | null,
+  prof: Extent | null,
+  seed: Pick<BoxSeed, "hw" | "hh">,
+): { ext: Extent | null; blend: boolean } {
+  const blend = !!motion && !!prof && prof.b > BLEND_FROM * motion.b;
+  if (!motion) return { ext: prof, blend: false };
+  const b = blend ? Math.sqrt(prof!.b * motion.b) : motion.b;
+  return {
+    blend,
+    ext: {
+      b,
+      relB: blend ? Math.max(motion.relB, prof!.relB, Math.log(prof!.b / motion.b) / 2) : motion.relB,
+      a: prof ? Math.min(prof.a, 1.4 * b) : seed.hw * (b / seed.hh),
+      relA: prof?.relA ?? 0.1,
+      frames: motion.pairs,
+      faint: false,
+    },
+  };
+}
+
+/**
+ * Whether candidates that each read the set disagree (pure): two whose speed ranges (EstimateTry.range)
+ * are further apart than ESTIMATE_AGREE of their median. A blended candidate's range covers both of its
+ * measurements, so a stack read short by one measurement never refuses one read right by the other, and
+ * a scale truly off on one candidate (outside anything its own measurements allow) still does.
+ */
+export function candidatesDisagree(tried: Pick<EstimateTry, "accepted" | "range">[]): boolean {
+  const rs = tried.filter((t) => t.accepted && t.range).map((t) => t.range!);
+  if (rs.length < 2) return false;
+  const mid = median(rs.map((r) => Math.sqrt(r.lo * r.hi)));
+  if (!(mid > 0)) return false;
+  for (let i = 0; i < rs.length; i++)
+    for (let k = i + 1; k < rs.length; k++) {
+      const gap = Math.max(0, rs[k].lo - rs[i].hi, rs[i].lo - rs[k].hi);
+      if (gap / mid > ESTIMATE_AGREE) return true;
+    }
+  return false;
+}
+
 export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateResult {
   const tried: EstimateTry[] = [];
   if (frames.length < 10) return { ok: false, why: "no_candidates", tried, best: null };
@@ -864,18 +924,9 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     // can't be read, from its edges
     const motion = measureByMotion(frames, points, seed);
     const prof = measureExtent(frames, points, seed, opts.hiRes);
-    const ext: Extent | null = motion
-      ? {
-          b: motion.b,
-          relB: motion.relB,
-          a: prof ? Math.min(prof.a, 1.4 * motion.b) : seed.hw * (motion.b / seed.hh),
-          relA: prof?.relA ?? 0.1,
-          frames: motion.pairs,
-          faint: false,
-        }
-      : prof;
+    const { ext, blend } = plateSize(motion, prof, seed);
     // edge-on: a stack front-on is clearly narrower than it is tall (a plate's face turned that far isn't read)
-    const edgeOn = !!ext && (seed.from === "stack" ? ext.a / ext.b < 0.75 : ext.a / ext.b < 0.62);
+    const edgeOn = !!ext && (seed.from === "stack" || seed.from === "wide" ? ext.a / ext.b < 0.75 : ext.a / ext.b < 0.62);
     const pts = ext ? points.map((p) => (p.found ? { ...p, a: ext.a, b: ext.b, r: Math.sqrt(ext.a * ext.b) } : p)) : points;
     const a = analyzeTrack(pts, {
       plate,
@@ -892,7 +943,11 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
     const why = plainlyTheSet(a, opts.movement, opts.expectedReps);
     const complete = a.reps.filter((r) => r.complete).length;
     const ok = !why.length;
-    tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: ok ? a.velocity.value : null, why });
+    // speed ∝ 1 / plate height: undo the blend for the comparison between candidates
+    const v = ok ? a.velocity.value : null;
+    const range =
+      v != null ? (blend && motion && prof ? { lo: (v * ext!.b) / prof.b, hi: (v * ext!.b) / motion.b } : { lo: v, hi: v }) : null;
+    tried.push({ from: seed.from, reps: a.reps.length, complete, tracked: a.quality.tracked, accepted: ok, value: v, range, why });
     const exact = opts.expectedReps != null && complete === opts.expectedReps ? 1 : 0;
     const score = (ok ? 10 : 0) + exact * 2 + a.quality.tracked + (a.units === "mm" ? Math.max(0, 1 - a.calibration.relErr * 5) : 0);
     if (ok && (!best || score > best.score)) best = { a, score };
@@ -901,8 +956,7 @@ export function estimateRead(frames: Frame[], opts: EstimateOptions): EstimateRe
   const chosen = best as { a: LiftAnalysis; score: number } | null;
   if (!chosen) return { ok: false, why: "no_read", tried, best: (bestAny as { a: LiftAnalysis } | null)?.a ?? null };
   // two candidates that each read the set must agree, or neither is trusted (a scale off on one of them)
-  const values = tried.filter((t) => t.accepted && t.value != null).map((t) => t.value as number);
-  if (values.length >= 2 && (Math.max(...values) - Math.min(...values)) / median(values) > ESTIMATE_AGREE)
+  if (candidatesDisagree(tried))
     return { ok: false, why: "disagree", tried, best: chosen.a };
   const a = chosen.a;
   // a read made this way is an estimate, whatever its margin

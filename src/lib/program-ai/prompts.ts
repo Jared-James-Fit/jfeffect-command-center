@@ -11,7 +11,7 @@ import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engin
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 8;
+export const EDIT_PROMPT_VERSION = 9;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -43,7 +43,7 @@ export function programText(snap: ProgramSnapshot, ctx: EngineCtx): string {
   const codeOf = new Map([...ctx.catalog.values()].map((e) => [e.id, e.code]));
   const out: string[] = [];
   if (snap.kind === "client") {
-    out.push(`Today: ${snap.today}. Training days: ${snap.trainingDays.length ? snap.trainingDays.join(", ") : "not set"}. Load unit: ${snap.unit}.${snap.maxSessionMinutes ? ` Session limit: ${snap.maxSessionMinutes} min.` : ""} Maxes on file: ${snap.maxLifts?.length ? snap.maxLifts.join(", ") : "none"}.`);
+    out.push(`Today: ${snap.today}. Training days: ${snap.trainingDays.length ? snap.trainingDays.join(", ") : "not set"}. Load unit: ${snap.unit}.${snap.maxSessionMinutes ? ` Session limit: ${snap.maxSessionMinutes} min.` : ""} Maxes on file: ${snap.maxLifts?.length ? snap.maxLifts.join(", ") : "none"}.${snap.pctRefs ? ` Estimated max a % can read: ${snap.pctRefs.est_1rm.length ? snap.pctRefs.est_1rm.join(", ") : "none yet"}. Competition PR on file: ${snap.pctRefs.comp_pr.length ? snap.pctRefs.comp_pr.join(", ") : "none"}.` : ""}`);
   } else out.push(`Load unit: ${snap.unit}. A library template: no athlete, no dates.`);
   if (!snap.blocks.length) out.push("(No editable program: nothing current or upcoming.)");
   for (const b of snap.blocks) {
@@ -130,7 +130,7 @@ OPERATIONS (refs: B1 block, B1W3 week 3, B1W3D2 a workout, B1W3D2E4 an exercise;
 {"op":"add_day","weeks":["B1W3","B1W4"],"name":"Upper B","focus":"...","exercises":[{"exercise":"X3","set":{"sets":4,"reps":"6-8","rpe":"8"}}]}
 {"op":"remove_day","days":[...]}
 {"op":"schedule","training_days":["mon","wed","fri","sat"],"redate":true}  client only: new training days, and/or (redate) put every upcoming workout back on their training days in order. Omit training_days to only re-date.
-"set" fields: sets (1–20), reps ("5", "8-10", "AMRAP"), rpe ("8", "7-8") OR rir ("2"), never both; percentage (30–110) with percentage_of ("1rm" | "training_max" | "est_1rm"), or load with load_unit ("kg" | "lb"), never both; rest_seconds; duration_seconds (a timed row's time per set: a run, a walk, a hold; a run's rest_seconds is its walk or jog recovery); tempo ("3-1-1-0"); notes (the cue the athlete reads); clear: ["rpe","rir","percentage","load","tempo","notes","rest"] to empty a field. Switching RPE→% means setting percentage and clearing rpe.
+"set" fields: sets (1–20), reps ("5", "8-10", "AMRAP"), rpe ("8", "7-8") OR rir ("2"), never both; percentage (30–110) with percentage_of ("1rm" | "training_max" | "est_1rm" = their current estimated max | "comp_pr" = their competition best | "var_e1rm" = this exercise's own estimate; only the one the coach asked for, never a % of today's top set here), or load with load_unit ("kg" | "lb"), never both; rest_seconds; duration_seconds (a timed row's time per set: a run, a walk, a hold; a run's rest_seconds is its walk or jog recovery); tempo ("3-1-1-0"); notes (the cue the athlete reads); clear: ["rpe","rir","percentage","load","tempo","notes","rest"] to empty a field. Switching RPE→% means setting percentage and clearing rpe.
 Running programs (Running / Walking rows, set by time and RPE): adapt them the way the program's own guide says (scale easy and long runs by time, repeat a week rather than add, keep one quality session a week, never stack missed runs); never turn an easy run into a hard one or add a second quality day to add volume.
 Top set + back-offs: two rows of the same exercise (the top set, then the same exercise again as back-offs), notes saying which is which.
 Reducing frequency: remove the workouts, move the work that matters into the days that stay (add / swap / update), and add a schedule op with the new training days. Moving work to the right dates: a schedule op with redate.

@@ -28,7 +28,7 @@ export type WorkerJob = {
 
 /**
  * Whether a read would go on the logged set (pure): the server's own rule
- * (20270602110000_velocity_server_worker.sql `_apply_video_velocity`) on what
+ * (20270602110500_velocity_server_worker.sql `_apply_video_velocity`) on what
  * the phone's pipeline found, so a read that the server would refuse is never
  * committed in place of a better one.
  */

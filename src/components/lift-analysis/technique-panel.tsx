@@ -66,6 +66,13 @@ import { canvasToPng, grabFrame, renderAnnotatedClip } from "@/lib/lift-analysis
 import { runPose, type PoseProgress } from "@/lib/lift-analysis/pose/pose-run";
 import { nearSide, smoothTrack, viewOf, type PoseTrack } from "@/lib/lift-analysis/pose/skeleton";
 import { readTechnique, type TechniqueRead } from "@/lib/lift-analysis/pose/technique";
+import {
+  POSE_ENGINE,
+  poseBarSeries,
+  storedPoseCovers,
+  unpackPose,
+} from "@/lib/lift-analysis/pose/pose-pack";
+import { useStoredPose } from "@/lib/lift-analysis/pose/pose-queries";
 import { isViewingAsClient } from "@/lib/pov-guard";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +111,8 @@ export type TechniqueState = {
   compare: Compare | null;
   setCompare: (c: Compare | null) => void;
   scene: PoseScene | null;
+  /** The body came from the server's read (stored on upload), not this device. */
+  fromServer: boolean;
   start: () => void;
   cancel: () => void;
 };
@@ -114,8 +123,12 @@ export function useTechnique(input: {
   analysis: LiftAnalysis | null;
   lift: GuideLift;
   initialLayers?: Partial<Layers>;
+  /** The set video, for the body read the server stored on upload (pl_set_video_poses). */
+  setVideoId?: string;
 }): TechniqueState {
-  const { active, src, analysis, lift } = input;
+  const { active, src, analysis, lift, setVideoId } = input;
+  const storedQ = useStoredPose(setVideoId, active);
+  const [fromServer, setFromServer] = useState(false);
   const [status, setStatus] = useState<TechniqueState["status"]>("idle");
   const [progress, setProgress] = useState<PoseProgress | null>(null);
   const [failure, setFailure] = useState("");
@@ -138,6 +151,7 @@ export function useTechnique(input: {
 
   const start = useCallback(() => {
     if (!src) return;
+    setFromServer(false);
     ctrl.current?.abort();
     const c = new AbortController();
     ctrl.current = c;
@@ -147,39 +161,47 @@ export function useTechnique(input: {
     const win = analysis
       ? { start: Math.max(0, analysis.window.start - 0.5), end: analysis.window.end + 0.5 }
       : { start: 0, end: 90 };
-    const barAt = analysis
+    // the bar's path tells the lifter from anyone else, except a front-on read's, which follows the
+    // plate stack past the lifter's outline (poseBarSeries); nobody found with it, read again without
+    const S = poseBarSeries(analysis);
+    const barAt = S
       ? (t: number) => {
-          const S = analysis.series;
           const x = valueAt(S.t, S.x, t);
           const y = valueAt(S.t, S.y, t);
           return x != null && y != null ? { fx: x, fy: y } : null;
         }
       : undefined;
-    void runPose({
-      source: src,
-      window: win,
-      barAt,
-      signal: c.signal,
-      onProgress: setProgress,
-      onPartial: setRaw,
-    }).then((res) => {
-      if (c.signal.aborted) return;
-      setProgress(null);
-      if (res.ok) {
-        setRaw(res.track);
-        setStatus("done");
-        return;
-      }
-      if (res.why === "cancelled") return setStatus("idle");
-      setFailure(
-        res.why === "no_body"
-          ? "No one was found in this video. The whole body needs to be in the frame, side-on."
-          : res.why === "model_failed"
-            ? "The body model couldn't load. Check the connection and try again."
-            : "This video couldn't be read on this device.",
-      );
-      setStatus("failed");
-    });
+    const read = (bar: typeof barAt) =>
+      runPose({
+        source: src,
+        window: win,
+        barAt: bar,
+        signal: c.signal,
+        onProgress: setProgress,
+        onPartial: setRaw,
+      });
+    void read(barAt)
+      .then((res) =>
+        !res.ok && res.why === "no_body" && barAt && !c.signal.aborted ? read(undefined) : res,
+      )
+      .then((res) => {
+        if (c.signal.aborted) return;
+        setProgress(null);
+        if (res.ok) {
+          setRaw(res.track);
+          setStatus("done");
+          return;
+        }
+        if (res.why === "cancelled") return setStatus("idle");
+        setFailure(
+          res.why === "no_body"
+            ? "No one was found in this video. The whole body needs to be in the frame, side-on."
+            : res.why === "model_failed"
+              ? "The body model couldn't load. Check the connection and try again."
+              : "This video couldn't be read on this device.",
+        );
+        setStatus("failed");
+      });
   }, [src, analysis]);
 
   const cancel = useCallback(() => {
@@ -189,11 +211,59 @@ export function useTechnique(input: {
   }, []);
 
   useEffect(() => () => ctrl.current?.abort(), []);
-  // opening Technique starts the read (once)
+
+  // the server's stored read, when it's this engine's, covers the set and is finished
+  const stored = storedQ.data;
+  const storedFits =
+    !!stored &&
+    stored.engine === POSE_ENGINE &&
+    !!stored.window &&
+    storedPoseCovers(stored.window, analysis);
+  const storedTrack = useMemo(
+    () => (storedFits && stored?.status === "done" ? unpackPose(stored.track) : null),
+    [storedFits, stored],
+  );
+  // whether the question has been asked since Technique opened (a copy from earlier in the visit can be old)
+  const storedSettled = !setVideoId || storedQ.isFetchedAfterMount || storedQ.isError;
+
+  // opening Technique starts the read, once per opening: the server's stored read when it covers the set,
+  // else the device's own (a stored read still being made, or none, never holds Technique up)
+  const started = useRef(false);
   useEffect(() => {
-    if (active && status === "idle" && !raw && src) start();
+    if (!active) {
+      started.current = false;
+      return;
+    }
+    if (started.current || status !== "idle" || raw || !src || !storedSettled) return;
+    started.current = true;
+    if (storedTrack) {
+      setRaw(storedTrack);
+      setFromServer(true);
+      setStatus("done");
+      return;
+    }
+    if (storedFits && stored?.status === "no_body") {
+      setFailure(
+        "No one was found in this video. The whole body needs to be in the frame, side-on.",
+      );
+      setStatus("failed");
+      return;
+    }
+    start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, src]);
+  }, [active, src, storedSettled, storedTrack]);
+
+  // the server finished while the phone was still reading, or after the phone couldn't: its read takes
+  // over (the same model, done); a read the phone finished itself is kept
+  useEffect(() => {
+    if (!active || !storedTrack || fromServer || (status !== "running" && status !== "failed")) return;
+    ctrl.current?.abort();
+    setProgress(null);
+    setFailure("");
+    setRaw(storedTrack);
+    setFromServer(true);
+    setStatus("done");
+  }, [active, storedTrack, fromServer, status]);
 
   const track = useMemo(() => (raw ? smoothTrack(raw) : null), [raw]);
   const read = useMemo(
@@ -226,6 +296,7 @@ export function useTechnique(input: {
     compare,
     setCompare,
     scene,
+    fromServer,
     start,
     cancel,
   };

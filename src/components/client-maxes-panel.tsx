@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import { MeetBestsRow } from "@/components/openipf/meet-bests";
 import { MaxHistory, StrengthReference } from "@/components/strength-intel/strength-reference";
+import { checkMaxChange, keepBlocksOnOld, MaxChangeQuestion, type MaxChangeCheck } from "@/components/strength-intel/max-change-guard";
 
 const COMMON_LIFTS = [
   "Competition Squat", "Competition Bench Press", "Competition Deadlift",
@@ -54,14 +55,27 @@ export function ClientMaxesPanel({ clientId, embedded = false }: { clientId: str
     manual_override: false,
   });
 
-  const remove = async (id: string) => {
-    if (!confirm("Delete this max?")) return;
+  // deleting a max a running block reads asks what that block should do first (max-change-guard)
+  const [removing, setRemoving] = useState<{ id: string; check: MaxChangeCheck } | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const doRemove = async (id: string, keep: MaxChangeCheck | null) => {
+    setRemoveBusy(true);
     try {
+      if (keep) await keepBlocksOnOld(clientId, keep);
       await deleteClientMax(id);
+      setRemoving(null);
       qc.invalidateQueries({ queryKey: ["pl-client-maxes", clientId] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
+    } finally {
+      setRemoveBusy(false);
     }
+  };
+  const remove = async (id: string) => {
+    const check = await checkMaxChange(clientId, { next: null, removeId: id }, clientUnit);
+    if (check) { setRemoving({ id, check }); return; }
+    if (!confirm("Delete this max?")) return;
+    await doRemove(id, null);
   };
 
   const Wrapper = embedded ? "div" : Card;
@@ -127,6 +141,14 @@ export function ClientMaxesPanel({ clientId, embedded = false }: { clientId: str
         existing={maxes}
         onClose={() => setEditing(null)}
         onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["pl-client-maxes", clientId] }); }}
+      />
+      <MaxChangeQuestion
+        check={removing?.check ?? null}
+        removing
+        busy={removeBusy}
+        onUseNew={() => removing && void doRemove(removing.id, null)}
+        onKeepOld={() => removing && void doRemove(removing.id, removing.check)}
+        onCancel={() => setRemoving(null)}
       />
     </Wrapper>
   );
@@ -195,37 +217,52 @@ export function MaxEditorDialog({
 }) {
   const [form, setForm] = useState<Partial<ClientMaxRow>>({});
   const [saving, setSaving] = useState(false);
+  const [moved, setMoved] = useState<MaxChangeCheck | null>(null);
   const { unit: clientUnit } = useClientWeightUnit(clientId);
 
   // Reset form whenever a new value is opened.
-  useEffect(() => { if (value) setForm(value); }, [value]);
+  useEffect(() => { if (value) { setForm(value); setMoved(null); } }, [value]);
 
   if (!value) return null;
   const isEdit = !!form.id;
 
   const set = (patch: Partial<ClientMaxRow>) => setForm((f) => ({ ...f, ...patch }));
 
-  const save = async () => {
-    if (!form.lift || !form.lift.trim()) { toast.error("Lift name is required"); return; }
+  const payloadOf = () => ({
+    ...form,
+    client_id: clientId,
+    lift: (form.lift ?? "").trim(),
+    unit: (form.unit as "kg" | "lb") ?? clientUnit,
+    rounding_mode: (form.rounding_mode as RoundingMode) ?? "nearest",
+    rounding_step: form.rounding_step ?? defaultRoundingStep((form.unit as "kg" | "lb") ?? clientUnit),
+    source: (form.source as MaxSource) ?? "manual",
+    active: form.active ?? true,
+    manual_override: form.manual_override ?? false,
+  });
+
+  // keep: copy the old numbers onto each running block that reads them first
+  const write = async (keep: MaxChangeCheck | null) => {
     setSaving(true);
     try {
-      await upsertClientMax({
-        ...form,
-        client_id: clientId,
-        lift: form.lift.trim(),
-        unit: (form.unit as "kg" | "lb") ?? clientUnit,
-        rounding_mode: (form.rounding_mode as RoundingMode) ?? "nearest",
-        rounding_step: form.rounding_step ?? defaultRoundingStep((form.unit as "kg" | "lb") ?? clientUnit),
-        source: (form.source as MaxSource) ?? "manual",
-        active: form.active ?? true,
-        manual_override: form.manual_override ?? false,
-      });
+      if (keep) await keepBlocksOnOld(clientId, keep);
+      await upsertClientMax(payloadOf());
+      setMoved(null);
       onSaved();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
     } finally {
       setSaving(false);
     }
+  };
+
+  const save = async () => {
+    if (!form.lift || !form.lift.trim()) { toast.error("Lift name is required"); return; }
+    setSaving(true);
+    // a running block that reads this max isn't moved without asking (max-change.ts)
+    const check = await checkMaxChange(clientId, { next: payloadOf() }, clientUnit);
+    setSaving(false);
+    if (check) { setMoved(check); return; }
+    await write(null);
   };
 
   const others = existing.filter((m) => m.id !== form.id);
@@ -406,6 +443,14 @@ export function MaxEditorDialog({
             {saving ? "Saving…" : isEdit ? "Save" : "Add max"}
           </Button>
         </DialogFooter>
+        {/* inside the editor's content, so a tap on it is never a tap outside the editor */}
+        <MaxChangeQuestion
+          check={moved}
+          busy={saving}
+          onUseNew={() => void write(null)}
+          onKeepOld={() => void write(moved)}
+          onCancel={() => setMoved(null)}
+        />
       </DialogContent>
     </Dialog>
   );

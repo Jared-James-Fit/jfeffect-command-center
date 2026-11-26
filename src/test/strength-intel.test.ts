@@ -15,12 +15,17 @@ import { buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes
 import { percentOf1RM } from "@/lib/analytics/e1rm";
 import {
   historyLine,
+  keepBlockOnRow,
   lockWrite,
+  maxesAsOf,
   pinWrite,
   restoreWrite,
   unpinWrite,
+  type MaxChange,
   type MaxHistoryEntry,
 } from "@/lib/strength-intel/max-history";
+import { blocksMovedByMaxChange, exampleWords, movedBlocksWords, type UpcomingPercentRow } from "@/lib/strength-intel/max-change";
+import { pctReadWarning } from "@/lib/program-ai/engine";
 
 const LB = 2.2046226218;
 type Lift = "squat" | "bench" | "deadlift";
@@ -385,5 +390,97 @@ describe("what the AI and the coach read", () => {
     const one = read(sets("bench", [{ day: "2026-11-20", kg: 140, reps: 2, rpe: 9 }]), "2026-11-26");
     expect(currentRef(one.lifts.bench)).not.toBeNull();
     expect(notPlannable(one.lifts.bench.current, "2026-11-26")).toMatch(/One session/);
+  });
+});
+
+describe("history stays history: a finished workout keeps the max it was planned from", () => {
+  const squat = { id: "m1", lift: "Competition Squat", unit: "kg" as const, one_rm: 240, training_max: 215, block_id: null, active: true };
+  const bench = { id: "m2", lift: "Competition Bench Press", unit: "kg" as const, one_rm: 150, block_id: null, active: true };
+  const ch = (c: Partial<MaxChange> & { max_id: string; changed_at: string }): MaxChange => ({ op: "update", before: null, after: null, ...c });
+
+  it("a max raised after the workout is read as it stood then", () => {
+    const changes = [ch({ max_id: "m1", before: { ...squat, one_rm: 230, training_max: 207.5 }, after: squat, changed_at: "2026-11-20T18:00:00Z" })];
+    const asOf = maxesAsOf([squat, bench], changes, "2026-11-18T17:00:00Z");
+    expect(asOf.find((m) => m.id === "m1")).toMatchObject({ one_rm: 230, training_max: 207.5 });
+    // a workout finished after the change reads the new one
+    expect(maxesAsOf([squat, bench], changes, "2026-11-21T17:00:00Z").find((m) => m.id === "m1")).toMatchObject({ one_rm: 240 });
+  });
+
+  it("two changes since: the earliest one says what it was", () => {
+    const changes = [
+      ch({ max_id: "m1", before: { ...squat, one_rm: 235 }, after: squat, changed_at: "2026-11-22T10:00:00Z" }),
+      ch({ max_id: "m1", before: { ...squat, one_rm: 225 }, after: { ...squat, one_rm: 235 }, changed_at: "2026-11-19T10:00:00Z" }),
+    ];
+    expect(maxesAsOf([squat], changes, "2026-11-18T00:00:00Z")[0]).toMatchObject({ one_rm: 225 });
+  });
+
+  it("a max added since isn't there; one removed since comes back", () => {
+    const changes = [
+      ch({ max_id: "m2", op: "insert", before: null, after: bench, changed_at: "2026-11-20T10:00:00Z" }),
+      ch({ max_id: "m9", op: "delete", before: { id: "m9", lift: "Competition Deadlift", one_rm: 270, unit: "kg", block_id: null, active: true }, changed_at: "2026-11-21T10:00:00Z" }),
+    ];
+    const asOf = maxesAsOf([squat, bench], changes, "2026-11-19T00:00:00Z");
+    expect(asOf.map((m) => m.id).sort()).toEqual(["m1", "m9"]);
+    expect(asOf.find((m) => m.id === "m9")).toMatchObject({ one_rm: 270 });
+  });
+
+  it("no changes since, or none at all: the maxes as they are", () => {
+    expect(maxesAsOf([squat], [], "2026-11-01T00:00:00Z")).toEqual([squat]);
+    const earlier = [ch({ max_id: "m1", before: { ...squat, one_rm: 200 }, after: squat, changed_at: "2026-10-01T00:00:00Z" })];
+    expect(maxesAsOf([squat], earlier, "2026-11-01T00:00:00Z")).toEqual([squat]);
+  });
+});
+
+describe("a running block isn't moved mid-block without the coach saying so", () => {
+  const max = (p: Partial<ClientMaxRow>): ClientMaxRow =>
+    ({ id: "x", client_id: "c", lift: "Competition Squat", exercise_id: null, one_rm: null, training_max: null, estimated_1rm: null, unit: "kg", notes: null, tested_at: null, source: "tested", active: true, source_lift: null, source_exercise_id: null, variation_modifier: null, manual_override: false, rounding_step: 2.5, rounding_mode: "nearest", block_id: null, updated_at: "", created_at: "", ...p }) as ClientMaxRow;
+  const row = (p: Partial<UpcomingPercentRow>): UpcomingPercentRow => ({
+    id: "r", day_id: "d1", date: "2026-12-01", block_id: "b2", block_name: "Block 2 — Strength", exercise: "Competition Squat",
+    percentage: 75, percentage_basis: "training_max", movement_family: null, competition_lift_type: "squat", exercise_family: "squat", ...p,
+  });
+  const before = [max({ id: "m1", one_rm: 230, training_max: 200 })];
+  const after = [max({ id: "m1", one_rm: 230, training_max: 210 })];
+
+  it("a TM change moves the block's % of TM sets, said in plain words", () => {
+    const rows = [row({ id: "r1" }), row({ id: "r2", day_id: "d2" }), row({ id: "r3", exercise: "High Bar Squat", competition_lift_type: null, day_id: "d2" })];
+    const moved = blocksMovedByMaxChange(rows, before, after, "kg");
+    expect(moved).toHaveLength(1);
+    expect(moved[0]).toMatchObject({ blockId: "b2", workouts: 2, sets: 3 });
+    expect(movedBlocksWords(moved)).toBe("2 upcoming workouts in Block 2 — Strength");
+    expect(exampleWords(moved[0].example)).toBe("Competition Squat 75% TM: 150 kg → 157.5 kg");
+  });
+
+  it("sets that read another number, or a block with its own row, don't move", () => {
+    const rows = [row({ id: "r1", percentage_basis: "1rm" }), row({ id: "r2", block_id: "b3" })];
+    const withLock = [...before, max({ id: "lock", block_id: "b3", training_max: 200 })];
+    const withLockAfter = [...after, max({ id: "lock", block_id: "b3", training_max: 200 })];
+    expect(blocksMovedByMaxChange(rows, withLock, withLockAfter, "kg")).toEqual([]);
+  });
+
+  it("keeping the block on the old numbers is a row for that block that the block then reads", () => {
+    const keep = keepBlockOnRow(before[0], "b2", "2026-11-26");
+    expect(keep).toMatchObject({ block_id: "b2", training_max: 200, one_rm: 230, lift: "Competition Squat", active: true });
+    const kept = [...after, max({ ...(keep as any), id: "k" })];
+    expect(blocksMovedByMaxChange([row({ id: "r1" })], before, kept, "kg")).toEqual([]);
+  });
+
+  it("deleting a max a block reads leaves it with no weight, and says so", () => {
+    const moved = blocksMovedByMaxChange([row({ id: "r1" })], before, [], "kg");
+    expect(exampleWords(moved[0].example)).toBe("Competition Squat 75% TM: 150 kg → no weight");
+  });
+});
+
+describe("Adjust program says when a % has nothing to read", () => {
+  const snap = { maxLifts: ["squat"], pctRefs: { est_1rm: ["deadlift"], comp_pr: ["bench"] } };
+  it("each basis reads its own reference", () => {
+    expect(pctReadWarning("1rm", "squat", snap, false)).toBeNull();
+    expect(pctReadWarning("1rm", "bench", snap, false)).toMatch(/needs a max/);
+    expect(pctReadWarning("comp_pr", "bench", snap, false)).toBeNull();
+    expect(pctReadWarning("comp_pr", "squat", snap, true)).toMatch(/competition PR/);
+    expect(pctReadWarning("est_1rm", "deadlift", snap, false)).toBeNull();
+    // an estimate not ready falls back to the set's RPE: only a warning with no RPE
+    expect(pctReadWarning("est_1rm", "bench", snap, true)).toBeNull();
+    expect(pctReadWarning("est_1rm", "bench", snap, false)).toMatch(/give it an RPE/);
+    expect(pctReadWarning("top_set", null, snap, false)).toBeNull();
   });
 });

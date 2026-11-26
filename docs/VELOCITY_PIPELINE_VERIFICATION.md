@@ -58,3 +58,29 @@ To check it:
 4. Tests: `npx vitest run src/test/lift-analysis` (velocity-worker.test.ts covers the
    token checks and the logging rule; estimate-front.test.ts reads a synthetic front-on
    squat with a known answer).
+
+## Body read on the server (Nov 26 2026)
+
+Joint tracking is no longer only on demand. Once a set video's bar read is saved, the
+database queues its body read (`pl_set_video_poses`, 20270602120000_set_video_body_reads.sql),
+and the same server reader picks it up whenever no bar-speed read is waiting: the app's own
+`runPose` (MediaPipe on the CPU; the WebAssembly runtime and the model are bundled onto the
+runner by `scripts/velocity-worker/bundle.mjs`, nothing fetched from the internet) over the
+set's window ± 0.5 s, packed by `pose-pack.ts` and stored with a technique summary. Technique
+opens on the stored read when it covers the set's window and reads on the device otherwise.
+
+To check it:
+
+1. Settings → Bar speed from videos: each row says "Body read: N of M frames, side view" (or
+   waiting / no one found / failed with why), with "Read body again" for a failed one; the
+   reader card counts body reads done and waiting.
+2. Locally: `DRY_POSE_JOBS=pose-jobs.json PAGE_BUNDLE_DIR=… PLAYWRIGHT_MODULE=… npx tsx
+   --tsconfig tsconfig.json scripts/velocity-worker/worker.ts` after `node
+   scripts/velocity-worker/bundle.mjs <dir>` (a job's `analysis` may be `"@commit"` to chain a
+   `DRY_JOBS` bar read into it). One of Dwayne Gordon's bench clips: 172 of 281 frames, side
+   view, 24 s on one CPU.
+3. Tests: `npx vitest run src/test/lift-analysis/pose-pack.test.ts`.
+
+Limits: the body read's accuracy is the model's (no reference system compared); the server
+reads the ffmpeg-normalised copy, so its times are that copy's (the same assumption the server's
+bar reads already make).

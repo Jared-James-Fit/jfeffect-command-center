@@ -58,7 +58,7 @@ export const rxPatchSchema = z.preprocess(
       rpe: effort.optional(),
       rir: effort.optional(),
       percentage: z.coerce.number().min(1).max(150).optional(),
-      percentage_of: z.enum(["1rm", "training_max", "est_1rm"]).optional(),
+      percentage_of: z.enum(["1rm", "training_max", "est_1rm", "comp_pr", "var_e1rm"]).optional(),
       load: z.coerce.number().positive().max(2000).optional(),
       load_unit: z.enum(["kg", "lb"]).optional(),
       rest_seconds: z.coerce.number().int().min(0).max(1800).optional(),
