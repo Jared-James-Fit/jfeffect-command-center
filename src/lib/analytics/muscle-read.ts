@@ -267,7 +267,7 @@ export function buildMuscleRead(input: {
   const span = isoDay(input.start) && isoDay(endDay) ? dayNum(endDay) - dayNum(input.start) + 1 : 0;
   const hist = counted(input.history ?? input.sets);
   const before =
-    span > 0 && hist.some((s) => s.day < input.start)
+    span > 0 && hist.some((s) => s.day >= dayStr(dayNum(input.start) - span) && s.day < input.start)
       ? { start: dayStr(dayNum(input.start) - span), end: dayStr(dayNum(input.start) - 1) }
       : null;
   const beforeTotals = new Map<FineMuscle, number>();
