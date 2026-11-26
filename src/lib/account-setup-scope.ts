@@ -19,3 +19,10 @@ export function accountSetupRequirements(tier: string | null | undefined, packag
 export function firstPendingHandlingMeet<T extends { id: string; done: boolean }>(meets: readonly T[]): T | undefined {
   return meets.find(meet => !meet.done);
 }
+
+/** One progress calculation for the Home checklist and non-blocking launch reminder. */
+export function accountSetupProgress<T extends { key: string; done: boolean; optional?: boolean }>(items: readonly T[]) {
+  const required = items.filter(item => !item.optional);
+  const open = required.filter(item => !item.done);
+  return { required, open, done: required.length - open.length, needsReminder: open.some(item => item.key !== "agreement") };
+}
