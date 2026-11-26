@@ -29,6 +29,8 @@ const MAX_BASES: Record<string, string> = {
   training_max: "Training Max",
   "1rm": "1RM",
   est_1rm: "Est. 1RM",
+  comp_pr: "Competition PR",
+  var_e1rm: "Est. 1RM",
 };
 
 const LINKED_BASES: Record<string, { what: string; first: string }> = {

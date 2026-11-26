@@ -19,7 +19,13 @@ import { rpeCap } from "@/lib/percent-load-line";
 export type LoadUnit = "kg" | "lb";
 
 const LB_PER_KG = 2.2046226218;
-const MAX_NAMES: Record<string, string> = { training_max: "Training Max", "1rm": "1RM", est_1rm: "Est. 1RM" };
+const MAX_NAMES: Record<string, string> = {
+  training_max: "Training Max",
+  "1rm": "1RM",
+  est_1rm: "Est. 1RM",
+  comp_pr: "Competition PR",
+  var_e1rm: "Est. 1RM",
+};
 
 export interface PlannedLoadInput {
   percentage: number | string | null | undefined;
@@ -43,6 +49,8 @@ export interface PlannedLoadInput {
   viaFamily?: boolean;
   /** a set logged over the cap, and what it was rated */
   capOver?: { set: number; rpe: number } | null;
+  /** where a max read from their training came from (e1rmSourceLine), said after the working-out */
+  referenceNote?: string | string[] | null;
   /** the label the max lookup already made ("65% Comp Squat TM"), else one is made here */
   label?: string | null;
   /** the maxes are still loading (a % of a max) */
@@ -121,6 +129,7 @@ export function plannedLoadView(i: PlannedLoadInput): PlannedLoadView | null {
     if (!i.reference || i.planned == null) return null;
     const exact = (convert(i.reference.value, i.reference.unit, i.unit) * pct) / 100;
     why.push(`${fmtPct(pct)}% of your ${of} (${i.reference.lift} ${fmtLoad(i.reference.value)} ${i.reference.unit}) ${workedOut(exact, i.planned, i.unit)}.`);
+    if (i.referenceNote) why.push(...(Array.isArray(i.referenceNote) ? i.referenceNote : [i.referenceNote]).filter(Boolean));
   }
 
   const capped = i.open != null && i.planned != null && i.open < i.planned - 1e-9;

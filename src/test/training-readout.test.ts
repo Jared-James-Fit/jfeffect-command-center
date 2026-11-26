@@ -93,7 +93,7 @@ describe("training readout", () => {
       history: [set("h-bp", 245, 5, 7.5, 1, "2026-10-08"), set("h-bp", 235, 11, 9, 2, "2026-10-08")],
       historyRows,
     })!;
-    expect(r.this_week.find((x) => x.lift === "bench")!.e1rm_change).toMatch(/^\+0\.\d% vs best earlier this block \(306lb\)$/); // 245 × 5 @ 7.5; the 11-rep set is excluded (strength-read.ts: 10 reps or fewer)
+    expect(r.this_week.find((x) => x.lift === "bench")!.e1rm_change).toMatch(/^\+0\.\d% vs best earlier this block \(307lb\)$/); // 245 × 5 @ 7.5 on the RPE chart; the 11-rep set is excluded (strength-read.ts: 10 reps or fewer)
   });
 
   it("today's session isn't due until it's logged; a passed day with nothing logged is called out", () => {

@@ -78,6 +78,7 @@ import { cn } from "@/lib/utils";
 import { PerformanceCalendar, type DayMeta } from "@/components/analytics/performance-calendar";
 import { SbdDonut } from "@/components/analytics/sbd-donut";
 import { StrengthTrendChart } from "@/components/analytics/strength-trend-chart";
+import { phasesFromBlocks } from "@/lib/strength-intel/phases";
 import { SbdWorkloadChart } from "@/components/analytics/sbd-workload-chart";
 import { BlockComparisonCard } from "@/components/analytics/block-comparison-card";
 import { RecordsView } from "@/components/analytics/records-view";
@@ -392,9 +393,24 @@ export function ClientAnalyticsDashboard({
   });
   const competition = useCompetitionData(clientId, hasPowerlifting);
   const meets = useMemo(() => competition.data?.meets ?? [], [competition.data]);
+  // the training phases the strength read judges lower sessions in (a volume block's
+  // tired sets aren't lost strength): the athlete's blocks, by their type or their words
+  const strengthPhases = useMemo(
+    () =>
+      phasesFromBlocks(
+        clientBlocks.map((b) => ({
+          start_date: b.start_date,
+          end_date: b.end_date,
+          name: b.name,
+          phase: b.training_focus,
+          block_type: blockTypes?.get(b.id) ?? null,
+        })),
+      ),
+    [clientBlocks, blockTypes],
+  );
   const strength = useMemo(
-    () => liftStrengths(allResults as any[], meets, today),
-    [allResults, meets, today],
+    () => liftStrengths(allResults as any[], meets, today, { phases: strengthPhases }),
+    [allResults, meets, today, strengthPhases],
   );
   const { records } = useMemo(
     () => personalRecords(allResults as any[], meets),
@@ -1056,8 +1072,14 @@ export function ClientAnalyticsDashboard({
                             (RPE).
                           </p>
                           <p>
-                            Each dot is one workout. The line follows your hardest recent sets, so a
-                            light day doesn't pull it down. Diamonds are meet lifts.
+                            Each dot is one workout. The line is your training-day strength: hard
+                            sets move it, lighter sets can only nudge it up, and a tired week or a
+                            deload never pulls it down. Diamonds are meet lifts; a peaked meet runs a
+                            little over a normal training day, so the line sits just under them.
+                          </p>
+                          <p>
+                            Competition PR, best in training and peak estimate are kept apart from
+                            the estimate: each answers a different question.
                           </p>
                         </>
                       }
