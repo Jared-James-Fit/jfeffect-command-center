@@ -451,3 +451,28 @@ describe("after the meet", () => {
     expect(r.message).toMatch(/605 kg total, 8 for 9/);
   });
 });
+
+describe("shared meet onboarding defaults", () => {
+  it("reuses existing facts without completing any athlete step", async () => {
+    const { prefillMeetInfo } = await import("@/lib/competition/athlete-info");
+    const info = prefillMeetInfo({ bests: { squat: 130 } }, {
+      unit: "lb", phone: "555-0100", emergencyName: "Contact",
+      bodyweightKg: 63, bodyweightOn: "2026-11-25", bests: { squat: 125, bench: 75 }, recent: { deadlift: 155 },
+    });
+    expect(info.bests).toEqual({ squat: 130, bench: 75 });
+    expect(info.recent?.deadlift).toBe(155);
+    expect(info.bodyweightKg).toBe(63);
+    expect(info.meetDay?.phone).toBe("555-0100");
+    expect(info.steps).toBeUndefined();
+    expect(info.completedAt).toBeUndefined();
+  });
+  it("never restores old defaults into a submitted step", async () => {
+    const { prefillMeetInfo } = await import("@/lib/competition/athlete-info");
+    const info = prefillMeetInfo({ steps: { lifts: "2026-11-25", body: "2026-11-25", day: "2026-11-25" } }, {
+      bodyweightKg: 63, phone: "555-0100", bests: { squat: 125 },
+    });
+    expect(info.bests).toBeUndefined();
+    expect(info.bodyweightKg).toBeUndefined();
+    expect(info.meetDay).toBeUndefined();
+  });
+});
