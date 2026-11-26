@@ -401,6 +401,14 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
     // Snapshot is server-derived, not supplied by the model.
     intakeMeta = { _identity_before: before };
     summary = identitySummary(c, p);
+    if (p.source_id && p.source_quote) {
+      const { requireClientAiConsent } = await import("@/lib/ai-consent/consent.server");
+      await requireClientAiConsent(p.client_id);
+      const { verifyCompetitionNameEvidence } = await import("@/lib/cleo-competition-evidence.server");
+      const file = await verifyCompetitionNameEvidence(actor.db, p);
+      intakeMeta._identity_source = { id: file.id, name: file.file_name };
+      summary += `\nSource: ${file.file_name ?? "Competition file"}`;
+    }
   } else {
     summary = await describeAction(actor.db, kind, params);
   }
@@ -448,6 +456,12 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
       const before = (raw as { _identity_before?: Record<string, string | null> })._identity_before;
       if (!before || identityFields.some(key => !Object.prototype.hasOwnProperty.call(before, key))) throw new Error("The reviewed name is missing. Ask Cleo for a new card.");
       await assertRequesterReaches(await service(), actor.userId, p.client_id);
+      if (p.source_id && p.source_quote) {
+        const { requireClientAiConsent } = await import("@/lib/ai-consent/consent.server");
+        await requireClientAiConsent(p.client_id);
+        const { verifyCompetitionNameEvidence } = await import("@/lib/cleo-competition-evidence.server");
+        await verifyCompetitionNameEvidence(actor.db, p);
+      }
       const patch = identityPatch(p);
       const fields = Object.keys(patch).filter(key => key !== "full_name" && patch[key] !== before[key]);
       let query = sb.from("clients").update({
