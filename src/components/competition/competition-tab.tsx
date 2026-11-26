@@ -629,6 +629,13 @@ function Card({
   );
 }
 
+function meetClock(value: string): string {
+  const [h, m] = value.split(":").map(Number);
+  return Number.isInteger(h) && Number.isInteger(m) && h >= 0 && h < 24 && m >= 0 && m < 60
+    ? `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`
+    : value;
+}
+
 function Header({
   competitions,
   selected,
@@ -665,11 +672,22 @@ function Header({
           {[
             fmtDate(selected.meet_date),
             selected.federation,
-            selected.weight_class ? `${selected.weight_class} kg` : null,
+            selected.weight_class ? `${String(selected.weight_class).replace(/\s*kg$/i, "")} kg` : null,
+            selected.division,
+            selected.equipment_event,
             selected.level ? `${selected.level[0].toUpperCase()}${selected.level.slice(1)}` : null,
           ]
             .filter(Boolean)
             .join(" · ")}
+        </p>
+        <p className="mt-1 text-[13px] text-muted-foreground" data-meet-logistics-summary>
+          {[
+            selected.session_label,
+            selected.flight ? `Flight ${selected.flight}` : null,
+            selected.weigh_in_at ? `Weigh-in ${meetClock(selected.weigh_in_at)}` : null,
+            selected.lifting_start ? `Lifting ${meetClock(selected.lifting_start)}` : null,
+            selected.location,
+          ].filter(Boolean).join(" · ")}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
