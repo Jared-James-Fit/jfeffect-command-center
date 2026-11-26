@@ -274,7 +274,7 @@ export const getGoalsServiceScopeFn = createServerFn({ method: "GET" })
     await assertClientOwnerOrCoachOrAdmin(context, data.clientId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [client, enrollments] = await Promise.all([
-      supabaseAdmin.from("clients").select("service_tier").eq("id", data.clientId).maybeSingle(),
+      supabaseAdmin.from("clients").select("service_tier, user_id").eq("id", data.clientId).maybeSingle(),
       (supabaseAdmin as any).from("coaching_package_enrollments")
         .select("coaching_packages!inner(slug)").eq("client_id", data.clientId)
         .eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)),
@@ -284,7 +284,14 @@ export const getGoalsServiceScopeFn = createServerFn({ method: "GET" })
     const { loadHandlingSetup } = await import("@/lib/competition/handling-setup.server");
     const handlingMeets = await loadHandlingSetup(supabaseAdmin, data.clientId);
     const requirements = accountSetupRequirements(client.data.service_tier, (enrollments.data ?? []).map((e: any) => e.coaching_packages?.slug ?? ""), handlingMeets.length > 0);
-    return { nutritionOnly: requirements.nutritionOnly, requirements, handlingMeets };
+    const { memberSetupSummary } = await import("@/lib/member-setup-steps");
+    let membership = memberSetupSummary(null);
+    if (requirements.memberSetup && client.data.user_id) {
+      const member = await supabaseAdmin.from("app_members").select("account_type, is_admin_sandbox, subscription_status, stripe_subscription_id, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, committed_training_days").eq("user_id", client.data.user_id).maybeSingle();
+      if (member.error) throw new Error("Could not read membership setup");
+      membership = memberSetupSummary(member.data);
+    }
+    return { nutritionOnly: requirements.nutritionOnly, requirements, handlingMeets, membership };
   });
 
 /** Reuse previously supplied member answers in account forms; never mutate a
