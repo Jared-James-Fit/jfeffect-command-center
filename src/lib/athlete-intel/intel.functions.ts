@@ -29,7 +29,7 @@ async function sourceClient(sb: any, sourceId: string) {
 
 const uuid = z.string().uuid();
 const PROVIDERS = ["primary_coach", "athlete", "handler", "other_coach", "other", "unknown"] as const;
-const PURPOSES = ["program", "logs", "competition_history", "coach_recommendations", "warmups", "attempts", "technical", "other"] as const;
+const PURPOSES = ["program", "logs", "competition_history", "event_logistics", "coach_recommendations", "warmups", "attempts", "technical", "other"] as const;
 const fileMeta = z.object({
   name: z.string().trim().min(1).max(200),
   size: z.number().int().min(1).max(MAX_VIDEO_BYTES),
@@ -76,7 +76,7 @@ const addBase = z.object({
   competitionId: uuid.nullable().optional(),
   provider: z.enum(PROVIDERS).default("unknown"),
   providerName: z.string().trim().max(120).nullable().optional(),
-  purposes: z.array(z.enum(PURPOSES)).max(8).default([]),
+  purposes: z.array(z.enum(PURPOSES)).max(9).default([]),
   context: z.string().trim().max(1000).nullable().optional(),
 });
 
