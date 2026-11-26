@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { CommentThread } from "@/components/community/comments-sheet";
-import { AutoPostCaption, CoachBadge } from "@/components/community/post-card";
+import { AutoPostCaption } from "@/components/community/post-card";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { WorkoutDetails } from "@/components/community/workout-details";
 import { StoryAvatar } from "@/components/community/story-ring";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { SHEET_SETTLE, useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
 import { POST_SHEET_FULL_HEIGHT, POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { CaptionText } from "@/components/community/caption-text";
+import { NameMarks } from "@/components/name-marks";
 
 /** Where the sheet opens: the caption at the top ("… more"), scrolled to the comments (💬), or a workout's every set (its recap). */
 export type PostSheetAt = "caption" | "comments" | "workout";
@@ -244,7 +245,7 @@ function PostSheetCaption({ post, onOpenAuthor, onOpenLikes }: { post: Community
                 {also}
               </span>
             )}
-            {post.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+            <NameMarks person={post.author} userId={post.author.user_id} size={13} />
           </div>
           <div className="text-[12px] leading-4 text-muted-foreground">{postTimeLabel(post.created_at)}</div>
         </div>

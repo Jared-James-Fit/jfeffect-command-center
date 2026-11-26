@@ -185,15 +185,15 @@ describe("Crew Stories", () => {
       // Nov 25 2026: one emoji made room for GIFs & stickers (the field stays readable on a small phone)
       expect(viewer).toContain("data-story-gif");
       expect(viewer).toContain("quick.slice(0, 1).map((e) =>");
-      expect(viewer).toContain('placeholder={full ? `You can message ${first} again once they reply` : "Send a message…"}');
+      expect(viewer).toContain('placeholder={full ? `You can message ${first} again once they reply` : "Message…"}');
       expect(viewer).toContain("<StoryBar\n              post={post}\n              viewerIsStaff={viewerIsStaff}\n              onOpenPerson={openPerson}\n              onOpen={() => onOpenPost(storyTarget(post))}\n              onComposing={setComposing}");
     });
     it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens its comments (on yours, its Activity)", () => {
-      expect(viewer).toContain("if (!frameKey || paused || end || composing || clipDrives) return;");
+      expect(viewer).toContain("if (!frameKey || paused || end || waiting || clipDrives) return;");
       // a clip pauses the same way (its own clock)
-      expect(viewer).toContain("paused: paused || !!end || composing,");
+      expect(viewer).toContain("paused: paused || !!end || waiting,");
       expect(viewer).toContain("if (post.is_mine) return setAskActivity((n) => n + 1);");
-      expect(viewer).toContain("return storyLinkLabel(post) ? onOpenPost(storyTarget(post)) : setAskComments((n) => n + 1);");
+      expect(viewer).toContain("return openComments();");
       expect(viewer).toContain("onEscapeKeyDown={(e) => {");
     });
     it("goes the same private way as Message on a post, tagged as a story; never as a client the coach is previewing", () => {
@@ -258,7 +258,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("setEnd(storyEnd(groups, posts, watched.current));");
       expect(viewer).not.toContain("} else onClose();");
       // the clock stops on it
-      expect(viewer).toContain("if (!frameKey || paused || end || composing || clipDrives) return;");
+      expect(viewer).toContain("if (!frameKey || paused || end || waiting || clipDrives) return;");
       // swipe down closes it, but never from the camera opened on top of it
       expect(viewer).toContain("if (!e.currentTarget.contains(e.target as Node)) return;");
       const screen = read("src/components/community/community-screen.tsx");

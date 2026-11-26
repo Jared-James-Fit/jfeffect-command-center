@@ -40,6 +40,10 @@ function fakeDb(opts: {
           inserted.push({ table, row });
           return { error: null };
         },
+        upsert: async (row: any, o: any) => {
+          inserted.push({ table, row, upsert: o });
+          return { error: null };
+        },
       };
       return q;
     },
@@ -64,7 +68,12 @@ describe("recordSignupAcceptances", () => {
       contextRef: "membership_application:a-1",
     });
     expect(r).toEqual({ recorded: ["terms-of-service", "privacy-policy"], missing: [] });
-    expect(db.inserted).toHaveLength(2);
+    expect(db.inserted.filter((i) => i.table === "legal_acceptances")).toHaveLength(2);
+    // the box names the Crew community guidelines: kept where Crew reads it, never over an earlier agreement
+    expect(db.inserted.find((i) => i.table === "community_rules_acceptances")).toMatchObject({
+      row: { user_id: "u-1", version: 1 },
+      upsert: { onConflict: "user_id", ignoreDuplicates: true },
+    });
     const row = db.inserted[0].row;
     expect(db.inserted[0].table).toBe("legal_acceptances");
     expect(row).toMatchObject({
@@ -85,7 +94,7 @@ describe("recordSignupAcceptances", () => {
     });
     const r = await recordSignupAcceptances(db, { userId: "u-1" });
     expect(r).toEqual({ recorded: [], missing: ["terms-of-service", "privacy-policy"] });
-    expect(db.inserted).toHaveLength(0);
+    expect(db.inserted.filter((i) => i.table === "legal_acceptances")).toHaveLength(0);
 
     const draft = fakeDb({
       docs: [{ id: "d-priv", slug: "privacy-policy", current_version_id: "v-priv" }],

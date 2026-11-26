@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import { Globe } from "lucide-react";
 import { toast } from "sonner";
 import { useEntitlement } from "@/lib/service-tier";
@@ -120,5 +123,48 @@ export function PostMyFilmRow() {
         when="when you finish"
       />
     </div>
+  );
+}
+
+/**
+ * "Show my membership badge": the emblem beside your name in the Crew (coaching, member or free,
+ * from your plan). On by default and said in the Privacy Policy; off hides it everywhere
+ * (community_set_show_badge, read by _membership_badge). Never in View as.
+ */
+export function MembershipBadgeRow() {
+  const { isImpersonating } = useClientImpersonation();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { data: shown } = useQuery({
+    queryKey: ["show-membership-badge", user?.id],
+    enabled: !!user?.id && !isImpersonating,
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("community_profiles").select("show_membership_badge").eq("user_id", user!.id).maybeSingle();
+      return data?.show_membership_badge !== false;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const save = useMutation({
+    mutationFn: async (on: boolean) => {
+      const { error } = await (supabase as any).rpc("community_set_show_badge", { _on: on });
+      if (error) throw new Error(error.message);
+      return on;
+    },
+    onSuccess: (on) => {
+      qc.setQueryData(["show-membership-badge", user?.id], on);
+      void qc.invalidateQueries({ queryKey: ["membership-badge"] });
+      toast.success(on ? "Your badge shows beside your name" : "Your badge is hidden");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
+  });
+  if (isImpersonating || shown === undefined) return null;
+  return (
+    <label data-badge-switch className={ROW}>
+      <span className="min-w-0">
+        <span className={TITLE}>Show my membership badge</span>
+        <span className={NOTE}>The small emblem beside your name in the Crew says whether you're coached, a member or on the free app.</span>
+      </span>
+      <Switch checked={shown} disabled={save.isPending} onCheckedChange={(on) => save.mutate(on)} aria-label="Show my membership badge" />
+    </label>
   );
 }

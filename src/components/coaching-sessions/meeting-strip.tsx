@@ -124,16 +124,21 @@ export function MeetingStrip({
     >
       <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
+        {/* when first: on a phone the title gives way, never the time */}
         <p className={cn("truncate font-medium", compact ? "text-[13px]" : "text-[14px]")}>
-          {d.meeting?.title || call?.title || "Meeting"}
           {call?.startsAt ? (
-            <span className="font-normal text-muted-foreground">
-              {" "}
-              · {soonWords(call.startsAt, now, { clock: clockOf, day: dayOf }, call.endsAt)}
-            </span>
+            soonWords(call.startsAt, now, { clock: clockOf, day: dayOf }, call.endsAt)
           ) : d.meeting?.status === "live" ? (
-            <span className="font-normal text-success"> · Live</span>
+            <span className="text-success">Live</span>
           ) : null}
+          {call?.startsAt || d.meeting?.status === "live" ? (
+            <span className="font-normal text-muted-foreground">
+              {" · "}
+              {d.meeting?.title || call?.title || "Meeting"}
+            </span>
+          ) : (
+            d.meeting?.title || call?.title || "Meeting"
+          )}
         </p>
         {call || d.meeting?.changes ? (
           <p className="truncate text-[12px] text-muted-foreground">
@@ -145,7 +150,7 @@ export function MeetingStrip({
             {d.meeting?.changes ? (
               <span className="text-warning">
                 {call ? " · " : ""}
-                {d.meeting.changes} new in the plan
+                {d.meeting.changes} new
               </span>
             ) : null}
             {d.openAfter ? ` · ${d.openAfter} open from last time` : ""}

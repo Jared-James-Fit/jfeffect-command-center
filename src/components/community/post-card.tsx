@@ -1,6 +1,6 @@
 import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
+import { CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { CLIP_SCRUB_EVENT, inClipScrubBand } from "@/lib/video-scrub";
 import { justGaveSound, justStartedPlay } from "@/lib/video-pool";
@@ -71,6 +71,7 @@ import { WorkoutRecap } from "@/components/community/workout-recap";
 import { FitScale } from "@/components/community/fit-scale";
 import { recapIndex } from "@/lib/workout-recap";
 import { splitAtWeight } from "@/lib/dual-weight";
+import { NameMarks } from "@/components/name-marks";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -211,10 +212,8 @@ export function AutoPostCaption({ post, clamp, onOpenPerson, className, named = 
   );
 }
 
-/** The coach mark next to a name: small, verified-style, never a banner. */
-export function CoachBadge({ className }: { className?: string }) {
-  return <BadgeCheck className={cn("h-4 w-4 shrink-0 fill-primary text-primary-foreground", className)} aria-label="Coach" role="img" />;
-}
+/** The coach mark next to a name (it lives with the other name marks, name-marks.tsx). */
+export { CoachBadge } from "@/components/name-marks";
 
 /**
  * A coach's own note ("+ Post", a shared comment): the featured quote with
@@ -296,7 +295,7 @@ export function AuthorLine({
             <button type="button" onClick={onOpen} className="max-w-[60%] shrink-0 truncate font-bold" aria-label={`${author.name}'s profile`}>
               {author.name}
             </button>
-            {author.is_coach && <CoachBadge />}
+            <NameMarks person={author} userId={author.user_id} />
             <span className="shrink-0 text-muted-foreground">and</span>
             {collabs.length === 1 ? (
               <button type="button" onClick={() => onOpenPerson?.(collabs[0])} className="min-w-0 truncate font-bold" aria-label={`${collabs[0].name}'s profile`}>
@@ -318,7 +317,7 @@ export function AuthorLine({
   const nameLine = (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
-      {author.is_coach && <CoachBadge />}
+      <NameMarks person={author} userId={author.user_id} />
     </div>
   );
   if (!onOpen) {
@@ -342,7 +341,7 @@ export function AuthorLine({
         <div className="flex min-w-0 items-center gap-1.5">
           <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-1.5 rounded-md text-left" tabIndex={-1} aria-hidden>
             <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
-            {author.is_coach && <CoachBadge />}
+            <NameMarks person={author} userId={author.user_id} />
           </button>
           {trailing}
         </div>
@@ -1147,7 +1146,7 @@ export function CommentPreviewList({ post, onOpenComments }: { post: CommunityPo
           {c.pinned && <Pin className="h-3 w-3 shrink-0 translate-y-[1px] rotate-45 text-muted-foreground" aria-label="Pinned" />}
           <span className="line-clamp-1 min-w-0">
             <span className="font-bold">{c.author.name}</span>
-            {c.author.is_coach && <CoachBadge className="mx-0.5 inline h-3.5 w-3.5 -translate-y-px" />}{" "}
+            <NameMarks person={c.author} userId={c.author.user_id} size={13} className="mx-0.5 -translate-y-px align-middle" />{" "}
             <span className="text-foreground/85">{c.body || (c.media ? "📷 Photo" : "")}</span>
           </span>
         </div>

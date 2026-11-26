@@ -273,28 +273,30 @@ function PointRow({
           >
             {p.text}
           </span>
-          <span className="ml-1.5 inline-flex flex-wrap gap-1 align-middle">
-            {isNew ? (
-              <span className="rounded bg-warning/15 px-1 text-[10.5px] font-medium text-warning">
-                New
-              </span>
-            ) : null}
-            {p.custom ? (
-              <span className="rounded bg-muted px-1 text-[10.5px] text-muted-foreground">
-                Yours
-              </span>
-            ) : null}
-            {covered && !addressed ? (
-              <span className="rounded bg-success/10 px-1 text-[10.5px] text-success">
-                Sounds covered
-              </span>
-            ) : null}
-            {skipped ? (
-              <span className="rounded bg-muted px-1 text-[10.5px] text-muted-foreground">
-                Skipped
-              </span>
-            ) : null}
-          </span>
+          {isNew || p.custom || (covered && !addressed) || skipped ? (
+            <span className="ml-1.5 inline-flex flex-wrap gap-1 align-middle">
+              {isNew ? (
+                <span className="rounded bg-warning/15 px-1 text-[10.5px] font-medium text-warning">
+                  New
+                </span>
+              ) : null}
+              {p.custom ? (
+                <span className="rounded bg-muted px-1 text-[10.5px] text-muted-foreground">
+                  Yours
+                </span>
+              ) : null}
+              {covered && !addressed ? (
+                <span className="rounded bg-success/10 px-1 text-[10.5px] text-success">
+                  Sounds covered
+                </span>
+              ) : null}
+              {skipped ? (
+                <span className="rounded bg-muted px-1 text-[10.5px] text-muted-foreground">
+                  Skipped
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </button>
         {p.share && !skipped ? (
           <Eye

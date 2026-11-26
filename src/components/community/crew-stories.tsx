@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Aperture, Check, ChevronRight, Eye, Heart, MessageCircle, MoreHorizontal, Play, Plus, Send, Trophy, VolumeX, X } from "lucide-react";
+import { Aperture, Check, ChevronRight, Eye, Heart, Lock, MessageCircle, MoreHorizontal, Play, Plus, Send, Trophy, VolumeX, X } from "lucide-react";
+import { NameMarks } from "@/components/name-marks";
 import { storyLookLine, useStoryLooks } from "@/lib/story-looks";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -7,13 +8,14 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { clipFrame, type ClipFrame } from "@/lib/photo-frame";
-import { PREVIEW_ONLY_MESSAGE, canShareToStory, compactNumber, crewStories, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyLinkLabel, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, canShareToStory, compactNumber, crewStories, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyLinkLabel, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityComment, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
 import { StoryViewersPanel } from "@/components/community/post-activity";
 import { StoryMenuSheet, StoryOthersMenuSheet } from "@/components/community/story-menu";
-import { CommentsSheet, PostShareSheet } from "@/components/community/lazy-sheets";
+import { PostShareSheet, StoryCommentsPanel, preloadStoryComments } from "@/components/community/lazy-sheets";
+import { StoryCommentsPeek, useStoryCommentsLive } from "@/components/community/story-comments-peek";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
 import { InlineFollow } from "@/components/community/follow-button";
@@ -383,8 +385,20 @@ function StoryViewer({
   const [composing, setComposing] = useState(false);
   // your own story, swiped up: its Activity (counted up so the same swipe twice still opens it)
   const [askActivity, setAskActivity] = useState(0);
-  // someone else's story, swiped up: its comments (a story with no post of its own to open); your ⋯ menu the same way
-  const [askComments, setAskComments] = useState(0);
+  // the story's comments: a panel that's part of the story (never the feed's sheet or a page), opened from 💬,
+  // a swipe up or the comments floating over it; mounted on first open and kept for its slide out
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsMounted, setCommentsMounted] = useState(false);
+  const openComments = useCallback(() => {
+    setCommentsMounted(true);
+    setCommentsOpen(true);
+  }, []);
+  const closeComments = useCallback(() => setCommentsOpen(false), []);
+  // this moment's comments, live once it's been showing a beat (or at once with its panel open)
+  const liveComments = useStoryCommentsLive(post?.id, commentsOpen);
+  // the panel's code, ready before the first tap
+  useEffect(() => preloadStoryComments(), []);
+  // your ⋯ menu (counted up, so the same tap twice still opens it)
   const [askMenu, setAskMenu] = useState(0);
   // someone else's story: ⋯ with Report and Block (never for a coach, never in View as client)
   const [othersMenu, setOthersMenu] = useState(false);
@@ -490,6 +504,8 @@ function StoryViewer({
   useEffect(() => {
     if (!frameKey) return;
     setProgress(0);
+    // a new moment starts with its own comments closed
+    setCommentsOpen(false);
     if (!post) return;
     watched.current.add(post.id);
     // every ring for this person (the rail, their profile, their posts, comments, chats) catches up at once
@@ -499,9 +515,11 @@ function StoryViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameKey]);
 
-  // the clock (stopped on the end card, and while replying; a clip runs its own)
+  // the story waits while you reply, read or write its comments (or anything else is open over it), and carries
+  // on from the very same spot after: the clock (stopped on the end card too; a clip runs its own)
+  const waiting = composing || commentsOpen;
   useEffect(() => {
-    if (!frameKey || paused || end || composing || clipDrives) return;
+    if (!frameKey || paused || end || waiting || clipDrives) return;
     let raf = 0;
     let last = performance.now();
     const tick = (t: number) => {
@@ -512,7 +530,7 @@ function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [frameKey, paused, end, composing, clipDrives]);
+  }, [frameKey, paused, end, waiting, clipDrives]);
   useEffect(() => {
     if (progress >= 1 && !end) next();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -608,11 +626,11 @@ function StoryViewer({
     if (!p) return;
     const dy = e.clientY - p.y;
     if (dy > 80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return close();
-    // swipe up: on yours, its Activity (Instagram's viewers); on anyone else's, what the story points at (the workout it
-    // shows, or the post it shares), else its comments right here: a story never opens a page of its own
+    // swipe up: on yours, its Activity (Instagram's viewers); on anyone else's, its comments right here. A swipe never
+    // leaves the story for a page (a workout's or a shared post's page is only its own labelled button)
     if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) {
       if (post.is_mine) return setAskActivity((n) => n + 1);
-      return storyLinkLabel(post) ? onOpenPost(storyTarget(post)) : setAskComments((n) => n + 1);
+      return openComments();
     }
     if (wasHold || Date.now() - p.t > 220) return;
     if (p.x < window.innerWidth / 3) prev();
@@ -652,6 +670,13 @@ function StoryViewer({
         overlayStyle={drag ? { opacity: 1 - pull, transition: drag.settle ? `opacity 210ms ${ease}` : "none" } : undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => {
+          // Esc closes the comments first (the story carries on), never the stories with them
+          if (commentsOpen) {
+            e.preventDefault();
+            (document.activeElement as HTMLElement | null)?.blur?.();
+            setCommentsOpen(false);
+            return;
+          }
           // Esc while replying puts the keyboard away, it doesn't close the stories
           if (composing) {
             e.preventDefault();
@@ -671,7 +696,7 @@ function StoryViewer({
             <StoryPeek group={groups[prevFace.j]} at={prevFace.at} unit={unit} />
           </div>
         )}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black will-change-transform sm:rounded-[28px]" style={swipe ? face(0) : lifted} data-story-card>
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-black will-change-transform sm:rounded-[28px]" style={swipe ? face(0) : lifted} data-story-card>
         {end ? (
           <StoryEndCard
             end={end}
@@ -687,7 +712,7 @@ function StoryViewer({
         ) : (
         <>
         <DialogTitle className="sr-only">{group.mine ? "Your story" : `${group.author.name}'s story`}</DialogTitle>
-        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe left or right for the next or last person, swipe up for its comments (on your own story, its activity), swipe down to close. Reply, like, comment or share at the bottom.</DialogDescription>
+        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe left or right for the next or last person, swipe up for its comments (on your own story, its activity), swipe down to close. Reply privately, like, comment publicly or share at the bottom.</DialogDescription>
         <div
           className="relative flex min-h-0 flex-1 select-none flex-col touch-none"
           onPointerDown={onDown}
@@ -713,7 +738,7 @@ function StoryViewer({
             clip={
               clipDrives
                 ? {
-                    paused: paused || !!end || composing,
+                    paused: paused || !!end || waiting,
                     onProgress: (p) => setProgress((cur) => (p > cur ? Math.min(0.999, p) : cur)),
                     onEnd: () => setProgress(1),
                     onFail: () => setClipFailed(post.id),
@@ -829,6 +854,8 @@ function StoryViewer({
               viewerIsStaff={viewerIsStaff}
               askMenu={askMenu}
               onViewFeedPost={onOpenPost}
+              onOpenComments={openComments}
+              liveComments={liveComments}
             />
           ) : (
             <>
@@ -848,7 +875,8 @@ function StoryViewer({
               onOpenPerson={openPerson}
               onOpen={() => onOpenPost(storyTarget(post))}
               onComposing={setComposing}
-              askComments={askComments}
+              onOpenComments={openComments}
+              liveComments={liveComments}
               // a moment that's a crew-wide post: ✈️ adds it to your story (the story slides away, the camera opens)
               onShare={
                 shareReady && !isImpersonating && canShareToStory(post)
@@ -863,6 +891,13 @@ function StoryViewer({
             </>
           )}
         </div>
+        {/* its comments: inside the story (the story stays above it, paused where it was), outside the story's own
+            gestures, so nothing in the panel can step, swipe or close the story under it */}
+        {commentsMounted && (
+          <Suspense fallback={null}>
+            <StoryCommentsPanel key={post.id} post={post} open={commentsOpen} onClose={closeComments} viewerIsStaff={viewerIsStaff} onOpenPerson={openPerson} />
+          </Suspense>
+        )}
         </>
         )}
         </div>
@@ -1084,6 +1119,7 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
         <div className="mt-2.5 flex h-10 items-center gap-2">
           <UserAvatar src={group.author.avatar_url} name={group.author.name} size={32} expandable={false} />
           <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : group.author.name.split(" ")[0]}</span>
+          {!group.mine && <NameMarks person={group.author as any} userId={group.author.user_id} size={13} onDark />}
           <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
         </div>
       </div>
@@ -1095,8 +1131,9 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
  * Your own story: who's seen it, the likes, the comments and a share, along
  * the bottom (nothing to reply to). Seen by, the likes or a swipe up open its
  * viewers (Instagram's: the story shrinks to the top, StoryViewersPanel),
- * whose strip moves the story to another of your moments; the speech bubble
- * opens its comments over the story, and the paper plane shares it in the
+ * whose strip moves the story to another of your moments; its newest comments
+ * float above the bar, and they or the speech bubble open its comments panel
+ * (the story's own, StoryCommentsPanel); the paper plane shares it in the
  * app or out of it. The ⋯ in the story's top row holds the rest (Share to
  * feed, Change sticker: StoryMenuSheet), so the bar stays clean. The story
  * waits while any of them is open.
@@ -1114,6 +1151,8 @@ function MyStoryBar({
   viewerIsStaff,
   askMenu,
   onViewFeedPost,
+  onOpenComments,
+  liveComments,
 }: {
   post: CommunityPost;
   moments: CommunityPost[];
@@ -1128,14 +1167,16 @@ function MyStoryBar({
   /** The ⋯ in the story's top row (counted up, like `ask`). */
   askMenu: number;
   onViewFeedPost: (id: string) => void;
+  /** Its comments panel (the viewer's; the story waits while it's open). */
+  onOpenComments: () => void;
+  /** Its comments, live, for the ones floating over it (else the story's own preview). */
+  liveComments: CommunityComment[] | undefined;
 }) {
   const { isImpersonating } = useClientImpersonation();
   const [viewers, setViewers] = useState(false);
   const [sticker, setSticker] = useState(false);
   const [menu, setMenu] = useState(false);
   const [menuBusy, setMenuBusy] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [commentsMounted, setCommentsMounted] = useState(false);
   const [sharing, setSharing] = useState<boolean | null>(null);
   // only a swipe made while this is on screen (never one from before it was)
   const asked = useRef(ask);
@@ -1150,16 +1191,14 @@ function MyStoryBar({
     askedMenu.current = askMenu;
     setMenu(true);
   }, [askMenu]);
-  // the story waits while its viewers, comments, share or menu (or the sticker editor) are open
+  // the story waits while its viewers, share or menu (or the sticker editor) are open (its comments: the viewer's own)
   const sharingOpen = sharing === true;
   useEffect(() => {
-    onHold(viewers || sticker || menuBusy || commentsOpen || sharingOpen);
-  }, [viewers, sticker, menuBusy, commentsOpen, sharingOpen, onHold]);
+    onHold(viewers || sticker || menuBusy || sharingOpen);
+  }, [viewers, sticker, menuBusy, sharingOpen, onHold]);
   useEffect(() => () => onHold(false), [onHold]);
   // another moment: nothing from the last one stays open
   useEffect(() => {
-    setCommentsOpen(false);
-    setCommentsMounted(false);
     setSharing(null);
     setMenu(false);
   }, [post.id]);
@@ -1167,13 +1206,12 @@ function MyStoryBar({
   const hearts = post.reaction_count ?? 0;
   const comments = post.comment_count ?? 0;
   const closeViewers = useCallback(() => setViewers(false), []);
-  const openComments = () => {
-    setCommentsMounted(true);
-    setCommentsOpen(true);
-  };
   return (
     <>
-    <div className="absolute inset-x-0 bottom-0 z-30 flex items-center gap-1 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.85rem)" }} data-story-mine-bar>
+    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.85rem)" }} data-story-mine-bar>
+      {/* its newest comments, floating over the story (a tap opens them all) */}
+      <StoryCommentsPeek post={post} live={liveComments} onOpen={onOpenComments} max={post.sticker ? 1 : undefined} className="mb-3 px-1" />
+      <div className="flex items-center gap-1">
       <button
         type="button"
         onClick={() => setViewers(true)}
@@ -1199,13 +1237,14 @@ function MyStoryBar({
         <Heart className="h-[26px] w-[26px]" strokeWidth={1.8} />
         {hearts > 0 && <span>{compactNumber(hearts)}</span>}
       </button>
-      <button type="button" onClick={openComments} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={comments ? `Comments, ${comments}` : "Comments"} data-story-comment>
+      <button type="button" onClick={onOpenComments} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={comments ? `Comments, ${comments}` : "Comments"} data-story-comment>
         <MessageCircle className="h-[26px] w-[26px] -scale-x-100" strokeWidth={1.8} />
         {comments > 0 && <span>{compactNumber(comments)}</span>}
       </button>
       <button type="button" onClick={() => setSharing(true)} aria-label="Share" className="grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-90" data-story-share>
         <Send className="h-[25px] w-[25px] -rotate-12" strokeWidth={1.8} />
       </button>
+      </div>
       <StoryMenuSheet
         post={post}
         open={menu}
@@ -1217,11 +1256,6 @@ function MyStoryBar({
       />
       <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />
     </div>
-    {commentsMounted && (
-      <Suspense fallback={null}>
-        <CommentsSheet story open={commentsOpen} post={post} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsOpen(false)} onOpenAuthor={onOpenPerson} />
-      </Suspense>
-    )}
     {sharing !== null && (
       <Suspense fallback={null}>
         <PostShareSheet post={post} open={sharing} onOpenChange={setSharing} />
@@ -1304,9 +1338,10 @@ const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉
 const QUICK_POST = ["😍", "😂", "🔥", "👏", "😮", "🙌", "💯", "🎉"];
 
 /**
- * The bar under a story, as on Instagram / TikTok: "Send a message…" with two
- * quick emoji in it, then the heart (like / unlike the story), the speech
- * bubble (its comments, in a sheet over the story, the story still showing
+ * The bar under a story, as on Instagram / TikTok: its newest public comments
+ * floating above it (a tap opens them all), then "Message …" with a lock and
+ * two quick emoji in it, the heart (like / unlike the story), the speech
+ * bubble (its comments, in the story's own panel, the story still showing
  * above it) and the paper plane (share it: people and chats in the app, or
  * the phone's own share sheet). Tapping the field pauses the story and opens
  * eight quick reactions; one tap sends it (with a shower of it on screen), or
@@ -1314,11 +1349,30 @@ const QUICK_POST = ["😍", "😂", "🔥", "👏", "😮", "🙌", "💯", "�
  * the same way as Message on a post (useMessageAuthor): member to member as a
  * message request, a coach and their client in their coach chat; the other
  * person sees "Replied to your story" with the moment. A comment is public,
- * seen by everyone who can see the story, and the sheet says so. The story
- * waits while you type or while any sheet is open. A story has no page of its
- * own: a link only shows for a workout's win and a story that shares a post.
+ * seen by everyone who can see the story (the panel's globe says so); the
+ * lock says a message isn't. The story waits while you type or while any
+ * sheet is open. A story has no page of its own: a link only shows for a
+ * workout's win and a story that shares a post.
  */
-function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPerson, askComments }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void; onComposing: (on: boolean) => void; onShare?: () => void; onOpenPerson?: (a: CommunityAuthor) => void; askComments: number }) {
+function StoryBar({
+  post,
+  viewerIsStaff,
+  onOpen,
+  onComposing,
+  onShare,
+  onOpenPerson,
+  onOpenComments,
+  liveComments,
+}: {
+  post: CommunityPost;
+  viewerIsStaff: boolean;
+  onOpen: () => void;
+  onComposing: (on: boolean) => void;
+  onShare?: () => void;
+  onOpenPerson?: (a: CommunityAuthor) => void;
+  onOpenComments: () => void;
+  liveComments: CommunityComment[] | undefined;
+}) {
   const { role } = useAuth();
   const { isImpersonating } = useClientImpersonation();
   const react = useReact(post, viewerIsStaff);
@@ -1343,9 +1397,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
   const [pop, setPop] = useState(0);
   const [shower, setShower] = useState<{ id: number; emoji: string } | null>(null);
   const [sent, setSent] = useState<string | null>(null);
-  // the comments over the story, and the share sheet (mounted on its first tap)
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [commentsMounted, setCommentsMounted] = useState(false);
+  // the share sheet (mounted on its first tap); the comments are the viewer's own panel
   const [sharing, setSharing] = useState<boolean | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const blurTimer = useRef<number | undefined>(undefined);
@@ -1356,30 +1408,17 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
   useEffect(() => {
     setText("");
     setSent(null);
-    setCommentsOpen(false);
-    setCommentsMounted(false);
     setSharing(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
-  const openComments = () => {
-    setCommentsMounted(true);
-    setCommentsOpen(true);
-  };
   // typing, or a sheet open: the story waits, and carries on from the same spot when it's put away
   // the GIF picker holds the story too
-  const sheetOpen = commentsOpen || sharing === true || gifOpen;
+  const sheetOpen = sharing === true || gifOpen;
   useEffect(() => {
     onComposing(focused || text.trim().length > 0 || sheetOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused, text, sheetOpen]);
   useEffect(() => () => onComposing(false), [onComposing]);
-  // a swipe up on a story with no page of its own opens its comments (only one made while this is on screen)
-  const askedComments = useRef(askComments);
-  useEffect(() => {
-    if (askComments === askedComments.current) return;
-    askedComments.current = askComments;
-    openComments();
-  }, [askComments]);
   useEffect(() => {
     if (!sent) return;
     const t = window.setTimeout(() => setSent(null), 2200);
@@ -1439,7 +1478,6 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
         >
           {!typing && (
             <div className="w-full max-w-[320px] text-center">
-              <p className="mb-4 text-[13px] font-bold text-white/70">Quick reactions</p>
               <div className="grid grid-cols-4 gap-y-4">
                 {quick.map((e) => (
                   <button
@@ -1457,8 +1495,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
             </div>
           )}
           {/* a message and a comment are different things: this one is only for them */}
-          <p className="mt-6 max-w-[300px] text-center text-[12.5px] font-semibold leading-snug text-white/65" data-story-private-note>
-            Only {first} sees this, in your messages. To say something everyone can see, tap the speech bubble.
+          <p className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[12px] font-semibold text-white/75" data-story-private-note>
+            <Lock className="h-3 w-3" aria-hidden /> Private · only {first} sees it
           </p>
         </div>
       )}
@@ -1479,6 +1517,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
         style={{ bottom: lift, paddingBottom: lift ? "0.6rem" : "max(env(safe-area-inset-bottom), 0.75rem)" }}
         data-story-bar
       >
+        {/* its newest public comments, floating over the story (a tap opens them all); away while you type a message */}
+        {!focused && <StoryCommentsPeek post={post} live={liveComments} onOpen={onOpenComments} max={post.sticker ? 1 : undefined} className="mb-3 px-1" />}
         {!focused && (caption || link || sent) && (
           <div className="mb-3 px-1">
             {/* its words, the people it tags tappable (their profile) */}
@@ -1499,7 +1539,9 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
         )}
         <div className="flex items-center gap-1">
           {canMessage ? (
-            <div className={cn("mr-1 flex h-12 min-w-0 flex-1 items-center rounded-full border pl-4 pr-1", focused ? "border-white bg-black/40" : "border-white/50")}>
+            <div className={cn("mr-1 flex h-12 min-w-0 flex-1 items-center rounded-full border pl-3.5 pr-1", focused ? "border-white bg-black/40" : "border-white/50")}>
+              {/* private: a message only they see (comments, the speech bubble, are public) */}
+              <Lock className="mr-2 h-3.5 w-3.5 shrink-0 text-white/70" aria-hidden />
               <input
                 ref={input}
                 value={text}
@@ -1514,7 +1556,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
                 }}
                 disabled={full}
                 enterKeyHint="send"
-                placeholder={full ? `You can message ${first} again once they reply` : "Send a message…"}
+                placeholder={full ? `You can message ${first} again once they reply` : "Message…"}
                 className="h-full min-w-0 flex-1 select-text bg-transparent text-[16px] text-white outline-none placeholder:text-white/80 disabled:placeholder:text-white/55"
                 aria-label={`Send ${post.author.name} a private message`}
                 data-story-reply-field
@@ -1548,7 +1590,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
                   {mine && mine !== "heart" ? <span className="text-[26px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-[28px] w-[28px]", mine && "fill-[#ef3340] text-[#ef3340]")} strokeWidth={1.8} />}
                 </span>
               </button>
-              <button type="button" onClick={openComments} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={comments ? `Comments, ${comments}` : "Comments"} data-story-comment>
+              <button type="button" onClick={onOpenComments} className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-1.5 text-[14px] font-bold tabular-nums active:scale-90" aria-label={comments ? `Comments, ${comments}` : "Comments"} data-story-comment>
                 <MessageCircle className="h-[26px] w-[26px] -scale-x-100" strokeWidth={1.8} />
                 {comments > 0 && <span>{compactNumber(comments)}</span>}
               </button>
@@ -1568,11 +1610,6 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPer
           onControlledOpenChange={setGifOpen}
           onPick={(m) => { setGifOpen(false); void deliver("", undefined, m); }}
         />
-      )}
-      {commentsMounted && (
-        <Suspense fallback={null}>
-          <CommentsSheet story open={commentsOpen} post={post} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsOpen(false)} onOpenAuthor={onOpenPerson} />
-        </Suspense>
       )}
       {sharing !== null && (
         <Suspense fallback={null}>

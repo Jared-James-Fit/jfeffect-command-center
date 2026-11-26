@@ -126,12 +126,35 @@ describe("the app side", () => {
     expect(read("src/components/community/crew-stories.tsx")).toContain("<StoryOthersMenuSheet");
   });
 
-  it("asks for the Community rules when the server does, and posts again on Agree", () => {
+  it("never interrupts a post, comment or reply with a rules pop-up: the guidelines are agreed to with the Terms at sign-up", () => {
     const q = read("src/lib/community.queries.ts");
-    expect(q).toContain('withCrewRules(() => db.rpc("community_add_comment"');
-    expect(q).toContain('withCrewRules(() => db.rpc("community_create_post"');
-    expect(q).toContain('db.rpc("community_save_post"');
-    expect(read("src/components/app-shell.tsx")).toContain("<CrewRulesHost />");
+    expect(q).not.toContain("withCrewRules");
+    expect(q).toContain('db.rpc("community_add_comment", {');
+    expect(q).toContain('db.rpc("community_create_post", {');
+    expect(q).toContain('db.rpc("community_save_post", {');
+    expect(read("src/lib/story-feed.queries.ts")).not.toContain("withCrewRules");
+    expect(read("src/components/app-shell.tsx")).not.toContain("CrewRulesHost");
+    expect(read("src/lib/crew-safety.ts")).not.toContain("askCrewRules");
+    // sign-up's box names them and links them; they're kept where Crew reads who agreed
+    expect(read("src/lib/legal-signup.ts")).toContain("including the Crew community guidelines");
+    expect(read("src/components/join/activate-page.tsx")).toContain('to="/community-guidelines"');
+    expect(read("src/lib/legal-signup.server.ts")).toContain('.from("community_rules_acceptances")');
+    // always one tap away in Settings, and public
+    expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("<CrewGuidelinesRow />");
+    expect(read("src/components/community/profile-edit.tsx")).toContain('<CrewGuidelinesRow variant="list"');
+    expect(read("src/routes/community-guidelines.tsx")).toContain('createFileRoute("/community-guidelines")');
+  });
+
+  it("the server no longer refuses a post for the rules, keeps suspensions, and records the Terms as agreeing to them", () => {
+    const m = read("supabase/migrations/20270531100000_crew_guidelines_at_signup.sql");
+    const fn = m.split("CREATE OR REPLACE FUNCTION public.crew_assert_can_post(")[1].split("$$;")[0];
+    expect(fn).toContain("HINT = 'crew_suspended'");
+    expect(fn).not.toContain("crew_rules");
+    expect(m).toContain("CREATE TRIGGER trg_legal_acceptance_crew_guidelines");
+    expect(m).toContain("ON CONFLICT (user_id) DO NOTHING;");
+    // Terms 8.1 is a draft for the owner to publish, and asks no one to accept again
+    expect(m).toContain("8.1 Crew community guidelines");
+    expect(m).toContain("(v_doc, v_next, 'draft', v_base.title,");
   });
 
   it("the queue has Remove, Keep, Warn, Suspend and the 24-hour clock; Help publishes the contact email", () => {

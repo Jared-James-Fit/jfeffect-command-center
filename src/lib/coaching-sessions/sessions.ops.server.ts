@@ -130,6 +130,9 @@ export async function prepareSession(c: Caller, data: any) {
   const event = pickEvent(ctx, data.eventKey, data.customTitle);
   let topics: string | null = null;
   if (data.ptSessionId) {
+    // only this client's own booking, read with the coach's login (RLS), can be linked
+    const { data: booking } = await supabase.from("pt_sessions").select("id, client_id").eq("id", data.ptSessionId).maybeSingle();
+    if (!booking || (booking as any).client_id !== data.clientId) throw new Error("That booking isn't this client's.");
     const { data: t } = await supabase.from("coaching_call_topics").select("topics").eq("pt_session_id", data.ptSessionId).maybeSingle();
     topics = (t as any)?.topics ?? null;
   }
@@ -263,28 +266,40 @@ export async function getSession(c: Caller, data: any) {
 
 export async function updateSession(c: Caller, data: any) {
   const { session, sb, userId } = await reachSession(c, data.sessionId);
-  const patch: Record<string, unknown> = {};
-  if (data.coachNotes !== undefined) patch.coach_notes = data.coachNotes;
-  if (data.priorities) patch.coach_priorities = data.priorities;
-  if (data.minutes) patch.minutes = data.minutes;
-  if (data.live) patch.live = { ...(session.live ?? {}), ...data.live };
-  if (data.status) patch.status = data.status;
-  // the meeting's clock: when it went live (kept if it's restarted), when it ended
-  if (data.status === "live" && !session.live?.started_at) patch.live = { ...((patch.live as any) ?? session.live ?? {}), started_at: new Date().toISOString() };
-  if (data.status === "done" && session.status === "live") patch.live = { ...((patch.live as any) ?? session.live ?? {}), ended_at: new Date().toISOString() };
-  if (data.gamePlan) patch.game_plan = data.gamePlan;
-  if (data.outcome) patch.outcome = { ...(session.outcome ?? {}), ...data.outcome };
-  if (data.agendaOps?.length) {
-    const { applyAgendaOp } = await import("./prepare");
-    const now = new Date().toISOString();
-    let agenda: any = session.agenda;
-    for (const op of data.agendaOps) agenda = applyAgendaOp(agenda, op, now);
-    patch.agenda = agenda;
-  }
-  if (!Object.keys(patch).length) return { ok: true };
-  const { error } = await sb.from("coaching_sessions").update(patch).eq("id", session.id);
-  if (error) throw new Error(error.message);
-  if (data.status && data.status !== session.status) {
+  const { writeFresh } = await import("./fresh-write.server");
+  let before = session.status as string;
+  // worked out from the row as it is when written, so a tap never undoes another (or a refresh)
+  const res = await writeFresh(
+    sb,
+    session.id,
+    async (row) => {
+      before = row.status;
+      const patch: Record<string, unknown> = {};
+      if (data.coachNotes !== undefined) patch.coach_notes = data.coachNotes;
+      if (data.priorities) patch.coach_priorities = data.priorities;
+      if (data.minutes) patch.minutes = data.minutes;
+      const was = row.live ?? {};
+      let live = was;
+      if (data.live) live = { ...live, ...data.live };
+      // the meeting's clock: when it went live (kept if it's restarted), when it ended
+      if (data.status === "live" && !live.started_at) live = { ...live, started_at: new Date().toISOString() };
+      if (data.status === "done" && row.status === "live") live = { ...live, ended_at: new Date().toISOString() };
+      if (live !== was) patch.live = live;
+      if (data.status) patch.status = data.status;
+      if (data.gamePlan) patch.game_plan = data.gamePlan;
+      if (data.outcome) patch.outcome = { ...(row.outcome ?? {}), ...data.outcome };
+      if (data.agendaOps?.length) {
+        const { applyAgendaOp } = await import("./prepare");
+        const now = new Date().toISOString();
+        let agenda: any = row.agenda;
+        for (const op of data.agendaOps) agenda = applyAgendaOp(agenda, op, now);
+        patch.agenda = agenda;
+      }
+      return patch;
+    },
+    { first: session },
+  );
+  if (res?.wrote && data.status && data.status !== before) {
     const { logSessionEvent } = await import("./sessions.server");
     await logSessionEvent(sb, { sessionId: session.id, clientId: session.client_id, actorId: userId, actor: "coach", action: `status_${data.status}` });
   }
@@ -506,50 +521,70 @@ export async function sendSessionQuestions(c: Caller, data: any) {
   if (!form || (form as any).archived) throw new Error("The “Before our call” form isn't in your library.");
   if (!(form as any).active) await sb.from("nf_forms").update({ active: true }).eq("id", PRE_CALL_FORM_ID);
   const now = new Date().toISOString();
-  const { data: existing } = await sb.from("nf_assignments").select("settings").eq("form_id", PRE_CALL_FORM_ID).eq("client_id", s.client_id).maybeSingle();
-  const settings = { ...(((existing as any)?.settings ?? {}) as Record<string, unknown>), ask_keys: q.keys, session_id: s.id };
-  const { error: aErr } = await sb
-    .from("nf_assignments")
-    .upsert({ form_id: PRE_CALL_FORM_ID, client_id: s.client_id, last_sent_by: userId, last_sent_at: now, settings }, { onConflict: "form_id,client_id" });
-  if (aErr) throw new Error(aErr.message);
-  const body = data.note?.trim() || `Before our call: a few quick questions so we can use our time well (about ${q.minutes} min).`;
-  const { data: msg, error } = await sb
-    .from("messages")
-    .insert({
-      client_id: s.client_id,
-      sender_id: userId,
-      sender_role: "admin",
-      body,
-      message_type: "Form",
-      is_automated: false,
-      read_by_admin_at: now,
-      attachments: [
-        {
-          kind: "form_request",
-          type: "link",
-          url: `/portal/check-ins/${PRE_CALL_FORM_ID}`,
-          form_id: PRE_CALL_FORM_ID,
-          assignment_client_ids: [s.client_id],
-          request_title: (form as any).title,
-          request_note: data.note?.trim() || undefined,
-        },
-      ],
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
+  // claimed before anything goes: a second tap finds it sent and sends nothing
+  const { writeFresh } = await import("./fresh-write.server");
+  let before: any = null;
+  const claim = await writeFresh(
+    sb,
+    s.id,
+    (row) => {
+      const at = row.questionnaire?.sent_at;
+      if (at && Date.now() - Date.parse(at) < 10 * 60_000) return null;
+      before = row.questionnaire ?? null;
+      return { questionnaire: { ...(row.questionnaire ?? {}), sent_at: now, sending: true } };
+    },
+    { first: s },
+  );
+  if (!claim?.wrote) return { already: true, keys: ((claim?.row as any)?.questionnaire?.keys ?? []) as string[] };
+  const giveBack = () =>
+    sb.from("coaching_sessions").update({ questionnaire: before }).eq("id", s.id).eq("questionnaire->>sent_at", now);
   try {
-    const { pushNewMessage } = await import("@/lib/push/message-push.server");
-    await pushNewMessage(sb, { id: msg.id, client_id: s.client_id, sender_id: userId, sender_role: "admin", is_internal_note: false, body, attachments: [] } as any);
+    const { data: existing } = await sb.from("nf_assignments").select("settings").eq("form_id", PRE_CALL_FORM_ID).eq("client_id", s.client_id).maybeSingle();
+    // this send's questions in this send's words (never an earlier send's wording)
+    const settings = { ...(((existing as any)?.settings ?? {}) as Record<string, unknown>), ask_keys: q.keys, ask_labels: (q as any).labels ?? {}, session_id: s.id };
+    const { error: aErr } = await sb
+      .from("nf_assignments")
+      .upsert({ form_id: PRE_CALL_FORM_ID, client_id: s.client_id, last_sent_by: userId, last_sent_at: now, settings }, { onConflict: "form_id,client_id" });
+    if (aErr) throw new Error(aErr.message);
+    const body = data.note?.trim() || `Before our call: a few quick questions so we can use our time well (about ${q.minutes} min).`;
+    const { data: msg, error } = await sb
+      .from("messages")
+      .insert({
+        client_id: s.client_id,
+        sender_id: userId,
+        sender_role: "admin",
+        body,
+        message_type: "Form",
+        is_automated: false,
+        read_by_admin_at: now,
+        attachments: [
+          {
+            kind: "form_request",
+            type: "link",
+            url: `/portal/check-ins/${PRE_CALL_FORM_ID}`,
+            form_id: PRE_CALL_FORM_ID,
+            assignment_client_ids: [s.client_id],
+            request_title: (form as any).title,
+            request_note: data.note?.trim() || undefined,
+          },
+        ],
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    try {
+      const { pushNewMessage } = await import("@/lib/push/message-push.server");
+      await pushNewMessage(sb, { id: msg.id, client_id: s.client_id, sender_id: userId, sender_role: "admin", is_internal_note: false, body, attachments: [] } as any);
+    } catch (e) {
+      console.warn("[sessions] questions push failed", e);
+    }
+    await writeFresh(sb, s.id, () => ({ questionnaire: { sent_at: now, keys: q.keys, minutes: q.minutes, reasons: q.reasons, message_id: msg.id, answers: {} } }));
+    await logSessionEvent(sb, { sessionId: s.id, clientId: s.client_id, actorId: userId, actor: "coach", action: "questions_sent", detail: { keys: q.keys, message_id: msg.id } });
+    return { already: false, keys: q.keys as string[] };
   } catch (e) {
-    console.warn("[sessions] questions push failed", e);
+    await giveBack();
+    throw e;
   }
-  await sb
-    .from("coaching_sessions")
-    .update({ questionnaire: { sent_at: now, keys: q.keys, minutes: q.minutes, reasons: q.reasons, message_id: msg.id, answers: {} } })
-    .eq("id", s.id);
-  await logSessionEvent(sb, { sessionId: s.id, clientId: s.client_id, actorId: userId, actor: "coach", action: "questions_sent", detail: { keys: q.keys, message_id: msg.id } });
-  return { already: false, keys: q.keys as string[] };
 }
 
 export async function queueBrief(c: Caller, data: any) {
@@ -627,6 +662,11 @@ export async function deleteTranscript(c: Caller, data: any) {
   const { deleteRecordingAudio } = await import("./audio.server");
   await deleteRecordingAudio(sb, s.id).catch(() => 0);
   const patch: Record<string, unknown> = { transcript_path: null, transcript_deleted_at: new Date().toISOString() };
+  // a reading still waiting or under way stops: there's nothing left to read (the worker drops what it found)
+  if (s.analysis_status === "queued" || s.analysis_status === "running") {
+    patch.analysis_status = "none";
+    patch.analysis_error = null;
+  }
   if (data.derived !== "none") {
     patch.analysis = null;
     patch.analysis_status = "none";
@@ -790,7 +830,26 @@ export async function intelligenceRestore(c: Caller, data: { clientId: string; r
   const rows = (data.rows ?? []).filter((r) => r && r.client_id === data.clientId && typeof r.id === "string");
   if (!rows.length) return { ok: true };
   const allowed = MEMORY_FIELDS.split(", ").concat(["source_session_id", "source_quote", "created_at"]);
-  const clean = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => allowed.includes(k))));
+  // Undo puts back this client's memories only: an id that's another client's is never touched,
+  // and a source meeting must be one of theirs
+  const ids = rows.map((r) => r.id);
+  const sessionIds = [...new Set(rows.map((r) => r.source_session_id).filter(Boolean))];
+  const [{ data: taken }, { data: theirs }] = await Promise.all([
+    sb.from("client_intelligence").select("id, client_id").in("id", ids),
+    sessionIds.length
+      ? sb.from("coaching_sessions").select("id").eq("client_id", data.clientId).in("id", sessionIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const elsewhere = new Set(((taken ?? []) as any[]).filter((t) => t.client_id !== data.clientId).map((t) => t.id));
+  const okSessions = new Set(((theirs ?? []) as any[]).map((t) => t.id));
+  const clean = rows
+    .filter((r) => !elsewhere.has(r.id))
+    .map((r) => ({
+      ...Object.fromEntries(Object.entries(r).filter(([k]) => allowed.includes(k))),
+      client_id: data.clientId,
+      source_session_id: r.source_session_id && okSessions.has(r.source_session_id) ? r.source_session_id : null,
+    }));
+  if (!clean.length) return { ok: true };
   const { error } = await sb.from("client_intelligence").upsert(clean, { onConflict: "id" });
   if (error) throw new Error(error.message);
   return { ok: true };
@@ -905,9 +964,12 @@ export async function recordingPartDone(c: Caller, data: { sessionId: string; se
     { onConflict: "session_id,seq" },
   );
   if (error) throw new Error(error.message);
-  const rec = s.recording ?? {};
-  const uploaded = Math.max(Number(rec.parts_uploaded ?? 0), data.seq + 1);
-  await sb.from("coaching_sessions").update({ recording: { ...rec, parts_uploaded: uploaded } }).eq("id", s.id);
+  const { writeFresh } = await import("./fresh-write.server");
+  await writeFresh(sb, s.id, (row) => {
+    const rec = row.recording ?? {};
+    const uploaded = Math.max(Number(rec.parts_uploaded ?? 0), data.seq + 1);
+    return uploaded === Number(rec.parts_uploaded ?? 0) ? null : { recording: { ...rec, parts_uploaded: uploaded } };
+  }, { first: s });
   return { ok: true };
 }
 
@@ -915,18 +977,29 @@ export async function recordingPartDone(c: Caller, data: { sessionId: string; se
 export async function recordingSpeakerRefs(c: Caller, data: { sessionId: string; refs: Array<{ name: string; path: string }> }) {
   const { session: s, sb } = await reachSession(c, data.sessionId);
   const refs = data.refs.filter((r) => r.path.startsWith(`${s.client_id}/${s.id}/ref-`)).slice(0, 4);
-  await sb.from("coaching_sessions").update({ recording: { ...(s.recording ?? {}), speaker_refs: refs } }).eq("id", s.id);
+  const { writeFresh } = await import("./fresh-write.server");
+  // onto the recording as it is (it may have been stopped meanwhile: its status is never undone)
+  await writeFresh(sb, s.id, (row) => (row.recording ? { recording: { ...row.recording, speaker_refs: refs } } : null), { first: s });
   return { ok: true };
 }
 
 /** Recording stopped: `parts` were made; once each is transcribed the transcript is assembled and read. */
 export async function recordingFinish(c: Caller, data: { sessionId: string; parts: number; durationMs: number }) {
   const { session: s, sb, userId } = await reachSession(c, data.sessionId);
-  const rec = s.recording ?? {};
-  await sb
-    .from("coaching_sessions")
-    .update({ recording: { ...rec, status: "processing", parts: Math.max(Number(rec.parts ?? 0), data.parts), stopped_at: new Date().toISOString(), duration_ms: Math.round((Number(rec.duration_ms ?? 0) || 0) + data.durationMs) } })
-    .eq("id", s.id);
+  const { writeFresh } = await import("./fresh-write.server");
+  await writeFresh(sb, s.id, (row) => {
+    const rec = row.recording ?? {};
+    // already finished (a second Stop, or after a reload): the parts count only grows
+    const done = rec.status === "processing" || rec.status === "ready";
+    return {
+      recording: {
+        ...rec,
+        status: rec.status === "ready" ? "ready" : "processing",
+        parts: Math.max(Number(rec.parts ?? 0), data.parts),
+        ...(done ? {} : { stopped_at: new Date().toISOString(), duration_ms: Math.round((Number(rec.duration_ms ?? 0) || 0) + data.durationMs) }),
+      },
+    };
+  }, { first: s });
   const { logSessionEvent } = await import("./sessions.server");
   await logSessionEvent(sb, { sessionId: s.id, clientId: s.client_id, actorId: userId, actor: "coach", action: "recording_stopped", detail: { parts: data.parts, duration_ms: data.durationMs } });
   const { assembleIfComplete } = await import("./audio.server");
@@ -946,7 +1019,8 @@ export async function recordingSpeakers(c: Caller, data: { sessionId: string; sp
   const map = { ...(s.recording?.speakers ?? {}), ...data.speakers };
   const confirmed = speakersConfirmed(list((parts ?? []) as any[], map));
   const wasConfirmed = s.recording?.speakers_confirmed === true;
-  await sb.from("coaching_sessions").update({ recording: { ...(s.recording ?? {}), speakers: map, speakers_confirmed: confirmed } }).eq("id", s.id);
+  const { writeFresh } = await import("./fresh-write.server");
+  await writeFresh(sb, s.id, (row) => ({ recording: { ...(row.recording ?? {}), speakers: { ...(row.recording?.speakers ?? {}), ...data.speakers }, speakers_confirmed: confirmed } }), { first: s });
   if (s.recording?.transcript_ready) {
     const { assembleIfComplete } = await import("./audio.server");
     // re-assembled with the names; Cleo reads it again only the first time the speakers are settled

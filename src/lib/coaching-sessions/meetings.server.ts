@@ -198,48 +198,57 @@ export async function refreshMeeting(
     now,
   });
   const hash = prepHash(prepared.prep);
-  const same = hash === s.prep_hash && !answered && !opts.force;
-  const patch: Record<string, unknown> = { prep_refreshed_at: now };
-  if (scheduledAt !== s.scheduled_at) patch.scheduled_at = scheduledAt;
-  if (status !== s.status) patch.status = status;
-  if (answered) {
-    patch.questionnaire = s.questionnaire;
-    patch.questionnaire_submission_id = s.questionnaire_submission_id;
-  }
+  const cleoOk = await cleoForUser(sb, s.coach_user_id).catch(() => false);
   let changed: string[] = [];
-  if (!same) {
-    const prev = normalizeAgenda(s.agenda);
-    const merged = mergeAgenda(prev, prepared.agenda, now);
-    changed = agendaChanges(prev, merged);
-    patch.prep = prepared.prep;
-    patch.agenda = merged;
-    patch.prep_hash = hash;
-    patch.event = event ?? s.event;
-    if (changed.length) {
-      const list = [
-        ...changed.map((text) => ({ at: now, text })),
-        ...((s.changes ?? []) as any[]),
-      ].slice(0, 30);
-      patch.changes = list;
-      // Cleo refines the wording again only for a meaningful change, at most twice a day
-      const last = s.write_up?.at ? Date.parse(s.write_up.at) : 0;
-      const meaningful = changed.some((c) => c.startsWith("New in") || c.startsWith("Objective"));
-      if (
-        meaningful &&
-        s.write_up_status !== "running" &&
-        s.write_up_status !== "queued" &&
-        Date.now() - last > 12 * 3_600_000 &&
-        (await cleoForUser(sb, s.coach_user_id))
-      )
-        Object.assign(patch, { write_up_status: "queued", attempts: 0 });
-    }
-  }
-  const { data: updated } = await sb
-    .from("coaching_sessions")
-    .update(patch)
-    .eq("id", s.id)
-    .select("*")
-    .single();
+  // merged into the plan as it is when written (a coach's tap meanwhile is kept, never undone)
+  const { writeFresh } = await import("./fresh-write.server");
+  const res = await writeFresh(
+    sb,
+    s.id,
+    (row) => {
+      changed = [];
+      const same = hash === row.prep_hash && !answered && !opts.force;
+      const patch: Record<string, unknown> = { prep_refreshed_at: now };
+      if (scheduledAt !== row.scheduled_at) patch.scheduled_at = scheduledAt;
+      if (status === "cancelled" && (row.status === "ready" || row.status === "preparing"))
+        patch.status = "cancelled";
+      if (answered) {
+        patch.questionnaire = s.questionnaire;
+        patch.questionnaire_submission_id = s.questionnaire_submission_id;
+      }
+      if (!same) {
+        const prev = normalizeAgenda(row.agenda);
+        const merged = mergeAgenda(prev, prepared.agenda, now);
+        changed = agendaChanges(prev, merged);
+        patch.prep = prepared.prep;
+        patch.agenda = merged;
+        patch.prep_hash = hash;
+        patch.event = event ?? row.event;
+        if (changed.length) {
+          patch.changes = [
+            ...changed.map((text) => ({ at: now, text })),
+            ...((row.changes ?? []) as any[]),
+          ].slice(0, 30);
+          // Cleo refines the wording again only for a meaningful change, at most twice a day
+          const last = row.write_up?.at ? Date.parse(row.write_up.at) : 0;
+          const meaningful = changed.some(
+            (c) => c.startsWith("New in") || c.startsWith("Objective"),
+          );
+          if (
+            meaningful &&
+            row.write_up_status !== "running" &&
+            row.write_up_status !== "queued" &&
+            Date.now() - last > 12 * 3_600_000 &&
+            cleoOk
+          )
+            Object.assign(patch, { write_up_status: "queued", attempts: 0 });
+        }
+      }
+      return patch;
+    },
+    { first: s },
+  );
+  const updated = res?.row ?? null;
   if (changed.length)
     await logSessionEvent(sb, {
       sessionId: s.id,
@@ -248,7 +257,7 @@ export async function refreshMeeting(
       action: "plan_refreshed",
       detail: { changes: changed.slice(0, 8) },
     });
-  return { changed, session: updated ?? { ...s, ...patch } };
+  return { changed, session: updated ?? s };
 }
 
 export type AppointmentInfo = {

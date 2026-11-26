@@ -1,7 +1,6 @@
 import { EyeOff, MoreHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { StoryAvatar } from "@/components/community/story-ring";
-import { CoachBadge } from "@/components/community/post-card";
 import { FollowButton } from "@/components/community/follow-button";
 import { MutualFaces } from "@/components/community/discover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -11,6 +10,7 @@ import { useMyCommunitySettings } from "@/lib/community.queries";
 import {
   feedSuggestionsHidden, isStrongReason, reasonLabel, useHideFeedSuggestions, useHideSuggestion, useSuggestions, type DiscoverPerson,
 } from "@/lib/community-discover";
+import { NameMarks } from "@/components/name-marks";
 
 /**
  * "Suggested for you": a sideways row of people in the Crew you don't follow
@@ -113,7 +113,7 @@ function SuggestionCard({ p, onOpen, onHide }: { p: DiscoverPerson; onOpen: (a: 
       <button type="button" onClick={() => onOpen(p)} className="flex w-full min-w-0 flex-col items-center active:opacity-80">
         <span className="mt-2.5 flex w-full min-w-0 items-center justify-center gap-1">
           <span className="truncate text-[14px] font-bold">{p.name}</span>
-          {p.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          <NameMarks person={p as any} userId={(p as any).user_id} size={13} />
         </span>
         <span className="mt-1 flex min-h-[30px] w-full min-w-0 items-start justify-center gap-1">
           <MutualFaces m={faces} size={16} className="mt-px" />
