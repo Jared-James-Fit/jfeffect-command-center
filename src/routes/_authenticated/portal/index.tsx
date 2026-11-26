@@ -46,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/portal/")({ component: Por
 
 /** Clients the Goals & Setup prompt already opened for in this app launch (module state: a reload starts over). */
 const goalsPromptShownFor = new Set<string>();
+const handlingPromptShownFor = new Set<string>();
 
 /** No popup, sheet or drawer open, so a new one never stacks on another. */
 function uiIsClear() {
@@ -166,26 +167,35 @@ function PortalHome() {
   // and only once nothing else is open: it waits for any other popup or sheet to
   // close first. Closing never marks Goals & Setup complete, so it comes back on
   // the next launch; the setup checklist keeps its row in between.
-  const goalsIncomplete = scope.ready && goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null, scope.nutritionOnly);
+  const needsGeneralSetup = scope.requirements?.generalGoals === true;
+  const goalsIncomplete = scope.ready && needsGeneralSetup && goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null, scope.nutritionOnly);
   const promptClientId = client?.id ?? null;
   useEffect(() => {
-    if (!promptClientId || !scope.ready || viewingAsClient || offlineNoCache || goalsPromptShownFor.has(promptClientId)) return;
-    if (!pendingHandlingMeet && (!coaching || !goalsIncomplete)) return;
+    if (!promptClientId || !scope.ready || viewingAsClient || offlineNoCache || goalsSetupPromptOpen || handlingSetupMeet) return;
+    // The shared questionnaire comes first; closing it does not launch another dialog.
+    if (needsGeneralSetup && goalsSetup === undefined) return;
+    const showGeneral = goalsIncomplete && !goalsPromptShownFor.has(promptClientId);
+    const showMeet = !goalsIncomplete && !!pendingHandlingMeet && !handlingPromptShownFor.has(promptClientId);
+    if (!showGeneral && !showMeet) return;
     let stopped = false;
     let timer = 0;
     const tick = () => {
-      if (stopped || goalsPromptShownFor.has(promptClientId)) return;
+      if (stopped) return;
       if (uiIsClear()) {
-        goalsPromptShownFor.add(promptClientId);
-        if (pendingHandlingMeet) setHandlingSetupMeet({ clientId: promptClientId, meetId: pendingHandlingMeet.id });
-        else setGoalsSetupPromptOpen(true);
+        if (showGeneral) {
+          goalsPromptShownFor.add(promptClientId);
+          setGoalsSetupPromptOpen(true);
+        } else if (pendingHandlingMeet) {
+          handlingPromptShownFor.add(promptClientId);
+          setHandlingSetupMeet({ clientId: promptClientId, meetId: pendingHandlingMeet.id });
+        }
         return;
       }
       timer = window.setTimeout(tick, 1200);
     };
     timer = window.setTimeout(tick, 1500);
     return () => { stopped = true; window.clearTimeout(timer); };
-  }, [promptClientId, coaching, goalsIncomplete, pendingHandlingMeet?.id, scope.ready, viewingAsClient, offlineNoCache]);
+  }, [promptClientId, goalsIncomplete, goalsSetup, needsGeneralSetup, pendingHandlingMeet?.id, scope.ready, viewingAsClient, offlineNoCache, goalsSetupPromptOpen, handlingSetupMeet]);
 
 
   // Only derive the name from the loaded client record. Falling back to the
@@ -207,9 +217,9 @@ function PortalHome() {
         <HandlingSetupDialog key={`${handlingSetupMeet.clientId}:${handlingSetupMeet.meetId}`} clientId={handlingSetupMeet.clientId} meetId={handlingSetupMeet.meetId} onClose={() => setHandlingSetupMeet(null)} />
       )}
       {/* Background gates / popups — keep wired exactly as before. */}
-      {client?.id && coaching && (
+      {client?.id && needsGeneralSetup && !viewingAsClient && (
         <Dialog
-          open={goalsSetupPromptOpen && goalsIncomplete}
+          open={goalsSetupPromptOpen}
           onOpenChange={setGoalsSetupPromptOpen}
         >
           <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-4 sm:p-6">
@@ -219,10 +229,10 @@ function PortalHome() {
               </div>
               <DialogTitle>Finish your Goals & Setup</DialogTitle>
               <DialogDescription>
-                {scope.nutritionOnly ? "Complete your nutrition preferences so your coach can tailor your nutrition." : "Complete the remaining coaching details so your program, nutrition and recommendations can be tailored to you."} You can close this for now and finish later.
+                {scope.nutritionOnly ? "Complete your nutrition preferences so your coach can tailor your nutrition." : "Tell us about your goals, training, lifestyle and nutrition so we can tailor your experience."} You can close this for now and finish later.
               </DialogDescription>
             </DialogHeader>
-            <GoalsSetupFlow key={`${client.id}:${scope.nutritionOnly}`} clientId={client.id} nutritionOnly={scope.nutritionOnly} />
+            <GoalsSetupFlow key={`${client.id}:${scope.nutritionOnly}`} clientId={client.id} nutritionOnly={scope.nutritionOnly} onComplete={() => setGoalsSetupPromptOpen(false)} />
           </DialogContent>
         </Dialog>
       )}
@@ -264,7 +274,8 @@ function PortalHome() {
               <SetupChecklistBanner
                 clientId={client.id}
                 userId={portalUserId ?? ""}
-                onOpenMeet={viewingAsClient ? undefined : (meetId) => { goalsPromptShownFor.add(client.id); setHandlingSetupMeet({ clientId: client.id, meetId }); }}
+                onOpenGoals={viewingAsClient ? undefined : () => { goalsPromptShownFor.add(client.id); setGoalsSetupPromptOpen(true); }}
+                onOpenMeet={viewingAsClient ? undefined : (meetId) => { handlingPromptShownFor.add(client.id); setHandlingSetupMeet({ clientId: client.id, meetId }); }}
                 whenHidden={
                   <SectionErrorBoundary label="Coaching agreement">
                     <AgreementDashboardCard />

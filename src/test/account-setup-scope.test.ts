@@ -4,11 +4,11 @@ import { accountSetupRequirements } from "../lib/account-setup-scope";
 describe("universal account setup scope", () => {
   it("keeps free and member onboarding lightweight", () => {
     expect(accountSetupRequirements("self_serve", [], false)).toEqual({
-      memberSetup: true, basicInfo: false, headshot: false, coachingGoals: false, trainingSchedule: false, nutritionOnly: false,
+      memberSetup: true, basicInfo: false, headshot: false, coachingGoals: false, generalGoals: false, trainingSchedule: false, nutritionOnly: false,
     });
   });
-  it("adds handling without unlocking full coaching", () => {
-    expect(accountSetupRequirements("self_serve", [], true)).toMatchObject({ memberSetup: true, basicInfo: true, headshot: true, coachingGoals: false, trainingSchedule: false });
+  it("requires ordinary goals questions for handling without unlocking full coaching", () => {
+    expect(accountSetupRequirements("self_serve", [], true)).toMatchObject({ memberSetup: true, basicInfo: true, headshot: true, coachingGoals: false, generalGoals: true, trainingSchedule: false });
   });
   it("preserves nutrition intake for nutrition-only coaching", () => {
     expect(accountSetupRequirements("coaching", ["nutrition"], false)).toMatchObject({ coachingGoals: true, nutritionOnly: true, trainingSchedule: false });
@@ -44,4 +44,9 @@ describe("guided handling intake", () => {
     expect(firstPendingHandlingMeet([])).toBeUndefined();
     expect(firstPendingHandlingMeet([{ id: "complete", done: true }])).toBeUndefined();
   });
+});
+
+
+it("uses the full shared questionnaire for nutrition plus handling without changing the service tier", () => {
+  expect(accountSetupRequirements("coaching", ["nutrition"], true)).toMatchObject({generalGoals: true, nutritionOnly: false});
 });
