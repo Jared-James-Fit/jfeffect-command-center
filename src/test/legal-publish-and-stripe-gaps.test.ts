@@ -29,7 +29,7 @@ describe("Admin → Legal: Publish works the way it reads", () => {
 });
 
 describe("publishing the current legal set", () => {
-  const sql = readFileSync("supabase/migrations/20270601093000_legal_publish_current_versions.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20270601094000_legal_publish_current_versions.sql", "utf8");
   it("builds each version from its exact draft and stops on anything unexpected", () => {
     for (const md5 of ["36020d706f175345e19cd28720e3f1a1", "bd9cc9d591ce97d980b40297356fc4fb", "eacf63b12531a07def698922d556c3b0",
                        "3cbbb1406a552e39b56eb31778898933", "5d98adf6c6217d5ad3ecad9d462897fb", "b147b2a7df1304f1cdef41bd4ae15907"]) {
