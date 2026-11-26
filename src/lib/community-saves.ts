@@ -8,6 +8,7 @@
  */
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { usePovCrewRead } from "@/lib/pov/pov-crew-read";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { communityKeys, patchPost, POST_LIST_KEYS } from "@/lib/community.queries";
 import { GRID_FIRST_PAGE, GRID_PAGE_SIZE, cleanRepostNote, nextFeedCursor, type CommunityFeedPage, type CommunityPost } from "@/lib/community";
@@ -64,12 +65,13 @@ export function useSavePost() {
 
 /** Saved at a glance: All posts and your albums (with whether each holds `postId`). */
 export function useSavedOverview(enabled = true, postId: string | null = null) {
+  const pov = usePovCrewRead();
   return useQuery({
-    queryKey: savedKeys.overview(postId),
-    enabled,
+    queryKey: pov.key(savedKeys.overview(postId)),
+    enabled: enabled && pov.ready,
     staleTime: 30_000,
     queryFn: async (): Promise<SavedOverview> => {
-      const { data, error } = await db.rpc("community_saved_albums", postId ? { _post_id: postId } : {});
+      const { data, error } = await pov.read("saved_albums", "community_saved_albums", postId ? { _post_id: postId } : {});
       if (error) throw error;
       return (data ?? { all: { count: 0, covers: [] }, albums: [] }) as SavedOverview;
     },
@@ -78,13 +80,14 @@ export function useSavedOverview(enabled = true, postId: string | null = null) {
 
 /** The posts in All (albumId null) or one album, newest saved first. */
 export function useSavedPosts(albumId: string | null, enabled = true) {
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    queryKey: savedKeys.posts(albumId),
-    enabled,
+    queryKey: pov.key(savedKeys.posts(albumId)),
+    enabled: enabled && pov.ready,
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
-      const { data, error } = await db.rpc("community_saved_posts", {
+      const { data, error } = await pov.read("saved_posts", "community_saved_posts", {
         _limit: pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE,
         ...(albumId ? { _album_id: albumId } : {}),
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
@@ -199,13 +202,14 @@ export function useRepost() {
 
 /** What someone reposted, newest first (their profile's Reposts tab). */
 export function useUserReposts(userId: string | null, enabled = true) {
+  const pov = usePovCrewRead();
   return useInfiniteQuery({
-    queryKey: savedKeys.reposts(userId),
-    enabled: enabled && !!userId,
+    queryKey: pov.key(savedKeys.reposts(userId)),
+    enabled: enabled && !!userId && pov.ready,
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
-      const { data, error } = await db.rpc("community_user_reposts", {
+      const { data, error } = await pov.read("reposts", "community_user_reposts", {
         _user_id: userId,
         _limit: pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
