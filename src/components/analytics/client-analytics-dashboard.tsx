@@ -67,7 +67,7 @@ import {
   isHeadlineRecord,
 } from "@/lib/analytics/records";
 import { buildWorkload, splitShift } from "@/lib/analytics/sbd-workload";
-import { estimatedComposition, meetCompositions } from "@/lib/analytics/sbd-composition";
+import { clientBodyweightQueryKey, loadClientBodyweight } from "@/lib/client-bodyweight";
 import { buildMuscleRead, muscleWindowChanges, musclesNamed } from "@/lib/analytics/muscle-read";
 import { recoveryPatterns } from "@/lib/analytics/recovery-intel";
 import { pickObservation } from "@/lib/analytics/performance-observation";
@@ -715,12 +715,12 @@ export function ClientAnalyticsDashboard({
     },
   });
 
-  // compositions: the estimate (when all three lifts are current) then each meet
-  const est = useMemo(() => estimatedComposition(strength, today), [strength, today]);
-  const compositions = useMemo(
-    () => [...(est.composition ? [est.composition] : []), ...meetCompositions(meets)],
-    [est, meets],
-  );
+  const bodyweightHistory = useQuery({
+    queryKey: clientBodyweightQueryKey(clientId),
+    queryFn: () => loadClientBodyweight(clientId),
+    enabled: !!clientId && profile === "powerlifting" && view === "overview",
+    staleTime: 60_000,
+  });
 
   // ── key numbers for this athlete ────────────────────────────────────
   const fmtDay = (d: string) => format(new Date(`${d}T12:00:00`), "MMM d");
@@ -964,38 +964,25 @@ export function ClientAnalyticsDashboard({
                   className={cn(
                     "grid gap-6",
                     profile === "powerlifting" &&
-                      compositions.length > 0 &&
                       "lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]",
                   )}
                 >
-                  {profile === "powerlifting" && compositions.length > 0 && (
+                  {profile === "powerlifting" && (
                     <Card className="p-4" data-overview-total>
                       <SectionTitle
-                        title="Your total"
-                        sub={
-                          est.composition
-                            ? "How much each lift adds to your squat + bench + deadlift"
-                            : "Your meet totals, lift by lift"
-                        }
-                        info={
-                          <>
-                            <p>
-                              Your total is your best squat, bench and deadlift added together, the
-                              number powerlifting meets rank you by.
-                            </p>
-                            <p>
-                              The ring shows how much of it each lift makes up. Tap a lift for its
-                              numbers. Every lifter's split is different, so it isn't a score.
-                            </p>
-                          </>
-                        }
+                        title="Performance"
+                        info="Current strength projections, official competition totals and gym records are separate views."
                       />
                       <SectionErrorBoundary label="Total">
                         <SbdDonut
-                          compositions={compositions}
-                          missing={est.missing}
+                          strength={strength}
+                          meets={meets}
+                          results={allResults as any[]}
+                          bodyweights={bodyweightHistory.data?.entries ?? []}
+                          sex={competition.data?.sex ?? null}
+                          today={today}
                           unit={displayUnit}
-                          maxes={competition.data?.maxes ?? []}
+                          onRecords={() => changeView("records")}
                         />
                       </SectionErrorBoundary>
                     </Card>
