@@ -10,6 +10,11 @@ const ClientProfileWorkspace = lazyWithRetry(async () => {
   return { default: mod.ClientProfileWorkspace };
 });
 
+const TeamAccountWorkspace = lazyWithRetry(async () => {
+  const mod = await import("@/route-pages/_authenticated/admin/staff");
+  return { default: mod.TeamAccountWorkspace };
+});
+
 function Skeleton() {
   return (
     <div className="space-y-4 p-6" aria-busy="true" aria-label="Loading client">
@@ -31,21 +36,21 @@ function Skeleton() {
 }
 
 export function ClientProfileOverlayMount() {
-  const { clientId, clientTab } = useOverlayClientId();
+  const { clientId, clientTab, teamUserId } = useOverlayClientId();
   const close = useCloseClientProfile();
   const setTab = useSetOverlayClientTab();
   const triggerRef = useRef<Element | null>(null);
 
   // Remember the element that opened the overlay so focus can be restored.
   useEffect(() => {
-    if (clientId && typeof document !== "undefined") {
+    if ((clientId || teamUserId) && typeof document !== "undefined") {
       triggerRef.current = document.activeElement;
     }
-  }, [clientId]);
+  }, [clientId, teamUserId]);
 
   return (
     <DialogPrimitive.Root
-      open={!!clientId}
+      open={!!(clientId || teamUserId)}
       onOpenChange={(open) => {
         if (!open) {
           close();
@@ -78,12 +83,12 @@ export function ClientProfileOverlayMount() {
             e.preventDefault();
           }}
         >
-          <DialogPrimitive.Title className="sr-only">Client workspace</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{teamUserId ? "Team account workspace" : "Client workspace"}</DialogPrimitive.Title>
 
           {/* Dedicated mobile header keeps navigation out of the workspace content. */}
           <div className="shrink-0 border-b border-border bg-background/95 px-3 py-2 backdrop-blur md:hidden">
             <DialogPrimitive.Close
-              aria-label="Back to clients"
+              aria-label={teamUserId ? "Back to team" : "Back to clients"}
               className="inline-flex h-11 min-w-[88px] items-center justify-start gap-1 rounded-lg px-2 text-sm font-semibold text-foreground hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -93,7 +98,7 @@ export function ClientProfileOverlayMount() {
 
           {/* Desktop close control remains outside the scrollable workspace. */}
           <DialogPrimitive.Close
-            aria-label="Back to clients"
+            aria-label={teamUserId ? "Back to team" : "Back to clients"}
             className="absolute right-3 top-3 z-30 hidden h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/95 px-3 text-sm font-semibold text-foreground shadow-sm backdrop-blur hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring md:inline-flex"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -102,7 +107,9 @@ export function ClientProfileOverlayMount() {
 
           <div className="min-h-0 flex-1 overflow-y-auto" data-scroll-restoration-id="client-profile-overlay">
             <Suspense fallback={<Skeleton />}>
-              {clientId ? (
+              {teamUserId ? (
+                <TeamAccountWorkspace key={teamUserId} userId={teamUserId} onClose={close} />
+              ) : clientId ? (
                 <ClientProfileWorkspace
                   key={clientId}
                   clientId={clientId}

@@ -372,3 +372,31 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
 
     return { ok: true, email: invite.email as string, role: invite.role as string };
   });
+
+/** Admin-visible staff profile metadata only: never return auth tokens, credentials, factor IDs or keys. */
+export const getTeamAccountDetails = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ userId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminView(context as any);
+    const sb = await admin();
+    const roles = await sb.from("user_roles").select("role").eq("user_id", data.userId).in("role", TEAM_ROLES);
+    if (roles.error || !roles.data?.length) throw new Error("This login is not a team account.");
+    const [auth, profile] = await Promise.all([
+      sb.auth.admin.getUserById(data.userId),
+      sb.from("profiles").select("phone").eq("id", data.userId).maybeSingle(),
+    ]);
+    if (auth.error || !auth.data?.user || profile.error) throw new Error("Could not read team account.");
+    const u = auth.data.user;
+    const { roleRequiresMfa } = await import("@/lib/mfa-rules");
+    const { methodsFor } = await import("@/lib/two-step.server");
+    const methods = await methodsFor(sb, data.userId).catch(() => null);
+    return {
+      phone: (profile.data?.phone ?? u.phone ?? null) as string | null,
+      createdAt: (u.created_at ?? null) as string | null,
+      lastSignInAt: (u.last_sign_in_at ?? null) as string | null,
+      emailConfirmed: !!u.email_confirmed_at,
+      twoStepRequired: roles.data.some((r: { role: string }) => roleRequiresMfa(r.role)),
+      twoStepEnrolled: methods === null ? null : methods.length > 0,
+    };
+  });

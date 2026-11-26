@@ -1,4 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
+import { WorkspaceIdentityHeader } from "@/components/workspace";
+import { WORKSPACE_CONTAINER_CLASS } from "@/components/workspace/workspace-container";
+import { ClientNameLink } from "@/components/clients/client-name-link";
+import { useOpenTeamProfile } from "@/lib/open-client-profile";
+import { teamSetupSteps } from "@/lib/team-account-setup";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { roleRequiresMfa } from "@/lib/mfa-rules";
 import { resetTeammateTwoStep } from "@/lib/mfa-recovery.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -24,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { startTeamPreview } from "@/lib/team-preview";
 import {
-  getStaffInviteLink, inviteStaff, linkTeamMemberClient, listTeam, removeStaffRole, resendStaffInvite, revokeStaffInvite,
+  getStaffInviteLink, getTeamAccountDetails, inviteStaff, linkTeamMemberClient, listTeam, removeStaffRole, resendStaffInvite, revokeStaffInvite,
   searchInviteRecipients, type TeamInvite, type TeamMember,
 } from "@/lib/staff-invites.functions";
 import { ClientLinkDialog } from "@/components/tasks/client-link-dialog";
@@ -114,7 +120,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
         <div className="min-w-0">
           <div className="text-base font-bold">Give someone a team login</div>
           <p className="text-sm text-muted-foreground">
-            Pick a role, add their details, and send the setup link. Team logins are always separate from client accounts.
+            Pick a role, add their details, and send the setup link. Open a teammate to see their setup and account information. Team and client logins stay separate.
           </p>
         </div>
         <Button className="shrink-0" onClick={() => setAdding(true)}>
@@ -224,7 +230,74 @@ function PendingInviteCard({ inv, onChanged }: { inv: TeamInvite; onChanged: () 
   );
 }
 
-function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) {
+function MemberCard({ m }: { m: TeamMember; onChanged: () => void }) {
+  const open = useOpenTeamProfile();
+  return <Card className="flex flex-wrap items-center gap-3 p-3" data-team-account-row>
+    <Avatar text={initials(m.name, m.email)} />
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="truncate text-left font-semibold hover:underline" onClick={() => open(m.user_id)}>{m.name || m.email || "Team member"}</button>
+        {m.roles.filter(r => r !== "coach" || !m.roles.includes("admin")).map(r => <RoleBadge key={r} role={r} owner={m.owner} />)}
+      </div>
+      <div className="truncate text-xs text-muted-foreground">{m.email}</div>
+      {m.client && <div className="truncate text-xs text-muted-foreground">Client account: {m.client.name}</div>}
+    </div>
+    <Button variant="secondary" size="sm" className="min-h-10 shrink-0" onClick={() => open(m.user_id)}>Open account</Button>
+  </Card>;
+}
+
+/** Same overlay and identity header as a client; staff security and athlete data remain separate. */
+export function TeamAccountWorkspace({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const list = useServerFn(listTeam);
+  const read = useServerFn(getTeamAccountDetails);
+  const team = useQuery({ queryKey: TEAM_KEY, queryFn: () => list() });
+  const details = useQuery({ queryKey: ["team-account-details", userId], queryFn: () => read({ data: { userId } }), retry: false });
+  const [tab, setTab] = useState("summary");
+  const m = team.data?.members.find(item => item.user_id === userId);
+  const refresh = () => { void qc.invalidateQueries({ queryKey: TEAM_KEY }); void qc.invalidateQueries({ queryKey: ["team-account-details", userId] }); };
+  if (team.isError || details.isError) return <div className="p-6 space-y-3"><p>Couldn't load this team account.</p><Button onClick={refresh}>Retry</Button></div>;
+  if (team.isPending || details.isPending) return <div className="p-6 text-sm text-muted-foreground">Loading account…</div>;
+  if (!m || !details.data) return <div className="p-6 text-sm text-muted-foreground">This team account is no longer available.</div>;
+  const d = details.data;
+  const steps = teamSetupSteps(d);
+  const completed = steps.filter(s => s.state === "Completed").length;
+  const fmt = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
+  const fields = [["Team login", m.email || "Not recorded"], ["Name", m.name || "Not recorded"], ["Phone", d.phone || "Not recorded"], ["Created", fmt(d.createdAt)], ["Last sign-in", fmt(d.lastSignInAt)], ["Email verification", d.emailConfirmed ? "Confirmed" : "Not confirmed"], ["Two-step sign-in", d.twoStepEnrolled == null ? "Check status" : d.twoStepEnrolled ? "Configured" : "Not configured"]];
+  return <>
+    <WorkspaceIdentityHeader identity={{ name: m.name || m.email || "Team member", badges: m.roles.map(r => ({ label: m.owner && r === "admin" ? "Owner" : staffRoleLabel(r) })), meta: [m.email] }} onClose={onClose} />
+    <div className={cn(WORKSPACE_CONTAINER_CLASS, "px-3 py-3 md:px-6 md:py-4")}>
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="mb-4 bg-background" data-team-workspace-tabs>
+          <div className="pb-1 text-xs font-medium text-muted-foreground">Workspace</div>
+          <nav aria-label="Team account workspace" className="flex gap-1 overflow-x-auto border-b border-border">
+            {([["summary","Summary"],["account","Account details"],["access","Roles & access"]] as const).map(([id,label]) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined} className={cn("h-11 shrink-0 border-b-2 px-3 text-[15px]", tab === id ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground")}>{label}</button>)}
+          </nav>
+        </div>
+        <TabsContent value="summary" className="space-y-4">
+          <Card className="space-y-3 p-4">
+            <div><h3 className="text-sm font-semibold">Account setup <span className="font-normal text-muted-foreground">{completed}/{steps.length}</span></h3><p className="text-xs text-muted-foreground">Saved staff account requirements.</p></div>
+            <ul className="divide-y divide-border">{steps.map(step => <li key={step.label}><button type="button" onClick={() => setTab(step.tab)} className="flex min-h-10 w-full items-center justify-between gap-3 py-2 text-left text-sm"><span className={cn(step.state === "Completed" && "line-through text-muted-foreground")}>{step.label}</span><span className={cn("shrink-0 text-xs",step.state === "Completed" ? "text-emerald-500" : "text-muted-foreground")}>{step.state === "Completed" ? "✓ Completed" : step.state + " ›"}</span></button></li>)}</ul>
+          </Card>
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div><p className="text-xs text-muted-foreground">Linked client account</p><p className="text-sm font-semibold">{m.client?.name || "Not linked"}</p><p className="text-xs text-muted-foreground">Separate login and athlete history.</p></div>
+            {m.client ? <Button asChild size="sm" variant="outline"><ClientNameLink clientId={m.client.id}>Open client</ClientNameLink></Button> : <Button size="sm" variant="outline" onClick={() => setTab("account")}>Manage link</Button>}
+          </Card>
+        </TabsContent>
+        <TabsContent value="account" className="space-y-4">
+          <Card className="p-4"><h3 className="mb-3 text-sm font-semibold">Staff account information</h3><dl className="grid gap-4 text-sm sm:grid-cols-2">{fields.map(([label,value]) => <div key={label} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="break-words">{value}</dd></div>)}</dl></Card>
+          <Card className="space-y-3 p-4"><h3 className="text-sm font-semibold">Linked client account</h3><ClientAccountLine m={m} onChanged={refresh} />{m.client && <Button asChild variant="outline" size="sm"><ClientNameLink clientId={m.client.id}>Open client</ClientNameLink></Button>}</Card>
+        </TabsContent>
+        <TabsContent value="access" className="space-y-4">
+          {m.roles.map(r => <Card key={r} className="space-y-2 p-4"><RoleBadge role={r} owner={m.owner}/><p className="text-sm text-muted-foreground">{STAFF_ROLE_INFO[r as StaffRoleKey]?.summary}</p><ul className="space-y-1 text-sm">{STAFF_ROLE_INFO[r as StaffRoleKey]?.can.map(item => <li key={item}>✓ {item}</li>)}</ul></Card>)}
+          <TeamAccountControls m={m} onChanged={refresh} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  </>;
+}
+
+function TeamAccountControls({ m, onChanged }: { m: TeamMember; onChanged: () => void }) {
   const remove = useServerFn(removeStaffRole);
   const navigate = useNavigate();
   const { role, viewOnly } = useAuth();
@@ -249,20 +322,7 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
   const [confirmReset, setConfirmReset] = useState(false);
 
   return (
-    <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
-      <Avatar text={initials(m.name, m.email)} />
-      {/* The buttons drop to their own line on a phone rather than squeezing the name. */}
-      <div className="min-w-[11rem] flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="truncate font-semibold">{m.name || m.email || "Team member"}</span>
-          {m.roles.filter((r) => r !== "coach" || !m.roles.includes("admin")).map((r) => <RoleBadge key={r} role={r} owner={m.owner} />)}
-        </div>
-        <div className="truncate text-xs text-muted-foreground">{m.email}</div>
-        <ClientAccountLine m={m} onChanged={onChanged} />
-        {m.roles.includes("media_manager") && (
-          <div className="mt-0.5 text-xs text-muted-foreground">Media Manager is retired, so this login has nowhere to go.</div>
-        )}
-      </div>
+    <Card className="flex flex-wrap items-center gap-2 p-4"><h3 className="w-full text-sm font-semibold">Account actions</h3>
       {canViewAs && (
         <Button size="sm" variant="outline" className="h-9 shrink-0 px-2.5" onClick={viewAs} aria-label={`View as ${m.name || m.email || "this team member"}`}>
           <Eye className="h-4 w-4" /><span className="ml-1 text-xs">View as</span>
@@ -298,7 +358,7 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
               setBusy(true);
               try {
                 const r = await resetTwoStep({ data: { userId: m.user_id } });
-                toast.success(r.removed ? "Two-step reset. They'll set it up again when they sign in." : "They had no authenticator to reset.");
+                toast.success(r.removed ? "Two-step reset. They'll set it up again when they sign in." : "Two-step reset completed."); onChanged();
               } catch (e: any) { toast.error(e?.message ?? "Couldn't reset it"); }
               finally { setBusy(false); }
             }}>Reset</AlertDialogAction>
