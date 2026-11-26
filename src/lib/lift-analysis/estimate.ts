@@ -850,8 +850,8 @@ export function plainlyTheSet(a: LiftAnalysis, movement: Movement, expectedReps:
  * one set's stacks were 54 px through the set, read 53–55 by motion and 54 / 77 by their edges (the
  * edges ran on); another's were 60, read 43 by motion and 60 by its edges (motion stopped short). Either
  * can be the one that's right, so when the edges say more than 10 % bigger the size is their geometric
- * mean and its margin half the gap (in log terms: the truth can be at either end). A gap over ~27 % is
- * then past the scale gate (quality.ts TOLERANT 12 %) and the candidate isn't logged: never a size
+ * mean and its margin half the gap (in log terms: the truth can be at either end). A gap over ~26 % is
+ * then past the scale gate (quality.ts TOLERANT 12 %, with calibrate.ts's plate and edge-on terms) and the candidate isn't logged: never a size
  * picked from two that disagree. Edges smaller than motion found an inner step (motion is only ever
  * read short), and motion stands.
  */
