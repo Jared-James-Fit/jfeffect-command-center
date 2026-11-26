@@ -34,7 +34,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Client account preview unavailable' USING ERRCODE = '42501';
   END IF;
-  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts', 'direct_threads', 'crew_threads', 'chat_prefs', 'nav_data')
+  IF _read IS NULL OR _read NOT IN ('feed', 'ranked', 'profile', 'post', 'follows', 'activity', 'crew_notices', 'follow_list', 'archived', 'saved_albums', 'saved_posts', 'reposts', 'direct_threads', 'crew_threads', 'chat_prefs', 'nav_data', 'comments', 'reactors', 'post_activity', 'hints')
      OR jsonb_typeof(_args) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Unknown account view read' USING ERRCODE = '22023';
   END IF;
@@ -55,6 +55,10 @@ BEGIN
         (_args->>'_seen_before')::timestamptz, coalesce((_args->>'_following')::boolean, false));
     WHEN 'profile' THEN v_result := public.community_profile((_args->>'_user_id')::uuid);
     WHEN 'post' THEN v_result := public.community_post((_args->>'_post_id')::uuid);
+    WHEN 'comments' THEN v_result := public.community_comments((_args->>'_post_id')::uuid);
+    WHEN 'reactors' THEN v_result := public.community_post_reactors((_args->>'_post_id')::uuid);
+    WHEN 'post_activity' THEN v_result := public.community_post_activity((_args->>'_post_id')::uuid);
+    WHEN 'hints' THEN SELECT coalesce(jsonb_agg(hint), '[]'::jsonb) INTO v_result FROM public.community_hints_seen WHERE user_id=v_target;
     WHEN 'follows' THEN v_result := public.community_follow_state();
     WHEN 'activity' THEN v_result := public.community_activity();
     WHEN 'follow_list' THEN v_result := public.community_follow_list((_args->>'_user_id')::uuid, _args->>'_kind');
