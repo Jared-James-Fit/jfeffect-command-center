@@ -6,7 +6,7 @@ import { clientNav, clientBottomNav, selfServeNav, selfServeBottomNav } from "@/
 import { isCoachingOnlyPath, isLapsedMemberPath, useServiceTier } from "@/lib/service-tier";
 import { useGoalsServiceScope } from "@/lib/client-goals/use-goals-service-scope";
 import { useMemberAccess } from "@/lib/member-access";
-import { MemberSetupGate } from "@/components/member/member-setup-gate";
+import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { MemberAgreementGate } from "@/components/member/member-agreement";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
@@ -78,6 +78,7 @@ function PortalContent() {
             client" they'd show the coach's own popups/legal status — skip. */}
         {!isImpersonating && (
           <>
+            {clientId && portalUserId && !tierLoading && <SetupChecklistBanner key={clientId} clientId={clientId} userId={portalUserId} reminderOnly />}
             <FormPopupGate />
             <HomeScreenSetupGate />
             {/* a screen's short tutorial on its first visit, once (server-side), and the hub's replays */}
@@ -124,7 +125,6 @@ function MemberGates({ hasHandling, scopeReady }: { hasHandling: boolean; scopeR
           <SubscriptionRestrictedBanner status={status} subscriptionStatus={subscriptionStatus} />
         </div>
       )}
-      {!isImpersonating && <MemberSetupGate />}
     </>
   );
 }
