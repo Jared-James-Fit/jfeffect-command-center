@@ -11,12 +11,14 @@
  * client update, which waits in its review window with Preview, Edit, Hold,
  * Cancel and Send now.
  */
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, MessageSquare, Plus, Target } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, MessageSquare, Plus, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -28,7 +30,7 @@ import { CompactWeightInput, draftKg, type WeightDraft } from "@/components/comp
 import { dualRange, dualLoadText, inputKg, type DualWeight } from "@/lib/dual-weight";
 import { WeightOther } from "@/components/dual-weight";
 import { handOffToCleo } from "@/lib/cleo-handoff";
-import { discussedKg, inferredUnitKey, reviewTarget, reviewedSourceUnit, validMeetIncrement } from "@/lib/goal-intel/competition-review";
+import { discussedKg, inferredUnitKey, reviewTarget, reviewedSourceUnit, validMeetIncrement, nearestMeetTarget, targetDifficulty } from "@/lib/goal-intel/competition-review";
 import {
   addGoalFn,
   decideGoalFn,
@@ -205,6 +207,16 @@ function groupCompetitionGoals(goals: GoalRow[]): GoalRow[][] {
   return result;
 }
 
+function GoalInfo({ label, brief }: { label: string; brief: string }) {
+  const [open, setOpen] = useState(false);
+  return <TooltipProvider delayDuration={180}><Popover open={open} onOpenChange={setOpen}><Tooltip>
+    <TooltipTrigger asChild><PopoverTrigger asChild><button type="button" aria-label={label} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><Info className="h-3.5 w-3.5" aria-hidden /></button></PopoverTrigger></TooltipTrigger>
+    {!open && <TooltipContent className="max-w-[260px] whitespace-normal border bg-popover text-popover-foreground shadow-md">{brief}</TooltipContent>}
+    <PopoverContent className="w-64 max-w-[calc(100vw-2rem)] p-2.5 text-xs leading-relaxed" onOpenAutoFocus={e => e.preventDefault()}>{brief}</PopoverContent>
+  </Tooltip></Popover></TooltipProvider>;
+}
+const APPROACH_GUIDE = "Easy: most margin. Conservative: below forecast. Moderate: near forecast. High: upper forecast. Very aggressive: beyond forecast. Extreme: a major reach. Ratings describe difficulty, not success odds.";
+
 function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: GoalRow[]; view: View; unit: Unit; onOpenTraining?: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const first = goals[0];
@@ -259,7 +271,8 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
   const discussedLow = sum(goals.map(g => discussedKg(g, false)));
   const discussedHigh = sum(goals.map(g => discussedKg(g)));
   const sources = [...new Set(goals.map(g => g.source_kind ? (g.source_kind === "meeting" ? "Meeting" : SOURCE_WORD[g.source_kind] ?? "On file") + (g.source_at ? " · " + ago(g.source_at) : "") : null).filter(Boolean))];
-  const editMode = (next: "cleo" | "discussed") => { setMode(next); setDrafts({}); };
+  const editMode = (next: "cleo" | "discussed") => setMode(next);
+  const clearDraft = (id: string) => setDrafts(old => { const next = {...old}; delete next[id]; return next; });
   return <li className="py-3" data-competition-goal-group>
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
@@ -271,7 +284,7 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
     {proposed.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-1.5">
       {hasCleo && <Button size="sm" variant={mode === "cleo" ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("cleo")}>Cleo suggested</Button>}
       <Button size="sm" variant={mode === "discussed" || !hasCleo ? "secondary" : "ghost"} className="h-8 px-2" disabled={batch.isPending} onClick={() => editMode("discussed")}>Discussed upper end</Button>
-      <span className="text-[11px] text-muted-foreground">Drafts rounded to nearest meet increment. Review any target to edit.</span>
+      <span className="text-[11px] text-muted-foreground">Drafts rounded to meet increments. Edited targets stay until reset.</span>
     </div>}
     <div className="mt-2 overflow-x-auto">
       <table className="w-full min-w-[460px] text-left text-xs tabular-nums">
@@ -282,34 +295,59 @@ function CompetitionGoalGroup({ goals, view, unit, onOpenTraining }: { goals: Go
             const proj = goalWeight(projected[i], "kg");
             const target = goalWeight(targets[i], "kg", null, g.status === "proposed" ? draftFor(g).unit : g.approved_unit ?? undefined);
             const suggestion = reviewTarget(g, increment, mode);
-            const source = drafts[g.id]?.version === g.version ? "Edited draft" : suggestion.approach ? `Cleo · ${suggestion.approach}` : suggestion.basis;
-            return <tr key={g.id} className="border-t border-border align-top">
-              <th className="py-2 pr-2 font-medium capitalize">{g.lift}<span className="block text-[10px] font-normal normal-case text-muted-foreground">{g.title.toLowerCase().includes("third attempt") ? "Third attempt goal" : "Lift goal"}</span></th>
-              <td className="py-2 pr-2">{discussed ? <>{discussed.primary}<span className="block text-muted-foreground">{discussed.secondary}{g.client_unit_source === "inferred" ? " · inferred" : ""}</span></> : fmtClientTarget(g) ?? "—"}</td>
-              <td className="py-2 pr-2">{proj ? <>{proj.primary}<span className="block text-muted-foreground">{proj.secondary}</span></> : "—"}</td>
-              <td className="py-2 pr-2">{target ? <>{target.primary}<span className="block text-muted-foreground">{target.secondary} · {g.status === "active" ? "Approved" : source}</span></> : "Enter target"}</td>
-              <td className="py-1 text-right"><Button variant="ghost" size="sm" className="h-8 px-2" disabled={batch.isPending} aria-expanded={selected === g.id} onClick={() => setSelected(selected === g.id ? null : g.id)}>{selected === g.id ? "Close" : "Review"}</Button></td>
-            </tr>;
+            const edited = drafts[g.id]?.version === g.version;
+            const rating = targetDifficulty(g, targets[i]);
+            const source = g.status === "active" ? "Approved" : edited ? "Edited" : suggestion.approach ? "Cleo" : "Discussed";
+            const isOpen = selected === g.id;
+            const exactApproach = g.feasibility?.approaches?.find(a => {
+              const kg = nearestMeetTarget(a.targetKg, increment);
+              return kg != null && targets[i] != null && Math.abs(kg - targets[i]!) < 1e-6;
+            })?.key ?? "custom";
+            return <Fragment key={g.id}>
+              <tr className={cn("border-t border-border align-top", isOpen && "bg-muted/40")} data-goal-review-row={g.id}>
+                <th className="py-2 pr-2 font-medium capitalize">{g.lift}<span className="block text-[10px] font-normal normal-case text-muted-foreground">{g.title.toLowerCase().includes("third attempt") ? "Third attempt goal" : "Lift goal"}</span></th>
+                <td className="py-2 pr-2">{discussed ? <>{discussed.primary}<span className="block text-muted-foreground">{discussed.secondary}{g.client_unit_source === "inferred" ? " · inferred" : ""}</span></> : fmtClientTarget(g) ?? "—"}</td>
+                <td className="py-2 pr-2">{proj ? <>{proj.primary}<span className="block text-muted-foreground">{proj.secondary}</span></> : "—"}</td>
+                <td className="py-2 pr-2">{target ? <>{target.primary}<span className="flex flex-wrap items-center gap-x-0.5 text-muted-foreground">{target.secondary} · {source} · {rating.label}<GoalInfo label={`Why ${g.lift} is rated ${rating.label}`} brief={rating.brief} /></span></> : "Enter target"}</td>
+                <td className="py-1 text-right"><Button variant={isOpen ? "secondary" : "ghost"} size="sm" className="h-8 px-2 gap-1" disabled={batch.isPending} aria-expanded={isOpen} aria-controls={`goal-review-${g.id}`} onClick={() => setSelected(isOpen ? null : g.id)}>{isOpen ? "Close" : "Review / edit"}{isOpen ? <ChevronDown className="h-3 w-3 rotate-180" /> : <ChevronDown className="h-3 w-3" />}</Button></td>
+              </tr>
+              {isOpen && <tr data-goal-review-inline={g.id}><td colSpan={5} className="pb-2 pt-0">
+                <div id={`goal-review-${g.id}`} className="rounded-b-md border border-t-0 border-border bg-muted/25 p-2.5 space-y-2">
+                  {g.status === "proposed" ? <>
+                    <div className="flex flex-wrap items-center justify-between gap-1"><p className="font-medium capitalize">{g.lift} target · {rating.label}</p>{edited && <Button size="sm" variant="ghost" className="h-7 px-2" disabled={batch.isPending} onClick={() => clearDraft(g.id)}>Reset draft</Button>}</div>
+                    {(g.source_quote || g.source_context) && <p className="text-xs text-muted-foreground">Discussed: {g.source_quote ?? g.source_context}</p>}
+                    <p className="text-xs text-muted-foreground">{rating.brief}</p>
+                    {g.feasibility?.projection?.basis?.length ? <p className="text-[11px] text-muted-foreground">{g.feasibility.projection.basis.slice(0, 2).join(" · ")}</p> : null}
+                    <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                      {g.feasibility?.approaches?.length ? <div className="flex items-center gap-1">
+                        <Select value={exactApproach} disabled={batch.isPending} onValueChange={key => { const a = g.feasibility?.approaches.find(o => o.key === key); if (!a) return; const kg = nearestMeetTarget(a.targetKg, increment); if (kg != null) setDrafts(old => ({...old,[g.id]:{draft:{value:String(kg),unit:"kg"},version:g.version}})); }}>
+                          <SelectTrigger aria-label={`${g.lift} approach`} className="h-9 w-fit text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent><SelectItem value="custom" disabled>Custom target</SelectItem>{g.feasibility.approaches.map(a => {const kg = nearestMeetTarget(a.targetKg, increment); return kg == null ? null : <SelectItem key={a.key} value={a.key}>{a.label} · {dualLoadText(kg,"kg")}</SelectItem>;})}</SelectContent>
+                        </Select>
+                        <GoalInfo label="Approach guide" brief={APPROACH_GUIDE} />
+                      </div> : null}
+                      <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({...old,[g.id]:{draft,rounded,version:g.version}}))} incrementKg={increment} confirmed={rulesReady} disabled={batch.isPending} />
+                    </div>
+                    {!validMeetIncrement(draftKg(draftFor(g)), increment) && <p className="text-xs text-muted-foreground">Choose a positive multiple of {increment} kg.</p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" className="h-9" disabled={batch.isPending || !isValid(g)} onClick={() => batch.mutate([g])}>Approve this target</Button>
+                      <Button size="sm" variant="ghost" disabled={batch.isPending} onClick={async () => { try { await decide({ data: { goalId: g.id, decision: { action: "dismiss" } } }); setSelected(null); await qc.invalidateQueries({queryKey: clientGoalsKey(g.client_id)}); } catch(e) { toast.error(e instanceof Error ? e.message : "Couldn't dismiss goal"); } }}>Dismiss</Button>
+                      <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">History</summary><GoalHistory g={g} view={view} unit="kg" /></details>
+                    </div>
+                    {!isValid(g) && validMeetIncrement(draftKg(draftFor(g)), increment) && <p className="text-[11px] text-muted-foreground">Confirm the discussed units and meet rules below before approving.</p>}
+                  </> : <ul><GoalItem key={g.id} g={g} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul>}
+                </div>
+              </td></tr>}
+            </Fragment>;
           })}
           {goals.length === 3 && <tr className="border-t border-border"><th className="py-2 font-semibold">Total</th><td><WeightWords weight={goalWeight(discussedLow, "kg", discussedHigh, "lb")} /></td><td><WeightWords weight={goalWeight(sum(projected), "kg")} /></td><td className="font-semibold"><WeightWords weight={goalWeight(sum(targets), "kg")} /></td><td /></tr>}
         </tbody>
       </table>
     </div>
-    {hasCleo && proposed.length > 0 && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">Why these targets?</summary><div className="mt-1 space-y-1">{proposed.map(g => { const r = reviewTarget(g, increment, mode); return <p key={g.id}><span className="font-medium capitalize text-foreground">{g.lift}: </span>{r.reason ?? (r.kg != null ? "Upper end of the discussed range, rounded to the nearest meet increment." : "Enter a target; no usable source value.")}</p>; })}</div></details>}
-    {selected && goals.some(g => g.id === selected) && (() => {
-      const g = goals.find(g => g.id === selected)!;
-      return g.status === "proposed" ? <div className="mt-2 rounded-lg border border-border p-2 space-y-2">
-        <p className="text-xs font-medium">{g.title}</p>
-        {(g.source_quote || g.source_context) && <p className="text-xs text-muted-foreground">Meeting note: {g.source_quote ?? g.source_context}</p>}
-        {g.feasibility?.recommendedWhy && <p className="text-xs text-muted-foreground">Cleo: {g.feasibility.recommendedWhy}</p>}
-        {g.feasibility?.projection?.basis?.length ? <p className="text-xs text-muted-foreground">Projection: {g.feasibility.projection.basis.slice(0, 2).join(" · ")}</p> : null}
-        {g.feasibility?.approaches?.length ? <Select disabled={batch.isPending} onValueChange={key => { const a = g.feasibility?.approaches.find(o => o.key === key); if (!a) return; const kg = reviewTarget({...g, feasibility: {...g.feasibility!, recommended: a.key, confidence: "medium"}}, increment, "cleo").kg; if (kg != null) setDrafts(old => ({...old, [g.id]: {draft: {value: String(kg), unit: "kg"}, version: g.version}})); }}><SelectTrigger className="h-8 w-fit text-xs"><SelectValue placeholder="Choose another approach" /></SelectTrigger><SelectContent>{g.feasibility.approaches.map(a => <SelectItem key={a.key} value={a.key}>{a.label} · {dualLoadText(a.targetKg, "kg")}</SelectItem>)}</SelectContent></Select> : null}
-        <CompactWeightInput key={g.id} draft={draftFor(g)} onChange={(draft, rounded) => setDrafts(old => ({ ...old, [g.id]: { draft, rounded, version: g.version } }))} incrementKg={increment} confirmed={rulesReady} disabled={batch.isPending} />
-        {!validMeetIncrement(draftKg(draftFor(g)), increment) && <p className="text-xs text-muted-foreground">Choose a positive multiple of {increment} kg.</p>}
-        <div className="flex flex-wrap gap-2"><Button size="sm" className="h-9" disabled={batch.isPending || !isValid(g)} onClick={() => batch.mutate([g])}>Approve this target</Button><Button size="sm" variant="ghost" disabled={batch.isPending} onClick={async () => { try { await decide({ data: { goalId: g.id, decision: { action: "dismiss" } } }); setSelected(null); await qc.invalidateQueries({queryKey: clientGoalsKey(g.client_id)}); } catch(e) { toast.error(e instanceof Error ? e.message : "Couldn't dismiss goal"); } }}>Dismiss</Button></div>
-        <details><summary className="cursor-pointer text-xs text-muted-foreground">History</summary><GoalHistory g={g} view={view} unit="kg" /></details>
-      </div> : <ul className="mt-1 rounded-lg border border-border px-3"><GoalItem key={g.id} g={g} view={view} unit={unit} compact onOpenTraining={onOpenTraining} /></ul>;
-    })()}
+    {proposed.length > 0 && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">Target overview</summary><div className="mt-1 space-y-1">
+      {sum(projected) != null && sum(targets) != null && <p>Draft total: {dualLoadText(sum(targets)!, "kg")} vs forecast {dualLoadText(sum(projected)!, "kg")}. These are goal targets, not attempt selections.</p>}
+      {goals.filter(g => g.status === "proposed").map(g => <p key={g.id}><span className="font-medium capitalize text-foreground">{g.lift}: </span>{targetDifficulty(g, draftKg(draftFor(g))).brief}</p>)}
+    </div></details>}
     {proposed.length > 0 && <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
       <div className="space-y-1.5">
         {sourceUnits.map(({unit: u, rows}) => <label key={u} className="flex items-center gap-2 text-xs">

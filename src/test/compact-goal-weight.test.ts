@@ -45,3 +45,24 @@ it("distinguishes a supported Cleo option from the discussed fallback", () => {
   expect(reviewTarget(g,2.5,"discussed").kg).toBe(102.5);
   expect(reviewTarget({...g,feasibility:{...g.feasibility!,confidence:"low"}},2.5,"cleo").basis).toBe("Discussed range");
 });
+
+import { targetDifficulty } from "@/lib/goal-intel/competition-review";
+import { APPROACHES } from "@/lib/goal-intel/types";
+import type { Feasibility } from "@/lib/goal-intel/types";
+describe("live competition target rating", () => {
+  const f = {confidence:"medium",projection:{expectedKg:120,lowKg:112.5,highKg:122.5},approaches:APPROACHES.map((a,i)=>({...a,targetKg:[107.5,112.5,120,122.5,125,137.5][i]}))} as unknown as Feasibility;
+  const g = {feasibility:f,client_unit:"lb" as const,client_value:264,client_value_max:280};
+  it("explains the actual displayed target, not the saved rating", () => {
+    expect(targetDifficulty(g,122.5)).toMatchObject({band:"high",label:"High"});
+    expect(targetDifficulty(g,122.5).brief).toContain("2.5 kg above");
+    expect(targetDifficulty(g,122.5).brief).toContain("within the discussed range");
+    expect(targetDifficulty(g,120).band).toBe("moderate");
+    expect(targetDifficulty(g,137.5).band).toBe("extreme");
+    expect(targetDifficulty(g,137.5).brief).toContain("above the discussed range");
+  });
+  it("does not invent a rating without a complete forecast", () => {
+    expect(targetDifficulty({...g,feasibility:null},120).label).toBe("Not rated");
+    expect(targetDifficulty(g,null).label).toBe("No target");
+    expect(targetDifficulty({...g,feasibility:{...f,confidence:"low"}},122.5).brief).toContain("provisional");
+  });
+});
