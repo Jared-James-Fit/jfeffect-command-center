@@ -14,7 +14,7 @@
  *    editor; only that editor applying it (or the coach saying so) is Applied.
  *  - workSummary: what Cleo did, and what's waiting on the coach.
  */
-import type { MeetingAnalysis, AnalysisItem } from "./analysis";
+import { sameIdea, type MeetingAnalysis, type AnalysisItem } from "./analysis";
 
 export type OutcomeLine = {
   text: string;
@@ -60,17 +60,17 @@ export function organizeOutcome(x: {
   const of = (...k: AnalysisItem["kind"][]) =>
     items.filter((i) => k.includes(i.kind)).map(fromItem);
   const kept = x.commitments.filter((c) => c.status !== "dropped" && c.confirmed !== false);
+  // one line per idea: the coach's own words win, and Cleo's quote and due date join them
+  // ("Squat opener 105 kg" the coach noted and "Squat opener is locked at 105 kg" Cleo read are one decision)
   const dedupe = (rows: OutcomeLine[]) => {
-    const seen = new Set<string>();
-    return rows.filter((r) => {
-      const k = r.text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, " ")
-        .trim();
-      if (!k || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    const out: OutcomeLine[] = [];
+    for (const r of rows) {
+      if (!r.text.trim()) continue;
+      const i = out.findIndex((o) => sameIdea(o.text, r.text));
+      if (i < 0) out.push({ ...r });
+      else out[i] = { ...out[i], quote: out[i].quote ?? r.quote ?? null, due: out[i].due ?? r.due ?? null };
+    }
+    return out;
   };
   return {
     feedback: dedupe(of("feedback")),
@@ -176,11 +176,12 @@ export function workSummary(x: {
       `Read the ${x.source === "recording" ? "recording" : x.source === "transcript" ? "transcript" : "notes"}`,
     );
   const statuses = x.recs.map(recStatus);
-  if (x.recs.length)
+  const decide = statuses.filter((s) => s === "suggested" || s === "needs_review").length;
+  // said once: while some wait on the coach, "to decide" says it
+  if (x.recs.length && !decide)
     did.push(`${x.recs.length} recommendation${x.recs.length === 1 ? "" : "s"} drafted`);
   const auto = x.memories.filter((m) => m.status === "confirmed" && m.auto_kept).length;
   if (auto) did.push(`${auto} memor${auto === 1 ? "y" : "ies"} kept automatically`);
-  const decide = statuses.filter((s) => s === "suggested" || s === "needs_review").length;
   if (decide) needs.push(`${decide} recommendation${decide === 1 ? "" : "s"} to decide`);
   const toApply = statuses.filter((s) => s === "approved").length;
   if (toApply) needs.push(`${toApply} approved, not applied yet`);

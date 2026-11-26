@@ -233,11 +233,16 @@ export function ActivatePage({
               id="signup-agree-text"
               className="text-[13px] leading-relaxed text-muted-foreground"
             >
+              {/* SIGNUP_ACK_TEXT, with its links (the guidelines are part of the Terms) */}
               I agree to the JF Effect{" "}
               <Link to="/terms" target="_blank" className="underline underline-offset-2">
                 Terms of Service
-              </Link>{" "}
-              and{" "}
+              </Link>
+              , including the{" "}
+              <Link to="/community-guidelines" target="_blank" className="underline underline-offset-2" data-signup-guidelines>
+                Crew community guidelines
+              </Link>
+              , and the{" "}
               <Link to="/privacy" target="_blank" className="underline underline-offset-2">
                 Privacy Policy
               </Link>

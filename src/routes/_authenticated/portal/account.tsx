@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DeactivateAccountPanel, DeleteAccountPanel, useLifecycleStatus } from "@/components/account/account-lifecycle";
 import { AiConsentPanel } from "@/components/ai-consent/ai-consent";
+import { CrewGuidelinesRow } from "@/components/community/crew-rules-sheet";
 import { UsageAnalyticsPanel } from "@/components/privacy/usage-analytics-panel";
 import { AccountHeadshotSection, headshotSummary, useMyHeadshot } from "@/components/headshots/headshot-ui";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
@@ -154,6 +155,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "delete-account": "legal",
   delete: "legal",
   "privacy-data": "legal",
+  // the Crew community guidelines live in Privacy & data (agreed to with the Terms at sign-up)
+  "community-guidelines": "legal",
+  guidelines: "legal",
   deactivate: "deactivate",
   "deactivate-account": "deactivate",
 };
@@ -668,6 +672,10 @@ function AccountPage() {
                   <ClientLegalSafety bare />
                 </SectionErrorBoundary>
               )}
+              {/* the Crew community guidelines, any time (agreed to with the Terms, never asked mid-comment) */}
+              <div className={cn(!isImpersonating && "mt-3")}>
+                <CrewGuidelinesRow />
+              </div>
               {/* AI processing: the person's own permission (OpenAI, Google), so never in "View as client" */}
               {!isImpersonating && (
                 <div className="mt-5 border-t border-border pt-5">

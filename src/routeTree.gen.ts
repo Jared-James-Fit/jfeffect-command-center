@@ -18,6 +18,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CoachingAgreementRouteImport } from './routes/coaching-agreement'
+import { Route as CommunityGuidelinesRouteImport } from './routes/community-guidelines'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as JoinRouteImport } from './routes/join'
@@ -387,6 +388,11 @@ const AuthRoute = AuthRouteImport.update({
 const CoachingAgreementRoute = CoachingAgreementRouteImport.update({
   id: '/coaching-agreement',
   path: '/coaching-agreement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityGuidelinesRoute = CommunityGuidelinesRouteImport.update({
+  id: '/community-guidelines',
+  path: '/community-guidelines',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
@@ -2289,6 +2295,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2625,6 +2632,7 @@ export interface FileRoutesByTo {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2959,6 +2967,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
   '/coaching-agreement': typeof CoachingAgreementRoute
+  '/community-guidelines': typeof CommunityGuidelinesRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -3297,6 +3306,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3633,6 +3643,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -3966,6 +3977,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/coaching-agreement'
+    | '/community-guidelines'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -4304,6 +4316,7 @@ export interface RootRouteChildren {
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
   CoachingAgreementRoute: typeof CoachingAgreementRoute
+  CommunityGuidelinesRoute: typeof CommunityGuidelinesRoute
   DeleteAccountRoute: typeof DeleteAccountRoute
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
@@ -4477,6 +4490,13 @@ declare module '@tanstack/react-router' {
       path: '/coaching-agreement'
       fullPath: '/coaching-agreement'
       preLoaderRoute: typeof CoachingAgreementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community-guidelines': {
+      id: '/community-guidelines'
+      path: '/community-guidelines'
+      fullPath: '/community-guidelines'
+      preLoaderRoute: typeof CommunityGuidelinesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/delete-account': {
@@ -7462,6 +7482,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
   CoachingAgreementRoute: CoachingAgreementRoute,
+  CommunityGuidelinesRoute: CommunityGuidelinesRoute,
   DeleteAccountRoute: DeleteAccountRoute,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,
