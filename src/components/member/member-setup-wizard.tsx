@@ -66,7 +66,7 @@ export function MemberSetupWizard({
   const fetchStatus = useServerFn(getMySetupStatus);
   const update = useServerFn(updateMyMemberProfile);
   const previewRead = useServerFn(previewMemberSetup);
-  const { data, isPending, isError } = useQuery({ queryKey: preview ? ["m-setup-status-preview", clientId] : ["m-setup-status"], queryFn: () => preview ? previewRead({ data: { clientId: clientId! } }) : fetchStatus(), enabled: open && (!preview || !!clientId) });
+  const { data, isPending, isError } = useQuery<Awaited<ReturnType<typeof fetchStatus>> | Awaited<ReturnType<typeof previewRead>>>({ queryKey: preview ? ["m-setup-status-preview", clientId] : ["m-setup-status"], queryFn: async () => preview ? await previewRead({ data: { clientId: clientId! } }) : await fetchStatus(), enabled: open && (!preview || !!clientId) });
   const m = data?.member as any;
   const { data: unitRow } = useQuery({
     ...weightUnitSetupQuery(portalUserId),
