@@ -24,7 +24,7 @@ export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
   });
   if (q.isError || !q.data) return <AgreementAccessScreen checking={!q.isError} retry={() => void q.refetch()} />;
   const blocking = q.data.filter((d) =>
-    !d.accepted_at && !d.emergency_disabled && !d.is_optional_consent &&
+    !d.accepted_at && !d.satisfied_by_prior_version && !d.emergency_disabled && !d.is_optional_consent &&
     d.slug !== MEMBERSHIP_AGREEMENT_SLUG &&
     ((SIGNUP_LEGAL_SLUGS as readonly string[]).includes(d.slug) ||
       (d.is_required && d.effective_enforcement === "full_portal_gate")),
