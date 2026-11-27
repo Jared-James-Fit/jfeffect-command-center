@@ -244,4 +244,16 @@ do $ declare t text; begin
    execute format('create trigger protect_setup_forms before insert or update or delete on public.%I for each row execute function public.tg_protect_setup_forms()',t);
  end loop;
 end $;
+-- A client can read their own completed form's labels (not other clients'
+-- responses), even though we deliberately do not assign the system form.
+drop policy if exists "Client read own setup form" on public.nf_forms;
+create policy "Client read own setup form" on public.nf_forms for select to authenticated using (
+ id in ('a1e9fca0-6c31-4a00-9f00-000000000001'::uuid,'a1e9fca0-6c31-4a00-9f00-000000000002'::uuid)
+ and exists(select 1 from public.nf_submissions s join public.clients c on c.id=s.client_id where s.form_id=nf_forms.id and c.user_id=auth.uid())
+);
+drop policy if exists "Client read own setup questions" on public.nf_questions;
+create policy "Client read own setup questions" on public.nf_questions for select to authenticated using (
+ form_id in ('a1e9fca0-6c31-4a00-9f00-000000000001'::uuid,'a1e9fca0-6c31-4a00-9f00-000000000002'::uuid)
+ and exists(select 1 from public.nf_submissions s join public.clients c on c.id=s.client_id where s.form_id=nf_questions.form_id and c.user_id=auth.uid())
+);
 notify pgrst,'reload schema';
