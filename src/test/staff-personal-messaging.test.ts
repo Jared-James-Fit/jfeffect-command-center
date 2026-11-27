@@ -23,6 +23,15 @@ describe("staff personal messaging", () => {
     expect(admin).toContain("personalUnread");
     expect(read("src/lib/direct-chats.ts")).toContain('db.rpc("chat_staff_direct_start"');
   });
+  it("offers admins a recipient picker that reuses the normal conversation route", () => {
+    const admin = read("src/route-pages/_authenticated/admin/messages.tsx");
+    expect(admin).toContain('const canCompose = role === "admin" && !clientPov.isImpersonating');
+    expect(admin).toContain('aria-label="New message"');
+    expect(admin).toContain('title="New message" sub="Choose someone to message directly."');
+    expect(admin).toContain('selectClient(c.id);');
+    expect(admin).toContain('c.user_id !== user?.id && !c.archived');
+    expect(admin).toContain('staffClientId={selected.id}');
+  });
   it("routes personal notifications to the recipient's actual inbox", () => {
     const groupId = "a493f2a4-2461-4204-a621-bf62c2a6d01b";
     expect(notificationDeepLink("direct_message", "admin", { groupId })).toBe(`/admin/communication?tab=messages&direct=${groupId}`);
