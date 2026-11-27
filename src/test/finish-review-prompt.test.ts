@@ -71,6 +71,18 @@ describe("the finish review pops the moment it's all logged", () => {
     expect(shouldPromptReview({ ...base, loggedHere: true })).toBe(true);
   });
 
+  it("prompts after lifting whether plan cardio is logged before, after or not at all", () => {
+    const lifts = [{ id: "squat", sets: 2 }, { id: "bench", sets: 1 }];
+    const cardio = set("walk", 1, { actual_reps: null, actual_load: null, completed_duration_seconds: 600 });
+    const partial = [set("squat", 1), set("squat", 2)];
+    const full = [...partial, set("bench", 1)];
+    for (const results of [full, [cardio, ...full], [...full, cardio]]) {
+      expect(shouldPromptReview({ ...base, allDone: workoutSetProgress(lifts, results).allDone })).toBe(true);
+    }
+    expect(shouldPromptReview({ ...base, allDone: workoutSetProgress(lifts, [cardio, ...partial]).allDone })).toBe(false);
+    expect(shouldPromptReview({ ...base, allDone: workoutSetProgress(lifts, [...full, cardio]).allDone, finished: true })).toBe(false);
+  });
+
   it("in View as client, once the coach logs from that screen (never just for opening a client's full workout)", () => {
     expect(shouldPromptReview({ ...base, previewing: true })).toBe(false);
     expect(shouldPromptReview({ ...base, previewing: true, loggedHere: true })).toBe(true);
@@ -132,7 +144,7 @@ describe("the finish review waits while the last set is still being entered", ()
   });
 
   it("the logger holds it while a box is focused and re-times it on every focus change", () => {
-    expect(day).toContain("const awaitingEffort = timedSetAwaitingEffort(lastLoggedSet(results as any[]));");
+    expect(day).toContain("const awaitingEffort = timedSetAwaitingEffort(lastLoggedSet((results as any[]).filter((r) => reviewRowIds.has(String(r.row_id)))));");
     expect(day).toContain("const wait = reviewPromptDelay({ editing: editing(), leftABox, awaitingEffort });");
     expect(day).toContain('document.addEventListener("focusin", onFocusIn);');
     expect(day).toContain('document.addEventListener("focusout", onFocusOut);');

@@ -1980,7 +1980,7 @@ function WorkoutDay({
     void qc.invalidateQueries({
       predicate: (q) => {
         const k = String(q.queryKey[0] ?? "");
-        return k.startsWith("cardio-completion") || k.startsWith("cardio-analytics") || k.startsWith("cardio-compliance") || k === "client-cardio-resolved" || k === "cal-client-cardio";
+        return k === "workout-cardio-status" || k.startsWith("cardio-completion") || k.startsWith("cardio-analytics") || k.startsWith("cardio-compliance") || k === "client-cardio-resolved" || k === "cal-client-cardio";
       },
     });
   };
@@ -2389,26 +2389,27 @@ function WorkoutDay({
     [rows, setScope, setSessionsVersion],
   );
   const loggedProgress = useMemo(() => workoutSetProgress(progressRows, results as any[]), [progressRows, results]);
+  // Only remind about prescribed, outstanding cardio; a log from Nutrition
+  // or an explicit skip for the day also counts as resolved.
+  const pendingCardioRow = cardioTakeaway?.status === "logged" || cardioTakeaway?.status === "skipped"
+    ? undefined
+    : progressRows.find((r: any) => isPlanCardioRow(r) && !r.skipped && !cardioRowDone(r.id, results as any[]));
   // The lifting alone: the day's cardio is done before, during or after it (or
   // later that day), so the ring and the Finish button never wait on it (workout-cardio.ts).
   const liftLogged = useMemo(
     () => (liftRows > 0 && liftRows < progressRows.length ? workoutSetProgress(progressRows.slice(0, liftRows), results as any[]) : loggedProgress),
     [progressRows, results, liftRows, loggedProgress],
   );
-  // When every set is logged, the day's cardio too, there's no extra "Finish
-  // Workout" tap: the review opens as the athlete's last step and saving it
-  // finishes the workout. The workout remains amber/in-progress until that review
-  // is submitted. With the lifting done and the cardio still to come it
-  // never pops over the cardio (the next card, done right after or later that
-  // day): Finish is the review, one tap (`reviewReady`), and logging the cardio
-  // pops it like any last set.
+  // Review the prescribed workout independently of the day's plan cardio.
+  // Cardio may be logged before or after the review; cardio-only workouts
+  // retain the existing all-rows fallback.
   // The workout's lifting in order and which still has sets to log: a rest
   // that finishes an exercise shows on the next one up too (restHosts).
   const restOrder = useMemo(
     () => (rows as any[]).slice(0, liftRows).map((r) => ({ id: String(r.id), open: !loggedProgress.doneRowIds.has(String(r.id)) })),
     [rows, liftRows, loggedProgress],
   );
-  const autoFinishReady = loggedProgress.allDone;
+  const autoFinishReady = liftLogged.allDone;
   const reviewReady = liftLogged.allDone;
 
   const online = useOnlineStatus();
@@ -2426,7 +2427,8 @@ function WorkoutDay({
   });
   // A timed set that finished the workout with no RPE yet (its timer just
   // stopped, or only calories went in) gets room for RPE before the review.
-  const awaitingEffort = timedSetAwaitingEffort(lastLoggedSet(results as any[]));
+  const reviewRowIds = new Set(progressRows.slice(0, liftRows || progressRows.length).map((row: any) => String(row.id)));
+  const awaitingEffort = timedSetAwaitingEffort(lastLoggedSet((results as any[]).filter((r) => reviewRowIds.has(String(r.row_id)))));
   useEffect(() => {
     if (!promptReview) return;
     // Never while a box is focused: the last set counts as done as soon as it
@@ -3349,6 +3351,19 @@ function WorkoutDay({
           displayUnit={summaryDisplayUnit}
           setUnit={setUnitOf}
           cardio={cardioTakeaway}
+          onLogCardio={recapFromSubmitRef.current && pendingCardioRow && rowsLoaded && resultsLoaded && !resultsFetching && cardioDayLog !== undefined && !isImpersonating && !readonly ? () => {
+            recapFromSubmitRef.current = false;
+            setSummaryOpen(false);
+            const rowId = String(pendingCardioRow.id);
+            window.setTimeout(() => {
+              if (storyOpen) {
+                const index = storyRowIds.indexOf(rowId);
+                if (index >= 0) jumpStory(index, { instant: true });
+              } else {
+                document.querySelector<HTMLElement>(`[data-story-slide="${CSS.escape(rowId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }, 150);
+          } : undefined}
           // Sharing is the athlete's own choice: not offered on membership
           // workouts, and never from a coach's "View as client" session.
           completionId={isClientWorkout && !isImpersonating && completion?.completed_at ? completion.id ?? null : null}

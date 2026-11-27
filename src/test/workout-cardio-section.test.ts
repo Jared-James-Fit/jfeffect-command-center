@@ -102,9 +102,9 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(refreshCardioBody).not.toContain("beginSessionOnAction");
   });
 
-  it("the review pops by itself only once the cardio's in too; with it still to come, Finish is the review in one tap", () => {
-    // never over the cardio card (it's the next thing, done right after or later that day)
-    expect(day).toContain("const autoFinishReady = loggedProgress.allDone;");
+  it("the review pops after prescribed lifting independently of plan cardio", () => {
+    // plan cardio is independent of the workout review
+    expect(day).toContain("const autoFinishReady = liftLogged.allDone;");
     expect(day).toContain("allDone: autoFinishReady,");
     expect(day).toContain("const reviewReady = liftLogged.allDone;");
     expect(day).toContain("review: reviewReady,");
@@ -115,6 +115,18 @@ describe("cardio is done when it suits them: before, during, after or later that
     // Finish's required sets leave the plan's cardio out (the shared reading the re-sync uses too)
     expect(day).toContain("requiredRowsFromExerciseRows(rows as any[])");
     expect(readFileSync("src/lib/workout-completeness.ts", "utf8")).toContain(".filter((r) => !r?.cardio_target_id)");
+  });
+
+  it("shows one optional cardio reminder beside Done, only on the immediate completion recap", () => {
+    const recap = read("src/components/workout-submission-summary.tsx");
+    expect(day).toContain('cardioTakeaway?.status === "logged" || cardioTakeaway?.status === "skipped"');
+    expect(day).toContain("isPlanCardioRow(r) && !r.skipped && !cardioRowDone(r.id, results as any[])");
+    expect(day).toContain("onLogCardio={recapFromSubmitRef.current && pendingCardioRow");
+    expect(recap).toContain("{cardio && !onLogCardio && (");
+    expect(recap).toContain("{onLogCardio && (");
+    expect(recap.indexOf("data-recap-cardio-reminder")).toBeLessThan(recap.indexOf("data-recap-done"));
+    expect(recap).toContain("onClick={onLogCardio}>Log cardio</Button>");
+    expect(recap).toContain("onClick={close} data-recap-done");
   });
 
   it("the recap and Vs the plan never call cardio not done yet 'missed'; logged, it counts", async () => {
