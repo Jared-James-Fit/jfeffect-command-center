@@ -169,7 +169,7 @@ begin
  end if;
  perform public.sync_setup_form_response('a1e9fca0-6c31-4a00-9f00-000000000002',p_row.id,p_row.client_id,finished,
    to_jsonb(p_row)||info||jsonb_build_object('proposed_event_changes',
-   (select coalesce(jsonb_agg(x->>'text'),'[]'::jsonb) from jsonb_array_elements(coalesce(p_row.athlete_info_changes,'[]'::jsonb)) x where x->>'key' like 'event_%')));
+   (select coalesce(jsonb_agg(x->>'text'),'[]'::jsonb) from jsonb_array_elements(case when jsonb_typeof(p_row.athlete_info_changes)='array' then p_row.athlete_info_changes else '[]'::jsonb end) x where x->>'key' like 'event_%')));
 end
 $$;
 revoke all on function public.sync_competition_setup_form(public.competitions) from public,anon,authenticated,service_role;
@@ -203,4 +203,45 @@ begin
 end $$;
 drop trigger if exists no_setup_form_assignment on public.nf_assignments;
 create trigger no_setup_form_assignment before insert or update on public.nf_assignments for each row execute function public.tg_no_setup_form_assignment();
+-- Keep the system definitions and mirrored responses read-only through generic
+-- form CRUD. Their source triggers execute as the migration owner; ordinary
+-- authenticated/service-role mutations may only mark a response reviewed.
+create or replace function public.tg_protect_setup_forms()
+returns trigger language plpgsql set search_path=public as $
+declare f uuid; oldf uuid; sid uuid; oldsid uuid; c uuid;
+begin
+ if current_user not in ('authenticated','anon','service_role') or pg_trigger_depth()>1 then
+   if tg_op='DELETE' then return old; else return new; end if;
+ end if;
+ if tg_table_name='nf_forms' then
+   if tg_op<>'INSERT' then oldf:=old.id; end if;
+   if tg_op<>'DELETE' then f:=new.id; end if;
+ elsif tg_table_name='nf_questions' or tg_table_name='nf_submissions' then
+   if tg_op<>'INSERT' then oldf:=old.form_id; end if;
+   if tg_op<>'DELETE' then f:=new.form_id; end if;
+ else
+   if tg_op<>'INSERT' then oldsid:=old.submission_id; end if;
+   if tg_op<>'DELETE' then sid:=new.submission_id; end if;
+   select form_id into oldf from public.nf_submissions where id=oldsid;
+   select form_id into f from public.nf_submissions where id=sid;
+ end if;
+ if f in ('a1e9fca0-6c31-4a00-9f00-000000000001'::uuid,'a1e9fca0-6c31-4a00-9f00-000000000002'::uuid)
+ or oldf in ('a1e9fca0-6c31-4a00-9f00-000000000001'::uuid,'a1e9fca0-6c31-4a00-9f00-000000000002'::uuid) then
+   if tg_table_name='nf_submissions' and tg_op='UPDATE' then
+     c:=old.client_id;
+     if (current_user='service_role' or public.has_role(auth.uid(),'admin'::public.app_role) or c in (select public.coached_client_ids()))
+       and (to_jsonb(new)-array['status','reviewed_at','reviewed_by','updated_at'])=(to_jsonb(old)-array['status','reviewed_at','reviewed_by','updated_at'])
+       and new.status in ('reviewed','pending_review','submitted')
+       then return new; end if;
+   end if;
+   raise exception 'System setup responses are maintained by the original onboarding workflow.';
+ end if;
+ if tg_op='DELETE' then return old; else return new; end if;
+end $;
+do $ declare t text; begin
+ foreach t in array array['nf_forms','nf_questions','nf_submissions','nf_answers','nf_files'] loop
+   execute format('drop trigger if exists protect_setup_forms on public.%I',t);
+   execute format('create trigger protect_setup_forms before insert or update or delete on public.%I for each row execute function public.tg_protect_setup_forms()',t);
+ end loop;
+end $;
 notify pgrst,'reload schema';
