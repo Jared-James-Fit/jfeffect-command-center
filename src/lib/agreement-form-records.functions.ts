@@ -8,7 +8,7 @@ export type AgreementFormRecord = {
   version: string | null; method: string | null; status: string;
   acknowledgement: string | null; source: "legal" | "coaching" | "external";
 };
-export type AgreementFormGroup = { id: string; title: string; records: AgreementFormRecord[]; source: AgreementFormRecord["source"]; historical?: boolean };
+export type AgreementFormGroup = { id: string; title: string; records: AgreementFormRecord[]; source: AgreementFormRecord["source"]; historical?: boolean; purpose?: "core" | "service" | "policy" };
 
 async function allRows(build: (from: number, to: number) => PromiseLike<{data: any[] | null; error: any}>) {
   const rows: any[] = [];
@@ -28,7 +28,7 @@ export const listAgreementFormRecords = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<AgreementFormGroup[]> => {
     const { db } = await assertAdminView(context as any);
     const [docs, acceptances, signatures, external] = await Promise.all([
-      allRows((a,b) => db.from("legal_documents").select("id,title,archived,is_required,current_version_id").order("id").range(a,b)),
+      allRows((a,b) => db.from("legal_documents").select("id,slug,title,archived,is_required,current_version_id").order("id").range(a,b)),
       allRows((a,b) => db.from("legal_acceptances").select("id,document_id,user_id,client_id,accepted_at,revoked_at,signature_method,typed_name,acknowledgement_text,client:clients(full_name),version:legal_document_versions(version_number,title)").order("id").range(a,b)),
       allRows((a,b) => db.from("coaching_agreement_signatures").select("id,client_id,client_name,signed_at,signature_method,coaching_agreement_versions(version)").order("id").range(a,b)),
       allRows((a,b) => db.from("agreements").select("id,client_id,template_name,agreement_type,status,archived,signed_at,sent_at,signing_method,clients(full_name)").order("id").range(a,b)),
@@ -41,27 +41,29 @@ export const listAgreementFormRecords = createServerFn({ method: "GET" })
       for (const p of data ?? []) if (p.full_name) names.set(p.id,p.full_name);
     }
     const groups = new Map<string, AgreementFormGroup>();
+    const purpose = (slug: string): AgreementFormGroup["purpose"] => ["terms-of-service","privacy-policy"].includes(slug) ? "core" : ["cancellation-and-refund-policy","recurring-billing-disclosure"].includes(slug) ? "policy" : "service";
     for (const d of docs) if (!d.archived && d.current_version_id && d.is_required) {
-      groups.set(d.id,{id:d.id,title:d.title,records:[],source:"legal",historical:!!d?.archived || !d?.current_version_id});
+      groups.set(d.id,{id:d.id,title:d.title,records:[],source:"legal",purpose:purpose(d.slug)});
     }
     for (const r of acceptances) {
       const d = docs.find(d => d.id === r.document_id);
-      if (!groups.has(r.document_id)) groups.set(r.document_id,{id:r.document_id,title:d?.title ?? first(r.version)?.title ?? "Archived legal document",records:[],source:"legal"});
+      if (!groups.has(r.document_id)) groups.set(r.document_id,{id:r.document_id,title:d?.title ?? first(r.version)?.title ?? "Archived legal document",records:[],source:"legal",purpose:purpose(d?.slug),historical:!d || !!d.archived || !d.current_version_id});
       groups.get(r.document_id)!.records.push({
         id:r.id,name:first(r.client)?.full_name ?? r.typed_name ?? names.get(r.user_id) ?? "Account " + String(r.user_id ?? "unknown").slice(0,8),
         clientId:r.client_id,date:r.accepted_at,version:first(r.version)?.version_number != null ? String(first(r.version).version_number) : null,
         method:r.signature_method,status:r.revoked_at ? "Revoked" : "Accepted",acknowledgement:r.acknowledgement_text,source:"legal",
       });
     }
-    groups.set("coaching",{id:"coaching",title:"Coaching Agreement",source:"coaching",records:signatures.map(r => ({
+    groups.set("coaching",{id:"coaching",title:"Coaching Agreement",source:"coaching",purpose:"service",records:signatures.map(r => ({
       id:r.id,name:r.client_name ?? "Client",clientId:r.client_id,date:r.signed_at,version:first(r.coaching_agreement_versions)?.version ?? null,
       method:r.signature_method,status:"Signed",acknowledgement:null,source:"coaching",
     }))});
     for (const r of external) {
       const title = r.template_name ?? r.agreement_type ?? "External agreement";
-      const historical = !!r.archived || (/signnow/i.test(title) && !r.sent_at && !r.signed_at && !["Signed","Completed","Verified"].includes(r.status));
+      const historical = !!r.archived || ((/signnow/i.test(title) || title === "Coaching Agreement") && !r.sent_at && !r.signed_at && r.status === "Not Sent");
       const key = "external:" + title;
-      if (!groups.has(key)) groups.set(key,{id:key,title,source:"external",records:[]});
+      if (!groups.has(key)) groups.set(key,{id:key,title,source:"external",records:[],historical:true});
+      if (!historical) groups.get(key)!.historical = false;
       groups.get(key)!.records.push({id:r.id,name:first(r.clients)?.full_name ?? "Client",clientId:r.client_id,date:r.signed_at ?? (["Signed","Completed","Verified"].includes(r.status) ? null : r.sent_at),
         version:null,method:r.signing_method,status:r.status + (r.archived ? " · Archived" : ""),acknowledgement:null,source:"external"});
     }
