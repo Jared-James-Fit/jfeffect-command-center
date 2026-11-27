@@ -9,7 +9,7 @@ import { IN_APP_SIGNING_FROM_VERSION } from "@/lib/membership-agreement.function
 
 export type StaffFormRequirement = {
   key: string; clientId: string; name: string; title: string;
-  complete: boolean; occurrence?: string; acceptedAt?: string | null;
+  complete: boolean; occurrence?: string; acceptedAt?: string | null; recordId?: string;
 };
 
 async function rows(build: (from: number,to: number)=>PromiseLike<{data:any[]|null;error:any}>) {
@@ -80,7 +80,7 @@ export const listStaffFormRequirements = createServerFn({method:"GET"})
       const [goals,enrollments,acceptances,handling]=await Promise.all([
         rows((a,b)=>db.from("client_goals_setup").select("client_id,main_goal,training_days_per_week,workout_length_minutes,training_experience,training_location,nutrition_goal").in("client_id",ids).order("client_id").range(a,b)),
         rows((a,b)=>db.from("coaching_package_enrollments").select("client_id,coaching_packages!inner(slug)").in("client_id",ids).eq("status","active").lte("starts_on",new Date().toISOString().slice(0,10)).order("id").range(a,b)),
-        rows((a,b)=>db.from("legal_acceptances").select("user_id,document_id,version_id,accepted_at,signature_method,context_ref,checkbox_checked,acknowledgement_text").in("user_id",users).in("document_id",legalDocs.map(d=>d.id)).is("revoked_at",null).order("id").range(a,b)),
+        rows((a,b)=>db.from("legal_acceptances").select("id,user_id,document_id,version_id,accepted_at,signature_method,context_ref,checkbox_checked,acknowledgement_text").in("user_id",users).in("document_id",legalDocs.map(d=>d.id)).is("revoked_at",null).order("id").range(a,b)),
         Promise.all(batch.map(c=>loadHandlingSetup(db,c.id))),
       ]);
       batch.forEach((c,index)=>{
@@ -105,9 +105,30 @@ export const listStaffFormRequirements = createServerFn({method:"GET"})
             if(v.needs_legal_review) continue;
             signed=acc.find(a=>a.version_id===v.id) ?? (!v.requires_reacceptance ? acc[0] : undefined);
           }
-          out.push({...base,key:"legal:"+d.id,title:d.title,complete:!!signed,acceptedAt:signed?.accepted_at??null});
+          out.push({...base,key:"legal:"+d.id,title:d.title,complete:!!signed,acceptedAt:signed?.accepted_at??null,recordId:signed?.id});
         }
       });
     }
     return out;
+  });
+
+/** Read one accepted document for the explicitly authorized account only. */
+export const getStaffFormAcceptanceEvidence=createServerFn({method:"GET"})
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input:unknown)=>z.object({clientId:z.string().uuid(),id:z.string().uuid()}).parse(input))
+  .handler(async({context,data})=>{
+    const caller=context.supabase;
+    const [admin,coach,assigned]=await Promise.all([
+      caller.rpc("has_role",{_user_id:context.userId,_role:"admin"}),
+      caller.rpc("has_role",{_user_id:context.userId,_role:"coach"}),
+      caller.rpc("is_assigned_coach_for_client",{_client_id:data.clientId}),
+    ]);
+    if(admin.error || coach.error || (!admin.data && assigned.error)) throw new Error("Could not verify staff access");
+    if(!admin.data && !(coach.data && assigned.data)) throw new Error("Forbidden");
+    const {data:target,error}=await caller.from("clients").select("user_id").eq("id",data.clientId).maybeSingle();
+    if(error || !target?.user_id) throw new Error("Account not available");
+    const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
+    const {data:record,error:recordError}=await (supabaseAdmin as any).from("legal_acceptances").select("rendered_snapshot,signature_method,acknowledgement_text").eq("id",data.id).eq("user_id",target.user_id).single();
+    if(recordError || !record) throw new Error("Accepted document not available");
+    return {snapshot:record.rendered_snapshot as string|null,method:record.signature_method as string|null,acknowledgement:record.acknowledgement_text as string|null};
   });
