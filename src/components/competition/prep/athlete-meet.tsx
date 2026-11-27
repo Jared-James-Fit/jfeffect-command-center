@@ -278,7 +278,8 @@ export function AthleteMeet({
               const checklist = applyChecklistChanges(old.checklist, [{ key: k, state }]);
               return { ...old, checklist, readiness: readinessOf(checklist, old.today) };
             });
-            await qc.invalidateQueries({ queryKey: prefix });
+            // The confirmed cache is already updated; don't block the next tap on a full reload.
+            void qc.invalidateQueries({ queryKey: prefix });
             void qc.invalidateQueries({ queryKey: ["goals-service-scope"] });
           }}
         />
