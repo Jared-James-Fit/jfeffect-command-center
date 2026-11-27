@@ -3997,7 +3997,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const rowHasVideos = useRowHasSetVideos(dayId, row.id, setVideosOn);
   const looseWarmupClip = useLooseWarmupClip(dayId, row.id, setVideosOn);
   const videoColumn = setVideosOn && (!readonly || rowHasVideos);
-  const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, hideWeight, videoColumn });
+  const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, cardioTime: cardioRow || runRow, showDistance, showCalories, showVelocity, hideWeight, videoColumn });
   // The logging frontier: helper chips (suggested load, repeat previous set)
   // appear only on the next set to log — never on every row.
   const frontier = Array.from({ length: setCount }, (_, k) => k + 1)
