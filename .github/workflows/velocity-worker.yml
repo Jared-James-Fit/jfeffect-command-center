@@ -2,10 +2,19 @@ name: Velocity worker (bar speed from set videos)
 
 # Reads bar path, reps and bar speed from every barbell set video on the
 # server, then the athlete's body (joints for Technique), so nothing waits for
-# an athlete or coach to open the app (scripts/velocity-worker/worker.ts). Each run keeps polling the app for
-# waiting videos for RUN_MINUTES; runs start every 30 minutes and never
-# overlap, so a new upload is picked up within a minute or two while a run is
-# going, and within half an hour at most.
+# an athlete or coach to open the app (scripts/velocity-worker/worker.ts).
+#
+# It reads all the time: each run polls the app for waiting videos for
+# RUN_MINUTES (320, just under a job's 6-hour limit) and then starts the next
+# run itself (a workflow_dispatch made with this run's own token, which GitHub
+# allows), so a new upload is picked up within a minute or so. Runs never
+# overlap (the concurrency group keeps one running and one waiting, so the
+# chain can't double up). The schedule only restarts the chain if it ever
+# breaks: GitHub runs this repository's crons hours late or not at all, so it
+# can't be what keeps videos moving. A reader that stops on its own inside
+# 10 minutes (a refused token, a broken build) doesn't start another run;
+# the schedule tries again later and velocity_worker_watch tells the owner
+# when videos wait 45 minutes.
 #
 # It authenticates to the app with this job's GitHub OIDC token (id-token:
 # write): the app checks GitHub's signature and that the token is this
@@ -20,11 +29,16 @@ on:
       minutes:
         description: 'How long to keep reading (minutes)'
         required: false
-        default: '25'
+        default: '320'
+      chain:
+        description: 'Start the next run when this one ends (keeps the reader going)'
+        required: false
+        default: 'true'
 
 permissions:
   contents: read
   id-token: write
+  actions: write # only to start the next run of this workflow
 
 concurrency:
   group: velocity-worker
@@ -35,7 +49,7 @@ jobs:
     name: Read waiting set videos
     if: github.repository == 'Jared-James-Fit/jfeffect-command-center'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,8 +82,30 @@ jobs:
         run: node scripts/velocity-worker/bundle.mjs /tmp/vw-page
 
       - name: Read
+        id: read
+        # the last video claimed near the end can take a while: the step stops
+        # before the job's own limit so the next run is still started
+        timeout-minutes: 345
         env:
           VELOCITY_HOOK_URL: ${{ vars.VELOCITY_HOOK_URL || 'https://project--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app/api/public/hooks/velocity-worker' }}
-          RUN_MINUTES: ${{ github.event.inputs.minutes || '25' }}
+          RUN_MINUTES: ${{ github.event.inputs.minutes || '320' }}
           PAGE_BUNDLE_DIR: /tmp/vw-page
-        run: node_modules/.bin/tsx --tsconfig tsconfig.json scripts/velocity-worker/worker.ts
+        run: |
+          echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
+          node_modules/.bin/tsx --tsconfig tsconfig.json scripts/velocity-worker/worker.ts
+
+      - name: Start the next run
+        if: ${{ !cancelled() && github.event.inputs.chain != 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STARTED: ${{ steps.read.outputs.started }}
+          READ_OUTCOME: ${{ steps.read.outcome }}
+        run: |
+          now=$(date +%s)
+          ran=$(( now - ${STARTED:-$now} ))
+          if [ "$READ_OUTCOME" != "success" ] && [ "$ran" -lt 600 ]; then
+            echo "The reader stopped after ${ran}s ($READ_OUTCOME); not starting another run. The schedule will try again."
+            exit 0
+          fi
+          gh workflow run velocity-worker.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "Next run started (this one read for $(( ran / 60 )) min)."

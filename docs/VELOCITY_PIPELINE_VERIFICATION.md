@@ -40,8 +40,10 @@ The "analysed but not on the set" bug had two causes: the phone read an unconfir
 ## Server reader (Nov 26 2026)
 
 Set videos no longer depend on an open phone. `.github/workflows/velocity-worker.yml`
-runs `scripts/velocity-worker/worker.ts` every 30 minutes (and on demand from the
-Actions tab, "Run workflow"). It authenticates to `/api/public/hooks/velocity-worker`
+runs `scripts/velocity-worker/worker.ts` all the time: each run reads for about
+five and a half hours and then starts the next run itself (GitHub runs this
+repository's crons hours late, so the schedule only restarts the chain if it breaks;
+"Run workflow" on the Actions tab starts it by hand). It authenticates to `/api/public/hooks/velocity-worker`
 with the job's GitHub OIDC token; the hook verifies GitHub's signature and the
 repository, branch, workflow and runner claims (`src/lib/lift-analysis/worker-oidc.ts`).
 

@@ -18,7 +18,8 @@
  * each job; nothing about a client is ever printed (the logs are public).
  *
  *   VELOCITY_HOOK_URL   https://jfeffect.com/api/public/hooks/velocity-worker
- *   RUN_MINUTES         how long to keep polling (default 25)
+ *   RUN_MINUTES         how long to keep polling (default 25; the workflow runs
+ *                       320 minutes and then starts the next run itself)
  *   ONCE=1              stop as soon as nothing is waiting
  *   DRY_JOBS=<file>     test locally: jobs from a JSON file (url may be a local path), every
  *                       hook call printed instead of sent
@@ -64,7 +65,11 @@ const HOOK =
 const AUDIENCE = "jfeffect-velocity-worker";
 const RUN_MS = Number(process.env.RUN_MINUTES ?? 25) * 60_000;
 const ONCE = process.env.ONCE === "1";
+/** Waiting between polls: 20 s while videos have just come in, easing to a minute when quiet. */
 const IDLE_MS = 20_000;
+const IDLE_MAX_MS = 60_000;
+/** How long to wait when the app doesn't answer (a publish, a blip) before asking again. */
+const APP_DOWN_MS = 60_000;
 const MAX_DOWNLOAD = 800 * 1024 * 1024;
 
 const log = (msg: string) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
@@ -499,17 +504,34 @@ async function processPoseJob(job: PoseJob, reader: BrowserReader, dir: string) 
 }
 
 /* ── the loop ────────────────────────────────────────────────────────────── */
+/** 20 s for the first three quiet polls, then 40 s, then a minute. */
+function idleWait(quietPolls: number): number {
+  return Math.min(IDLE_MAX_MS, IDLE_MS * (1 + Math.floor(Math.max(0, quietPolls - 1) / 3)));
+}
+
 async function main() {
   const start = Date.now();
   const dir = join(tmpdir(), "velocity-worker");
   mkdirSync(dir, { recursive: true });
   let reader: BrowserReader | null = null;
   const tally: Record<string, number> = {};
+  let quiet = 0;
   try {
     while (Date.now() - start < RUN_MS) {
       // bar speed first (it goes on the set); bodies when nothing else is waiting
-      const { jobs } = (await hook("claim", { max: 1 })) as { jobs: WorkerJob[] };
+      let jobs: WorkerJob[] = [];
+      try {
+        ({ jobs } = (await hook("claim", { max: 1 })) as { jobs: WorkerJob[] });
+      } catch (e: any) {
+        // A run lasts hours: the app being published or briefly down never ends it.
+        if (e?.fatal || ONCE || DRY || DRY_POSE) throw e;
+        log(`the app didn't answer; asking again in a minute (${String(e?.message ?? e).slice(0, 80)})`);
+        tally.app_unreachable = (tally.app_unreachable ?? 0) + 1;
+        await sleep(APP_DOWN_MS);
+        continue;
+      }
       if (jobs?.length) {
+        quiet = 0;
         reader ??= await startBrowser();
         for (const job of jobs) {
           const what = await processJob(job, reader, dir);
@@ -521,6 +543,7 @@ async function main() {
         jobs: PoseJob[];
       };
       if (poses?.jobs?.length) {
+        quiet = 0;
         reader ??= await startBrowser();
         for (const job of poses.jobs) {
           const what = await processPoseJob(job, reader, dir);
@@ -530,7 +553,13 @@ async function main() {
       }
       dropCache();
       if (ONCE || DRY || DRY_POSE) break;
-      await sleep(IDLE_MS);
+      quiet++;
+      // a long quiet stretch: let the browser go, it starts again in a second for the next video
+      if (quiet === 15 && reader) {
+        await reader.close();
+        reader = null;
+      }
+      await sleep(idleWait(quiet));
     }
   } finally {
     dropCache();
