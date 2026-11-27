@@ -57,7 +57,8 @@ import { cn } from "@/lib/utils";
 import { PrepOverview } from "./prep/prep-overview";
 import { GameplanSection } from "./prep/gameplan-section";
 import { TimelineSection } from "./prep/timeline-section";
-import { ChecklistSection } from "./prep/checklist-section";
+import { ChecklistSection, applyChecklistChanges } from "./prep/checklist-section";
+import { readinessOf } from "@/lib/competition/prep-checklist";
 import { HandlingOpportunities } from "./prep/handling-opportunities";
 import { HandlingInviteSheet } from "./prep/handling-sheets";
 import { RecapCard } from "./prep/recap-card";
@@ -477,11 +478,26 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
       ) : null}
       {section === "checklist" && sel.prep ? (
         <ChecklistSection
+          key={comp.id}
+          competitionId={comp.id}
           items={sel.prep.checklist}
           readiness={sel.prep.readiness}
           today={sel.prep.today}
           who="coach"
-          onTick={(key, state) => prepRun.mutate(() => tickChecklist({ data: { competitionId: comp.id, key, state } }))}
+          onTick={async (key, state) => {
+            await tickChecklist({ data: { competitionId: comp.id, key, state } });
+            const prefix = ["competition-workspace", clientId];
+            await qc.cancelQueries({ queryKey: prefix });
+            qc.setQueriesData<any>({ queryKey: prefix }, (old) => {
+              if (old?.selected?.competition?.id !== comp.id || !old.selected.prep) return old;
+              const prep = old.selected.prep;
+              const checklist = applyChecklistChanges(prep.checklist, [{ key, state }]);
+              return { ...old, selected: { ...old.selected, prep: { ...prep, checklist, readiness: readinessOf(checklist, prep.today) } } };
+            });
+            await qc.invalidateQueries({ queryKey: prefix });
+            void qc.invalidateQueries({ queryKey: planEventsKey(clientId) });
+            void qc.invalidateQueries({ queryKey: ["my-meet", comp.id] });
+          }}
         />
       ) : null}
       {section === "preparation" ? (
