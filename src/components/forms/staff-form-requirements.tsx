@@ -52,7 +52,7 @@ export function AccountFormRequirements({clientId,onOpenSetup}: {clientId:string
   if(q.isLoading) return <p className="text-xs text-muted-foreground">Checking account requirements…</p>;
   if(q.isError) return <Button variant="ghost" size="sm" onClick={()=>void q.refetch()}>Couldn't check account requirements · Retry</Button>;
   const all=q.data??[];
-  const missing=all.filter(r=>!r.complete);
+  const missing=all.filter(r=>!r.complete && r.key!=="coaching"); // Existing Coaching Agreement panel owns its status and actions.
   const accepted=all.filter(r=>r.complete && r.key.startsWith("legal:"));
   if(!missing.length && !accepted.length) return null;
   return <div className="space-y-2" data-account-form-requirements>
