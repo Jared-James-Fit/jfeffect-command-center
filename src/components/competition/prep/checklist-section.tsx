@@ -4,7 +4,6 @@
  * still open marked by how much it matters. A tick is one tap; an item the
  * records already show done says so and can't be unticked here.
  */
-import { useState } from "react";
 import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,7 +28,6 @@ export function ChecklistSection({
   onTick?: (key: string, state: ItemState) => void;
   who: "coach" | "athlete";
 }) {
-  const [showDone, setShowDone] = useState(true);
   return (
     <div className="space-y-3" data-prep-checklist>
       <div className="rounded-2xl border border-border bg-card p-4">
@@ -44,7 +42,6 @@ export function ChecklistSection({
         const list = items.filter((i) => i.stage === stage);
         if (!list.length) return null;
         const open = list.filter((i) => i.state === "open");
-        const shown = showDone ? list : open;
         return (
           <section key={stage} className="rounded-2xl border border-border bg-card" data-stage={stage}>
             <header className="flex items-baseline justify-between gap-2 px-4 pt-3">
@@ -53,26 +50,15 @@ export function ChecklistSection({
                 {open.length ? `${open.length} to do` : "All done"}
               </span>
             </header>
-            {shown.length ? (
-              <ul className="mt-1 divide-y divide-border">
-                {shown.map((i) => (
-                  <Row key={i.key} item={i} today={today} onTick={onTick} who={who} />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-4 pb-3 pt-1 text-[13px] text-muted-foreground">Nothing left here.</p>
-            )}
-            {!shown.length ? null : <div className="h-1" />}
+            <ul className="mt-1 divide-y divide-border">
+              {list.map((i) => (
+                <Row key={i.key} item={i} today={today} onTick={onTick} who={who} />
+              ))}
+            </ul>
+            <div className="h-1" />
           </section>
         );
       })}
-      <button
-        type="button"
-        className="text-[13px] text-muted-foreground underline-offset-2 hover:underline"
-        onClick={() => setShowDone((v) => !v)}
-      >
-        {showDone ? "Hide what's done" : "Show what's done"}
-      </button>
     </div>
   );
 }
