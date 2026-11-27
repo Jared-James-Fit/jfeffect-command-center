@@ -548,89 +548,43 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
     return { ok: false, status: "failed", reason: "no question" };
   }
 
-  // Existing attempt weights and their provenance are internal coaching records.
-  // Read them under the same role-scoped authorization as setup reviews.
-  if (chat.client_id && !cleo.viewOnly && !(questionRow.attachments?.length)) {
-    const { isLocalAttemptQuestion, localAttemptAnswer } = await import("@/lib/cleo-local-attempts.server");
-    if (isLocalAttemptQuestion(questionRow.content)) {
+  // Internal staff queries are independent of permission to send personal
+  // data outside JF Effect. If external processing is unavailable, reuse the
+  // existing authorized read tools instead of failing the whole conversation.
+  if (chat.client_id) {
+    const { clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
+    const consent = await clientAllowsAi(chat.client_id);
+    const hasAttachments = !!questionRow.attachments?.length;
+    const { isLocalAttemptQuestion } = await import("@/lib/cleo-local-attempts.server");
+    const setupQuestion = /^(review (account|coaching) setup|what (access issues are|is still) outstanding|(?:show|review|check) (?:(?:client|competition|meet|handling) )?(?:onboarding|intake|setup)(?: status)?|what(?:'s| is) (?:missing|left) (?:from|in) (?:onboarding|setup|intake))[?.!]*$/i.test(questionRow.content.trim());
+    const attemptQuestion = isLocalAttemptQuestion(questionRow.content);
+    if (!cleo.viewOnly && (!consent.ok || (!hasAttachments && (attemptQuestion || setupQuestion)))) {
       try {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const answer = await localAttemptAnswer(supabaseAdmin, userId, chat.client_id);
-        await own.from("summer_messages").update({ content: answer, status: "done", progress: null, error: null }).eq("id", messageId).eq("status", "running");
+        const { localClientReply } = await import("@/lib/cleo-local-client.server");
+        const { localClientIntent } = await import("@/lib/cleo-local-intent");
+        const intent = localClientIntent(questionRow.content);
+        // Exact setup/attempt commands retain their established semantics.
+        if (!hasAttachments && !intent.action && (attemptQuestion || setupQuestion)) {
+          intent.topics = [attemptQuestion ? "attempts" : "setup"];
+        }
+        const reply = await localClientReply({
+          db: cleo.db, admin: supabaseAdmin, requester: userId,
+          clientId: chat.client_id, coach: cleo.coach, question: questionRow.content,
+          attachments: hasAttachments, intent,
+        });
+        await own.from("summer_messages").update({ content: reply.text, choices: reply.choices ?? null, status: "done", progress: null, error: null }).eq("id", messageId).eq("status", "running");
         return { ok: true, status: "done" };
       } catch {
-        await fail("Couldn't verify the attempt plan right now. Open the client's Competition tab and try again.");
-        return { ok: false, status: "failed", reason: "attempt read failed" };
+        await fail("I couldn't access this client's records with your current staff permissions. Check the client profile or try again.");
+        return { ok: false, status: "failed", reason: "internal client read failed" };
       }
     }
-  }
-
-  // Explicit setup review commands use an internal, role-scoped read, never a model.
-  // Keep this allowlist narrow: arbitrary free text and previous chat history can contain personal data.
-  if (chat.client_id && !cleo.viewOnly && !(questionRow.attachments?.length) &&
-      /^(review (account|coaching) setup|what (access issues are|is still) outstanding|(?:show|review|check) (?:(?:client|competition|meet|handling) )?(?:onboarding|intake|setup)(?: status)?|what(?:'s| is) (?:missing|left) (?:from|in) (?:onboarding|setup|intake))[?.!]*$/i.test(questionRow.content.trim())) {
-    try {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { assertRequesterReaches } = await import("@/lib/cleo-actions.server");
-      await assertRequesterReaches(supabaseAdmin, userId, chat.client_id);
-      const { isBasicInfoComplete } = await import("@/lib/basic-info");
-      const { isGoalsSetupComplete } = await import("@/lib/client-goals/schema");
-      const { accountSetupRequirements } = await import("@/lib/account-setup-scope");
-      const { memberSetupSummary } = await import("@/lib/member-setup-steps");
-      const [client, goals, enrollments] = await Promise.all([
-        cleo.db.from("clients").select("id, user_id, last_signed_in_at, portal_access_disabled, profile_picture_url, service_tier, first_name, last_name, phone, date_of_birth, height_cm, address, city, country, timezone, emergency_contact_name, emergency_contact_phone, training_schedule_completed").eq("id", chat.client_id).maybeSingle(),
-        cleo.db.from("client_goals_setup").select("*").eq("client_id", chat.client_id).maybeSingle(),
-        (supabaseAdmin as any).from("coaching_package_enrollments").select("coaching_packages!inner(slug)").eq("client_id", chat.client_id).eq("status", "active").lte("starts_on", new Date().toISOString().slice(0, 10)),
-      ]);
-      if (client.error || !client.data) throw new Error("Couldn't read the client's setup.");
-      const c = client.data;
-      const status = (done: boolean, label: string) => done ? "✓ " + label + " — complete" : "○ " + label + " — outstanding";
-      const lines = [
-        "Client setup (checked internally):",
-        c.portal_access_disabled ? "○ Account access — disabled" : status(!!c.last_signed_in_at, "Account sign-in"),
-      ];
-      const { loadHandlingSetup } = await import("@/lib/competition/handling-setup.server");
-      const handlingMeets = await loadHandlingSetup(supabaseAdmin, chat.client_id);
-      if (enrollments.error) throw new Error("Could not read service scope");
-      const req = accountSetupRequirements(c.service_tier, (enrollments.data ?? []).map((e: any) => e.coaching_packages?.slug ?? ""), handlingMeets.length > 0);
-      if (req.basicInfo) lines.push(status(isBasicInfoComplete(c), "Basic information"));
-      if (req.headshot) lines.push(status(!!c.profile_picture_url, "Account photo"));
-      if (req.memberSetup && c.user_id) {
-        const member = await supabaseAdmin.from("app_members").select("account_type, is_admin_sandbox, subscription_status, stripe_subscription_id, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, committed_training_days").eq("user_id", c.user_id).maybeSingle();
-        if (member.error) lines.push("Membership setup — couldn’t verify");
-        else {
-          const summary = memberSetupSummary(member.data);
-          if (summary.applicable) {
-            lines.push(status(summary.complete, summary.free ? "Training setup" : "Membership setup"));
-            if (summary.missing.length) lines.push("Remaining: " + summary.missing.map(s => s.replace(/_/g, " ")).join(", "));
-          }
-        }
-      }
-      for (const meet of handlingMeets) {
-        lines.push(status(meet.intakeDone, `Competition intake: ${meet.name}`), status(meet.termsDone, "Handling terms"));
-        if (meet.remaining.length) lines.push("Remaining: " + meet.remaining.join(", "));
-      }
-      if (req.generalGoals) {
-        const nutritionOnly = req.nutritionOnly;
-        if (req.trainingSchedule) lines.push(status(!!c.training_schedule_completed, "Training schedule"));
-        const label = nutritionOnly ? "Nutrition setup" : "Goals & setup";
-        lines.push(goals.error ? label + " — couldn't verify" : status(isGoalsSetupComplete(goals.data, nutritionOnly), label));
-      }
-      lines.push("Check the Client setup card for agreement status and to request outstanding details.");
-      await own.from("summer_messages").update({ content: lines.join("\n"), status: "done", progress: null, error: null }).eq("id", messageId).eq("status", "running");
-      return { ok: true, status: "done" };
-    } catch {
-      await fail("Couldn't verify setup right now. Open the client's setup card to review or request missing items.");
-      return { ok: false, status: "failed", reason: "setup read failed" };
-    }
-  }
-  // Free-text model requests can carry personal data, so consent remains required before model context is built.
-  if (chat.client_id) {
-    const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
-    const consent = await clientAllowsAi(chat.client_id);
+    // The finance view is not coaching access. Never send unapproved client
+    // data to an external provider, including chat history and attachments.
     if (!consent.ok) {
-      await fail(coachConsentMessage(consent.name) + " You can still ask 'Review account setup' or 'Explain attempt selection' for an internal review without AI processing.");
-      return { ok: false, status: "failed", reason: "no AI consent" };
+      await own.from("summer_messages").update({ content: "This conversation is limited to authorized internal coaching reads. Open the relevant client record in the app to review it.", status: "done", progress: null, error: null }).eq("id", messageId).eq("status", "running");
+      return { ok: true, status: "done" };
     }
   }
 
