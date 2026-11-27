@@ -301,6 +301,7 @@ export function MeetingsWorkspace({
       <MemoryPanel
         clientId={clientId}
         title="Client memory"
+        onOpenSource={open}
         rows={(d.intelligence as any[]).filter((i) => i.status !== "archived")}
         today={d.today}
         onChange={() => qc.invalidateQueries({ queryKey: meetingsKey(clientId) })}
