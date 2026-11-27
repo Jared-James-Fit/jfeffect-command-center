@@ -98,8 +98,15 @@ export function SessionAfter({
   refresh: () => void;
 }) {
   const s = data.session;
-  const analysis: (MeetingAnalysis & { source?: string }) | null = s.analysis ?? null;
+  const analysis: (MeetingAnalysis & { source?: string; model?: string }) | null = s.analysis ?? null;
   const working = s.analysis_status === "queued" || s.analysis_status === "running";
+  const privateReview = analysis?.model === "private-extractive";
+  const retryPrivate = useServerFn(analyseNotesFn);
+  const retryReview = useMutation({
+    mutationFn: () => retryPrivate({ data: { sessionId: s.id } }),
+    onSuccess: refresh,
+    onError: (e: any) => toast.error(e?.message ?? "Could not start review"),
+  });
   const decisions: string[] = useMemo(() => s.live?.decisions ?? [], [s.live?.decisions]);
   const outcome = useMemo(
     () =>
@@ -154,6 +161,7 @@ export function SessionAfter({
             ) : (
               <p className="text-[13px] text-success">Nothing waiting on you.</p>
             )}
+            {privateReview ? <p className="text-[12px] text-muted-foreground">Private review · transcript excerpts, not AI-generated recommendations.</p> : null}
             {analysis?.summary ? <Summary text={analysis.summary} /> : null}
           </div>
         </section>
@@ -185,7 +193,13 @@ export function SessionAfter({
       ) : !analysis && s.recording?.consent && !s.recording?.transcript_ready ? (
         <RecordingProgress parts={(data.audio ?? []) as any[]} />
       ) : null}
-      {s.analysis_status === "failed" ? (
+      {s.analysis_status === "failed" && isCoachConsentMessage(s.analysis_error) ? (
+        data.cleo && (s.transcript_path || `${s.live?.notes ?? ""} ${(s.live?.decisions ?? []).join(" ")}`.trim().length >= 40) ? (
+          <Button size="sm" variant="outline" loading={retryReview.isPending} onClick={() => retryReview.mutate()}>
+            Review saved meeting
+          </Button>
+        ) : null
+      ) : s.analysis_status === "failed" ? (
         <p
           className={cn(
             "text-[13px]",
@@ -230,7 +244,7 @@ export function SessionAfter({
             ))}
           </ul>
         </section>
-      ) : analysis ? (
+      ) : analysis && !privateReview ? (
         <p className="text-[13px] text-muted-foreground">
           No changes came out of this conversation. That's often the right answer.
         </p>
@@ -1145,7 +1159,7 @@ function Import({ data, refresh }: { data: any; refresh: () => void }) {
     <section className="space-y-2 rounded-2xl border border-border p-3" data-transcript-import>
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto text-[14px] font-medium">Add what happened in the meeting</p>
-        {hasNotes ? (
+        {hasNotes || s.transcript_path ? (
           <Button
             size="sm"
             variant="outline"
@@ -1153,7 +1167,7 @@ function Import({ data, refresh }: { data: any; refresh: () => void }) {
             onClick={() => notesGo.mutate()}
             loading={notesGo.isPending}
           >
-            <FileText className="mr-1.5 h-3.5 w-3.5" /> Read my notes
+            <FileText className="mr-1.5 h-3.5 w-3.5" /> {s.transcript_path ? "Read saved transcript" : "Read my notes"}
           </Button>
         ) : null}
         <input
