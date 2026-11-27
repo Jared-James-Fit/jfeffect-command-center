@@ -10,6 +10,8 @@ import { AgreementRecordViewer } from "@/components/coaching-agreement/agreement
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useAuth } from "@/lib/auth";
 import { adminAgreementRoster } from "@/lib/coaching-agreement.functions";
+import { RequirementCount } from "@/components/forms/staff-form-requirements";
+import type { StaffFormRequirement } from "@/lib/staff-form-requirements.functions";
 import { listAgreementFormRecords, getLegalFormEvidence, type AgreementFormGroup, type AgreementFormRecord } from "@/lib/agreement-form-records.functions";
 
 export function useAgreementFormGroups() {
@@ -20,7 +22,7 @@ export function useAgreementFormGroups() {
 const isResponse = (r: AgreementFormRecord) => r.source !== "external" || ["Signed","Completed","Verified"].includes(r.status.split(" · ")[0]);
 const formatDate = (d: string | null) => d ? new Date(d).toLocaleString() : "—";
 
-export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
+export function AgreementFormRow({ group, requirements=[] }: {group: AgreementFormGroup; requirements?:StaffFormRequirement[]}) {
   const [open,setOpen] = useState(false);
   const [search,setSearch] = useState("");
   const [selected,setSelected] = useState<string|null>(null);
@@ -47,6 +49,7 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
         <span className="block text-[13px] leading-snug">{count} {count===1?"submission":"submissions"}{group.source==="external" && group.records.length>count ? " · "+(group.records.length-count)+" other records":""}</span>
       </button>
       {group.source === "coaching" && !group.historical && (roster.isError ? <Button variant="ghost" size="sm" onClick={()=>void roster.refetch()}>Retry status</Button> : outstanding.length > 0 ? <Button variant="ghost" size="sm" className="text-warning" onClick={showOutstanding}>{outstanding.length} need signing</Button> : roster.isSuccess ? <span className="text-xs text-muted-foreground">Up to date</span> : null)}
+      {group.source==="legal" && !group.historical && <RequirementCount title={group.title} requirements={requirements} />}
       <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={show} aria-label={"Responses to "+group.title}><ChevronRight className="h-4 w-4"/></Button>
     </li>
     {open && <Dialog open onOpenChange={setOpen}>
