@@ -11,12 +11,12 @@ export type LocalTopic =
 export type LocalIntent = { topics: LocalTopic[]; action: boolean; days: number | null; date?: string; exercise?: string };
 
 const TOPICS: Array<[LocalTopic, RegExp]> = [
-  ["setup", /\b(?:onboarding|intake|account setup|coaching setup|setup checklist|profile setup|account access|sign.?in|agreements?|forms? (?:left|missing)|(?:setup|checklist) (?:status|complete|missing|outstanding)|outstanding setup)\b/],
+  ["setup", /\b(?:onboarding|intake|account setup|coaching setup|setup checklist|profile setup|what(?:'s| is) (?:still )?(?:missing|left|outstanding)|account access|sign.?in|agreements?|forms? (?:left|missing)|(?:setup|checklist) (?:status|complete|missing|outstanding)|outstanding setup)\b/],
   ["attempts", /\b(?:attempt(?:s| selection| plan| numbers| weights| rationale)?|openers?|game\s?plan|(?:a )?temp selection|atempt selection|attemt selection)\b/],
   ["competition", /\b(?:competition|meet(?:s| day| prep)?|weigh.?in|flight|weight class|federation|openipf|openpowerlifting|handling)\b/],
   ["strength", /\b(?:strength|(?:e|estimated )?1rm|one.rep max|training max|(?:squat|bench|deadlift) max|how strong|strength trend|strength progress)\b/],
   ["records", /\b(?:prs?|personal records?|personal bests?|all.time bests?|best lifts?)\b/],
-  ["program", /\b(?:program(?:ming|me|mes|s)?|training plan|workout plan|training block|schedule|workout today|next workout|missed workouts?|workout adherence|training compliance|training frequency)\b/],
+  ["program", /\b(?:program(?:ming|me|mes|s)?|training plan|workout plan|training block|schedule|workout today|next workout|missed workouts?|workout adherence|training compliance|training frequency|adherence|attendance)\b/],
   ["training", /\b(?:training (?:log|history|progress|performance|data|sessions?|volume)|workout(?:s| history| log| results| performance)?|sets?|reps?|rpe|rir|bar (?:speed|velocity)|velocity|lift(?:s|ed|ing)?|squat|bench|deadlift)\b/],
   ["weight", /\b(?:body\s?weight|weigh.?ins?|scale weight|weight (?:trend|change|loss|gain|progress)|how much (?:do|does|did) (?:they|he|she) weigh)\b/],
   ["nutrition", /\b(?:nutrition|macros?|calories?|kcal|protein|carbs?|fat intake|diet|meal(?:s| plan)?|food|water intake|digestion)\b/],
