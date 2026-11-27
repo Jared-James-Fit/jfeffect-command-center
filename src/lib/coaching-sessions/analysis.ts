@@ -309,3 +309,18 @@ export function plainTranscript(name: string, raw: string): string {
   }
   return t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+
+/** Private, extractive review: no provider, inference, or automatic changes. */
+export function privateMeetingAnalysis(raw: string, decisions: string[] = []): MeetingAnalysis {
+  const clean = (value: string) => value.replace(/\s+/g, " ").trim();
+  const lines = raw.split(/\n+/).map(clean).filter(Boolean);
+  const excerpts = lines.flatMap((line) => line.match(/[^.!?]+[.!?]*/g) ?? [line])
+    .map(clean).filter((line) => line.length >= 12);
+  const summary = excerpts.slice(0, 6).map((line) => line.slice(0, 180)).join("\n");
+  const items: AnalysisItem[] = [...new Set(decisions.map(clean).filter(Boolean))].slice(0, 30)
+    .map((text) => ({ kind: hedged(text) ? "tentative" : "agreement", text: text.slice(0, 300),
+      quote: text.slice(0, 400), speaker: "unclear", due: null, basis: hedged(text) ? "tentative" : "confirmed" }));
+  return { summary, items, recommendations: [], intelligence: [], contradictions: [],
+    feedback: { strengths: [], consider: [] }, followUp: null, dropped: [] };
+}

@@ -9,7 +9,7 @@
  */
 import type { CallState } from "@/lib/ai/staged-call.server";
 import { checkBrief, prepLines } from "./brief";
-import { checkAnalysis, transcriptForModel, type MeetingAnalysis } from "./analysis";
+import { checkAnalysis, privateMeetingAnalysis, transcriptForModel, type MeetingAnalysis } from "./analysis";
 
 type Db = any;
 type Job = "brief" | "analysis";
@@ -127,11 +127,10 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
     await sb.from("coaching_sessions").update({ progress: { ...progress, [job]: state } }).eq("id", s.id);
   };
   try {
-    // the call's transcript goes to OpenAI only with the client's permission (5.1.2(i), src/lib/ai-consent):
-    // refused (or unreadable: fails closed), the job stops here, says why for the coach and asks no model
+    // External AI remains opt-in. Meeting analysis can always use the private extractive path.
     const { clientAllowsAi } = await import("@/lib/ai-consent/consent.server");
     const consent = await clientAllowsAi(s.client_id);
-    if (!consent.ok) {
+    if (!consent.ok && job === "brief") {
       const { coachConsentMessage } = await import("@/lib/ai-consent/consent");
       const words = coachConsentMessage(consent.name);
       // the coach reads why (the brief keeps it on write_up, which is only read as a brief once it's ready)
@@ -144,7 +143,7 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
     }
     const { resolveRoute } = await import("@/lib/ai/routing");
     const { readRouteOverride } = await import("@/lib/ai/route-call.server");
-    const route = resolveRoute(job === "analysis" ? "session_analysis" : "session_brief", await readRouteOverride(sb), { openaiOnly: true });
+    const route = consent.ok ? resolveRoute(job === "analysis" ? "session_analysis" : "session_brief", await readRouteOverride(sb), { openaiOnly: true }) : null;
     if (job === "brief") {
       const brief = await writeBrief(sb, s, route, state, save);
       // Cleo's phrasing goes onto the points it refines (never one the coach wrote or edited)
@@ -162,7 +161,7 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
       await log(sb, s, "brief_ready", { model: brief.model, dropped: brief.brief.dropped.length });
       return "ready";
     }
-    const a = await analyse(sb, s, route, state, save);
+    const a = await analyse(sb, s, route, state, save, !consent.ok);
     // the transcript deleted while Cleo was reading it: nothing it found is kept
     const { data: still } = await sb.from("coaching_sessions").select("analysis_status, transcript_deleted_at").eq("id", s.id).maybeSingle();
     if (!still || (still as any).transcript_deleted_at || (still as any).analysis_status !== "running") {
@@ -181,6 +180,7 @@ async function runJob(sb: Db, s: any, job: Job): Promise<string> {
     await log(sb, s, "analysis_ready", { model: a.model, items: a.analysis.items.length, recommendations: a.analysis.recommendations.length, dropped: a.analysis.dropped.length });
     // the goals it names go to the goal ledger as proposed (goal-intel; the 5-minute tick catches any this misses)
     try {
+      if (a.model === "private-extractive") return "ready";
       const { extractFromMeeting, assessClient } = await import("@/lib/goal-intel/goals.server");
       const g = await extractFromMeeting(sb, s.id);
       if (g.created || g.updated) await assessClient(sb, s.client_id);
@@ -277,7 +277,7 @@ async function writeBrief(sb: Db, s: any, route: any, state: CallState, save: ()
   return { brief, model: r.model };
 }
 
-async function analyse(sb: Db, s: any, route: any, state: CallState, save: () => Promise<void>) {
+async function analyse(sb: Db, s: any, route: any, state: CallState, save: () => Promise<void>, privateOnly = false) {
   const { ANALYSIS_SYSTEM } = await import("./prompts.server");
   let text = "";
   let source: "transcript" | "notes" = "notes";
@@ -295,6 +295,10 @@ async function analyse(sb: Db, s: any, route: any, state: CallState, save: () =>
     text = [s.live?.notes ?? "", ...((s.live?.decisions ?? []) as string[]).map((d) => `Agreed: ${d}`)].join("\n").trim();
   }
   if (text.trim().length < 40) throw new Unreadable("There's too little in the notes to read");
+  if (privateOnly) {
+    const t = transcriptForModel(text);
+    return { analysis: privateMeetingAnalysis(t.text, s.live?.decisions ?? []), model: "private-extractive", source, clipped: t.clipped };
+  }
   const t = transcriptForModel(text);
   const today = new Date().toISOString().slice(0, 10);
   const since60 = new Date(Date.now() - 60 * 86_400_000).toISOString();
