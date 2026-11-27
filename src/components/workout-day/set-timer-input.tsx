@@ -6,7 +6,8 @@
  * Reset plus a fast MM:SS target editor. The timer is a tool, never a
  * requirement: the client can type a result and commit it directly.
  */
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { Play, Pause, RotateCcw, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import {
   subscribeTimers,
   fmtMMSS,
   parseMMSS,
+  parseCardioDuration,
 } from "@/lib/set-timer-store";
 import { feedback } from "@/lib/feedback";
 
@@ -34,6 +36,7 @@ export function SetTimerInput({
   isConfirmed,
   disabled = false,
   focusMode = false,
+  cardio = false,
   onCommit,
   onTargetChange,
   ariaLabel,
@@ -46,6 +49,8 @@ export function SetTimerInput({
   isConfirmed: boolean;
   disabled?: boolean;
   focusMode?: boolean;
+  /** Cardio has a direct minutes-first numeric entry, separate from its timer. */
+  cardio?: boolean;
   /** Persist the actual performed seconds for this set. */
   onCommit: (
     seconds: number,
@@ -65,6 +70,8 @@ export function SetTimerInput({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [manualDraft, setManualDraft] = useState<string | null>(null);
+  const manualDirty = useRef(false);
 
   const running = isRunning(state);
   const paused = isPaused(state);
@@ -92,10 +99,13 @@ export function SetTimerInput({
   const elapsed = Math.max(0, target - remaining);
 
   const commitDraft = () => {
-    const parsed = parseMMSS(draft);
+    const parsed = cardio ? parseCardioDuration(draft) : parseMMSS(draft);
+    if (parsed == null) {
+      toast.error(cardio ? "Enter minutes or a valid minutes:seconds duration" : "Enter a valid timer duration");
+      return;
+    }
     setEditing(false);
     setDraft("");
-    if (parsed == null) return;
     persistTarget(timerKey, parsed);
     onTargetChange?.(parsed);
   };
@@ -104,6 +114,19 @@ export function SetTimerInput({
     isConfirmed && completedSeconds != null && !running && !paused
       ? fmtMMSS(completedSeconds)
       : fmtMMSS(remaining);
+
+  const commitManual = (value: string) => {
+    setManualDraft(null);
+    if (!manualDirty.current) return;
+    manualDirty.current = false;
+    if (!value.trim()) return;
+    const parsed = parseCardioDuration(value);
+    if (parsed == null) {
+      toast.error("Enter minutes or a valid duration, e.g. 25 or 2530");
+      return;
+    }
+    onCommit(parsed, "manual_entry");
+  };
 
   return (
     <Popover
@@ -117,12 +140,41 @@ export function SetTimerInput({
         }
       }}
     >
+      <div className={cardio ? "flex min-w-0 items-center gap-0.5" : "contents"}>
+        {cardio && (
+          <Input
+            type="text"
+            inputMode="numeric"
+            enterKeyHint="done"
+            aria-label={`${ariaLabel} duration in minutes; 25 or 2530 for 25:30`}
+            title="Minutes or MMSS (25 = 25:00, 2530 = 25:30)"
+            disabled={disabled}
+            readOnly={running || paused}
+            value={manualDraft ?? (running || paused ? fmtMMSS(remaining) : completedSeconds != null ? fmtMMSS(completedSeconds) : "")}
+            placeholder={fmtMMSS(target)}
+            onFocus={(e) => {
+              if (running || paused) return;
+              manualDirty.current = false;
+              setManualDraft(e.currentTarget.value);
+              e.currentTarget.select();
+            }}
+            onChange={(e) => {
+              manualDirty.current = true;
+              setManualDraft(e.target.value.replace(/[^0-9:]/g, "").slice(0, 12));
+            }}
+            onBlur={(e) => commitManual(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+            }}
+            className={cn("min-w-0 flex-1 px-1 text-center text-sm tabular-nums", focusMode ? "h-12 text-base sm:h-10" : "h-11 sm:h-8", isConfirmed && completedSeconds != null ? "border-success/50 bg-success/10 text-success" : "border-dashed border-border")}
+          />
+        )}
       <PopoverTrigger asChild>
         <button
           type="button"
           disabled={disabled}
           aria-label={ariaLabel}
-          title="Timer"
+          title={cardio ? "Open cardio timer" : "Timer"}
           className={cn(
             "flex w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-medium tabular-nums transition-colors whitespace-nowrap",
             // the set's other boxes are 44px on a phone; the timer matches them
@@ -137,6 +189,7 @@ export function SetTimerInput({
                   // never reads as a time already done.
                   : "border-dashed border-border bg-transparent text-muted-foreground",
             !disabled && "cursor-pointer",
+            cardio && "w-7 shrink-0 px-0.5",
           )}
         >
           {isConfirmed && completedSeconds != null && !running && !paused ? (
@@ -146,9 +199,10 @@ export function SetTimerInput({
           ) : (
             <Play className="h-3 w-3 shrink-0" />
           )}
-          {label}
+          {!cardio && label}
         </button>
       </PopoverTrigger>
+      </div>
       <PopoverContent
         align="center"
         side="bottom"
@@ -200,15 +254,16 @@ export function SetTimerInput({
             >
               <Input
                 autoFocus
-                inputMode="text"
+                onFocus={(e) => e.currentTarget.select()}
+                inputMode={cardio ? "numeric" : "text"}
                 type="text"
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck={false}
                 enterKeyHint="done"
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="MM:SS (or seconds)"
+                onChange={(e) => setDraft(cardio ? e.target.value.replace(/[^0-9:]/g, "").slice(0, 12) : e.target.value)}
+                placeholder={cardio ? "25 or 2530" : "MM:SS (or seconds)"}
                 aria-label="Timer target"
                 className="h-10 px-2 text-base tabular-nums"
               />
