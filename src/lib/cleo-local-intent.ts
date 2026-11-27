@@ -6,11 +6,12 @@
 export type LocalTopic =
   | "setup" | "attempts" | "competition" | "profile" | "strength" | "training"
   | "program" | "records" | "weight" | "nutrition" | "cardio" | "checkins"
-  | "goals" | "meetings" | "messages" | "purchases";
+  | "goals" | "meetings" | "messages" | "purchases" | "forms";
 
 export type LocalIntent = { topics: LocalTopic[]; action: boolean; days: number | null; date?: string; exercise?: string; followup?: boolean };
 
 const TOPICS: Array<[LocalTopic, RegExp]> = [
+  ["forms", /\b(?:forms?|questionnaires?|submissions?|competition (?:setup|intake)|goals\s*(?:&|and)\s*(?:intake|setup)|intake answers?|what (?:did|has) (?:she|he|they) (?:answer|answered|fill out|filled out))\b/],
   ["setup", /\b(?:onboarding|intake|account setup|coaching setup|setup checklist|profile setup|what(?:'s| is) (?:still )?(?:missing|left|outstanding)|account access|sign.?in|agreements?|forms? (?:left|missing)|(?:setup|checklist) (?:status|complete|missing|outstanding)|outstanding setup)\b/],
   ["attempts", /\b(?:attempt(?:s| selection| plan| numbers| weights| rationale)?|openers?|game\s?plan|(?:a )?temp selection|atempt selection|attemt selection)\b/],
   ["competition", /\b(?:competition|meet(?:s| day| prep)?|weigh.?in|flight|weight class|federation|openipf|openpowerlifting|handling)\b/],
@@ -47,6 +48,7 @@ export function localClientIntent(question: string): LocalIntent {
   if (found.includes("cardio") && !/\b(?:goals ledger|goal approval|approved goals)\b/.test(q)) drop.add("goals");
   if (found.length > 1 && !/\b(?:profile|client file|contact|phone|email|coach notes|client notes)\b/.test(q)) drop.add("profile");
   let topics = found.filter(topic => !drop.has(topic));
+  if (found.includes("forms") && !/\b(?:missing|left|outstanding|status|complete|completed)\b/.test(q)) topics = ["forms"];
   if (!topics.length && /\b(?:overview|summary|how (?:is|are) (?:she|he|they) doing|progress|what's going on|everything on file)\b/.test(q)) topics = ["profile", "strength", "checkins"];
   const duration = q.match(/\b(?:last|past|previous|over the last) (\d{1,3}) (days?|weeks?|months?)\b/);
   let days = duration ? Math.max(1, Math.min(365, Number(duration[1]) * (duration[2].startsWith("week") ? 7 : duration[2].startsWith("month") ? 30 : 1))) : null;
