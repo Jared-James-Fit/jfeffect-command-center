@@ -154,5 +154,8 @@ export async function localClientReply(ctx: Context): Promise<Reply> {
     catch { return "**" + LABEL[t] + "**\n\nCouldn't verify this section from the current records. Try again or open the corresponding client tab."; }
   }));
   const tail = topics.length > selected.length ? "\n\nAlso available: " + topics.slice(selected.length).map(t => LABEL[t]).join(", ") + "." : "";
-  return { text: results.join("\n\n") + tail + "\n\n_Read from this client's existing JF Effect records. No external AI processing or changes made._" };
+  const followup = intent.followup
+    ? "Here is the recorded basis for the " + selected.map(t => LABEL[t].toLowerCase()).join(" and ") + " we were discussing. This is a fresh read of the records; if they have changed, it may not reproduce the exact earlier figures.\n\n"
+    : "";
+  return { text: followup + results.join("\n\n") + tail + "\n\n_Read from this client's existing JF Effect records. No external AI processing or changes made._" };
 }
