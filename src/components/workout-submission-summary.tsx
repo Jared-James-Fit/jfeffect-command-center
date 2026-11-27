@@ -68,6 +68,8 @@ type Props = {
   setUnit?: (setId: string) => "kg" | "lb" | null;
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
+  /** Return to the outstanding cardio row without reopening the workout. */
+  onLogCardio?: () => void;
   /**
    * pl_day_completions.id of this finished workout. When present, the footer
    * offers the optional "Share workout" studio (camera → card → community
@@ -89,7 +91,7 @@ type Props = {
   celebrate?: boolean;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose, onEdit, celebrate = false }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, onLogCardio, completionId, dayId, onClose, onEdit, celebrate = false }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -443,7 +445,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               </div>
             )}
 
-            {cardio && (
+            {cardio && !onLogCardio && (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
                 <Heart className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="font-semibold">Cardio</span>
@@ -479,9 +481,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
         {/* 4. Done: one full-width button, clear of the home indicator */}
         <DialogFooter
-          className="shrink-0 border-t border-border/70 bg-background px-4 pt-2.5 sm:px-5"
+          className="shrink-0 flex-col gap-1 border-t border-border/70 bg-background px-4 pt-2.5 sm:flex-col sm:space-x-0 sm:px-5"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
         >
+          {onLogCardio && (
+            <div className="mb-2 flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left" data-recap-cardio-reminder>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold">Don't forget your cardio</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Log it now or later today.</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onLogCardio}>Log cardio</Button>
+            </div>
+          )}
           <Button className="h-12 w-full rounded-xl text-[15px] font-semibold" onClick={close} data-recap-done>
             {completionId ? "Done" : <><ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout</>}
           </Button>
