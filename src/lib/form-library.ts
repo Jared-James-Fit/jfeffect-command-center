@@ -39,6 +39,10 @@ export type LibraryForm = {
   updated_at?: string | null;
 };
 
+export function isSetupSystemForm(f: Pick<LibraryForm, "form_type">): boolean {
+  return f.form_type === "setup_goals" || f.form_type === "setup_competition";
+}
+
 export function categoryOf(f: Pick<LibraryForm, "category">): string {
   const c = f.category?.trim();
   return c || UNCATEGORIZED;
@@ -89,7 +93,7 @@ export function pickerList(
   forms: LibraryForm[],
   opts: { tab: PickerTab; query?: string; favorites: Set<string>; recent: RecentSend[]; suggested?: string[] },
 ): LibraryForm[] {
-  const live = forms.filter((f) => !f.archived);
+  const live = forms.filter((f) => !f.archived && !isSetupSystemForm(f));
   const byTitle = (a: LibraryForm, b: LibraryForm) => a.title.localeCompare(b.title);
   const q = opts.query?.trim() ?? "";
   if (q) {
@@ -152,7 +156,7 @@ function daysBetween(a: string, b: string): number {
  * from the last year; an onboarding form for a new lead.
  */
 export function formSuggestions(i: SuggestionInput): Suggestion[] {
-  const live = i.forms.filter((f) => !f.archived);
+  const live = i.forms.filter((f) => !f.archived && !isSetupSystemForm(f));
   const out: Suggestion[] = [];
   const meetForm = live.find((f) => f.form_type === "meet_checklist");
   if (meetForm && i.nextMeetDate && /^\d{4}-\d{2}-\d{2}$/.test(i.nextMeetDate)) {
