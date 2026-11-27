@@ -16,12 +16,14 @@ describe("Forms oversight",()=>{
     expect(formDeliveryMatches({form_type:"setup_goals"},"manual")).toBe(false);
   });
   it("reads canonical obligations only after staff authorization and never writes",()=>{
-    const source=read("src/lib/staff-form-requirements.functions.ts");
+    const source=read("src/lib/staff-form-requirements.functions.ts")+read("src/lib/staff-form-requirements.server.ts");
     expect(source).toContain("is_assigned_coach_for_client");
     expect(source).toContain("accountSetupRequirements");
     expect(source).toContain("isGoalsSetupComplete");
     expect(source).toContain("loadHandlingSetup");
     expect(source).toContain("isMemberAppAcceptance");
+    expect(source).toContain("resolveAgreementState");
+    expect(read("src/lib/cleo-tools.server.ts")).toContain("readStaffFormRequirements");
     expect(source).toContain('eq("user_id",target.user_id)');
     expect(source).not.toMatch(/\.insert\(|\.upsert\(|\.update\(|\.delete\(/);
   });
