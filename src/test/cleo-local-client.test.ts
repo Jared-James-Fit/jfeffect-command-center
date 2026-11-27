@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { localClientIntent, contextualLocalClientIntent } from "@/lib/cleo-local-intent";
 const mocks = vi.hoisted(() => ({
-  access: vi.fn(), readers: vi.fn(), attempt: vi.fn(), nutrition: vi.fn(), training: vi.fn(), purchases: vi.fn(),
+  catalog: vi.fn(), access: vi.fn(), readers: vi.fn(), attempt: vi.fn(), nutrition: vi.fn(), training: vi.fn(), purchases: vi.fn(),
 }));
 vi.mock("@/lib/cleo-actions.server", () => ({ assertRequesterReaches: mocks.access }));
 vi.mock("@/lib/cleo-local-attempts.server", () => ({ localAttemptAnswer: mocks.attempt }));
-vi.mock("@/lib/cleo-tools.server", () => ({ cleoReadTools: mocks.readers }));
+vi.mock("@/lib/cleo-tools.server", () => ({ cleoReadTools: mocks.readers, loadCatalog: mocks.catalog }));
 import { localClientReply } from "@/lib/cleo-local-client.server";
 
 describe("Cleo internal client mode", () => {
@@ -73,6 +73,25 @@ describe("Cleo internal client mode", () => {
     expect(reply.text).toContain("Training logs");
     expect(reply.text).toContain("Source checked: Nutrition");
     expect(reply.text).toContain("Source checked: Training log");
+  });
+  it("discovers additional admin evidence without expanding the selected client or exposing secret fields", async () => {
+    mocks.catalog.mockResolvedValue([
+      { t: "client_equipment", c: [["id", "uuid"], ["client_id", "uuid"], ["equipment_name", "text"], ["private_token", "text"]] },
+      { t: "other_equipment", c: [["id", "uuid"], ["equipment_name", "text"]] },
+    ]);
+    const limit = vi.fn().mockResolvedValue({ data: [{ equipment_name: "Rack" }], count: 1, error: null });
+    const eq = vi.fn().mockReturnValue({ limit });
+    const select = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ select });
+    const reply = await localClientReply({ ...ctx, coach: false, db: { from }, question: "What equipment does she have?" });
+    expect(reply.text).toContain("Rack");
+    expect(reply.text).toContain("Source: client_equipment");
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(eq).toHaveBeenCalledWith("client_id", ctx.clientId);
+    expect(select.mock.calls[0][0]).not.toContain("private_token");
+    mocks.catalog.mockClear();
+    await localClientReply({ ...ctx, db: { from }, question: "What equipment does she have?" });
+    expect(mocks.catalog).not.toHaveBeenCalled();
   });
   it("denies unauthorized targets before loading any data", async () => {
     mocks.access.mockRejectedValueOnce(new Error("not authorized"));
