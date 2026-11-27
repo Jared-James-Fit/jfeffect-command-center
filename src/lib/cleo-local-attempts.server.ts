@@ -13,11 +13,11 @@ export function isLocalAttemptQuestion(question: string): boolean {
   // Keep normalization local and narrowly scoped. A common speech-to-text
   // rendering of "attempt selection" is "temp selection" or "a temp selection".
   const q = question.normalize("NFKC").toLowerCase()
-    .replace(/[‘’]/g, "'").replace(/\\s+/g, " ").trim()
+    .replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim()
     .replace(/[?.!]+$/, "").trim()
     .replace(/^(?:hey cleo[, ]+|cleo[, ]+|please )/, "")
     .replace(/,? please$/, "")
-    .replace(/\\b(?:a temp|temp|atempt|attemt) selection\\b/g, "attempt selection");
+    .replace(/\b(?:a temp|temp|atempt|attemt) selection\b/g, "attempt selection");
   const subject = "(?:(?:the|their|these|those|client's|athlete's) )?(?:(?:squat|bench|deadlift) )?(?:attempt selection|attempt plan|attempt rationale|attempt sources|attempt weights|attempt numbers|attempts?|openers?|opener weights)";
   const verb = "(?:get|calculate|choose|pick|select|determine|decide on|come up with|work out)";
   const patterns = [
