@@ -121,14 +121,20 @@ describe("competition preparation screens", () => {
     expect(html).toMatch(/data-status="(estimated|recommended|unconfirmed)"/);
   });
 
-  it("the checklist shows completed and open items by default for coach and athlete", () => {
+  it("the checklist always shows crossed-out completed and open items for coach and athlete", () => {
     const items = checklist.map((item, index) => index === 0 ? { ...item, state: "done" as const } : item);
     for (const who of ["coach", "athlete"] as const) {
       const html = wrap(createElement(ChecklistSection, { items, readiness, today: TODAY, who }));
       expect(html).toContain("data-prep-checklist");
       expect(html).toContain('data-state="done"');
       expect(html).toContain('data-state="open"');
-      expect(html).toContain("Hide what&#x27;s done");
+      expect(html).toMatch(/data-state="done"[^>]*>[\s\S]*?line-through/);
+      expect(html).not.toContain("Hide what&#x27;s done");
+      expect(html).not.toContain("Show what&#x27;s done");
+      const complete = items.map((item) => ({ ...item, state: "done" as const }));
+      const completedHtml = wrap(createElement(ChecklistSection, { items: complete, readiness: readinessOf(complete, TODAY), today: TODAY, who }));
+      expect(completedHtml).toContain("All done");
+      expect(completedHtml.match(/data-state="done"/g)).toHaveLength(complete.length);
     }
   });
 
