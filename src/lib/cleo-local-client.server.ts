@@ -169,18 +169,8 @@ export async function localClientReply(ctx: Context): Promise<Reply> {
       case "nutrition": return run("nutrition");
       case "cardio": return cardioAnswer(db, clientId, today);
       case "forms": {
-        const { readCoachForms } = await import("@/lib/cleo-forms.server");
-        const search = /competition (?:setup|intake)/i.test(ctx.question) ? "Competition Setup" : /goals\s*(?:&|and)\s*(?:intake|setup)/i.test(ctx.question) ? "Goals & Intake" : undefined;
-        const list = await readCoachForms(db, "submissions", { client_id: clientId, search, limit: 20 }, clientId);
-        // For a named setup questionnaire, read its latest submission directly.
-        if (search) {
-          const id = list.match(/submission ([0-9a-f-]{36})(?![^\n]*source fillout)/i)?.[1];
-          if (id) {
-            const pages = await Promise.all([0, 20, 40].map(question_offset => readCoachForms(db, "answers", { client_id: clientId, submission_id: id, question_offset }, clientId)));
-            return list + "\n\n" + pages.join("\n\n");
-          }
-        }
-        return list;
+        const { readLocalClientForms } = await import("@/lib/cleo-forms.server");
+        return readLocalClientForms(db, clientId, ctx.question);
       }
       case "checkins": return run("check_ins", { limit: 3 });
       case "goals": return run("goals", { details: true });
