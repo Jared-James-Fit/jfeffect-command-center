@@ -215,13 +215,22 @@ describe("a consent refusal says why and offers no retry", () => {
 
 
 describe("private meeting review", () => {
-  it("keeps original excerpts and explicit coach decisions without inferred changes", async () => {
+  it("scans beyond the opening, proposes evidence and preserves decisions", async () => {
     const { privateMeetingAnalysis } = await import("@/lib/coaching-sessions/analysis");
-    const result = privateMeetingAnalysis("Client: I can train three days this week.\nCoach: We can talk again Friday.", ["Keep three sessions this week", "Maybe add cardio next week"]);
-    expect(result.summary).toContain("I can train three days this week");
-    expect(result.items.map(i => i.kind)).toEqual(["agreement", "tentative"]);
-    expect(result.recommendations).toEqual([]);
-    expect(result.intelligence).toEqual([]);
+    const result = privateMeetingAnalysis(Array(100).fill("Unknown Speaker: Hello, how are you?").join("\n") + "\nUnknown Speaker: My parents are away for three months.\nUnknown Speaker: I am living alone now.\nClient: I can train three days this week.\nCoach: I will send the schedule tomorrow.", ["Keep three sessions this week", "Maybe add cardio next week"], "2026-11-27");
+    expect(result.summary).toContain("coaching-relevant observations");
+    expect(result.items.map(i => i.kind)).toEqual(["agreement", "tentative", "coach_commitment"]);
+    expect(result.intelligence.some(i => i.quote.includes("parents are away") && i.speaker === "unclear" && i.expiresOn === "2027-02-25")).toBe(true);
+    expect(result.intelligence.some(i => i.quote.includes("train three days") && i.speaker === "athlete")).toBe(true);
+    expect(result.recommendations.every(r => r.area === "coaching" && r.basis === "interpretation")).toBe(true);
+    expect(result.recommendations.length).toBeGreaterThan(0);
     expect(result.followUp).toBeNull();
+  });
+  it("does not invent ownership or retain irrelevant small talk", async () => {
+    const { privateMeetingAnalysis } = await import("@/lib/coaching-sessions/analysis");
+    const result = privateMeetingAnalysis("Unknown Speaker: I'll send the program tomorrow.\nCoach: I prefer to train in the morning.\nUnknown Speaker: Did you eat?\nUnknown Speaker: It is a nice day.");
+    expect(result.items).toEqual([]);
+    expect(result.intelligence).toEqual([]);
+    expect(result.recommendations).toEqual([]);
   });
 });

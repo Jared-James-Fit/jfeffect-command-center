@@ -308,16 +308,16 @@ export async function pollTurns(own: Db, userId: string, ids: string[], token: s
 // The worker.
 
 const briefCache = new Map<string, { at: number; text: string }>();
-const BRIEF_TTL_MS = 10 * 60_000;
+const BRIEF_TTL_MS = 60_000;
 
 /** The shared client intelligence for a client's conversation (cached a few minutes per server instance). */
 async function clientBrief(own: Db, userId: string, clientId: string, section: CleoSection | null): Promise<string | null> {
   const focus = section === "nutrition" ? "nutrition" : section === "cardio" ? "cardio" : "training";
   const key = `${userId}:${clientId}:${focus}`;
-  const hit = briefCache.get(key);
-  if (hit && Date.now() - hit.at < BRIEF_TTL_MS) return hit.text;
   const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
   if (!(await staffCanReachClient(own, userId, clientId))) return null;
+  const hit = briefCache.get(key);
+  if (hit && Date.now() - hit.at < BRIEF_TTL_MS) return hit.text;
   const sb = await admin();
   const work = (async () => {
     const [{ loadWeightManagement }, { clientIntelText }] = await Promise.all([import("@/lib/weight-management/load.server"), import("@/lib/client-intel/brief.server")]);
