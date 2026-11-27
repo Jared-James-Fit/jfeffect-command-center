@@ -26,6 +26,8 @@ import {
   fmtMMSS,
   parseMMSS,
   parseCardioDuration,
+  cardioMinutesDraft,
+  cardioDurationDraft,
 } from "@/lib/set-timer-store";
 import { feedback } from "@/lib/feedback";
 
@@ -72,6 +74,7 @@ export function SetTimerInput({
   const [draft, setDraft] = useState("");
   const [manualDraft, setManualDraft] = useState<string | null>(null);
   const manualDirty = useRef(false);
+  const firstTap = useRef(false);
 
   const running = isRunning(state);
   const paused = isPaused(state);
@@ -146,8 +149,11 @@ export function SetTimerInput({
             type="text"
             inputMode="numeric"
             enterKeyHint="done"
-            aria-label={`${ariaLabel} duration in minutes; 25 or 2530 for 25:30`}
-            title="Minutes or MMSS (25 = 25:00, 2530 = 25:30)"
+            aria-label={`${ariaLabel.replace(/timer$/, "time")} in minutes and seconds — tap either side of the colon`}
+            title="Minutes : seconds. Tap either side of the colon."
+            data-set-box
+            data-cardio-time
+            aria-invalid={manualDirty.current && manualDraft != null && parseCardioDuration(manualDraft) == null}
             disabled={disabled}
             readOnly={running || paused}
             value={manualDraft ?? (running || paused ? fmtMMSS(remaining) : completedSeconds != null ? fmtMMSS(completedSeconds) : "")}
@@ -155,25 +161,58 @@ export function SetTimerInput({
             onFocus={(e) => {
               if (running || paused) return;
               manualDirty.current = false;
-              setManualDraft(e.currentTarget.value);
-              e.currentTarget.select();
+              firstTap.current = true;
+              const input = e.currentTarget;
+              const initial = cardioMinutesDraft(completedSeconds ?? 0);
+              setManualDraft(initial);
+              input.value = initial;
+              input.setSelectionRange(0, initial.indexOf(":"));
+            }}
+            onClick={(e) => {
+              if (running || paused) return;
+              const input = e.currentTarget;
+              const colon = input.value.indexOf(":");
+              if (colon < 0) return;
+              const pos = input.selectionStart ?? 0;
+              if (firstTap.current || pos <= colon) input.setSelectionRange(0, colon);
+              else input.setSelectionRange(colon + 1, input.value.length);
+              firstTap.current = false;
             }}
             onChange={(e) => {
+              const input = e.currentTarget;
+              const raw = input.value;
+              const next = cardioDurationDraft(raw, manualDraft ?? "0:00");
+              firstTap.current = false;
+              if (next === manualDraft) return;
               manualDirty.current = true;
-              setManualDraft(e.target.value.replace(/[^0-9:]/g, "").slice(0, 12));
+              setManualDraft(next);
+              if (next !== raw) {
+                input.value = next;
+                const pos = next.indexOf(":");
+                input.setSelectionRange(pos < 0 ? next.length : pos, pos < 0 ? next.length : pos);
+              }
+            }}
+            onPaste={(e) => {
+              const raw = e.clipboardData.getData("text").trim();
+              const parsed = parseCardioDuration(raw);
+              if (parsed == null) { e.preventDefault(); return; }
+              e.preventDefault();
+              manualDirty.current = true;
+              firstTap.current = false;
+              setManualDraft(cardioMinutesDraft(parsed));
             }}
             onBlur={(e) => commitManual(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
             }}
-            className={cn("min-w-0 flex-1 px-1 text-center text-sm tabular-nums", focusMode ? "h-12 text-base sm:h-10" : "h-11 sm:h-8", isConfirmed && completedSeconds != null ? "border-success/50 bg-success/10 text-success" : "border-dashed border-border")}
+            className={cn("min-w-0 flex-1 px-0.5 text-center text-base tabular-nums sm:text-sm", focusMode ? "h-12 sm:h-10" : "h-11 sm:h-8", isConfirmed && completedSeconds != null ? "border-success/50 bg-success/10 text-success" : "border-dashed border-border", manualDirty.current && manualDraft != null && parseCardioDuration(manualDraft) == null && "border-destructive") }
           />
         )}
       <PopoverTrigger asChild>
         <button
           type="button"
           disabled={disabled}
-          aria-label={ariaLabel}
+          aria-label={cardio ? `${ariaLabel} controls` : ariaLabel}
           title={cardio ? "Open cardio timer" : "Timer"}
           className={cn(
             "flex w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-medium tabular-nums transition-colors whitespace-nowrap",
@@ -192,7 +231,7 @@ export function SetTimerInput({
             cardio && "w-7 shrink-0 px-0.5",
           )}
         >
-          {isConfirmed && completedSeconds != null && !running && !paused ? (
+          {isConfirmed && completedSeconds != null && !running && !paused && !cardio ? (
             <Check className="h-3 w-3 shrink-0" />
           ) : paused ? (
             <Pause className="h-3 w-3 shrink-0" />
