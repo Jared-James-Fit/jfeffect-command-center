@@ -24,12 +24,15 @@ export async function readCoachForms(db: Db, mode: "library" | "submissions" | "
     let q = db.from("nf_forms").select("id,title,description,category,kind,form_type,active,archived,owner_id,shared", { count: "exact" });
     if (o.form_id) q = q.eq("id", o.form_id);
     if (o.search && cleanSearch(o.search)) q = q.ilike("title", "%" + cleanSearch(o.search) + "%");
-    const res = await q.order("title").order("id").range(offset,offset+limit-1);
+    const res = await q.order("title").order("id").range(o.form_id ? 0 : offset,o.form_id ? 0 : offset+limit-1);
     const forms = checked(res,"form library");
     const lines = ["Source: Coaching → Forms → App forms (nf_forms). Visible forms: " + (res.count ?? forms.length) + ". Offset " + offset + "."];
     for (const f of forms) lines.push("- " + f.title + " | " + f.id + " | " + (f.category ?? "Uncategorized") + " | " + (f.archived ? "archived" : f.active ? "active" : "draft") + " | " + f.kind + " | " + (f.owner_id ? "coach-owned" : "organization") + (f.description ? " | " + f.description : ""));
     if (o.form_id && forms.length === 1) {
-      const questions = checked(await db.from("nf_questions").select("id,label,question_type,order_index,required,options,help_text,archived_at").eq("form_id",o.form_id).order("order_index").range(offset,offset+limit-1),"form questions");
+      const start = Math.max(0, o.question_offset ?? 0);
+      const qr = await db.from("nf_questions").select("id,label,question_type,order_index,required,options,help_text,archived_at", { count: "exact" }).eq("form_id",o.form_id).order("order_index").order("id").range(start,start+limit-1);
+      const questions = checked(qr,"form questions");
+      if ((qr.count ?? 0)>start+questions.length) lines.push("More questions: increase question_offset to " + (start+questions.length));
       for (const q of questions) lines.push("  - " + q.label + " | " + q.id + " | " + q.question_type + (q.required ? " | required" : "") + (q.archived_at ? " | archived" : "") + (q.options?.length ? " | options: " + q.options.join(", ") : "") + (q.help_text ? " | " + q.help_text : ""));
     }
     if ((res.count ?? 0)>offset+forms.length) lines.push("More results: increase offset.");
@@ -53,6 +56,7 @@ export async function readCoachForms(db: Db, mode: "library" | "submissions" | "
     const start=Math.max(0,o.question_offset ?? 0);
     const qr=await db.from("nf_questions").select("id,label,order_index,question_type",{count:"exact"}).eq("form_id",s.form_id).order("order_index").order("id").range(start,start+19);
     const questions=checked(qr,"questions");
+    if (!questions.length && start === 0) return "Source: Forms → " + (s.form?.title ?? s.form_id) + " → submission " + s.id + ". No question definitions are visible for this response; do not infer its answers.";
     const answers=questions.length ? checked(await db.from("nf_answers").select("question_id,value_text,value_number,value_json").eq("submission_id",s.id).in("question_id",questions.map(q=>q.id)),"answers") : [];
     const byId=new Map(answers.map(a=>[a.question_id,a]));
     return ["Source: Forms → " + (s.form?.title ?? s.form_id) + " → submission " + s.id + " | " + (s.submitted_at ?? s.created_at) + " | " + s.status,
@@ -62,7 +66,8 @@ export async function readCoachForms(db: Db, mode: "library" | "submissions" | "
   const lines: string[] = [];
   const filters = o.search && cleanSearch(o.search) ? cleanSearch(o.search) : "";
   let ids: string[] | undefined;
-  if (filters && !o.form_id) ids=checked(await db.from("nf_forms").select("id").ilike("title","%"+filters+"%").limit(200),"matching forms").map(f=>f.id);
+  if (filters && !o.form_id && o.source !== "fillout") ids=checked(await db.from("nf_forms").select("id").ilike("title","%"+filters+"%").limit(200),"matching forms").map(f=>f.id);
+  if(o.source!=="fillout" && ids && !ids.length) lines.push("No visible native forms match the title.");
   if(o.source!=="fillout" && (!ids || ids.length)) {
     let q=db.from("nf_submissions").select("id,client_id,form_id,status,submitted_at,created_at,form:form_id(title),client:client_id(full_name)",{count:"exact"});
     if(client)q=q.eq("client_id",client);
@@ -88,4 +93,31 @@ export async function readCoachForms(db: Db, mode: "library" | "submissions" | "
     }
   }
   return lines.join("\n")||"No matching visible form submissions.";
+}
+
+/** Internal mode resolves a form by title or a listed submission ID, never by
+ * another client's ID. Ambiguous meets are listed instead of guessed. */
+export async function readLocalClientForms(db: Db, clientId: string, question: string): Promise<string> {
+  const explicitId = question.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i)?.[0];
+  const normalized = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const requested = normalized(question);
+  const search = /competition (?:setup|intake)/i.test(question) ? "Competition Setup" : /goals\s*(?:&|and)\s*(?:intake|setup)/i.test(question) ? "Goals & Intake" : undefined;
+  const list = await readCoachForms(db, "submissions", { client_id: clientId, search, limit: 20 }, clientId);
+  const native = checked(await db.from("nf_submissions").select("id,form_id,submitted_at,created_at,form:form_id(title)").eq("client_id",clientId).not("submitted_at","is",null).order("submitted_at",{ascending:false}).limit(200),"client forms");
+  const matched = native.filter(s => explicitId ? s.id === explicitId : search ? normalized(s.form?.title ?? "") === normalized(search) : s.form?.title && requested.includes(normalized(s.form.title)));
+  if (!matched.length) {
+    const f = await db.from("fillout_submissions").select("id,form_name,submitted_at,created_at").eq("client_id",clientId).order("submitted_at",{ascending:false,nullsFirst:false}).limit(200);
+    if (f.error) return list;
+    const matches = (f.data ?? []).filter((s: any) => explicitId ? s.id === explicitId : s.form_name && requested.includes(normalized(s.form_name)));
+    if (matches.length === 1) return list + "\n\n" + await readCoachForms(db,"answers",{client_id:clientId,submission_id:matches[0].id,source:"fillout"},clientId);
+    return list + (matches.length > 1 ? "\nMultiple matching intake submissions. Specify the submission ID." : "\nSpecify a form title or submission ID to open its answers.");
+  }
+  if (matched.length > 1 && !explicitId && !/\b(?:latest|most recent)\b/i.test(question)) return list + "\nMultiple matching submissions. Specify the submission ID or ask for the latest.";
+  const id = matched[0].id;
+  const page = Number(question.match(/question_offset\s*[=:]?\s*(\d+)/i)?.[1] ?? 0);
+  const answers = await readCoachForms(db,"answers",{client_id:clientId,submission_id:id,question_offset:page},clientId);
+  // Return successive pages for setup forms and concise forms, with explicit pagination for longer answers.
+  const next = answers.includes("More questions:") ? await readCoachForms(db,"answers",{client_id:clientId,submission_id:id,question_offset:page+20},clientId) : "";
+  const last = next.includes("More questions:") ? await readCoachForms(db,"answers",{client_id:clientId,submission_id:id,question_offset:page+40},clientId) : "";
+  return [answers,next,last].filter(Boolean).join("\n\n");
 }
