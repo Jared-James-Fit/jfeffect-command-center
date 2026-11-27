@@ -14,7 +14,7 @@ import { listAgreementFormRecords, getLegalFormEvidence, type AgreementFormGroup
 export function useAgreementFormGroups() {
   const { accountRole, user } = useAuth();
   const fn = useServerFn(listAgreementFormRecords);
-  return useQuery({queryKey:["agreement-form-records",user?.id],queryFn:()=>fn(),enabled:accountRole === "admin" && !!user,staleTime:15000});
+  return useQuery({queryKey:["admin-agreement-form-records",user?.id],queryFn:()=>fn(),enabled:accountRole === "admin" && !!user,staleTime:15000});
 }
 const isResponse = (r: AgreementFormRecord) => r.source !== "external" || ["Signed","Completed","Verified"].includes(r.status.split(" · ")[0]);
 const formatDate = (d: string | null) => d ? new Date(d).toLocaleString() : "—";
@@ -29,8 +29,9 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
   const visible = group.records.filter(r => [r.name,r.status,r.version].some(v => v?.toLowerCase().includes(search.toLowerCase())));
   const index = visible.findIndex(r=>r.id===selected);
   const record = index >= 0 ? visible[index] : undefined;
+  const { user } = useAuth();
   const detailFn = useServerFn(getLegalFormEvidence);
-  const detail = useQuery({queryKey:["legal-form-evidence",record?.id],queryFn:()=>detailFn({data:{id:record!.id}}),enabled:open && mode==="individual" && record?.source==="legal"});
+  const detail = useQuery({queryKey:["admin-legal-form-evidence",user?.id,record?.id],queryFn:()=>detailFn({data:{id:record!.id}}),enabled:!!user && open && mode==="individual" && record?.source==="legal"});
   function show() {setSearch("");setSelected(null);setMode("table");setOpen(true);}
   return <>
     <li className="flex items-center gap-1.5 px-2 py-2 sm:px-3" data-agreement-form-row>
