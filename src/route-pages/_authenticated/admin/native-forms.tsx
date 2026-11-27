@@ -41,6 +41,7 @@ import { CATEGORY_SUGGESTIONS, categoryOf, libraryCategories, matchesSearch, own
 import { FORM_LIBRARY_KEY, useFormFavorites, useFormLibraryStats, useToggleFavorite, type FormStats } from "@/lib/form-library.queries";
 import { NewFormFlow } from "@/components/forms/new-form-flow";
 import { useAuth } from "@/lib/auth";
+import { AgreementFormRow, useAgreementFormGroups } from "@/components/forms/agreement-form-row";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -54,7 +55,8 @@ export function NativeFormsRedirect() {
 
 export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, accountRole } = useAuth();
+  const agreementQuery = useAgreementFormGroups();
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [editTab, setEditTab] = useState<EditorTab>("settings");
   const [creating, setCreating] = useState<NfKind | null>(null);
@@ -113,6 +115,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
         .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || usedAt(b).localeCompare(usedAt(a))),
     [forms, lastUsed, search, filter, favorites, user?.id, stats],
   );
+  const agreementGroups = (agreementQuery.data ?? []).filter(g => search.trim() ? (g.title + " agreements legal " + (g.source === "external" ? "signnow" : "in-app")).toLowerCase().includes(search.trim().toLowerCase()) : filter === "all" || filter === "cat:Agreements");
   const toReviewForms = forms.filter((f) => !f.archived && (stats.get(f.id)?.to_review ?? 0) > 0).length;
   const archivedForms = useMemo(() => forms.filter((f) => f.archived).sort((a, b) => (b.archived_at ?? b.updated_at).localeCompare(a.archived_at ?? a.updated_at)), [forms]);
   const [showArchived, setShowArchived] = useState(false);
@@ -205,7 +208,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {forms.length > 0 && !search.trim() && (
+        {(forms.length > 0 || accountRole === "admin") && !search.trim() && (
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0" data-form-library-filters>
             {[
               { key: "all", label: "All" },
@@ -213,7 +216,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
               ...(toReviewForms || filter === "review" ? [{ key: "review", label: `To review · ${toReviewForms}` }] : []),
               { key: "favorites", label: `Favorites${favorites.size ? ` · ${favorites.size}` : ""}` },
               ...(hasOthers ? [{ key: "mine", label: "Mine" }] : []),
-              ...categories.map((c) => ({ key: `cat:${c}`, label: c })),
+              ...Array.from(new Set([...categories, ...(accountRole === "admin" ? ["Agreements"] : [])])).map((c) => ({ key: `cat:${c}`, label: c })),
             ].map((c) => (
               <button
                 key={c.key}
@@ -247,19 +250,22 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             </div>
           </div>
         )}
-        {forms.length === 0 && (
+        {forms.length === 0 && !agreementGroups.length && (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-[15px] text-muted-foreground">
             No forms yet. Make one built in the app, or link one from Fillout, Typeform or Google Forms.
           </div>
         )}
-        {forms.length > 0 && liveForms.length === 0 && (
+        {forms.length > 0 && liveForms.length === 0 && agreementGroups.length === 0 && (
           <p className="py-6 text-center text-[15px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : filter === "review" ? "Nothing waiting on you." : "Nothing here yet."}</p>
         )}
-        {liveForms.length > 0 && (
+        {(liveForms.length > 0 || (!selecting && agreementGroups.length > 0)) && (
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" data-form-library-list>
             {liveForms.map((f) => <FormRow key={f.id} {...rowProps(f)} />)}
+            {!selecting && agreementGroups.map(group => <AgreementFormRow key={group.id} group={group} />)}
           </ul>
         )}
+        {accountRole === "admin" && (filter === "all" || filter === "cat:Agreements") && agreementQuery.isError && <div role="alert" className="rounded-xl border border-border p-3 text-sm">Agreement records could not be loaded. <Button variant="outline" size="sm" onClick={() => agreementQuery.refetch()}>Retry</Button></div>}
+        {accountRole === "admin" && agreementQuery.isLoading && <p className="text-sm text-muted-foreground">Loading agreement records…</p>}
         {archivedForms.length > 0 && (
           <div className="pt-1">
             <button
