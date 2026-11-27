@@ -32,7 +32,8 @@ import { MeetDayNow, myMeetKey } from "./meet-day-now";
 import { GameplanView } from "./gameplan-view";
 import { GameplanEditor } from "./gameplan-editor";
 import { TimelineSection } from "./timeline-section";
-import { ChecklistSection } from "./checklist-section";
+import { ChecklistSection, applyChecklistChanges } from "./checklist-section";
+import { readinessOf } from "@/lib/competition/prep-checklist";
 import { ReadinessWord, countdown, dayWords } from "./prep-ui";
 
 type Tab = "overview" | "gameplan" | "timeline" | "checklist";
@@ -262,11 +263,25 @@ export function AthleteMeet({
 
       {tab === "checklist" ? (
         <ChecklistSection
+          key={competitionId}
+          competitionId={competitionId}
           items={m.checklist}
           readiness={m.readiness}
           today={today}
           who="athlete"
-          onTick={previewing ? undefined : (k, state) => act.mutate(() => tickFn({ data: { competitionId, key: k, state } }))}
+          onTick={previewing ? undefined : async (k, state) => {
+            await tickFn({ data: { competitionId, key: k, state } });
+            const prefix = ["my-meet", competitionId];
+            await qc.cancelQueries({ queryKey: prefix });
+            qc.setQueriesData<any>({ queryKey: prefix }, (old) => {
+              if (!old?.checklist) return old;
+              const checklist = applyChecklistChanges(old.checklist, [{ key: k, state }]);
+              return { ...old, checklist, readiness: readinessOf(checklist, old.today) };
+            });
+            // The confirmed cache is already updated; don't block the next tap on a full reload.
+            void qc.invalidateQueries({ queryKey: prefix });
+            void qc.invalidateQueries({ queryKey: ["goals-service-scope"] });
+          }}
         />
       ) : null}
     </div>

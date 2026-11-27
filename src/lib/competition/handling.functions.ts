@@ -387,12 +387,21 @@ export const tickChecklistFn = createServerFn({ method: "POST" })
   });
 
 async function tick(sb: any, comp: { id: string; client_id: string }, key: string, state: string, userId: string, who: "coach" | "athlete") {
-  const { data: row } = await sb.from("competitions").select("checklist").eq("id", comp.id).single();
-  const list = { ...((row?.checklist ?? {}) as Record<string, any>) };
-  if (state === "open") delete list[key];
-  else list[key] = { state, by: who, at: new Date().toISOString() };
-  const { error } = await sb.from("competitions").update({ checklist: list }).eq("id", comp.id);
-  if (error) throw new Error(error.message);
+  // Compare the JSONB snapshot when writing so concurrent coach/athlete
+  // ticks on different items cannot replace one another's changes.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data: row, error: readError } = await sb.from("competitions").select("checklist").eq("id", comp.id).single();
+    if (readError || !row) throw new Error(readError?.message ?? "Checklist not found");
+    const current = (row.checklist ?? {}) as Record<string, any>;
+    const list = { ...current };
+    if (state === "open") delete list[key];
+    else list[key] = { state, by: who, at: new Date().toISOString() };
+    const { data: saved, error } = await sb.from("competitions").update({ checklist: list })
+      .eq("id", comp.id).eq("checklist", JSON.stringify(current)).select("id").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (saved) return;
+  }
+  throw new Error("The checklist changed while saving. Please try again.");
 }
 
 /** The coach saw the athlete's changes (and, if he says so, takes the event times they proposed). */

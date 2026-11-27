@@ -29,7 +29,7 @@ const { handlingTerms } = await import("@/lib/competition/handling");
 const { PrepOverview } = await import("@/components/competition/prep/prep-overview");
 const { GameplanSection } = await import("@/components/competition/prep/gameplan-section");
 const { TimelineSection } = await import("@/components/competition/prep/timeline-section");
-const { ChecklistSection } = await import("@/components/competition/prep/checklist-section");
+const { ChecklistSection, applyChecklistChanges } = await import("@/components/competition/prep/checklist-section");
 const { MeetOnboarding } = await import("@/components/competition/prep/meet-onboarding");
 
 const TODAY = "2026-11-26";
@@ -121,15 +121,41 @@ describe("competition preparation screens", () => {
     expect(html).toMatch(/data-status="(estimated|recommended|unconfirmed)"/);
   });
 
-  it("the checklist shows completed and open items by default for coach and athlete", () => {
+  it("the checklist always shows crossed-out completed and open items for coach and athlete", () => {
     const items = checklist.map((item, index) => index === 0 ? { ...item, state: "done" as const } : item);
     for (const who of ["coach", "athlete"] as const) {
-      const html = wrap(createElement(ChecklistSection, { items, readiness, today: TODAY, who }));
+      const html = wrap(createElement(ChecklistSection, { competitionId: "c1", items, readiness, today: TODAY, who }));
       expect(html).toContain("data-prep-checklist");
       expect(html).toContain('data-state="done"');
       expect(html).toContain('data-state="open"');
-      expect(html).toContain("Hide what&#x27;s done");
+      expect(html).toMatch(/data-state="done"[^>]*>[\s\S]*?line-through/);
+      expect(html).not.toContain("Hide what&#x27;s done");
+      expect(html).not.toContain("Show what&#x27;s done");
+      const complete = items.map((item) => ({ ...item, state: "done" as const }));
+      const completedHtml = wrap(createElement(ChecklistSection, { competitionId: "c1", items: complete, readiness: readinessOf(complete, TODAY), today: TODAY, who }));
+      expect(completedHtml).toContain("All done");
+      expect(completedHtml.match(/data-state="done"/g)).toHaveLength(complete.length);
     }
+  });
+
+  it("applies queued taps instantly, keeps the latest intent and leaves automatic records alone", () => {
+    const manual = checklist.filter((item) => !item.auto && item.state === "open");
+    const [a, b] = manual;
+    const auto = checklist.find((item) => item.auto)!;
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    expect(auto).toBeDefined();
+    const changed = applyChecklistChanges(checklist, [
+      { key: a.key, state: "done" },
+      { key: b.key, state: "na" },
+      { key: a.key, state: "open" },
+      { key: auto.key, state: "open" },
+    ]);
+    expect(changed.find((item) => item.key === a.key)?.state).toBe("open");
+    expect(changed.find((item) => item.key === b.key)?.state).toBe("na");
+    expect(changed.find((item) => item.key === auto.key)?.state).toBe("done");
+    expect(checklist.find((item) => item.key === b.key)?.state).toBe("open");
+    expect(applyChecklistChanges(checklist, [])).toBe(checklist);
   });
 
   it("onboarding asks only the steps that apply, the terms last, and never pays in a preview", () => {
