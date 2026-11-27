@@ -157,7 +157,11 @@ export async function localClientReply(ctx: Context): Promise<Reply> {
   };
   const read = async (topic: LocalTopic): Promise<string> => {
     switch (topic) {
-      case "setup": return setupAnswer(db, admin, clientId);
+      case "setup": {
+        const setup = await setupAnswer(db, admin, clientId);
+        try { return setup + "\n\n" + await run("coach_forms", {mode:"requirements",limit:50}); }
+        catch { return setup + "\nCurrent form and agreement requirements could not be verified."; }
+      }
       case "attempts": return localAttemptAnswer(admin, requester, clientId);
       case "competition": return competitionAnswer(db, clientId);
       case "profile": return run("client_file");
