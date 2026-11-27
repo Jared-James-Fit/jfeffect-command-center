@@ -494,7 +494,8 @@ export function CompetitionWorkspace({ clientId }: { clientId: string }) {
               const checklist = applyChecklistChanges(prep.checklist, [{ key, state }]);
               return { ...old, selected: { ...old.selected, prep: { ...prep, checklist, readiness: readinessOf(checklist, prep.today) } } };
             });
-            await qc.invalidateQueries({ queryKey: prefix });
+            // The confirmed cache is already updated; don't block the next tap on a full reload.
+            void qc.invalidateQueries({ queryKey: prefix });
             void qc.invalidateQueries({ queryKey: planEventsKey(clientId) });
             void qc.invalidateQueries({ queryKey: ["my-meet", comp.id] });
           }}
