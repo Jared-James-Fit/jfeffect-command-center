@@ -112,7 +112,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
               : filter === "review"
                 ? (stats.get(f.id)?.to_review ?? 0) > 0
                 : filter === "waiting"
-                ? f.settings?.system_setup ? requirements.some(r=>r.key===f.form_type && !r.complete) : ((stats.get(f.id)?.waiting ?? 0) + (stats.get(f.id)?.in_progress ?? 0) > 0)
+                ? f.settings?.system_setup ? requirements.some(r=>(r.key===f.form_type || (f.form_type==="setup_competition" && r.key==="handling_terms")) && !r.complete) : ((stats.get(f.id)?.waiting ?? 0) + (stats.get(f.id)?.in_progress ?? 0) > 0)
                 : filter === "manual" || filter === "automatic"
                 ? formDeliveryMatches(f, filter)
                 : filter === "mine"
@@ -124,7 +124,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
         .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || usedAt(b).localeCompare(usedAt(a))),
     [forms, lastUsed, search, filter, favorites, user?.id, stats, requirements],
   );
-  const matchingAgreements = (agreementQuery.data ?? []).filter(g => search.trim() ? (g.title + " agreements legal " + (g.source === "external" ? "signnow" : "in-app")).toLowerCase().includes(search.trim().toLowerCase()) : filter === "all" || filter === "cat:Agreements" || (filter === "waiting" && (g.source === "coaching" || requirements.some(r=>r.key==="legal:"+g.id && !r.complete))) || (filter === "automatic" && g.purpose==="core"));
+  const matchingAgreements = (agreementQuery.data ?? []).filter(g => search.trim() ? (g.title + " agreements legal " + (g.source === "external" ? "signnow" : "in-app")).toLowerCase().includes(search.trim().toLowerCase()) : filter === "all" || filter === "cat:Agreements" || (filter === "waiting" && (requirements.some(r=>r.key===(g.source==="coaching"?"coaching":"legal:"+g.id) && !r.complete))) || (filter === "automatic" && g.purpose==="core"));
   const coreAgreements = matchingAgreements.filter(g=>!g.historical && g.purpose==="core");
   const agreementGroups = matchingAgreements.filter(g => !g.historical && g.purpose!=="core");
   const historicalAgreements = matchingAgreements.filter(g => g.historical);
