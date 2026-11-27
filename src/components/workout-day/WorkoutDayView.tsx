@@ -3351,7 +3351,7 @@ function WorkoutDay({
           displayUnit={summaryDisplayUnit}
           setUnit={setUnitOf}
           cardio={cardioTakeaway}
-          onLogCardio={pendingCardioRow && rowsLoaded && resultsLoaded && !resultsFetching && cardioDayLog !== undefined && !isImpersonating && !readonly ? () => {
+          onLogCardio={recapFromSubmitRef.current && pendingCardioRow && rowsLoaded && resultsLoaded && !resultsFetching && cardioDayLog !== undefined && !isImpersonating && !readonly ? () => {
             recapFromSubmitRef.current = false;
             setSummaryOpen(false);
             const rowId = String(pendingCardioRow.id);
