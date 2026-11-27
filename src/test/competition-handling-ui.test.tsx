@@ -121,9 +121,15 @@ describe("competition preparation screens", () => {
     expect(html).toMatch(/data-status="(estimated|recommended|unconfirmed)"/);
   });
 
-  it("the checklist lists what's due by importance", () => {
-    const html = wrap(createElement(ChecklistSection, { items: checklist, readiness, today: TODAY, who: "athlete" }));
-    expect(html).toContain("data-prep-checklist");
+  it("the checklist shows completed and open items by default for coach and athlete", () => {
+    const items = checklist.map((item, index) => index === 0 ? { ...item, state: "done" as const } : item);
+    for (const who of ["coach", "athlete"] as const) {
+      const html = wrap(createElement(ChecklistSection, { items, readiness, today: TODAY, who }));
+      expect(html).toContain("data-prep-checklist");
+      expect(html).toContain('data-state="done"');
+      expect(html).toContain('data-state="open"');
+      expect(html).toContain("Hide what&#x27;s done");
+    }
   });
 
   it("onboarding asks only the steps that apply, the terms last, and never pays in a preview", () => {

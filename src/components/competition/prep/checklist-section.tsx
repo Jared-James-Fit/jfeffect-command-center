@@ -29,7 +29,7 @@ export function ChecklistSection({
   onTick?: (key: string, state: ItemState) => void;
   who: "coach" | "athlete";
 }) {
-  const [showDone, setShowDone] = useState(false);
+  const [showDone, setShowDone] = useState(true);
   return (
     <div className="space-y-3" data-prep-checklist>
       <div className="rounded-2xl border border-border bg-card p-4">
