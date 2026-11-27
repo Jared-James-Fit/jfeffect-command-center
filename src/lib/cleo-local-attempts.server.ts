@@ -10,8 +10,27 @@ const LIFTS = ["squat", "bench", "deadlift"] as const;
 // Only explicit read-only attempt questions. No arbitrary prompts, history or files
 // are processed here, and no external model is called.
 export function isLocalAttemptQuestion(question: string): boolean {
-  const q = question.trim().toLowerCase().replace(/[?.!]+$/, "");
-  return /^(?:how did (?:you|cleo) (?:get|calculate|choose|pick|select|come up with) (?:the )?(?:numbers|weights) for (?:the )?attempt(?: selection|s| plan)?|how (?:were|are) (?:the )?attempts? (?:chosen|selected|calculated)|(?:show|review|explain|check) (?:the |their |client's )?(?:attempt selection|attempt plan|attempt rationale|attempt sources|attempt weights|attempts|openers)|why (?:these|those|the) (?:attempts|openers|attempt weights))$/.test(q);
+  // Keep normalization local and narrowly scoped. A common speech-to-text
+  // rendering of "attempt selection" is "temp selection" or "a temp selection".
+  const q = question.normalize("NFKC").toLowerCase()
+    .replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim()
+    .replace(/[?.!]+$/, "").trim()
+    .replace(/^(?:hey cleo[, ]+|cleo[, ]+|please )/, "")
+    .replace(/,? please$/, "")
+    .replace(/\b(?:a temp|temp|atempt|attemt) selection\b/g, "attempt selection");
+  const subject = "(?:(?:the|their|these|those|client's|athlete's) )?(?:(?:squat|bench|deadlift) )?(?:attempt selection|attempt plan|attempt rationale|attempt sources|attempt weights|attempt numbers|attempts?|openers?|opener weights)";
+  const verb = "(?:get|calculate|choose|pick|select|determine|decide on|come up with|work out)";
+  const patterns = [
+    `^how did (?:you|cleo) ${verb} ${subject}$`,
+    `^how did (?:you|cleo) ${verb} (?:the |these |those )?(?:numbers|weights) for ${subject}$`,
+    `^how (?:were|are|was|is) ${subject} (?:chosen|selected|calculated|determined|decided|worked out)$`,
+    `^(?:(?:can|could|would) you )?(?:show(?: me)?|review|explain|check|walk me through|tell me about) ${subject}$`,
+    `^why ${subject}$`,
+    `^why did (?:you|cleo) ${verb} ${subject}$`,
+    `^where did ${subject} come from$`,
+    `^what (?:is|was) the (?:reason|rationale|basis) (?:for|behind) ${subject}$`,
+  ];
+  return patterns.some(pattern => new RegExp(pattern).test(q));
 }
 
 const sourceLabels = {
