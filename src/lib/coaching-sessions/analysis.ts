@@ -311,16 +311,67 @@ export function plainTranscript(name: string, raw: string): string {
 }
 
 
-/** Private, extractive review: no provider, inference, or automatic changes. */
-export function privateMeetingAnalysis(raw: string, decisions: string[] = []): MeetingAnalysis {
+/** Private, extractive review: scan all text, surface evidence for coach review.
+ * Never infer a speaker from their words, invent a commitment or send data outside the app.
+ */
+export function privateMeetingAnalysis(raw: string, decisions: string[] = [], today = new Date().toISOString().slice(0, 10)): MeetingAnalysis {
   const clean = (value: string) => value.replace(/\s+/g, " ").trim();
-  const lines = raw.split(/\n+/).map(clean).filter(Boolean);
-  const excerpts = lines.flatMap((line) => line.match(/[^.!?]+[.!?]*/g) ?? [line])
-    .map(clean).filter((line) => line.length >= 12);
-  const summary = excerpts.slice(0, 6).map((line) => line.slice(0, 180)).join("\n");
   const items: AnalysisItem[] = [...new Set(decisions.map(clean).filter(Boolean))].slice(0, 30)
     .map((text) => ({ kind: hedged(text) ? "tentative" : "agreement", text: text.slice(0, 300),
       quote: text.slice(0, 400), speaker: "unclear", due: null, basis: hedged(text) ? "tentative" : "confirmed" }));
-  return { summary, items, recommendations: [], intelligence: [], contradictions: [],
+  const intelligence: IntelCandidate[] = [];
+  const recommendations: AnalysisRecommendation[] = [];
+  const seen = new Set<string>();
+  const topics = [
+    { kind: "constraint", label: "Lifestyle or routine", pattern: /\b(liv(?:e|ing) (?:alone|by myself|on my own)|mov(?:e|ing|ed) (?:out|house|to)|(?:parents|family) (?:are|will be|went|have gone) (?:away|to|on)|(?:work|school|exam|shift|travel|vacation|holiday|schedule|childcare|commute).{0,65}\b(?:change|busy|late|early|away|week|month|hours?|days?|hard|can't|cannot|start|finish|affect|different|time)\b|(?:can|can't|cannot|only|unable to) (?:train|work out|go to the gym))\b/i, ask: "Check whether the routine change affects training availability, meals or consistency." },
+    { kind: "preference", label: "Coaching preference", pattern: /\b(?:i (?:prefer|like|dislike|hate|enjoy|would rather|find it easier)|works better for me|works best for me)\b.{0,120}\b(?:train|gym|exercise|workout|lift|squat|bench|deadlift|food|meal|eat|cook|cardio|walk|check.?in|message|call|morning|evening|accountability|schedule)/i, ask: "Confirm the preference and consider it in the relevant coaching plan." },
+    { kind: "constraint", label: "Nutrition routine", pattern: /\b(?:i|we|my)\b.{0,90}\b(?:meal prep|grocer(?:y|ies)|cook(?:ing)?|eating|meals?|food)\b.{0,70}\b(?:hard|difficult|skip|miss|struggle|time|can't|cannot|changed|busy|alone|every day|usually|instead)\b/i, ask: "Ask whether meal planning or nutrition support would help." },
+    { kind: "concern", label: "Recovery consideration", pattern: /\b(?:i|my)\b.{0,80}\b(?:sleep|tired|fatigue|exhausted|stress(?:ed)?|recover(?:y|ing)?)\b.{0,65}\b(?:poor|hard|little|less|more|bad|lately|hours?|struggl|work|week|month|affect|better|worse|enough)\w*\b/i, ask: "Clarify whether recovery needs monitoring or a coaching adjustment." },
+    { kind: "goal", label: "Stated goal", pattern: /\b(?:my goal is|i want to|i'm aiming to|i am aiming to|i hope to)\b.{0,100}\b(?:train|lift|compete|squat|bench|deadlift|strength|weight|muscle|fitness|consistent|exercise|nutrition|run|walk)\w*\b/i, ask: "Confirm the target and whether it belongs in the existing goal record." },
+    { kind: "constraint", label: "Training access", pattern: /\b(?:i|my|we)\b.{0,90}\b(?:equipment|gym|barbell|dumbbells?|machines?)\b.{0,60}\b(?:access|available|only|don't|cannot|can't|closed|limited|home|no)\b/i, ask: "Confirm equipment access before changing exercise selection." },
+  ] as const;
+  let speaker: Speaker = "unclear";
+  const followups = new Set<string>();
+  for (const line of raw.split(/\n+/)) {
+    const labelled = line.match(/^\s*(?:\[\d{1,2}:\d{2}(?::\d{2})?\]\s*)?([^:\n]{1,45}):\s*(.*)$/);
+    if (labelled) {
+      speaker = /^(client|athlete)$/i.test(labelled[1].trim()) ? "athlete" : /^coach$/i.test(labelled[1].trim()) ? "coach" : "unclear";
+    } else if (/^\s*(?:speaker\s+\w+|unknown speaker)\b/i.test(line)) speaker = "unclear";
+    if (speaker === "coach") continue;
+    const body = labelled ? labelled[2] : line;
+    for (const sentence of body.match(/[^.!?]+[.!?]*/g) ?? [body]) {
+      const quote = clean(sentence).slice(0, 500);
+      if (quote.length < 18 || quote.endsWith("?") || hedged(quote)) continue;
+      const t = topics.find((topic) => topic.pattern.test(quote));
+      if (!t || !/\b(?:i|my|we|our|parents)\b/i.test(quote)) continue;
+      const key = normalizeWords(quote);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // Evidence is a proposed observation, never automatically a client fact.
+      const temporary = t.kind !== "preference" && /\b(?:this|next|last|for|until|away|currently|temporary|lately|right now)\b/i.test(quote);
+      const duration = quote.match(/\b(?:for\s+)?(\d{1,2}|one|two|three|four|five|six)\s+(week|month)s?\b/i);
+      const units: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+      const amount = duration ? Number(duration[1]) || units[duration[1].toLowerCase()] || 1 : 0;
+      const expiry = temporary ? addDays(today, duration ? Math.min(365, amount * (duration[2].toLowerCase() === "month" ? 30 : 7)) : 28) : null;
+      if (intelligence.length < 20) intelligence.push({ kind: t.kind, text: quote, quote, speaker, permanence: temporary ? "temporary" : "lasting", expiresOn: expiry });
+      if (!followups.has(t.label) && recommendations.length < 5) {
+        followups.add(t.label);
+        recommendations.push({ area: "coaching", kind: "change", title: t.ask, current: "", proposed: t.ask, reason: "Potential coaching relevance; verify the statement and speaker first.", quotes: [quote], benefit: "Personalize support using confirmed circumstances.", tradeoffs: "No plan change until confirmed.", affects: t.label, basis: "interpretation" });
+      }
+    }
+  }
+  // Only explicit, labelled promises. No deadlines or ownership guesses.
+  for (const line of raw.split(/\n+/)) {
+    const m = line.match(/^\s*(coach|client|athlete):\s*(.+)$/i);
+    if (!m) continue;
+    const quote = clean(m[2]).slice(0, 400);
+    if (!/\b(?:i will|i'll|i’ll)\s+(?:send|upload|check|book|schedule|complete|update|review|track|log|message|follow up|confirm|bring|prepare|fill)\b/i.test(quote) || hedged(quote) || quote.endsWith("?")) continue;
+    const role = m[1].toLowerCase() === "coach" ? "coach" : "athlete";
+    if (items.length < 30 && !items.some(i => normalizeWords(i.quote) === normalizeWords(quote))) items.push({ kind: role === "coach" ? "coach_commitment" : "athlete_commitment", text: quote, quote, speaker: role, due: null, basis: "confirmed" });
+  }
+  const summary = intelligence.length
+    ? "Found " + intelligence.length + " coaching-relevant observation" + (intelligence.length === 1 ? "" : "s") + " to review across the conversation. Confirm the source and relevance before using them in plans."
+    : "No clear coaching-relevant observations were identified by private extraction. Review the source if more context is needed.";
+  return { summary, items, recommendations, intelligence, contradictions: [],
     feedback: { strengths: [], consider: [] }, followUp: null, dropped: [] };
 }
