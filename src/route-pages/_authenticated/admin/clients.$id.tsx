@@ -963,7 +963,7 @@ export function ClientProfileWorkspace({
           {/* The in-app Coaching Agreement first; SignNow and the hand-set record fold away under it. */}
           <div className="md:col-span-3">
             <Suspense fallback={<TabFallback />}>
-              <ClientAgreementPanel clientId={id} clientName={form?.full_name} />
+              <ClientAgreementPanel clientId={id} clientName={form?.full_name} historicalOnly={form.service_tier === "self_serve"} />
             </Suspense>
           </div>
           <OlderAgreements clientId={id} client={form} />
