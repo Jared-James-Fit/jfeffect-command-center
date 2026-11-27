@@ -102,9 +102,9 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(refreshCardioBody).not.toContain("beginSessionOnAction");
   });
 
-  it("the review pops by itself only once the cardio's in too; with it still to come, Finish is the review in one tap", () => {
-    // never over the cardio card (it's the next thing, done right after or later that day)
-    expect(day).toContain("const autoFinishReady = loggedProgress.allDone;");
+  it("the review pops after prescribed lifting independently of plan cardio", () => {
+    // plan cardio is independent of the workout review
+    expect(day).toContain("const autoFinishReady = liftLogged.allDone;");
     expect(day).toContain("allDone: autoFinishReady,");
     expect(day).toContain("const reviewReady = liftLogged.allDone;");
     expect(day).toContain("review: reviewReady,");
