@@ -40,7 +40,7 @@ jobs:
         run: npm test -- src/test/performance-ring.test.ts src/test/analytics-redesign.test.ts src/test/analytics-unified.test.ts
 
       - name: Run Cleo permission and execution regression tests
-        run: npm test -- src/test/cleo-actions-run-as-requester.test.ts src/test/cleo-competition-evidence.test.ts
+        run: npm test -- src/test/cleo-actions-run-as-requester.test.ts src/test/cleo-competition-evidence.test.ts src/test/cleo-local-attempts.test.ts
 
       - name: Run POV identity and parity regression tests
         run: npm test -- src/test/pov-passive-activity.test.ts src/test/pov-scoped-reads.test.ts

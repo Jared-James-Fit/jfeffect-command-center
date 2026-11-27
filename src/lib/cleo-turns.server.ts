@@ -548,6 +548,23 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
     return { ok: false, status: "failed", reason: "no question" };
   }
 
+  // Existing attempt weights and their provenance are internal coaching records.
+  // Read them under the same role-scoped authorization as setup reviews.
+  if (chat.client_id && !cleo.viewOnly && !(questionRow.attachments?.length)) {
+    const { isLocalAttemptQuestion, localAttemptAnswer } = await import("@/lib/cleo-local-attempts.server");
+    if (isLocalAttemptQuestion(questionRow.content)) {
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const answer = await localAttemptAnswer(supabaseAdmin, userId, chat.client_id);
+        await own.from("summer_messages").update({ content: answer, status: "done", progress: null, error: null }).eq("id", messageId).eq("status", "running");
+        return { ok: true, status: "done" };
+      } catch {
+        await fail("Couldn't verify the attempt plan right now. Open the client's Competition tab and try again.");
+        return { ok: false, status: "failed", reason: "attempt read failed" };
+      }
+    }
+  }
+
   // Explicit setup review commands use an internal, role-scoped read, never a model.
   // Keep this allowlist narrow: arbitrary free text and previous chat history can contain personal data.
   if (chat.client_id && !cleo.viewOnly && !(questionRow.attachments?.length) &&
@@ -612,7 +629,7 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
     const [{ clientAllowsAi }, { coachConsentMessage }] = await Promise.all([import("@/lib/ai-consent/consent.server"), import("@/lib/ai-consent/consent")]);
     const consent = await clientAllowsAi(chat.client_id);
     if (!consent.ok) {
-      await fail(coachConsentMessage(consent.name) + " You can still ask 'Review account setup' for an internal setup check without AI processing.");
+      await fail(coachConsentMessage(consent.name) + " You can still ask 'Review account setup' or 'Explain attempt selection' for an internal review without AI processing.");
       return { ok: false, status: "failed", reason: "no AI consent" };
     }
   }
