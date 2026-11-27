@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { Inbox, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AgreementRecordViewer } from "@/components/coaching-agreement/agreement-record-viewer";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useAuth } from "@/lib/auth";
+import { adminAgreementRoster } from "@/lib/coaching-agreement.functions";
 import { listAgreementFormRecords, getLegalFormEvidence, type AgreementFormGroup, type AgreementFormRecord } from "@/lib/agreement-form-records.functions";
 
 export function useAgreementFormGroups() {
@@ -24,24 +25,29 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
   const [search,setSearch] = useState("");
   const [selected,setSelected] = useState<string|null>(null);
   const [signature,setSignature] = useState<string|null>(null);
-  const [mode,setMode] = useState<"table"|"individual">("table");
+  const [mode,setMode] = useState<"table"|"individual"|"outstanding">("table");
   const count = group.records.filter(isResponse).length;
   const visible = group.records.filter(r => [r.name,r.status,r.version].some(v => v?.toLowerCase().includes(search.toLowerCase())));
   const index = visible.findIndex(r=>r.id===selected);
   const record = index >= 0 ? visible[index] : undefined;
-  const { user } = useAuth();
+  const { user, accountRole } = useAuth();
+  const rosterFn = useServerFn(adminAgreementRoster);
+  const roster = useQuery({queryKey:["admin-agreement-form-roster",user?.id],queryFn:()=>rosterFn(),enabled:accountRole === "admin" && !!user && group.source === "coaching",staleTime:15000});
+  const outstanding = roster.data?.rows.filter(r => r.state.state === "needs_signature" && r.hasAccount) ?? [];
+  function showOutstanding() {setSearch("");setSelected(null);setMode("outstanding");setOpen(true);}
   const detailFn = useServerFn(getLegalFormEvidence);
   const detail = useQuery({queryKey:["admin-legal-form-evidence",user?.id,record?.id],queryFn:()=>detailFn({data:{id:record!.id}}),enabled:!!user && open && mode==="individual" && record?.source==="legal"});
   function show() {setSearch("");setSelected(null);setMode("table");setOpen(true);}
   return <>
-    <li className="flex items-center gap-1.5 px-2 py-2 sm:px-3" data-agreement-form-row>
+    <li className="flex items-center gap-1.5 px-2 py-1.5 sm:px-3" data-agreement-form-row>
       <span className="grid h-10 w-10 shrink-0 place-items-center text-muted-foreground"><ShieldCheck className="h-4 w-4"/></span>
       <button type="button" onClick={show} className="min-w-0 flex-1 py-1 text-left">
-        <span className="block text-[16px] font-semibold leading-snug">{group.title} <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">System agreement</span></span>
-        <span className="block text-[13px] text-muted-foreground">Agreements · {group.source === "external" ? "SignNow / external" : "In-app"}</span>
+        <span className="block text-[15px] font-semibold leading-snug">{group.title}{group.source === "external" ? " (external)" : ""}</span>
+        <span className="block text-[13px] text-muted-foreground">{group.historical ? "Historical record" : group.purpose === "core" ? "Account activation" : group.purpose === "policy" ? "Checkout / policy" : group.source === "external" ? "External agreement" : "Service agreement"}</span>
         <span className="block text-[13px] leading-snug">{count} {count===1?"submission":"submissions"}{group.source==="external" && group.records.length>count ? " · "+(group.records.length-count)+" other records":""}</span>
       </button>
-      <Button variant="outline" size="sm" className="h-10 shrink-0 px-2.5 sm:px-3" onClick={show} aria-label={"Responses to "+group.title}><Inbox className="h-4 w-4 sm:mr-1.5"/><span className="hidden sm:inline">Responses</span><span className="ml-1 tabular-nums text-muted-foreground">{count}</span></Button>
+      {group.source === "coaching" && !group.historical && (roster.isError ? <Button variant="ghost" size="sm" onClick={()=>void roster.refetch()}>Retry status</Button> : outstanding.length > 0 ? <Button variant="ghost" size="sm" className="text-warning" onClick={showOutstanding}>{outstanding.length} need signing</Button> : roster.isSuccess ? <span className="text-xs text-muted-foreground">Up to date</span> : null)}
+      <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={show} aria-label={"Responses to "+group.title}><ChevronRight className="h-4 w-4"/></Button>
     </li>
     {open && <Dialog open onOpenChange={setOpen}>
       <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
@@ -50,10 +56,10 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant={mode==="table"?"default":"outline"} onClick={()=>setMode("table")}>Table</Button>
           <Button size="sm" variant={mode==="individual"?"default":"outline"} disabled={!visible.length} onClick={()=>{setSelected(record?.id ?? visible[0]?.id ?? null);setMode("individual")}}>Individual</Button>
-          {group.source==="coaching" && <Button size="sm" variant="outline" asChild><Link to="/admin/coaching-agreements">Signing status</Link></Button>}
+          {group.source==="coaching" && <><Button size="sm" variant={mode==="outstanding"?"default":"outline"} onClick={showOutstanding}>Outstanding{roster.isSuccess ? ` · ${outstanding.length}` : ""}</Button><Button size="sm" variant="outline" asChild><Link to="/admin/coaching-agreements">Signing status</Link></Button></>}
           {group.source==="external" && <><Button size="sm" variant="outline" asChild><Link to="/admin/forms" search={{tab:"agreements"}}>Manage agreements</Link></Button><Button size="sm" variant="outline" asChild><Link to="/admin/agreements/signed">Signed documents</Link></Button></>}
         </div>
-        <Input value={search} onChange={e=>{setSearch(e.target.value);setMode("table");setSelected(null);}} placeholder="Search people, versions or status" />
+        {mode === "outstanding" ? <div className="divide-y divide-border rounded-xl border border-border">{roster.isLoading ? <p className="p-3 text-sm text-muted-foreground">Loading signing status…</p> : roster.isError ? <Button variant="ghost" onClick={()=>void roster.refetch()}>Retry signing status</Button> : outstanding.length ? outstanding.map(r=><div key={r.clientId} className="flex items-center justify-between gap-2 p-3"><ClientNameLink clientId={r.clientId} tab="agreements">{r.name}</ClientNameLink><span className="text-xs text-warning">Needs signing</span></div>) : <p className="p-3 text-sm text-muted-foreground">No outstanding coaching agreements.</p>}</div> : <Input value={search} onChange={e=>{setSearch(e.target.value);setMode("table");setSelected(null);}} placeholder="Search people, versions or status" />}
         {mode==="table" && <div className="divide-y divide-border rounded-xl border border-border">
           {visible.map(r=><button key={r.id} type="button" className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-muted" onClick={()=>{setSelected(r.id);setMode("individual")}}>
             <span className="min-w-0"><span className="block break-words font-medium">{r.name}</span><span className="block text-xs text-muted-foreground">{formatDate(r.date)}{r.version ? " · v"+r.version:""}</span></span><span className="shrink-0 text-xs">{r.status}</span>
