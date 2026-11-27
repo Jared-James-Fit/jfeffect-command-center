@@ -562,8 +562,17 @@ export async function runTurn(messageId: string, token: string): Promise<{ ok: b
       try {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { localClientReply } = await import("@/lib/cleo-local-client.server");
-        const { localClientIntent } = await import("@/lib/cleo-local-intent");
-        const intent = localClientIntent(questionRow.content);
+        const { localClientIntent, contextualLocalClientIntent, isLocalFollowup } = await import("@/lib/cleo-local-intent");
+        let intent = localClientIntent(questionRow.content);
+        // Resolve only from this user's active conversation, never another client.
+        if (!hasAttachments && !intent.action && !intent.topics.length && isLocalFollowup(questionRow.content)) {
+          const { data: prior } = await own.from("summer_messages")
+            .select("content").eq("chat_id", chat.id).eq("user_id", userId)
+            .eq("role", "user").is("superseded_at", null)
+            .lt("created_at", questionRow.created_at)
+            .order("created_at", { ascending: false }).limit(8);
+          intent = contextualLocalClientIntent(questionRow.content, (prior ?? []).map((m: { content: string }) => m.content));
+        }
         // Exact setup/attempt commands retain their established semantics.
         if (!hasAttachments && !intent.action && (attemptQuestion || setupQuestion)) {
           intent.topics = [attemptQuestion ? "attempts" : "setup"];

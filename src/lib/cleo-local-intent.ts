@@ -8,7 +8,7 @@ export type LocalTopic =
   | "program" | "records" | "weight" | "nutrition" | "cardio" | "checkins"
   | "goals" | "meetings" | "messages" | "purchases";
 
-export type LocalIntent = { topics: LocalTopic[]; action: boolean; days: number | null; date?: string; exercise?: string };
+export type LocalIntent = { topics: LocalTopic[]; action: boolean; days: number | null; date?: string; exercise?: string; followup?: boolean };
 
 const TOPICS: Array<[LocalTopic, RegExp]> = [
   ["setup", /\b(?:onboarding|intake|account setup|coaching setup|setup checklist|profile setup|what(?:'s| is) (?:still )?(?:missing|left|outstanding)|account access|sign.?in|agreements?|forms? (?:left|missing)|(?:setup|checklist) (?:status|complete|missing|outstanding)|outstanding setup)\b/],
@@ -55,4 +55,27 @@ export function localClientIntent(question: string): LocalIntent {
   const date = q.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
   const lift = q.match(/\b(?:(?:competition|high bar|low bar|pause|paused|tempo|sumo|conventional|close grip) )?(?:squat|bench(?: press)?|deadlift)\b/)?.[0];
   return { topics, action, days, date, exercise: lift };
+}
+
+/** Resolve referential follow-ups from the same conversation only. */
+export function isLocalFollowup(question: string): boolean {
+  const q = question.normalize("NFKC").toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim().replace(/[?.!]+$/, "");
+  return /^(?:why|how so|how come|how exactly|what do you mean|where from|show (?:me )?(?:the )?(?:sources?|math|calculation|breakdown))$/.test(q)
+    || /^(?:how|why|where)\b.*\b(?:those|these|that|them|it|numbers|figures|weights|sources?|calculation|rationale|basis|math)\b/.test(q)
+    || /^(?:(?:can|could|would) you )?(?:explain|clarify|show|walk me through)\b.*\b(?:those|these|that|them|it|numbers|figures|sources?|calculation|rationale|basis|math)\b/.test(q)
+    || /^what(?:'s| is| was) (?:the |your )?(?:reason|rationale|basis|source|calculation)\b/.test(q);
+}
+
+export function contextualLocalClientIntent(question: string, previousQuestions: string[]): LocalIntent {
+  const current = localClientIntent(question);
+  if (current.action || current.topics.length || !isLocalFollowup(question)) return current;
+  for (const previous of previousQuestions.slice(0, 8)) {
+    const prior = localClientIntent(previous);
+    if (prior.action) break;
+    if (prior.topics.length) {
+      return { ...current, topics: prior.topics, days: current.days ?? prior.days, date: current.date ?? prior.date, exercise: current.exercise ?? prior.exercise, followup: true };
+    }
+    if (!isLocalFollowup(previous)) break;
+  }
+  return current;
 }
