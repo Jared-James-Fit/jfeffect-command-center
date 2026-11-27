@@ -1980,7 +1980,7 @@ function WorkoutDay({
     void qc.invalidateQueries({
       predicate: (q) => {
         const k = String(q.queryKey[0] ?? "");
-        return k.startsWith("cardio-completion") || k.startsWith("cardio-analytics") || k.startsWith("cardio-compliance") || k === "client-cardio-resolved" || k === "cal-client-cardio";
+        return k === "workout-cardio-status" || k.startsWith("cardio-completion") || k.startsWith("cardio-analytics") || k.startsWith("cardio-compliance") || k === "client-cardio-resolved" || k === "cal-client-cardio";
       },
     });
   };
@@ -2389,6 +2389,11 @@ function WorkoutDay({
     [rows, setScope, setSessionsVersion],
   );
   const loggedProgress = useMemo(() => workoutSetProgress(progressRows, results as any[]), [progressRows, results]);
+  // Only remind about prescribed, outstanding cardio; a log from Nutrition
+  // or an explicit skip for the day also counts as resolved.
+  const pendingCardioRow = cardioTakeaway?.status === "logged" || cardioTakeaway?.status === "skipped"
+    ? undefined
+    : progressRows.find((r: any) => isPlanCardioRow(r) && !r.skipped && !cardioRowDone(r.id, results as any[]));
   // The lifting alone: the day's cardio is done before, during or after it (or
   // later that day), so the ring and the Finish button never wait on it (workout-cardio.ts).
   const liftLogged = useMemo(
@@ -3346,6 +3351,19 @@ function WorkoutDay({
           displayUnit={summaryDisplayUnit}
           setUnit={setUnitOf}
           cardio={cardioTakeaway}
+          onLogCardio={pendingCardioRow && rowsLoaded && resultsLoaded && !resultsFetching && cardioDayLog !== undefined && !isImpersonating && !readonly ? () => {
+            recapFromSubmitRef.current = false;
+            setSummaryOpen(false);
+            const rowId = String(pendingCardioRow.id);
+            window.setTimeout(() => {
+              if (storyOpen) {
+                const index = storyRowIds.indexOf(rowId);
+                if (index >= 0) jumpStory(index, { instant: true });
+              } else {
+                document.querySelector<HTMLElement>(`[data-story-slide="${CSS.escape(rowId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }, 150);
+          } : undefined}
           // Sharing is the athlete's own choice: not offered on membership
           // workouts, and never from a coach's "View as client" session.
           completionId={isClientWorkout && !isImpersonating && completion?.completed_at ? completion.id ?? null : null}
