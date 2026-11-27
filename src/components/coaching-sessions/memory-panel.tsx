@@ -46,6 +46,7 @@ export function MemoryPanel({
   onChange,
   title = "What Cleo remembers",
   compact = false,
+  onOpenSource,
 }: {
   clientId: string;
   rows: MemoryRow[];
@@ -54,6 +55,7 @@ export function MemoryPanel({
   title?: string;
   /** a meeting's own lines: no add row, no kept groups */
   compact?: boolean;
+  onOpenSource?: (sessionId: string) => void;
 }) {
   const board = useMemo(() => memoryBoard(rows, today), [rows, today]);
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
@@ -176,6 +178,7 @@ export function MemoryPanel({
                 act={act}
                 undoable={undoable}
                 restore={restore}
+                onOpenSource={onOpenSource}
               />
             ))}
           </ul>
@@ -225,6 +228,7 @@ export function MemoryPanel({
                           act={act}
                           undoable={undoable}
                           restore={restore}
+                onOpenSource={onOpenSource}
                         />
                       ))}
                     </ul>
@@ -257,6 +261,7 @@ function MemoryLine({
   act,
   undoable,
   restore,
+  onOpenSource,
 }: {
   r: MemoryRow;
   today: string;
@@ -270,6 +275,7 @@ function MemoryLine({
   act: any;
   undoable: (snapshot: any[], words: string) => void;
   restore: any;
+  onOpenSource?: (sessionId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(r.text);
@@ -363,6 +369,12 @@ function MemoryLine({
             <p className="text-[13px]">
               <span className="text-warning">Conflicts with:</span> {clash.text}
             </p>
+          ) : null}
+          {r.source_session_id ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Source: coaching meeting{r.created_at ? ` · ${billingDay(r.created_at.slice(0, 10))}` : ""}</span>
+              {onOpenSource ? <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onOpenSource(r.source_session_id!)}>Open meeting</Button> : null}
+            </div>
           ) : null}
           {r.source_quote ? (
             <p className="flex gap-1.5 text-[12.5px] italic text-muted-foreground">
