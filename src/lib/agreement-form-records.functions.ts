@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
 import { assertAdminView } from "@/lib/permissions.server";
 
 export type AgreementFormRecord = {
@@ -47,7 +48,7 @@ export const listAgreementFormRecords = createServerFn({ method: "GET" })
       const d = docs.find(d => d.id === r.document_id);
       if (!groups.has(r.document_id)) groups.set(r.document_id,{id:r.document_id,title:d?.title ?? first(r.version)?.title ?? "Archived legal document",records:[],source:"legal"});
       groups.get(r.document_id)!.records.push({
-        id:r.id,name:first(r.client)?.full_name ?? r.typed_name ?? names.get(r.user_id) ?? "Account " + r.user_id.slice(0,8),
+        id:r.id,name:first(r.client)?.full_name ?? r.typed_name ?? names.get(r.user_id) ?? "Account " + String(r.user_id ?? "unknown").slice(0,8),
         clientId:r.client_id,date:r.accepted_at,version:first(r.version)?.version_number != null ? String(first(r.version).version_number) : null,
         method:r.signature_method,status:r.revoked_at ? "Revoked" : "Accepted",acknowledgement:r.acknowledgement_text,source:"legal",
       });
@@ -60,8 +61,21 @@ export const listAgreementFormRecords = createServerFn({ method: "GET" })
       const title = r.template_name ?? r.agreement_type ?? "External agreement";
       const key = "external:" + title;
       if (!groups.has(key)) groups.set(key,{id:key,title,source:"external",records:[]});
-      groups.get(key)!.records.push({id:r.id,name:first(r.clients)?.full_name ?? "Client",clientId:r.client_id,date:r.signed_at ?? r.sent_at,
+      groups.get(key)!.records.push({id:r.id,name:first(r.clients)?.full_name ?? "Client",clientId:r.client_id,date:r.signed_at ?? (["Signed","Completed","Verified"].includes(r.status) ? null : r.sent_at),
         version:null,method:r.signing_method,status:r.status + (r.archived ? " · Archived" : ""),acknowledgement:null,source:"external"});
     }
     return [...groups.values()].map(g => ({...g,records:g.records.sort((a,b) => (b.date ?? "").localeCompare(a.date ?? ""))})).sort((a,b) => a.title.localeCompare(b.title));
+  });
+
+export const getLegalFormEvidence = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({id:z.string().uuid()}).parse(data))
+  .handler(async ({ context, data }) => {
+    const { db } = await assertAdminView(context as any);
+    const {data:row,error} = await db.from("legal_acceptances")
+      .select("rendered_snapshot,checkbox_checked,context,revoked_at,typed_name")
+      .eq("id",data.id).single();
+    if (error) throw new Error(error.message);
+    return {snapshot:row.rendered_snapshot as string | null,checked:row.checkbox_checked as boolean | null,
+      context:row.context as string | null,revokedAt:row.revoked_at as string | null,typedName:row.typed_name as string | null};
   });
