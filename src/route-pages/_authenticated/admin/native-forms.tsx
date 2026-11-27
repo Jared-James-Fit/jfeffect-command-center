@@ -43,6 +43,8 @@ import { NewFormFlow } from "@/components/forms/new-form-flow";
 import { useAuth } from "@/lib/auth";
 import { AgreementFormRow, useAgreementFormGroups } from "@/components/forms/agreement-form-row";
 import { formDeliveryLabel, formDeliveryMatches, formPurpose } from "@/lib/form-library";
+import { RequirementCount, useStaffFormRequirements } from "@/components/forms/staff-form-requirements";
+import type { StaffFormRequirement } from "@/lib/staff-form-requirements.functions";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -58,6 +60,8 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   const qc = useQueryClient();
   const { user, accountRole } = useAuth();
   const agreementQuery = useAgreementFormGroups();
+  const requirementsQuery = useStaffFormRequirements();
+  const requirements: StaffFormRequirement[] = requirementsQuery.data ?? EMPTY_ARRAY;
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [editTab, setEditTab] = useState<EditorTab>("settings");
   const [creating, setCreating] = useState<NfKind | null>(null);
@@ -108,7 +112,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
               : filter === "review"
                 ? (stats.get(f.id)?.to_review ?? 0) > 0
                 : filter === "waiting"
-                ? !f.settings?.system_setup && ((stats.get(f.id)?.waiting ?? 0) + (stats.get(f.id)?.in_progress ?? 0) > 0)
+                ? f.settings?.system_setup ? requirements.some(r=>r.key===f.form_type && !r.complete) : ((stats.get(f.id)?.waiting ?? 0) + (stats.get(f.id)?.in_progress ?? 0) > 0)
                 : filter === "manual" || filter === "automatic"
                 ? formDeliveryMatches(f, filter)
                 : filter === "mine"
@@ -118,10 +122,11 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
                   : true,
         )
         .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || usedAt(b).localeCompare(usedAt(a))),
-    [forms, lastUsed, search, filter, favorites, user?.id, stats],
+    [forms, lastUsed, search, filter, favorites, user?.id, stats, requirements],
   );
-  const matchingAgreements = (agreementQuery.data ?? []).filter(g => search.trim() ? (g.title + " agreements legal " + (g.source === "external" ? "signnow" : "in-app")).toLowerCase().includes(search.trim().toLowerCase()) : filter === "all" || filter === "cat:Agreements");
-  const agreementGroups = matchingAgreements.filter(g => !g.historical);
+  const matchingAgreements = (agreementQuery.data ?? []).filter(g => search.trim() ? (g.title + " agreements legal " + (g.source === "external" ? "signnow" : "in-app")).toLowerCase().includes(search.trim().toLowerCase()) : filter === "all" || filter === "cat:Agreements" || (filter === "waiting" && (g.source === "coaching" || requirements.some(r=>r.key==="legal:"+g.id && !r.complete))) || (filter === "automatic" && g.purpose==="core"));
+  const coreAgreements = matchingAgreements.filter(g=>!g.historical && g.purpose==="core");
+  const agreementGroups = matchingAgreements.filter(g => !g.historical && g.purpose!=="core");
   const historicalAgreements = matchingAgreements.filter(g => g.historical);
   const coreForms = liveForms.filter(f => formPurpose(f) === "core");
   const serviceForms = liveForms.filter(f => formPurpose(f) === "service");
@@ -177,6 +182,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   const rowProps = (f: NfForm) => ({
     form: f,
     stats: stats.get(f.id) ?? null,
+    requirements: f.settings?.system_setup ? requirements.filter(r=>r.key===f.form_type || (f.form_type==="setup_competition" && r.key==="handling_terms")) : [],
     favorite: favorites.has(f.id),
     onToggleFavorite: (on: boolean) => toggleFavorite(f.id, on).catch((e: any) => toast.error(e?.message ?? "Couldn't save")),
     ownerTag: ownerLabel(f as unknown as LibraryForm, user?.id),
@@ -264,26 +270,27 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             </div>
           </div>
         )}
-        {forms.length === 0 && !agreementGroups.length && !historicalAgreements.length && (
+        {forms.length === 0 && !agreementGroups.length && !coreAgreements.length && !historicalAgreements.length && (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-[15px] text-muted-foreground">
             No forms yet. Make one built in the app, or link one from Fillout, Typeform or Google Forms.
           </div>
         )}
-        {forms.length > 0 && liveForms.length === 0 && agreementGroups.length === 0 && historicalAgreements.length === 0 && (
+        {forms.length > 0 && liveForms.length === 0 && agreementGroups.length === 0 && coreAgreements.length === 0 && historicalAgreements.length === 0 && (
           <p className="py-6 text-center text-[15px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : filter === "review" ? "Nothing waiting on you." : "Nothing here yet."}</p>
         )}
         <div className="space-y-3" data-form-library-list>
-          {coreForms.length > 0 && <section>
+          {(coreForms.length > 0 || (!selecting && coreAgreements.length > 0)) && <section>
             <h2 className="mb-1 px-1 text-xs font-semibold text-muted-foreground">Core account forms</h2>
             <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
               {coreForms.map(f => <FormRow key={f.id} {...rowProps(f)} />)}
+              {!selecting && coreAgreements.map(group => <AgreementFormRow key={group.id} group={group} requirements={requirements.filter(r=>r.key==="legal:"+group.id)} />)}
             </ul>
           </section>}
           {(serviceForms.length > 0 || (!selecting && agreementGroups.length > 0)) && <section>
             <h2 className="mb-1 px-1 text-xs font-semibold text-muted-foreground">Service forms & agreements</h2>
             <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
               {serviceForms.map(f => <FormRow key={f.id} {...rowProps(f)} />)}
-              {!selecting && agreementGroups.map(group => <AgreementFormRow key={group.id} group={group} />)}
+              {!selecting && agreementGroups.map(group => <AgreementFormRow key={group.id} group={group} requirements={requirements.filter(r=>r.key==="legal:"+group.id)} />)}
             </ul>
           </section>}
           {otherForms.length > 0 && <section>
@@ -294,6 +301,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
           </section>}
         </div>
         {accountRole === "admin" && (filter === "all" || filter === "cat:Agreements") && agreementQuery.isError && <div role="alert" className="rounded-xl border border-border p-3 text-sm">Agreement records could not be loaded. <Button variant="outline" size="sm" onClick={() => agreementQuery.refetch()}>Retry</Button></div>}
+        {requirementsQuery.isError && <button type="button" className="text-xs text-muted-foreground underline" onClick={()=>void requirementsQuery.refetch()}>Could not check account requirements · Retry</button>}
         {accountRole === "admin" && agreementQuery.isLoading && <p className="text-sm text-muted-foreground">Loading agreement records…</p>}
         {(archivedForms.length > 0 || historicalAgreements.length > 0) && (
           <div className="pt-1">
@@ -373,6 +381,7 @@ function NewFormDialog({ open, onPick, onClose }: { open: boolean; onPick: (k: N
 function FormRow({
   form,
   stats,
+  requirements,
   favorite,
   onToggleFavorite,
   ownerTag,
@@ -388,6 +397,7 @@ function FormRow({
   form: NfForm;
   /** From nf_form_library_stats: one read for the whole list. */
   stats: FormStats | null;
+  requirements: StaffFormRequirement[];
   favorite: boolean;
   onToggleFavorite: (on: boolean) => void;
   ownerTag: string | null;
@@ -463,6 +473,7 @@ function FormRow({
           <span className="mt-0.5 block text-[13px] text-muted-foreground">Archived on its own: not used in {FORM_UNUSED_DAYS / 30} months.</span>
         )}
       </button>
+      {!selecting && systemSetup && !form.archived && <RequirementCount title={form.title} requirements={requirements} />}
       {native && !selecting && !systemSetup && (
         <Button variant="ghost" size="sm" className="h-10 shrink-0 px-2" onClick={unanswered ? onWaiting : onResponses} aria-label={unanswered ? `Awaiting ${unanswered} responses to ${form.title}` : `Responses to ${form.title}`} data-form-responses-open>
           {unanswered ? <span className="text-warning tabular-nums">{unanswered} open</span> : <><Inbox className="h-4 w-4" /><span className="ml-1 tabular-nums text-muted-foreground">{stats?.responses ?? 0}</span></>}
