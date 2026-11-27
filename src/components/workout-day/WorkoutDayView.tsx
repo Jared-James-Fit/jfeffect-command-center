@@ -5432,7 +5432,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
             </DropdownMenu>
           )}
           {showReps && <span>Reps</span>}
-          {showTimer && <span>Time</span>}
+          {showTimer && (cardioRow || runRow ? (
+            <span className="flex flex-col items-center leading-tight" title="Minutes:seconds, or hours:minutes:seconds for long sessions">
+              <span>Time</span>
+              <span className="text-[9px] font-normal text-muted-foreground">
+                {(effectivePrescribedDurationSec ?? 0) >= 3600 || existingResults.some((result) => Number(result.completed_duration_seconds ?? 0) >= 3600) ? "hr:min:sec" : "min:sec"}
+              </span>
+            </span>
+          ) : <span>Time</span>)}
           {showDistance && (readonly ? <span>{distanceUnit === "km" ? "Km" : "Mi"}</span> : (
             <button
               type="button"
@@ -7547,6 +7554,7 @@ function SetRow({
           aria-label={`Set ${setIndex} distance in ${distanceUnit === "km" ? "kilometres" : "miles"} (optional)`}
           disabled={readonly}
           data-set-distance
+          data-set-box
           className={cn(
             "px-1.5 text-center tabular-nums placeholder:text-muted-foreground/60",
             focusMode ? "h-12 text-lg sm:h-10 sm:text-base" : "h-11 text-base sm:h-8 sm:text-sm",
@@ -7569,6 +7577,7 @@ function SetRow({
           aria-label={`Set ${setIndex} calories (optional)`}
           disabled={readonly}
           data-set-calories
+          data-set-box
           className={cn(
             "px-1.5 text-center tabular-nums placeholder:text-muted-foreground/60",
             // the same height as the set's other boxes: 44px on a phone
