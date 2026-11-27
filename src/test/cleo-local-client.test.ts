@@ -71,6 +71,8 @@ describe("Cleo internal client mode", () => {
     expect(mocks.nutrition).toHaveBeenCalledWith({ client_id: "selected-client" }, expect.anything());
     expect(reply.text).toContain("Current and previous nutrition plans");
     expect(reply.text).toContain("Training logs");
+    expect(reply.text).toContain("Source checked: Nutrition");
+    expect(reply.text).toContain("Source checked: Training log");
   });
   it("denies unauthorized targets before loading any data", async () => {
     mocks.access.mockRejectedValueOnce(new Error("not authorized"));
