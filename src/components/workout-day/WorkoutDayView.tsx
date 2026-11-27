@@ -7517,6 +7517,7 @@ function SetRow({
       {showTimer && (
         <SetTimerInput
           timerKey={`${rowId}:${setIndex}`}
+          cardio={isTimedCardio(exerciseName) || isRunningExercise(exerciseName ?? "")}
           prescribedSeconds={prescribedSec}
           completedSeconds={durationSec}
           isConfirmed={isConfirmed}
