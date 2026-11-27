@@ -4,10 +4,13 @@
  * still open marked by how much it matters. A tick is one tap; an item the
  * records already show done says so and can't be unticked here.
  */
+import { useMutation, useMutationState } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   STAGES,
+  readinessOf,
   STAGE_LABEL,
   type ItemState,
   type PrepItem,
@@ -15,19 +18,49 @@ import {
 } from "@/lib/competition/prep-checklist";
 import { ReadinessWord, dayWords } from "./prep-ui";
 
+export type ChecklistChange = { key: string; state: ItemState };
+
+export function applyChecklistChanges(items: PrepItem[], changes: (ChecklistChange | undefined)[]): PrepItem[] {
+  const states = new Map<string, ItemState>();
+  for (const change of changes) if (change) states.set(change.key, change.state);
+  if (!states.size) return items;
+  return items.map((item) => !item.auto && states.has(item.key) ? { ...item, state: states.get(item.key)! } : item);
+}
+
 export function ChecklistSection({
-  items,
-  readiness,
+  items: serverItems,
+  readiness: serverReadiness,
+  competitionId,
   today,
   onTick,
   who,
 }: {
   items: PrepItem[];
   readiness: Readiness;
+  competitionId: string;
   today: string;
-  onTick?: (key: string, state: ItemState) => void;
+  onTick?: (key: string, state: ItemState) => Promise<unknown>;
   who: "coach" | "athlete";
 }) {
+  const mutationKey = ["prep-checklist-tick", competitionId, who];
+  const save = useMutation({
+    mutationKey,
+    scope: { id: `prep-checklist:${competitionId}` },
+    mutationFn: ({ key, state }: ChecklistChange) => {
+      if (!onTick) throw new Error("Checklist is read-only");
+      return onTick(key, state);
+    },
+    onError: () => toast.error("Couldn't save that checklist change. Please try again."),
+  });
+  const pending = useMutationState({
+    filters: { mutationKey, exact: true, status: "pending" },
+    select: (mutation) => mutation.state.variables as ChecklistChange | undefined,
+  });
+  // Pending mutations include queued taps. Keep their newest intent visible
+  // until each write and its cache reconciliation finish, even on tab changes.
+  const items = onTick ? applyChecklistChanges(serverItems, pending) : serverItems;
+  const readiness = items === serverItems ? serverReadiness : readinessOf(items, today);
+  const tick = onTick ? (key: string, state: ItemState) => save.mutate({ key, state }) : undefined;
   return (
     <div className="space-y-3" data-prep-checklist>
       <div className="rounded-2xl border border-border bg-card p-4">
@@ -52,7 +85,7 @@ export function ChecklistSection({
             </header>
             <ul className="mt-1 divide-y divide-border">
               {list.map((i) => (
-                <Row key={i.key} item={i} today={today} onTick={onTick} who={who} />
+                <Row key={i.key} item={i} today={today} onTick={tick} who={who} />
               ))}
             </ul>
             <div className="h-1" />
