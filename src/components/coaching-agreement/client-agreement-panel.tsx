@@ -45,9 +45,11 @@ const EVENT_LABEL: Record<string, string> = {
 export function ClientAgreementPanel({
   clientId,
   clientName,
+  historicalOnly = false,
 }: {
   clientId: string;
   clientName?: string | null;
+  historicalOnly?: boolean;
 }) {
   const name = clientName?.trim() || "this client";
   const queryClient = useQueryClient();
@@ -97,6 +99,18 @@ export function ClientAgreementPanel({
     );
   }
 
+  if (historicalOnly) {
+    if (!data.signatures.length && !data.legacy.signed && !data.events.length) return null;
+    return <details className="rounded-xl border border-border p-3">
+      <summary className="cursor-pointer text-sm font-medium text-muted-foreground">Previous coaching agreements · {data.signatures.length} signed copies</summary>
+      <div className="mt-2 space-y-1">
+        {data.signatures.map(s=><Button key={s.id} type="button" variant="ghost" className="w-full justify-start" onClick={()=>setViewing(s.id)}>Version {s.version} · {formatSignedDateTime(s.signedAt)}</Button>)}
+        {data.legacy.signed && <p className="text-xs text-muted-foreground">Earlier agreement on file · {data.legacy.version ?? "Legacy"}</p>}
+        {data.events.map((e: { id: string; event_type: string; created_at: string })=><p key={e.id} className="text-xs text-muted-foreground">{EVENT_LABEL[e.event_type] ?? e.event_type} · {formatSignedDateTime(e.created_at)}</p>)}
+      </div>
+      <AgreementRecordViewer signatureId={viewing} open={!!viewing} onOpenChange={o=>!o&&setViewing(null)}/>
+    </details>;
+  }
   const status = rosterStatusOf(data.state, data.hasAccount);
   const latest = data.signatures[0];
   const outstanding = data.state.state === "needs_signature";

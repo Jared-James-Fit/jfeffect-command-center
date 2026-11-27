@@ -11,6 +11,7 @@ import { FormPickerSheet } from "@/components/forms/form-picker-sheet";
 import { ChecklistAnswers, ReadinessSummary, relativeTime, useFormReadiness, verdictTone } from "@/components/forms/readiness-view";
 import { FormAnswersList, FormResponsesSheet } from "@/components/forms/form-responses";
 import { formPeople, type PersonState } from "@/lib/form-response-status";
+import { AccountFormRequirements } from "@/components/forms/staff-form-requirements";
 
 const db = supabase as any;
 
@@ -37,15 +38,15 @@ type Item = {
  * Send a form. The same assignments and submissions the chat card and the
  * library read, never a copy.
  */
-export function ClientFormsOverview({ clientId, firstName }: { clientId: string; firstName?: string | null }) {
+export function ClientFormsOverview({ clientId, firstName, onOpenSetup }: { clientId: string; firstName?: string | null; onOpenSetup?: (key:string)=>void }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [picking, setPicking] = useState(false);
-  const { data: items = [], isLoading } = useQuery({
+  const { data: items = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["client-forms-overview", clientId],
     staleTime: 30_000,
     queryFn: async (): Promise<Item[]> => {
-      const [{ data: asg }, { data: subs }] = await Promise.all([
+      const [{ data: asg, error: assignmentError }, { data: subs, error: submissionError }] = await Promise.all([
         db.from("nf_assignments").select("form_id, client_id, created_at, updated_at, next_due_at, settings, form:form_id(title, allow_updates, archived)").eq("client_id", clientId),
         db
           .from("nf_submissions")
@@ -54,6 +55,7 @@ export function ClientFormsOverview({ clientId, firstName }: { clientId: string;
           .order("created_at", { ascending: false })
           .limit(200),
       ]);
+      if(assignmentError || submissionError) throw new Error(assignmentError?.message ?? submissionError?.message ?? "Could not load forms");
       // One form at a time, on the same rule as the library and the responses viewer.
       type FormEntry = { title: string; allowUpdates: boolean; archived: boolean; asg: any | null; subs: any[] };
       const forms = new Map<string, FormEntry>();
@@ -106,21 +108,23 @@ export function ClientFormsOverview({ clientId, firstName }: { clientId: string;
     <div className="space-y-3" data-client-forms>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[13px] text-muted-foreground">
-          {isLoading ? "Loading…" : `${waiting.length} out with them · ${answered.length} answered`}
+          {isLoading ? "Loading…" : isError ? "Could not load requests" : `${waiting.length} outstanding requests · ${answered.length} answered`}
         </p>
         <Button size="sm" onClick={() => setPicking(true)} data-client-forms-send>
           <Send className="mr-1.5 h-4 w-4" /> Send a form
         </Button>
       </div>
+      <AccountFormRequirements clientId={clientId} onOpenSetup={onOpenSetup} />
+      {isError && <Button variant="outline" size="sm" onClick={()=>void refetch()}>Retry forms</Button>}
       {waiting.length > 0 && (
-        <ul className="divide-y divide-border rounded-xl border border-border">
+        <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">Outstanding requests</h4><ul className="divide-y divide-border rounded-xl border border-border">
           {waiting.map((i) => <OverviewRow key={i.formId} item={i} clientId={clientId} />)}
-        </ul>
+        </ul></div>
       )}
       {answered.length > 0 && (
-        <ul className="divide-y divide-border rounded-xl border border-border">
+        <div><h4 className="mb-1 text-xs font-semibold text-muted-foreground">Completed submissions</h4><ul className="divide-y divide-border rounded-xl border border-border">
           {answered.map((i) => <OverviewRow key={i.formId} item={i} clientId={clientId} />)}
-        </ul>
+        </ul></div>
       )}
       <FormPickerSheet
         open={picking}

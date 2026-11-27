@@ -72,6 +72,9 @@ const DO_NOT_PERSIST_PREFIXES = [
   // Agreement status gates a mandatory popup: a stale "unsigned" snapshot must never
   // flash on the phone after the client has signed.
   "coaching-agreement",
+  "admin-agreement-form-",
+  "admin-legal-form-evidence",
+  "staff-form-requirements",
   "membership-agreement",
   "legal-status",
   // One-time "What's new" popups: seen state must always come fresh from the

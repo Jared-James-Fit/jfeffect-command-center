@@ -734,6 +734,7 @@ export function FormResponsesSheet({
   title,
   submissionId,
   clientId,
+  initialView,
   open,
   onOpenChange,
 }: {
@@ -741,6 +742,7 @@ export function FormResponsesSheet({
   title?: string | null;
   submissionId?: string | null;
   clientId?: string | null;
+  initialView?: View;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -762,7 +764,7 @@ export function FormResponsesSheet({
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4">
-          <FormResponsesView key={`${formId}:${submissionId ?? ""}:${clientId ?? ""}`} formId={formId} submissionId={submissionId} clientId={clientId} onLeave={() => onOpenChange(false)} />
+          <FormResponsesView key={`${formId}:${submissionId ?? ""}:${clientId ?? ""}`} formId={formId} submissionId={submissionId} clientId={clientId} initialView={initialView} onLeave={() => onOpenChange(false)} />
         </div>
       </DialogContent>
     </Dialog>

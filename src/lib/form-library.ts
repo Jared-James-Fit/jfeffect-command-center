@@ -174,3 +174,25 @@ export function formSuggestions(i: SuggestionInput): Suggestion[] {
   }
   return out;
 }
+
+/** Purpose and delivery are separate. These labels never assign a form or change its schedule. */
+type DeliveryForm = { form_type?: string | null; settings?: Record<string, unknown> | null; recurrence?: string | null; auto_assign_new_clients?: boolean | null; popup_enabled?: boolean | null; visibility?: string | null; active?: boolean | null };
+export function formPurpose(f: DeliveryForm): "core" | "service" | "other" {
+  if (f.form_type === "setup_goals") return "core";
+  if (f.form_type === "setup_competition") return "service";
+  return "other";
+}
+export function formDeliveryLabel(f: DeliveryForm): string {
+  if (f.settings?.system_setup === true || isSetupSystemForm(f)) return "Account setup";
+  const labels: string[] = [];
+  if (f.recurrence && f.recurrence !== "none") labels.push("Scheduled · " + f.recurrence);
+  if (f.popup_enabled) labels.push("Scheduled popup");
+  if (f.auto_assign_new_clients) labels.push("Auto-share with new clients");
+  if (f.visibility === "all_active_clients") labels.push("Available to active clients");
+  return labels.length ? labels.join(" · ") : "Manual";
+}
+export function formDeliveryMatches(f: DeliveryForm, filter: "manual" | "automatic"): boolean {
+  const system = f.settings?.system_setup === true || isSetupSystemForm(f);
+  if (filter === "manual") return !system; // native library forms can also be sent by hand
+  return system || !!(f.recurrence && f.recurrence !== "none") || !!f.popup_enabled || !!f.auto_assign_new_clients;
+}

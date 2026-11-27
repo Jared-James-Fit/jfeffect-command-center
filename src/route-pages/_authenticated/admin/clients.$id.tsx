@@ -918,13 +918,14 @@ export function ClientProfileWorkspace({
               {/* A check-in response is written from Check-in conversations, just below. */}
               <Button asChild variant="outline" size="sm"><Link to="/admin/forms" search={{ tab: "builder" } as any}>Form library</Link></Button>
             </div>
-            <ClientFormsOverview clientId={id} firstName={(form as any).preferred_name || (form as any).first_name || String((form as any).full_name ?? "").split(" ")[0] || null} />
+            <ClientFormsOverview clientId={id} onOpenSetup={key=>setTab(key==="setup_goals"?"goals-setup":"competition")} firstName={(form as any).preferred_name || (form as any).first_name || String((form as any).full_name ?? "").split(" ")[0] || null} />
             <details className="rounded-xl border border-border px-3 py-2">
               <summary className="cursor-pointer text-[13px] font-semibold">Which forms they can open</summary>
               <div className="pt-2">
                 <ClientNativeFormsAssignment clientId={id} />
               </div>
             </details>
+            <details className="rounded-xl border border-border px-3 py-2"><summary className="cursor-pointer text-[13px] font-semibold">Check-in settings</summary><div className="space-y-2 pt-2">
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <Label>Check-in due day</Label>
@@ -954,6 +955,7 @@ export function ClientProfileWorkspace({
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">Use the Save button at the top of the page to apply changes.</p>
+            </div></details>
           </Card>
 
           <ClientCheckInConversations clientId={id} onCompose={() => setCheckInResponseOpen(true)} />
@@ -961,7 +963,7 @@ export function ClientProfileWorkspace({
           {/* The in-app Coaching Agreement first; SignNow and the hand-set record fold away under it. */}
           <div className="md:col-span-3">
             <Suspense fallback={<TabFallback />}>
-              <ClientAgreementPanel clientId={id} clientName={form?.full_name} />
+              <ClientAgreementPanel clientId={id} clientName={form?.full_name} historicalOnly={form.service_tier === "self_serve"} />
             </Suspense>
           </div>
           <OlderAgreements clientId={id} client={form} />
