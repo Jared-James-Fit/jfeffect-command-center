@@ -98,12 +98,13 @@ describe("Forms → Submissions", () => {
 });
 
 describe("the Forms page", () => {
-  it("opens on Submissions, with five tabs and the rest under More", () => {
-    expect(DEFAULT_TAB).toBe("submissions");
+  it("opens on Forms, with operational views under More", () => {
+    expect(DEFAULT_TAB).toBe("builder");
     const main = TABS.filter((t) => !("hidden" in t) && !("more" in t)).map((t) => t.label);
-    expect(main).toEqual(["Submissions", "Requests", "Forms", "Applications", "Agreements"]);
+    expect(main).toEqual(["Forms"]);
     expect(isMoreTab("reviews")).toBe(true);
-    expect(isMoreTab("submissions")).toBe(false);
+    expect(isMoreTab("submissions")).toBe(true);
+    expect(isMoreTab("agreements")).toBe(true);
   });
 
   it("old links still land somewhere sensible", () => {
