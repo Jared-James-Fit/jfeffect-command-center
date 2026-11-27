@@ -207,7 +207,7 @@ create trigger no_setup_form_assignment before insert or update on public.nf_ass
 -- form CRUD. Their source triggers execute as the migration owner; ordinary
 -- authenticated/service-role mutations may only mark a response reviewed.
 create or replace function public.tg_protect_setup_forms()
-returns trigger language plpgsql set search_path=public as $
+returns trigger language plpgsql set search_path=public as $$
 declare f uuid; oldf uuid; sid uuid; oldsid uuid; c uuid;
 begin
  if current_user not in ('authenticated','anon','service_role') or pg_trigger_depth()>1 then
@@ -237,13 +237,13 @@ begin
    raise exception 'System setup responses are maintained by the original onboarding workflow.';
  end if;
  if tg_op='DELETE' then return old; else return new; end if;
-end $;
-do $ declare t text; begin
+end $$;
+do $$ declare t text; begin
  foreach t in array array['nf_forms','nf_questions','nf_submissions','nf_answers','nf_files'] loop
    execute format('drop trigger if exists protect_setup_forms on public.%I',t);
    execute format('create trigger protect_setup_forms before insert or update or delete on public.%I for each row execute function public.tg_protect_setup_forms()',t);
  end loop;
-end $;
+end $$;
 -- A client can read their own completed form's labels (not other clients'
 -- responses), even though we deliberately do not assign the system form.
 drop policy if exists "Client read own setup form" on public.nf_forms;
