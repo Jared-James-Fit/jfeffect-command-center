@@ -296,8 +296,8 @@ async function analyse(sb: Db, s: any, route: any, state: CallState, save: () =>
   }
   if (text.trim().length < 40) throw new Unreadable("There's too little in the notes to read");
   if (privateOnly) {
-    const t = transcriptForModel(text);
-    return { analysis: privateMeetingAnalysis(t.text, s.live?.decisions ?? []), model: "private-extractive", source, clipped: t.clipped };
+    const meetingDay = String(s.scheduled_at || s.created_at || new Date().toISOString()).slice(0, 10);
+    return { analysis: privateMeetingAnalysis(text, s.live?.decisions ?? [], meetingDay), model: "private-extractive", source, clipped: false };
   }
   const t = transcriptForModel(text);
   const today = new Date().toISOString().slice(0, 10);
@@ -313,7 +313,7 @@ async function analyse(sb: Db, s: any, route: any, state: CallState, save: () =>
   const prompt = [
     `TODAY: ${today}`,
     `CLIENT: ${(client as any)?.preferred_name || (client as any)?.first_name || "the client"}`,
-    `MEETING: ${e.title ?? "General meeting"}${e.date ? `, event on ${e.date}` : ""}${e.phase ? ` (${e.phase})` : ""}`,
+    `MEETING: ${e.title ?? "General meeting"}${e.date ? `, event on ${e.date}` : ""}${e.phase ? ` (${e.phase})` : ""}; format: ${s.format ?? "general"}`,
     `CONFIRMED INTELLIGENCE:\n${known.map((i) => `- [${i.kind}] ${i.text}`).join("\n") || "- none yet"}`,
     `RECORDS (from the app):\n${lines.map((l) => `- ${l.text}`).join("\n") || "- none"}`,
     s.coach_notes ? `COACH'S PRIVATE NOTES BEFORE THE CALL:\n${s.coach_notes}` : null,
@@ -350,9 +350,15 @@ async function saveAnalysis(sb: Db, s: any, a: MeetingAnalysis, model: string, s
     sb.from("client_intelligence").delete().eq("source_session_id", s.id).eq("status", "proposed"),
     sb.from("coaching_session_commitments").delete().eq("session_id", s.id).eq("confirmed", false),
   ]);
-  if (a.recommendations.length)
+  const { sameIdea, normalizeWords } = await import("./analysis");
+  const [{ data: decided }, { data: keptCommitments }] = await Promise.all([
+    sb.from("coaching_session_recommendations").select("title").eq("session_id", s.id).neq("status", "proposed"),
+    sb.from("coaching_session_commitments").select("owner, text").eq("session_id", s.id).eq("confirmed", true),
+  ]);
+  const newRecs = a.recommendations.filter(r => !(decided ?? []).some((d: any) => sameIdea(d.title, r.title)));
+  if (newRecs.length)
     await sb.from("coaching_session_recommendations").insert(
-      a.recommendations.map((r) => ({
+      newRecs.map((r) => ({
         session_id: s.id,
         client_id: s.client_id,
         area: r.area,
@@ -377,7 +383,7 @@ async function saveAnalysis(sb: Db, s: any, a: MeetingAnalysis, model: string, s
     const e = s.event ?? {};
     const rows: any[] = [];
     for (const i of a.intelligence) {
-      const verdict = reviewCandidate({ kind: i.kind, text: i.text, quote: i.quote, speaker: i.speaker ?? "unclear" }, kept, { allowAutoKeep: true, speakerConfirmed });
+      const verdict = reviewCandidate({ kind: i.kind, text: i.text, quote: i.quote, speaker: i.speaker ?? "unclear" }, kept, { allowAutoKeep: model !== "private-extractive", speakerConfirmed });
       if (verdict.action === "duplicate") {
         const k = kept.find((x) => x.id === verdict.of);
         if (k) await sb.from("client_intelligence").update({ merged_count: (k.merged_count ?? 1) + 1 }).eq("id", k.id);
@@ -402,7 +408,7 @@ async function saveAnalysis(sb: Db, s: any, a: MeetingAnalysis, model: string, s
     }
     if (rows.length) await sb.from("client_intelligence").insert(rows);
   }
-  const commitments = a.items.filter((i) => i.kind === "athlete_commitment" || i.kind === "coach_commitment");
+  const commitments = a.items.filter((i) => (i.kind === "athlete_commitment" || i.kind === "coach_commitment") && !(keptCommitments ?? []).some((c: any) => c.owner === (i.kind === "coach_commitment" ? "coach" : "athlete") && normalizeWords(c.text) === normalizeWords(i.text)));
   if (commitments.length)
     await sb.from("coaching_session_commitments").insert(
       commitments.map((c) => ({
