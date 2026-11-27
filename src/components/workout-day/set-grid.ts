@@ -11,6 +11,8 @@ export type SetGridColumns = {
   focusMode?: boolean;
   showReps: boolean;
   showTimer: boolean;
+  /** Cardio time has an editable value and compact timer control. */
+  cardioTime?: boolean;
   /** a run's distance (km / mi); optional, so older callers leave it off */
   showDistance?: boolean;
   showCalories: boolean;
@@ -23,7 +25,7 @@ export function setGridTemplate(c: SetGridColumns): string {
   return [
     c.focusMode ? "40px" : "34px",
     c.showReps ? "1fr" : null,
-    c.showTimer ? "1fr" : null,
+    c.showTimer ? (c.cardioTime ? "minmax(0, 1.6fr)" : "1fr") : null,
     c.showDistance ? "1fr" : null,
     c.showCalories ? "1fr" : null,
     c.showVelocity ? "minmax(56px, 1fr)" : null,
