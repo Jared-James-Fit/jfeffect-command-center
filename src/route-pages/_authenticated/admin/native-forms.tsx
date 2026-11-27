@@ -116,7 +116,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   const toReviewForms = forms.filter((f) => !f.archived && (stats.get(f.id)?.to_review ?? 0) > 0).length;
   const archivedForms = useMemo(() => forms.filter((f) => f.archived).sort((a, b) => (b.archived_at ?? b.updated_at).localeCompare(a.archived_at ?? a.updated_at)), [forms]);
   const [showArchived, setShowArchived] = useState(false);
-  const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
+  const formSelection = useBulkSelection(useMemo(() => forms.filter((form) => !form.settings?.system_setup).map((form) => form.id), [forms]));
 
   async function deleteSelectedForms() {
     if (formSelection.count === 0) return;
@@ -373,6 +373,7 @@ function FormRow({
     enabled: form.kind === "native" && preview,
   });
 
+  const systemSetup = form.settings?.system_setup === true;
   const sentCount = stats?.sent ?? 0;
   const hasAudience = form.visibility === "all_active_clients" || sentCount > 0;
   const native = form.kind !== "external";
@@ -394,7 +395,7 @@ function FormRow({
     <li className="flex items-center gap-1.5 px-2 py-2 sm:px-3" data-form-row>
       {selecting ? (
         <span className="grid h-10 w-10 shrink-0 place-items-center">
-          <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
+          <Checkbox checked={selected} disabled={systemSetup} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
         </span>
       ) : (
         <button
@@ -407,16 +408,16 @@ function FormRow({
           <Star className={favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4"} />
         </button>
       )}
-      <button type="button" onClick={selecting ? () => onSelect(!selected) : onEdit} className="min-w-0 flex-1 py-1 text-left" data-form-open>
+      <button type="button" onClick={systemSetup ? onResponses : selecting ? () => onSelect(!selected) : onEdit} className="min-w-0 flex-1 py-1 text-left" data-form-open>
         <span className="block text-[16px] font-semibold leading-snug">
           {form.title}
           {form.archived ? <Tag>Archived</Tag> : !form.active ? <Tag tone="warn">Draft</Tag> : null}
           {!native && <Tag>External</Tag>}
-          {ownerTag && <Tag>{ownerTag}</Tag>}
+          {systemSetup ? <Tag>System form</Tag> : ownerTag && <Tag>{ownerTag}</Tag>}
         </span>
         <span className="block truncate text-[13px] text-muted-foreground">{meta}</span>
         <span className="block text-[13px] leading-snug" data-form-row-status>
-          <span className={status.tone === "muted" ? "text-muted-foreground" : "text-foreground"}>{status.text}</span>
+          <span className={status.tone === "muted" ? "text-muted-foreground" : "text-foreground"}>{systemSetup ? `${stats?.responses ?? 0} submissions · Account setup` : status.text}</span>
           {(stats?.to_review ?? 0) > 0 && <span className="font-medium text-sky-700 dark:text-sky-400"> · {stats!.to_review} to review</span>}
         </span>
         {hasAudience && !form.archived && !form.active && (
@@ -433,7 +434,10 @@ function FormRow({
           {(stats?.responses ?? 0) > 0 && <span className="ml-1 tabular-nums text-muted-foreground">{stats!.responses}</span>}
         </Button>
       )}
-      {!selecting && (
+      {!selecting && systemSetup && (
+        <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={() => setPreview(true)} aria-label={`Preview ${form.title}`}><Eye className="h-4 w-4" /></Button>
+      )}
+      {!selecting && !systemSetup && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label={`More for ${form.title}`}>
