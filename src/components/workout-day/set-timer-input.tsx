@@ -125,7 +125,7 @@ export function SetTimerInput({
     if (!value.trim()) return;
     const parsed = parseCardioDuration(value);
     if (parsed == null) {
-      toast.error("Enter minutes or a valid duration, e.g. 25 or 2530");
+      toast.error("Enter a valid time (minutes:seconds, seconds 0–59)");
       return;
     }
     onCommit(parsed, "manual_entry");
@@ -293,7 +293,11 @@ export function SetTimerInput({
             >
               <Input
                 autoFocus
-                onFocus={(e) => e.currentTarget.select()}
+                onFocus={(e) => {
+                  const input = e.currentTarget;
+                  if (cardio) input.setSelectionRange(0, Math.max(0, input.value.indexOf(":")));
+                  else input.select();
+                }}
                 inputMode={cardio ? "numeric" : "text"}
                 type="text"
                 autoCapitalize="off"
@@ -301,9 +305,9 @@ export function SetTimerInput({
                 spellCheck={false}
                 enterKeyHint="done"
                 value={draft}
-                onChange={(e) => setDraft(cardio ? e.target.value.replace(/[^0-9:]/g, "").slice(0, 12) : e.target.value)}
-                placeholder={cardio ? "25 or 2530" : "MM:SS (or seconds)"}
-                aria-label="Timer target"
+                onChange={(e) => setDraft(cardio ? cardioDurationDraft(e.target.value, draft) : e.target.value)}
+                placeholder={cardio ? "min:sec" : "MM:SS (or seconds)"}
+                aria-label={cardio ? "Timer target in minutes and seconds" : "Timer target"}
                 className="h-10 px-2 text-base tabular-nums"
               />
               <button
@@ -319,7 +323,7 @@ export function SetTimerInput({
             <button
               type="button"
               onClick={() => {
-                setDraft(fmtMMSS(target));
+                setDraft(cardio ? cardioMinutesDraft(target) : fmtMMSS(target));
                 setEditing(true);
               }}
               className="flex h-9 w-full items-center justify-between rounded-md border border-dashed border-border/70 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
