@@ -200,11 +200,15 @@ export function SetTimerInput({
             >
               <Input
                 autoFocus
-                inputMode="numeric"
+                inputMode="text"
                 type="text"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="done"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="45 or 1:30"
+                placeholder="MM:SS (or seconds)"
                 aria-label="Timer target"
                 className="h-10 px-2 text-base tabular-nums"
               />
