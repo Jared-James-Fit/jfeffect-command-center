@@ -14,6 +14,25 @@ const LABEL: Record<LocalTopic, string> = {
   checkins: "Check-ins", goals: "Goals", meetings: "Meetings", messages: "Coach-client messages", purchases: "Billing",
 };
 
+const SOURCE: Record<LocalTopic, string> = {
+  setup: "Account setup → client profile, service enrollments, membership setup, goals and handling intake",
+  attempts: "Competition → gameplan versions, recorded attempt sources, and competition forecast for an unsaved draft",
+  competition: "Competition → recorded meets and results",
+  profile: "Client file → profile, maxes on file and coach notes",
+  strength: "Strength intelligence → logged performance and maxes on file",
+  training: "Training log → completed set entries and session feedback",
+  program: "Training program → dated workouts and blocks (prescribed, not necessarily performed)",
+  records: "Personal records → finished workout records",
+  weight: "Progress → portal weigh-ins and coach-entered bodyweight metrics",
+  nutrition: "Nutrition → saved nutrition targets, day types and weight-management records",
+  cardio: "Cardio → active prescribed targets; weekly total is duration × frequency",
+  checkins: "Check-ins → submissions, form answers and workout feedback",
+  goals: "Goals → saved goal ledger, versions and statuses",
+  meetings: "Meetings → completed session analysis, recorded decisions and follow-ups",
+  messages: "Messages → coach-client thread and authorized staff notes",
+  purchases: "Billing → purchase records and session credits",
+};
+
 const MENU = ["Client overview", "Explain attempt selection", "Review account setup", "Training progress", "Current nutrition", "Goals and check-ins"];
 const MENU_TEXT = "I can review this client's existing records in JF Effect: setup, competitions, training, nutrition, cardio, goals, check-ins, meetings and coach-client messages.";
 
@@ -116,6 +135,14 @@ export async function localClientReply(ctx: Context): Promise<Reply> {
   if (intent.action) return { text: "I haven't made any changes. This conversation is in internal read-only mode; I can show the relevant existing records, but can't generate or execute that change here. " + MENU_TEXT, choices: MENU.slice(0, 4) };
   const topics = intent.topics.filter(t => !(coach && t === "purchases"));
   if (!topics.length) {
+    if (!coach && !intent.topics.length) {
+      const { readAdminEvidence } = await import("@/lib/cleo-admin-evidence.server");
+      try {
+        const evidence = await readAdminEvidence(db, requester, clientId, ctx.question);
+        if (evidence) return { text: "Here are the matching records for this client. These are stored values, not a new AI recommendation.\n\n" + evidence };
+      } catch { /* catalog unavailable; don't invent records */ }
+      return { text: "I couldn't identify a reliable client record for that question. Which detail are you looking for? I'll check the relevant records without guessing." };
+    }
     return { text: intent.topics.includes("purchases") ? "Billing is available to authorized admins, not coaches." : "I can work with the existing records here, but I can't provide unrestricted free-form analysis in internal mode. " + MENU_TEXT, choices: MENU.slice(0, 4) };
   }
   const tz = "America/Winnipeg";
@@ -148,9 +175,13 @@ export async function localClientReply(ctx: Context): Promise<Reply> {
     }
   };
   // Keep the response focused. A broad request can continue with another topic.
-  const selected = topics.slice(0, 3);
+  const selected = topics.slice(0, coach ? 3 : 6);
   const results = await Promise.all(selected.map(async t => {
-    try { return "**" + LABEL[t] + "**\n\n" + (await read(t)).slice(0, 8000); }
+    try {
+      const answer = await read(t);
+      const clipped = answer.length > 8000 ? answer.slice(0, 8000) + "\n… (additional records omitted; ask for a narrower range)" : answer;
+      return "**" + LABEL[t] + "**\n\n" + clipped + "\n\nSource checked: " + SOURCE[t] + ".";
+    }
     catch { return "**" + LABEL[t] + "**\n\nCouldn't verify this section from the current records. Try again or open the corresponding client tab."; }
   }));
   const tail = topics.length > selected.length ? "\n\nAlso available: " + topics.slice(selected.length).map(t => LABEL[t]).join(", ") + "." : "";
