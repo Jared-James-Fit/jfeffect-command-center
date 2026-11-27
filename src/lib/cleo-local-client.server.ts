@@ -11,7 +11,7 @@ const LABEL: Record<LocalTopic, string> = {
   setup: "Account setup", attempts: "Attempt selection", competition: "Competition records",
   profile: "Client file", strength: "Strength", training: "Training history", program: "Training program",
   records: "Personal records", weight: "Bodyweight", nutrition: "Nutrition", cardio: "Cardio",
-  checkins: "Check-ins", goals: "Goals", meetings: "Meetings", messages: "Coach-client messages", purchases: "Billing",
+  forms: "Forms", checkins: "Check-ins", goals: "Goals", meetings: "Meetings", messages: "Coach-client messages", purchases: "Billing",
 };
 
 const SOURCE: Record<LocalTopic, string> = {
@@ -26,6 +26,7 @@ const SOURCE: Record<LocalTopic, string> = {
   weight: "Progress → portal weigh-ins and coach-entered bodyweight metrics",
   nutrition: "Nutrition → saved nutrition targets, day types and weight-management records",
   cardio: "Cardio → active prescribed targets; weekly total is duration × frequency",
+  forms: "Coaching → Forms and client profile → Forms; saved native and Fillout submissions",
   checkins: "Check-ins → submissions, form answers and workout feedback",
   goals: "Goals → saved goal ledger, versions and statuses",
   meetings: "Meetings → completed session analysis, recorded decisions and follow-ups",
@@ -167,6 +168,20 @@ export async function localClientReply(ctx: Context): Promise<Reply> {
       case "weight": return run("body_weight", { days: Math.max(7, intent.days ?? 90) });
       case "nutrition": return run("nutrition");
       case "cardio": return cardioAnswer(db, clientId, today);
+      case "forms": {
+        const { readCoachForms } = await import("@/lib/cleo-forms.server");
+        const search = /competition (?:setup|intake)/i.test(ctx.question) ? "Competition Setup" : /goals\s*(?:&|and)\s*(?:intake|setup)/i.test(ctx.question) ? "Goals & Intake" : undefined;
+        const list = await readCoachForms(db, "submissions", { client_id: clientId, search, limit: 20 }, clientId);
+        // For a named setup questionnaire, read its latest submission directly.
+        if (search) {
+          const id = list.match(/submission ([0-9a-f-]{36})(?![^\n]*source fillout)/i)?.[1];
+          if (id) {
+            const pages = await Promise.all([0, 20, 40].map(question_offset => readCoachForms(db, "answers", { client_id: clientId, submission_id: id, question_offset }, clientId)));
+            return list + "\n\n" + pages.join("\n\n");
+          }
+        }
+        return list;
+      }
       case "checkins": return run("check_ins", { limit: 3 });
       case "goals": return run("goals", { details: true });
       case "meetings": return run("meetings", { limit: 5 });
