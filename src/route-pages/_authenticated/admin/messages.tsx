@@ -40,6 +40,8 @@ import { useGroupLastMessages, useGroupListRealtime, groupUnread } from "@/compo
 import { GroupChatRow, GroupThreadPane } from "@/components/messages/group-thread-pane";
 import { DirectChatView, DirectRow } from "@/components/direct-chat";
 import { NewRequestView } from "@/components/messages/inbox-parts";
+import { TallSheet } from "@/components/crew-chat";
+import { SquarePen } from "lucide-react";
 import { directThreadsKey, isUnread as directUnread, useDirectThreads, type DirectThread } from "@/lib/direct-chats";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { InboxControls } from "@/components/messages/inbox-chips";
@@ -275,6 +277,8 @@ export function MessagesInbox({
   const [groupId, setGroupId] = useState<string | null>(null);
   const [massOpen, setMassOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSearch, setComposeSearch] = useState("");
   const { role, user } = useAuth();
   const { data: badgeCounts } = useAdminNavBadgeCounts();
   const appAlerts = badgeCounts?.supportAlerts ?? 0;
@@ -297,6 +301,11 @@ export function MessagesInbox({
     refetchInterval: 60_000,
   });
   const clients = useMemo(() => clientsQ.data ?? [], [clientsQ.data]);
+  const canCompose = role === "admin" && !clientPov.isImpersonating;
+  const composePeople = useMemo(() => {
+    const term = composeSearch.trim().toLowerCase();
+    return clients.filter((c) => c.user_id && c.user_id !== user?.id && !c.archived && !["archived", "inactive", "deactivated"].includes((c.status ?? "").toLowerCase()) && (!term || `${c.full_name ?? ""} ${c.email ?? ""}`.toLowerCase().includes(term)));
+  }, [clients, composeSearch, user?.id]);
   // Staff see only direct chats they personally participate in, not other members’ private conversations.
   const personalQ = useDirectThreads((role === "admin" || role === "coach") && !clientPov.isImpersonating);
   const personalThreads = useMemo(() => (personalQ.data ?? []).map((t) => {
@@ -1051,6 +1060,7 @@ export function MessagesInbox({
             onFilter={(f) => { setPrimary(f); if (f === "groups" && filter !== "Inbox" && filter !== "Archived") setFilter("Inbox"); }}
             unread={newChats + unreadGroups}
             actions={<>
+              {canCompose && <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="New message" title="New message" onClick={() => { setComposeSearch(""); setComposeOpen(true); }} data-admin-compose><SquarePen className="h-5 w-5" /></Button>}
               <FilterMenu
                 filter={filter}
                 counts={filterCounts}
@@ -1533,6 +1543,21 @@ export function MessagesInbox({
         )}
       </section>
         </div>
+        {canCompose && composeOpen && <TallSheet open={composeOpen} onOpenChange={setComposeOpen} title="New message" sub="Choose someone to message directly.">
+          <div className="shrink-0 px-4 pb-3">
+            <Input type="search" aria-label="Who to message" placeholder="Search by name or email" value={composeSearch} onChange={(e) => setComposeSearch(e.target.value)} className="h-10 rounded-xl text-base" />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2" aria-label="Message recipients">
+            {clientsQ.isError ? <div className="p-4 text-center"><p className="mb-2 text-sm text-muted-foreground">Could not load recipients.</p><Button onClick={() => clientsQ.refetch()}>Retry</Button></div>
+              : clientsQ.isPending ? <ListSkeleton rows={5} className="p-2" label="Loading recipients" />
+              : composePeople.length === 0 ? <p className="p-4 text-center text-sm text-muted-foreground">No matching accounts.</p>
+              : composePeople.map((c) => <button key={c.id} type="button" className="flex min-h-14 w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-secondary/60 focus-visible:outline focus-visible:outline-primary" onClick={() => { setComposeOpen(false); setComposeSearch(""); setSearch(""); setFilter("Inbox"); setPrimary("all"); selectClient(c.id); }}>
+                <UserAvatar src={c.profile_picture_url} name={c.full_name ?? "Member"} size={40} expandable={false} />
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{c.full_name ?? c.email ?? "Member"}</span><span className="block truncate text-xs text-muted-foreground">{c.service_tier === "self_serve" ? "Member" : "Client"}</span></span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>)}
+          </div>
+        </TallSheet>}
         <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
         <InboxGuideSheet open={guideOpen} onOpenChange={setGuideOpen} filters={GUIDE_FILTERS} />
       <ClientBriefSheet
