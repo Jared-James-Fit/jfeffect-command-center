@@ -122,3 +122,35 @@ describe("Cleo internal client mode", () => {
     expect(mocks.nutrition).not.toHaveBeenCalled();
   });
 });
+
+describe("Cleo form evidence", () => {
+  it.each(["Show her Competition Setup answers","What did she fill out?","Show Goals & Intake","Show the Nutrition Update form","Open questionnaire submissions"])("routes %s to forms", question => {
+    expect(localClientIntent(question).topics).toContain("forms");
+  });
+  it("rejects a cross-client lookup before touching the database", async () => {
+    const { readCoachForms } = await import("@/lib/cleo-forms.server");
+    const from = vi.fn();
+    await expect(readCoachForms({from}, "answers", {client_id:"other",submission_id:"response"}, "selected")).rejects.toThrow("restricted");
+    expect(from).not.toHaveBeenCalled();
+  });
+  it("reads exact scoped submission and paginates question answers", async () => {
+    const { readCoachForms } = await import("@/lib/cleo-forms.server");
+    const calls: unknown[][] = [];
+    const from = vi.fn((table: string) => {
+      const res = table === "nf_submissions"
+        ? {data:[{id:"response",client_id:"selected",form_id:"form",form:{title:"Competition Setup"},submitted_at:"2026-11-26",status:"submitted"}],error:null}
+        : table === "nf_questions" ? {data:[{id:"q",label:"Bodyweight",order_index:20}],count:42,error:null}
+        : {data:[{question_id:"q",value_number:74,value_json:{unit:"kg"}}],error:null};
+      const q: any = {then:(resolve:any)=>Promise.resolve(res).then(resolve)};
+      for (const op of ["select","eq","order","range","in","limit"]) q[op]=(...args:unknown[])=>{calls.push([table,op,...args]);return q;};
+      return q;
+    });
+    const result = await readCoachForms({from},"answers",{submission_id:"response",question_offset:20},"selected");
+    expect(calls).toContainEqual(["nf_submissions","eq","client_id","selected"]);
+    expect(calls).toContainEqual(["nf_answers","eq","submission_id","response"]);
+    expect(calls).toContainEqual(["nf_questions","range",20,39]);
+    expect(result).toContain("Competition Setup");
+    expect(result).toContain("Bodyweight: 74 kg");
+    expect(result).toContain("More questions:");
+  });
+});
