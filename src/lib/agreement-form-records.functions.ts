@@ -8,7 +8,7 @@ export type AgreementFormRecord = {
   version: string | null; method: string | null; status: string;
   acknowledgement: string | null; source: "legal" | "coaching" | "external";
 };
-export type AgreementFormGroup = { id: string; title: string; records: AgreementFormRecord[]; source: AgreementFormRecord["source"] };
+export type AgreementFormGroup = { id: string; title: string; records: AgreementFormRecord[]; source: AgreementFormRecord["source"]; historical?: boolean };
 
 async function allRows(build: (from: number, to: number) => PromiseLike<{data: any[] | null; error: any}>) {
   const rows: any[] = [];
@@ -42,7 +42,7 @@ export const listAgreementFormRecords = createServerFn({ method: "GET" })
     }
     const groups = new Map<string, AgreementFormGroup>();
     for (const d of docs) if (!d.archived && d.current_version_id && d.is_required) {
-      groups.set(d.id,{id:d.id,title:d.title,records:[],source:"legal"});
+      groups.set(d.id,{id:d.id,title:d.title,records:[],source:"legal",historical:!!d?.archived || !d?.current_version_id});
     }
     for (const r of acceptances) {
       const d = docs.find(d => d.id === r.document_id);
@@ -59,6 +59,7 @@ export const listAgreementFormRecords = createServerFn({ method: "GET" })
     }))});
     for (const r of external) {
       const title = r.template_name ?? r.agreement_type ?? "External agreement";
+      const historical = !!r.archived || (/signnow/i.test(title) && !r.sent_at && !r.signed_at && !["Signed","Completed","Verified"].includes(r.status));
       const key = "external:" + title;
       if (!groups.has(key)) groups.set(key,{id:key,title,source:"external",records:[]});
       groups.get(key)!.records.push({id:r.id,name:first(r.clients)?.full_name ?? "Client",clientId:r.client_id,date:r.signed_at ?? (["Signed","Completed","Verified"].includes(r.status) ? null : r.sent_at),
