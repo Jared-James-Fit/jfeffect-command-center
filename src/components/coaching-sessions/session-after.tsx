@@ -161,8 +161,11 @@ export function SessionAfter({
             ) : (
               <p className="text-[13px] text-success">Nothing waiting on you.</p>
             )}
-            {privateReview ? <p className="text-[12px] text-muted-foreground">Private review · transcript excerpts, not AI-generated recommendations.</p> : null}
+            {privateReview ? <p className="text-[12px] text-muted-foreground">Private review · sourced observations and suggested follow-ups, not full AI analysis.</p> : null}
             {analysis?.summary ? <Summary text={analysis.summary} /> : null}
+            {data.cleo && !working && analysis && s.transcript_path && !s.transcript_deleted_at ? (
+              <Button size="sm" variant="ghost" className="h-7 px-1 text-xs" loading={retryReview.isPending} onClick={() => retryReview.mutate()}>Review again</Button>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -221,14 +224,10 @@ export function SessionAfter({
         <Speakers data={data} list={spk} refresh={refresh} />
       ) : null}
 
-      <OutcomeGroups outcome={outcome} />
-
-      <HandlingOpportunities sessionId={s.id} />
-
       {(data.recommendations as any[]).length ? (
         <section className="rounded-2xl border border-border" data-recommendations>
           <header className="px-3 py-2.5">
-            <h3 className="text-[15px] font-semibold">What could change</h3>
+            <h3 className="text-[15px] font-semibold">Suggested next steps</h3>
           </header>
           <ul className="divide-y divide-border border-t border-border">
             {(data.recommendations as any[]).map((r) => (
@@ -244,11 +243,22 @@ export function SessionAfter({
             ))}
           </ul>
         </section>
-      ) : analysis && !privateReview ? (
-        <p className="text-[13px] text-muted-foreground">
-          No changes came out of this conversation. That's often the right answer.
-        </p>
       ) : null}
+
+      {(data.intelligence as any[]).length ? (
+        <MemoryPanel
+          clientId={clientId}
+          rows={data.intelligence}
+          today={today}
+          onChange={refresh}
+          title="Client intelligence"
+          compact
+        />
+      ) : null}
+
+      <OutcomeGroups outcome={outcome} />
+
+      <HandlingOpportunities sessionId={s.id} />
 
       <Commitments
         sessionId={s.id}
@@ -258,16 +268,7 @@ export function SessionAfter({
         refresh={refresh}
       />
 
-      {(data.intelligence as any[]).length ? (
-        <MemoryPanel
-          clientId={clientId}
-          rows={data.intelligence}
-          today={today}
-          onChange={refresh}
-          title="From this meeting"
-          compact
-        />
-      ) : null}
+
 
       <Recap data={data} decisions={decisions} refresh={refresh} />
 
