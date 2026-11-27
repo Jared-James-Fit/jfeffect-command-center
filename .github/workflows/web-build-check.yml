@@ -42,6 +42,9 @@ jobs:
       - name: Run Cleo permission and execution regression tests
         run: npm test -- src/test/cleo-actions-run-as-requester.test.ts src/test/cleo-competition-evidence.test.ts src/test/cleo-local-attempts.test.ts src/test/cleo-local-client.test.ts
 
+      - name: Run meeting intelligence regression tests
+        run: npm test -- src/test/coaching-sessions-after.test.ts src/test/meeting-intelligence.test.ts src/test/meeting-memory.test.ts
+
       - name: Run POV identity and parity regression tests
         run: npm test -- src/test/pov-passive-activity.test.ts src/test/pov-scoped-reads.test.ts
 
