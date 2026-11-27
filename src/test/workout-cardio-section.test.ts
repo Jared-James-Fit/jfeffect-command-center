@@ -117,6 +117,18 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(readFileSync("src/lib/workout-completeness.ts", "utf8")).toContain(".filter((r) => !r?.cardio_target_id)");
   });
 
+  it("shows one optional cardio reminder beside Done, only on the immediate completion recap", () => {
+    const recap = read("src/components/workout-submission-summary.tsx");
+    expect(day).toContain('cardioTakeaway?.status === "logged" || cardioTakeaway?.status === "skipped"');
+    expect(day).toContain("isPlanCardioRow(r) && !r.skipped && !cardioRowDone(r.id, results as any[])");
+    expect(day).toContain("onLogCardio={recapFromSubmitRef.current && pendingCardioRow");
+    expect(recap).toContain("{cardio && !onLogCardio && (");
+    expect(recap).toContain("{onLogCardio && (");
+    expect(recap.indexOf("data-recap-cardio-reminder")).toBeLessThan(recap.indexOf("data-recap-done"));
+    expect(recap).toContain("onClick={onLogCardio}>Log cardio</Button>");
+    expect(recap).toContain("onClick={close} data-recap-done");
+  });
+
   it("the recap and Vs the plan never call cardio not done yet 'missed'; logged, it counts", async () => {
     const { computeWorkoutSummary } = await import("@/lib/workout-summary");
     const rows = [
