@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { localClientIntent } from "@/lib/cleo-local-intent";
+import { localClientIntent, contextualLocalClientIntent } from "@/lib/cleo-local-intent";
 const mocks = vi.hoisted(() => ({
   access: vi.fn(), readers: vi.fn(), attempt: vi.fn(), nutrition: vi.fn(), training: vi.fn(), purchases: vi.fn(),
 }));
@@ -41,6 +41,23 @@ describe("Cleo internal client mode", () => {
     ["What payments are outstanding?", "purchases"],
   ])("routes natural wording: %s", (q, topic) => {
     expect(localClientIntent(q).topics).toContain(topic);
+  });
+  it("resolves the exact reported follow-up and chained follow-ups", async () => {
+    const question = "How’d you get those numbers";
+    const intent = contextualLocalClientIntent(question, ["Why?", "Explain attempt selection"]);
+    expect(intent).toMatchObject({ topics: ["attempts"], followup: true, action: false });
+    const reply = await localClientReply({ ...ctx, question, intent });
+    expect(mocks.attempt).toHaveBeenCalledWith(ctx.admin, ctx.requester, ctx.clientId);
+    expect(reply.text).toContain("Existing attempt numbers");
+    expect(reply.text).toContain("fresh read");
+    expect(reply.choices).toBeUndefined();
+  });
+  it("does not override new subjects, inherit across unrelated turns, or enable actions", () => {
+    expect(contextualLocalClientIntent("What are her calories?", ["Explain attempt selection"]).topics).toEqual(["nutrition"]);
+    expect(contextualLocalClientIntent("How'd you get those numbers?", ["Hello", "Explain attempt selection"]).topics).toEqual([]);
+    expect(contextualLocalClientIntent("Send those numbers", ["Explain attempt selection"]).action).toBe(true);
+    expect(contextualLocalClientIntent("Why?", ["Change her attempts", "Explain attempt selection"]).topics).toEqual([]);
+    expect(contextualLocalClientIntent("Where did those numbers come from?", ["Show sumo deadlift history over the last 4 weeks"])).toMatchObject({ topics: ["training"], days: 28, exercise: "sumo deadlift", followup: true });
   });
   it("uses bounded dates and lift filters", () => {
     expect(localClientIntent("show her sumo deadlift history over the last 12 weeks")).toMatchObject({ days: 84, exercise: "sumo deadlift" });
