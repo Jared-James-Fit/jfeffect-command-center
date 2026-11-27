@@ -212,3 +212,16 @@ describe("a consent refusal says why and offers no retry", () => {
     expect(isCoachConsentMessage(null)).toBe(false);
   });
 });
+
+
+describe("private meeting review", () => {
+  it("keeps original excerpts and explicit coach decisions without inferred changes", async () => {
+    const { privateMeetingAnalysis } = await import("@/lib/coaching-sessions/analysis");
+    const result = privateMeetingAnalysis("Client: I can train three days this week.\nCoach: We can talk again Friday.", ["Keep three sessions this week", "Maybe add cardio next week"]);
+    expect(result.summary).toContain("I can train three days this week");
+    expect(result.items.map(i => i.kind)).toEqual(["agreement", "tentative"]);
+    expect(result.recommendations).toEqual([]);
+    expect(result.intelligence).toEqual([]);
+    expect(result.followUp).toBeNull();
+  });
+});
