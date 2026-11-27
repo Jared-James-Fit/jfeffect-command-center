@@ -128,6 +128,12 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   const coreAgreements = matchingAgreements.filter(g=>!g.historical && g.purpose==="core");
   const agreementGroups = matchingAgreements.filter(g => !g.historical && g.purpose!=="core");
   const historicalAgreements = matchingAgreements.filter(g => g.historical);
+  const coachAgreementGroups = useMemo(() => {
+    if(accountRole !== "coach") return [];
+    const grouped = new Map<string,StaffFormRequirement[]>();
+    for(const item of requirements) if(item.key==="coaching" || item.key.startsWith("legal:")) grouped.set(item.key,[...(grouped.get(item.key)??[]),item]);
+    return [...grouped.entries()].filter(([,items])=>search.trim()?items[0].title.toLowerCase().includes(search.trim().toLowerCase()):filter==="all"||filter==="cat:Agreements"||(filter==="waiting"&&items.some(r=>!r.complete)));
+  },[accountRole,requirements,filter,search]);
   const coreForms = liveForms.filter(f => formPurpose(f) === "core");
   const serviceForms = liveForms.filter(f => formPurpose(f) === "service");
   const otherForms = liveForms.filter(f => formPurpose(f) === "other");
@@ -236,7 +242,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
               { key: "automatic", label: "Automatic" },
               { key: "favorites", label: `Favorites${favorites.size ? ` · ${favorites.size}` : ""}` },
               ...(hasOthers ? [{ key: "mine", label: "Mine" }] : []),
-              ...Array.from(new Set([...categories, ...(accountRole === "admin" ? ["Agreements"] : [])])).map((c) => ({ key: `cat:${c}`, label: c })),
+              ...Array.from(new Set([...categories, ...((accountRole === "admin" || accountRole === "coach") ? ["Agreements"] : [])])).map((c) => ({ key: `cat:${c}`, label: c })),
             ].map((c) => (
               <button
                 key={c.key}
@@ -270,12 +276,12 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             </div>
           </div>
         )}
-        {forms.length === 0 && !agreementGroups.length && !coreAgreements.length && !historicalAgreements.length && (
+        {forms.length === 0 && !agreementGroups.length && !coreAgreements.length && !historicalAgreements.length && !coachAgreementGroups.length && (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-[15px] text-muted-foreground">
             No forms yet. Make one built in the app, or link one from Fillout, Typeform or Google Forms.
           </div>
         )}
-        {forms.length > 0 && liveForms.length === 0 && agreementGroups.length === 0 && coreAgreements.length === 0 && historicalAgreements.length === 0 && (
+        {forms.length > 0 && liveForms.length === 0 && agreementGroups.length === 0 && coreAgreements.length === 0 && historicalAgreements.length === 0 && coachAgreementGroups.length === 0 && (
           <p className="py-6 text-center text-[15px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : filter === "review" ? "Nothing waiting on you." : "Nothing here yet."}</p>
         )}
         <div className="space-y-3" data-form-library-list>
@@ -291,6 +297,15 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
               {serviceForms.map(f => <FormRow key={f.id} {...rowProps(f)} />)}
               {!selecting && agreementGroups.map(group => <AgreementFormRow key={group.id} group={group} requirements={requirements.filter(r=>r.key==="legal:"+group.id)} />)}
+            </ul>
+          </section>}
+          {!selecting && coachAgreementGroups.length > 0 && <section>
+            <h2 className="mb-1 px-1 text-xs font-semibold text-muted-foreground">Agreements · assigned accounts</h2>
+            <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+              {coachAgreementGroups.map(([key,items])=><li key={key} className="flex items-center justify-between gap-2 px-3 py-2">
+                <div className="min-w-0"><p className="text-sm font-medium">{items[0].title}</p><p className="text-xs text-muted-foreground">{items.filter(r=>r.complete).length} completed · {items.length} applicable</p></div>
+                <RequirementCount title={items[0].title} requirements={items}/>
+              </li>)}
             </ul>
           </section>}
           {otherForms.length > 0 && <section>
