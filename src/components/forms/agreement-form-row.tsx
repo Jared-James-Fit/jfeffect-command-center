@@ -9,14 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AgreementRecordViewer } from "@/components/coaching-agreement/agreement-record-viewer";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useAuth } from "@/lib/auth";
-import { listAgreementFormRecords, type AgreementFormGroup, type AgreementFormRecord } from "@/lib/agreement-form-records.functions";
+import { listAgreementFormRecords, getLegalFormEvidence, type AgreementFormGroup, type AgreementFormRecord } from "@/lib/agreement-form-records.functions";
 
 export function useAgreementFormGroups() {
   const { accountRole, user } = useAuth();
   const fn = useServerFn(listAgreementFormRecords);
   return useQuery({queryKey:["agreement-form-records",user?.id],queryFn:()=>fn(),enabled:accountRole === "admin" && !!user,staleTime:15000});
 }
-const isResponse = (r: AgreementFormRecord) => r.source !== "external" || !!r.date && ["Signed","Completed","Verified"].includes(r.status.split(" · ")[0]);
+const isResponse = (r: AgreementFormRecord) => r.source !== "external" || ["Signed","Completed","Verified"].includes(r.status.split(" · ")[0]);
 const formatDate = (d: string | null) => d ? new Date(d).toLocaleString() : "—";
 
 export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
@@ -29,6 +29,8 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
   const visible = group.records.filter(r => [r.name,r.status,r.version].some(v => v?.toLowerCase().includes(search.toLowerCase())));
   const index = visible.findIndex(r=>r.id===selected);
   const record = index >= 0 ? visible[index] : undefined;
+  const detailFn = useServerFn(getLegalFormEvidence);
+  const detail = useQuery({queryKey:["legal-form-evidence",record?.id],queryFn:()=>detailFn({data:{id:record!.id}}),enabled:open && mode==="individual" && record?.source==="legal"});
   function show() {setSearch("");setSelected(null);setMode("table");setOpen(true);}
   return <>
     <li className="flex items-center gap-1.5 px-2 py-2 sm:px-3" data-agreement-form-row>
@@ -48,7 +50,7 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
           <Button size="sm" variant={mode==="table"?"default":"outline"} onClick={()=>setMode("table")}>Table</Button>
           <Button size="sm" variant={mode==="individual"?"default":"outline"} disabled={!visible.length} onClick={()=>{setSelected(record?.id ?? visible[0]?.id ?? null);setMode("individual")}}>Individual</Button>
           {group.source==="coaching" && <Button size="sm" variant="outline" asChild><Link to="/admin/coaching-agreements">Signing status</Link></Button>}
-          {group.source==="external" && <Button size="sm" variant="outline" asChild><Link to="/admin/forms" search={{tab:"agreements"}}>Manage agreements</Link></Button>}
+          {group.source==="external" && <><Button size="sm" variant="outline" asChild><Link to="/admin/forms" search={{tab:"agreements"}}>Manage agreements</Link></Button><Button size="sm" variant="outline" asChild><Link to="/admin/agreements/signed">Signed documents</Link></Button></>}
         </div>
         <Input value={search} onChange={e=>{setSearch(e.target.value);setMode("table");setSelected(null);}} placeholder="Search people, versions or status" />
         {mode==="table" && <div className="divide-y divide-border rounded-xl border border-border">
@@ -68,6 +70,13 @@ export function AgreementFormRow({ group }: {group: AgreementFormGroup}) {
             <p className="text-sm">Status: {record.status}</p><p className="text-sm">Recorded: {formatDate(record.date)}</p>
             <p className="text-sm">Version: {record.version ?? "Not recorded"}</p><p className="text-sm">Method: {record.method ?? "Not recorded"}</p>
             {record.acknowledgement && <p className="whitespace-pre-wrap text-sm">{record.acknowledgement}</p>}
+            {record.source==="legal" && (detail.isLoading ? <p className="text-sm">Loading original evidence…</p> : detail.isError ? <Button variant="outline" onClick={()=>detail.refetch()}>Retry loading evidence</Button> : detail.data && <div className="space-y-2 text-sm">
+              {detail.data.typedName && <p>Typed name: {detail.data.typedName}</p>}
+              {detail.data.checked != null && <p>Checkbox: {detail.data.checked ? "Checked" : "Not checked"}</p>}
+              {detail.data.context && <p>Context: {detail.data.context}</p>}
+              {detail.data.revokedAt && <p>Revoked: {formatDate(detail.data.revokedAt)}</p>}
+              <details><summary className="cursor-pointer font-medium">Original accepted document</summary><div className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-muted p-3">{detail.data.snapshot ?? "No document snapshot recorded."}</div></details>
+            </div>)}
             <p className="break-all text-xs text-muted-foreground">Evidence ID: {record.id}</p>
             {record.clientId && <ClientNameLink clientId={record.clientId} tab="agreements">Open profile</ClientNameLink>}
             {record.source==="coaching" && <Button className="w-full" variant="outline" onClick={()=>{setOpen(false);setSignature(record.id)}}>View signed agreement</Button>}
