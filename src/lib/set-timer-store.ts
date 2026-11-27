@@ -180,3 +180,46 @@ export function parseMMSS(raw: string): number | null {
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n);
 }
+
+/** Cardio-only numeric shorthand: 25 = 25 min, 430 = 4:30, 10000 = 1:00:00.
+ * Explicit colon input is also accepted (paste); short strength timers keep parseMMSS.
+ */
+export function parseCardioDuration(raw: string): number | null {
+  const t = raw.trim();
+  if (!/^\d{1,6}$/.test(t) && !/^(?:\d{0,4}:\d{0,2}|\d{1,2}:\d{0,2}:\d{0,2})$/.test(t)) return null;
+  let h = 0, m = 0, s = 0;
+  if (t.includes(":")) {
+    const parts = t.split(":").map(Number);
+    if (parts.length === 3) [h, m, s] = parts;
+    else [m, s] = parts;
+    if (parts.length === 3 && m >= 60) return null;
+  } else if (t.length <= 2) {
+    m = Number(t);
+  } else {
+    s = Number(t.slice(-2));
+    m = Number(t.slice(-4, -2));
+    if (t.length > 4) {
+      h = Number(t.slice(0, -4));
+      if (m >= 60) return null;
+    }
+  }
+  const total = h * 3600 + m * 60 + s;
+  return s < 60 && total > 0 && total <= 359999 ? total : null;
+}
+
+/** Editing uses total minutes and a fixed separator; final display uses H:MM:SS when needed. */
+export function cardioMinutesDraft(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Preserve a typed separator, or format a whole replacement/paste without one. */
+export function cardioDurationDraft(raw: string, previous: string): string {
+  if (!/^[\d:]*$/.test(raw) || raw.length > 12) return previous;
+  if (!raw) return "0:00";
+  if (raw.includes(":")) return raw;
+  // A backspace over the separator must not reinterpret the entire duration.
+  if (previous.includes(":") && raw === previous.replace(/:/g, "")) return previous;
+  const parsed = parseCardioDuration(raw);
+  return parsed == null ? raw : cardioMinutesDraft(parsed);
+}
