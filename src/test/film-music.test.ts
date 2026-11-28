@@ -56,10 +56,16 @@ describe("the cameras keep the music playing by themselves", () => {
   const studio = read("src/components/community/share-studio.tsx");
   const recorder = read("src/components/community/clip-recorder.ts");
 
-  it("nothing to tap: the mic opens only when sound is switched on in the camera's settings", () => {
+  it("the mic opens only when sound is switched on", () => {
     expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
     expect(cam).toContain("Pauses your music while you film.");
-    expect(cam).not.toContain("FilmSoundToggle");
+    expect(cam).toContain("data-film-mic");
+    expect(cam).toContain("Music may pause while recording.");
+    expect(cam).toContain("Music continues · No recorded audio");
+    expect(cam).toContain("Microphone unavailable · No audio");
+    expect(cam).toContain("Microphone interrupted · Audio may be missing");
+    expect(cam).toContain('a.readyState === "live" && a.enabled && !a.muted');
+    expect(cam).toContain('["mute", "unmute", "ended"]');
   });
 
   it("the Crew studio's held clips follow the same setting, read when the clip starts", () => {
