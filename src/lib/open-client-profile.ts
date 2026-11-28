@@ -37,6 +37,7 @@ export function useOpenClientProfile() {
           clientTab: opts?.tab,
         }),
         replace: false,
+        resetScroll: false,
       } as any);
     },
     [navigate],
@@ -53,6 +54,7 @@ export function useOpenTeamProfile() {
         ...prev, clientId: undefined, clientTab: undefined, memberId: undefined, memberTab: undefined, teamUserId,
       }),
       replace: false,
+      resetScroll: false,
     } as any);
   }, [navigate]);
 }
@@ -67,6 +69,7 @@ export function useCloseClientProfile() {
         return rest;
       },
       replace: false,
+      resetScroll: false,
     } as any);
   }, [navigate]);
 }
@@ -80,6 +83,7 @@ export function useSetOverlayClientTab() {
         to: ".",
         search: (prev: Record<string, unknown>) => ({ ...prev, clientTab: tab }),
         replace: true,
+        resetScroll: false,
       } as any);
     },
     [navigate],

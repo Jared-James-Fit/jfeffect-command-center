@@ -41,24 +41,20 @@ export function ClientProfileOverlayMount() {
   const setTab = useSetOverlayClientTab();
   const triggerRef = useRef<Element | null>(null);
 
-  // Remember the element that opened the overlay so focus can be restored.
+  const isOpen = !!(clientId || teamUserId);
+  // Capture the original trigger once, not when switching accounts inside the overlay.
   useEffect(() => {
-    if ((clientId || teamUserId) && typeof document !== "undefined") {
+    if (isOpen && typeof document !== "undefined") {
       triggerRef.current = document.activeElement;
     }
-  }, [clientId, teamUserId]);
+  }, [isOpen]);
 
   return (
     <DialogPrimitive.Root
-      open={!!(clientId || teamUserId)}
+      open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
           close();
-          // Restore focus after the dialog closes.
-          setTimeout(() => {
-            const el = triggerRef.current as HTMLElement | null;
-            if (el && typeof el.focus === "function") el.focus();
-          }, 0);
         }
       }}
     >
@@ -81,6 +77,11 @@ export function ClientProfileOverlayMount() {
           onOpenAutoFocus={(e) => {
             // Prevent the initial focus jump; let the workspace body receive focus naturally.
             e.preventDefault();
+          }}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            const el = triggerRef.current;
+            if (el instanceof HTMLElement && el.isConnected) el.focus({ preventScroll: true });
           }}
         >
           <DialogPrimitive.Title className="sr-only">{teamUserId ? "Team account workspace" : "Client workspace"}</DialogPrimitive.Title>

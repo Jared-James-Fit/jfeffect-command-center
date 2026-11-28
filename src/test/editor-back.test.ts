@@ -44,3 +44,19 @@ describe("the program editor's ← goes back to where the coach came from", () =
     expect(read("src/lib/open-client-profile.ts")).toMatch(/clientTab: tab \}\),\s*replace: true/);
   });
 });
+
+
+describe("account profile overlay preserves the underlying directory", () => {
+  it("never resets scroll when opening, closing or changing profile tabs", () => {
+    const src = read("src/lib/open-client-profile.ts");
+    const calls = src.match(/navigate\(\{[\s\S]*?\} as any\)/g) ?? [];
+    expect(calls).toHaveLength(4);
+    for (const call of calls) expect(call).toContain("resetScroll: false");
+  });
+
+  it("restores trigger focus without scrolling the directory", () => {
+    const src = read("src/components/clients/profile/client-profile-overlay.tsx");
+    expect(src).toContain("onCloseAutoFocus");
+    expect(src).toContain("el.focus({ preventScroll: true })");
+  });
+});
