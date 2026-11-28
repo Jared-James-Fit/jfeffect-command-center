@@ -93,7 +93,10 @@ describe("full screen like a reel: the picture is 9:16 upright", () => {
     expect(cam).toContain("if (pic && upright) saveFilmAsk(shape);");
     expect(cam).toContain("if (!stream && best && !refused()) {");
     // the picture fills the screen, the controls over it
-    expect(cam).toContain('className={cn("absolute inset-0 h-full w-full object-cover"');
+    expect(cam).toContain('purpose ? "object-cover" : "object-contain"');
+    expect(cam).toContain('data-film-preview={purpose ? "cover" : "whole"}');
+    expect(cam).toContain('if (track() !== t) return;');
+    expect(cam).toContain('if (typeof applied === "number") setZoom(applied);');
   });
   it("while it's up the status bar and everything behind it are black, then the page's colour again", () => {
     const css = read("src/styles.css");

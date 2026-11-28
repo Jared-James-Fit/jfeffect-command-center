@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { ChevronDown, Grid3x3, Images, RefreshCcw, Ruler, Timer, X, Zap, ZapOff } from "lucide-react";
+import { ChevronDown, Grid3x3, Images, Mic, MicOff, RefreshCcw, Ruler, Timer, X, Zap, ZapOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { baseMediaType } from "@/lib/community";
@@ -147,6 +147,10 @@ export function FilmCamera({
   const [panel, setPanel] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [micBlocked, setMicBlocked] = useState(() => micRefused());
+  const [audioHint, setAudioHint] = useState(false);
+  const [audioIssue, setAudioIssue] = useState<string | null>(null);
+  const [micLive, setMicLive] = useState(false);
+  const audioHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -160,6 +164,15 @@ export function FilmCamera({
   settingsRef.current = settings;
 
   const recording = recordingAt != null;
+  const showAudioHint = useCallback(() => {
+    if (audioHintTimer.current) clearTimeout(audioHintTimer.current);
+    setAudioHint(true);
+    audioHintTimer.current = setTimeout(() => setAudioHint(false), 3000);
+  }, []);
+  useEffect(() => {
+    if (status === "live" && !purpose) showAudioHint();
+    return () => { if (audioHintTimer.current) clearTimeout(audioHintTimer.current); };
+  }, [status, purpose, showAudioHint]);
   // the capture camera's hold let go before filming had started
   const releasedEarly = useRef(false);
   const track = () => streamRef.current?.getVideoTracks()[0] ?? null;
@@ -187,6 +200,11 @@ export function FilmCamera({
       return next;
     });
   const update = (next: Partial<FilmSettings>) => {
+    if ("sound" in next) {
+      if (startingRef.current || recRef.current) return;
+      setAudioIssue(null);
+      showAudioHint();
+    }
     setSettings((prev) => {
       const s = { ...prev, ...next };
       if (!purpose) saveFilmSettings(s);
@@ -421,6 +439,9 @@ export function FilmCamera({
     const t = stream?.getVideoTracks()[0];
     if (!stream || !t) return;
     startingRef.current = true;
+    setAudioIssue(null);
+    setMicLive(false);
+    setAudioHint(false);
     setPanel(false);
     const s = t.getSettings?.() ?? {};
     const w = s.width ?? dims.w;
@@ -441,7 +462,27 @@ export function FilmCamera({
         mic = got.stream;
         restore = got.restore;
         micNote = got.note;
+        // A successful permission request can still return no usable audio track.
+        if (!mic.getAudioTracks().some((a) => a.readyState === "live" && a.enabled)) {
+          mic.getTracks().forEach((a) => a.stop());
+          restore();
+          mic = null;
+          restore = null;
+          const retry = await openVideoMic();
+          mic = retry.stream;
+          restore = retry.restore;
+          micNote = retry.note;
+          if (!mic.getAudioTracks().some((a) => a.readyState === "live" && a.enabled)) {
+            mic.getTracks().forEach((a) => a.stop());
+            restore();
+            mic = null;
+            restore = null;
+            throw new Error("No live microphone track");
+          }
+        }
       } catch {
+        micNote = micRefused() ? "permission-denied" : "unavailable";
+        setAudioIssue(micRefused() ? "Microphone blocked · No audio" : "Microphone unavailable · No audio");
         setMicBlocked(micRefused());
         toast.message("Filming without sound", {
           description: micRefused()
@@ -449,6 +490,9 @@ export function FilmCamera({
             : "The microphone isn't available to JF Effect.",
         });
       }
+    } else if (settingsRef.current.sound) {
+      micNote = "permission-denied";
+      setAudioIssue("Microphone blocked · No audio");
     }
     startingRef.current = false;
     if (streamRef.current !== stream) {
@@ -470,6 +514,19 @@ export function FilmCamera({
         return;
       }
     }
+    const audioTracks = mic?.getAudioTracks() ?? [];
+    let interrupted = false;
+    const syncMic = () => {
+      const live = audioTracks.some((a) => a.readyState === "live" && a.enabled && !a.muted);
+      setMicLive(live);
+      if (audioTracks.length && !live) {
+        interrupted = true;
+        setAudioIssue("Microphone interrupted · Audio may be missing");
+      }
+    };
+    const detachMic = () => {
+      for (const a of audioTracks) for (const event of ["mute", "unmute", "ended"]) a.removeEventListener(event, syncMic);
+    };
     const chunks: Blob[] = [];
     const t0 = performance.now();
     const entry: Rec = { recorder, mic, restore, startedAt: t0, keep: true };
@@ -479,6 +536,8 @@ export function FilmCamera({
     recorder.onstop = () => {
       if (recRef.current !== entry) return;
       recRef.current = null;
+      detachMic();
+      setMicLive(false);
       mic?.getTracks().forEach((x) => x.stop());
       restore?.();
       releaseWake();
@@ -487,6 +546,7 @@ export function FilmCamera({
       if (!entry.keep || took < MIN_RECORDING_MS || !chunks.length) return;
       const mime = baseMediaType(recorder.mimeType || type || "video/mp4") || "video/mp4";
       const file = new File([new Blob(chunks, { type: mime })], filmFileName(mime), { type: mime });
+      if (interrupted) micNote += " interrupted";
       noteClipMic(file.name, micNote);
       onClipRef.current(file);
     };
@@ -499,6 +559,8 @@ export function FilmCamera({
       return;
     }
     recRef.current = entry;
+    for (const a of audioTracks) for (const event of ["mute", "unmute", "ended"]) a.addEventListener(event, syncMic);
+    syncMic();
     setRecordingAt(t0);
     // the finger lifted while the mic was still opening: it stops as soon as it's started (too short is dropped)
     if (releasedEarly.current) {
@@ -543,7 +605,11 @@ export function FilmCamera({
       const value = pendingZoom.current;
       const t = track();
       if (value == null || !t) return;
-      void t.applyConstraints({ advanced: [{ zoom: value } as MediaTrackConstraintSet] }).then(() => setZoom(value), () => undefined);
+      void t.applyConstraints({ advanced: [{ zoom: value } as MediaTrackConstraintSet] }).then(() => {
+        if (track() !== t) return;
+        const applied = (t.getSettings?.() as { zoom?: number } | undefined)?.zoom;
+        if (typeof applied === "number") setZoom(applied);
+      }, () => undefined);
     });
   };
   const onTouchStart = (e: React.TouchEvent) => {
@@ -823,7 +889,8 @@ export function FilmCamera({
     >
       <video
         ref={videoRef}
-        className={cn("absolute inset-0 h-full w-full object-cover", facing === "user" && "-scale-x-100")}
+        className={cn("absolute inset-0 h-full w-full", purpose ? "object-cover" : "object-contain", purpose && facing === "user" && "-scale-x-100")}
+        data-film-preview={purpose ? "cover" : "whole"}
         muted
         playsInline
         autoPlay
@@ -927,7 +994,20 @@ export function FilmCamera({
               <ChevronDown className={cn("ml-1 h-3.5 w-3.5 transition-transform", panel && "rotate-180")} aria-hidden />
             </button>
           )}
-          <div className="flex w-10 items-center justify-end">
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            {canVideo && status === "live" && (
+              <button
+                type="button"
+                disabled={recording}
+                aria-label={recording ? (micLive ? "Recording sound" : "Not recording sound") : settings.sound ? "Sound on — tap to turn off" : "Sound off — tap to turn on"}
+                aria-pressed={recording ? micLive : settings.sound}
+                data-film-mic={recording ? (micLive ? "recording" : "silent") : settings.sound ? "on" : "off"}
+                onClick={() => { if (!startingRef.current) update({ sound: !settingsRef.current.sound }); }}
+                className="grid h-10 w-10 place-items-center rounded-full bg-black/40 active:scale-95"
+              >
+                {(recording ? micLive : settings.sound) ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5 text-white/75" />}
+              </button>
+            )}
             {purpose ? (
               // the flash: the back camera's light for a moment (on while it films), the screen for a selfie; never where it can't fire
               (facing === "user" || caps?.torch) && !recording && (
@@ -954,6 +1034,11 @@ export function FilmCamera({
             )}
           </div>
         </div>
+        {canVideo && (audioIssue || (!recording && settings.sound && micBlocked) || (audioHint && !recording && !panel)) && (
+          <p role="status" data-film-audio-hint className="mt-1 text-center text-[11px] leading-tight text-white/85">
+            {audioIssue ?? (settings.sound && micBlocked ? "Microphone blocked · Open settings to allow" : settings.sound ? "Music may pause while recording." : "Music continues · No recorded audio")}
+          </p>
+        )}
         {title && !recording && <p className="mt-1 truncate text-center text-[13px] font-medium text-white/80">{title}</p>}
         {detail && (
           <p
