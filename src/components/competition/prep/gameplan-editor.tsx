@@ -87,6 +87,7 @@ export function GameplanEditor({
         </section>
       ) : null}
 
+      {coach && <section className="rounded-2xl border border-border bg-card p-4 space-y-2"><h3 className="text-[15px] font-semibold">Coaching cues</h3><p className="text-xs text-muted-foreground">Write up to 12 short cues per lift in setup order. Use the athlete’s own preferences and specify when to stay quiet.</p>{LIFTS.map(l=><label key={l} className="block space-y-1 text-sm">{WORD[l]}<Textarea rows={3} defaultValue={(p.cues[l]??[]).join("\n")} onChange={e=>setP(x=>({...x,cues:{...x.cues,[l]:e.target.value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,12)}}))} placeholder="Approach: …&#10;Brace: …"/></label>)}</section>}
       {LIFTS.map((l) => (
         <WarmupRows key={l} lift={l} rows={p.warmups[l]?.rows ?? []} opener={p.attempts[l]?.opener ?? null} onChange={(rows) => setRows(l, rows)} unit={weightUnit} />
       ))}

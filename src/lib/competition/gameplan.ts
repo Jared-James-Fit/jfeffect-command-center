@@ -156,7 +156,7 @@ export function readGameplan(raw: unknown): GameplanDoc {
       }))
       .slice(0, 8);
   for (const l of LIFTS) {
-    const c = lines(r.cues?.[l]).map((x) => x.slice(0, 160)).slice(0, 4);
+    const c = lines(r.cues?.[l]).map((x) => x.slice(0, 160)).slice(0, 12);
     if (c.length) g.cues[l] = c;
   }
   g.instructions = lines(r.instructions).slice(0, 8);

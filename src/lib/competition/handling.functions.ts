@@ -884,3 +884,27 @@ export const claimHandlingInviteFn = createServerFn({ method: "POST" })
     if (!r.ok) throw new Error(r.why ?? "This invitation is for another account.");
     return { competitionId: row.competition_id };
   });
+
+/** Coach-side quick references. Access checked before any service-role read. */
+export const getCompetitionPrepEvidenceFn = createServerFn({method:"POST"})
+ .middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({competitionId:uuid}).parse(d))
+ .handler(async({data,context})=>{
+   await staffRole(context.supabase,context.userId);
+   const {sb,comp}=await reachCompetition(context,data.competitionId);
+   const {readPrepEvidence}=await import("./prep-evidence.server");
+   return readPrepEvidence(sb,comp.client_id,comp.id);
+ });
+export const getCompetitionPrepVideoFn = createServerFn({method:"POST"})
+ .middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({competitionId:uuid,fileId:uuid}).parse(d))
+ .handler(async({data,context})=>{
+   await staffRole(context.supabase,context.userId);
+   const {sb,comp}=await reachCompetition(context,data.competitionId);
+   const {readPrepEvidence}=await import("./prep-evidence.server");
+   const evidence=await readPrepEvidence(sb,comp.client_id,comp.id);
+   if(!evidence.lifts.some((l:any)=>l.videoIds.includes(data.fileId)))throw new Error("Video not found for this competition.");
+   const {data:file,error}=await sb.from("nf_files").select("storage_path").eq("id",data.fileId).single();
+   if(error||!file)throw new Error("Video unavailable.");
+   const {data:signed,error:signError}=await sb.storage.from("form-uploads").createSignedUrl(file.storage_path,600);
+   if(signError||!signed)throw new Error("Could not open video.");
+   return {url:signed.signedUrl};
+ });

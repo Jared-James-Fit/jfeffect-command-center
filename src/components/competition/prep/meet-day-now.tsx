@@ -18,6 +18,7 @@ import { clock, hhmm, nowInZone } from "@/lib/competition/event-timeline";
 import { meetDayView, STAGE_WORD, type LoggedAttempt } from "@/lib/competition/meet-day-mode";
 import { readGameplan } from "@/lib/competition/gameplan";
 import { cn } from "@/lib/utils";
+import { PrepReferences } from "./prep-references";
 
 export const myMeetKey = (competitionId: string, clientId: string | null) => ["my-meet", competitionId, clientId] as const;
 
@@ -159,6 +160,7 @@ export function MeetDayNow({
           {cuesFor(data, view.lift).join(" · ")}
         </p>
       ) : null}
+      {who === "coach" && <PrepReferences key={competitionId} competitionId={competitionId} />}
       {view.changes.length ? (
         <ul className="space-y-0.5 text-[13px] text-warning" data-meet-changes>
           {view.changes.map((c, i) => (
