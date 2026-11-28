@@ -197,6 +197,26 @@ export async function upsertForm(input: Partial<NfForm> & { id?: string }) {
   return data.id as string;
 }
 
+/** Materialize a customized lift request only after the coach finishes the builder. */
+export async function createLiftRequestDraft(draft: import("@/lib/lift-request-template").LiftRequestDraft) {
+  const { liftRequestQuestions, LIFT_REQUEST_CATEGORY } = await import("@/lib/lift-request-template");
+  const questions = liftRequestQuestions(draft);
+  const id = await upsertForm({
+    title: draft.title.trim(),
+    description: [draft.instructions.trim(), "Submit what you have. You can add or update lifts later."].filter(Boolean).join("\n\n"),
+    form_type: "check_in", recurrence: "none", active: false, kind: "native", open_style: "embed",
+    visibility: "selected", category: LIFT_REQUEST_CATEGORY, allow_updates: true,
+    button_label: "Submit available lifts", requires_client_identity: true, settings: { lift_request: true },
+  });
+  const { error } = await db.from("nf_questions").insert(questions.map(q=>({...q,form_id:id})));
+  if (error) {
+    // Never activate or send an incomplete draft.
+    await db.from("nf_forms").delete().eq("id",id);
+    throw error;
+  }
+  return id;
+}
+
 export async function duplicateForm(formId: string) {
   const form = await getForm(formId);
   if (!form) throw new Error("Form not found");

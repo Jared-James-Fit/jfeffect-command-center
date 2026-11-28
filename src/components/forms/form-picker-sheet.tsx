@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, Check, Copy, Eye, Loader2, MoreHorizontal, Plus, Search, Send, Star } from "lucide-react";
+import { Bell, Check, Copy, Dumbbell, Eye, Loader2, MoreHorizontal, Plus, Search, Send, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ import type { ChatSendAttachment } from "@/components/chat-send-menu";
 const FormEditorDialog = lazyWithRetry(() =>
   import("@/route-pages/_authenticated/admin/native-forms").then((m) => ({ default: m.FormEditorDialog })),
 );
+const LiftRequestBuilder = lazyWithRetry(() => import("@/components/forms/lift-request-builder").then(m=>({default:m.LiftRequestBuilder})));
 const NewFormFlow = lazyWithRetry(() => import("@/components/forms/new-form-flow").then((m) => ({ default: m.NewFormFlow })));
 
 /**
@@ -82,6 +83,7 @@ export function FormPickerSheet({
   const [preview, setPreview] = useState<{ form: NfForm; questions: NfQuestion[] } | null>(null);
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingLift, setCreatingLift] = useState(false);
   const [meetPick, setMeetPick] = useState<{ name: string; date: string | null; weight_class: string | null } | null>(null);
   const [reminders, setReminders] = useState(true);
 
@@ -228,6 +230,10 @@ export function FormPickerSheet({
               <span className="grid h-8 w-8 place-items-center rounded-full bg-muted"><Plus className="h-4 w-4" /></span>
               Create a new form
             </button>
+            <button type="button" onClick={()=>setCreatingLift(true)} className="flex min-h-[52px] w-full items-center gap-3 border-t border-border/60 px-4 text-left text-[15px] font-semibold active:bg-muted">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-muted"><Dumbbell className="h-4 w-4" /></span>
+              Lift request
+            </button>
             {isLoading && <p className="px-4 py-3 text-sm text-muted-foreground">Loading your forms…</p>}
             {!isLoading && list.length === 0 && (
               <p className="px-4 py-6 text-center text-[14px] text-muted-foreground">
@@ -329,6 +335,10 @@ export function FormPickerSheet({
       </Sheet>
 
       {preview && <NativeFormPreviewDialog open onClose={() => setPreview(null)} form={preview.form} questions={preview.questions} />}
+      {creatingLift && <Suspense fallback={null}><LiftRequestBuilder onClose={()=>setCreatingLift(false)} onCreated={async form=>{
+        await qc.invalidateQueries({queryKey:FORM_LIBRARY_KEY});
+        setQuery(""); setTab("all"); setSelectedId(form.id); setCreatingLift(false);
+      }} /></Suspense>}
       {(editing || creating) && (
         <Suspense fallback={null}>
           {editing ? (
