@@ -24,6 +24,7 @@ const n = (s: string): number | null => {
 
 export function GameplanEditor({
   initial,
+  onDraftCues,
   rules,
   who,
   saving,
@@ -31,6 +32,7 @@ export function GameplanEditor({
   onCancel,
 }: {
   initial: GameplanDoc;
+  onDraftCues?:()=>Promise<Record<Lift,string[]>>;
   rules: FederationRules;
   who: "coach" | "athlete";
   saving?: boolean;
@@ -39,6 +41,20 @@ export function GameplanEditor({
 }) {
   const [p, setP] = useState<GameplanDoc>(() => JSON.parse(JSON.stringify(initial)));
   const [note, setNote] = useState("");
+  const [cueText,setCueText]=useState(()=>Object.fromEntries(LIFTS.map(l=>[l,(initial.cues[l]??[]).join("\n")])) as Record<Lift,string>);
+  const [drafting,setDrafting]=useState(false);
+  const [cueError,setCueError]=useState("");
+  async function organizeCues(){
+    if(!onDraftCues||drafting)return;
+    setDrafting(true);setCueError("");
+    try{
+      const result=await onDraftCues();
+      const supplied=LIFTS.filter(l=>result[l].length);
+      setCueText(old=>({...old,...Object.fromEntries(supplied.map(l=>[l,result[l].join("\n")]))}));
+      setP(old=>({...old,cues:{...old.cues,...Object.fromEntries(supplied.map(l=>[l,result[l]]))}}));
+    }catch(e){setCueError(e instanceof Error?e.message:"Couldn't organize cues.");}
+    finally{setDrafting(false);}
+  }
   const [weightUnit, setWeightUnit] = useState<WeightUnit>("kg");
   const problems = useMemo(() => checkGameplan(p, rules), [p, rules]);
   const errors = problems.filter((x) => x.severity === "error");
@@ -87,7 +103,7 @@ export function GameplanEditor({
         </section>
       ) : null}
 
-      {coach && <section className="rounded-2xl border border-border bg-card p-4 space-y-2"><h3 className="text-[15px] font-semibold">Coaching cues</h3><p className="text-xs text-muted-foreground">Write up to 12 short cues per lift in setup order. Use the athlete’s own preferences and specify when to stay quiet.</p>{LIFTS.map(l=><label key={l} className="block space-y-1 text-sm">{WORD[l]}<Textarea rows={3} defaultValue={(p.cues[l]??[]).join("\n")} onChange={e=>setP(x=>({...x,cues:{...x.cues,[l]:e.target.value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,12)}}))} placeholder="Approach: …&#10;Brace: …"/></label>)}</section>}
+      {coach && <section className="rounded-2xl border border-border bg-card p-4 space-y-2"><h3 className="text-[15px] font-semibold">Coaching cues</h3><p className="text-xs text-muted-foreground">Write up to 12 short cues per lift in setup order. Use the athlete’s own preferences and specify when to stay quiet.</p>{onDraftCues&&<Button type="button" size="sm" variant="outline" disabled={drafting} onClick={()=>void organizeCues()}>{drafting?"Organizing…":"Organize with Cleo"}</Button>}{cueError&&<p role="alert" className="text-sm text-destructive">{cueError}</p>}{LIFTS.map(l=><label key={l} className="block space-y-1 text-sm">{WORD[l]}<Textarea rows={3} value={cueText[l]} disabled={drafting} onChange={e=>{const value=e.target.value;setCueText(x=>({...x,[l]:value}));setP(x=>({...x,cues:{...x.cues,[l]:value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,12)}}));}} placeholder="Approach: …&#10;Brace: …"/></label>)}</section>}
       {LIFTS.map((l) => (
         <WarmupRows key={l} lift={l} rows={p.warmups[l]?.rows ?? []} opener={p.attempts[l]?.opener ?? null} onChange={(rows) => setRows(l, rows)} unit={weightUnit} />
       ))}

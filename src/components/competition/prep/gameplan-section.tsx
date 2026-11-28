@@ -13,7 +13,7 @@ import { FileDown, History, Pencil, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
-import { gameplanActionFn, shareWithCoachFn } from "@/lib/competition/handling.functions";
+import { gameplanActionFn, shareWithCoachFn, draftCompetitionCuesFn } from "@/lib/competition/handling.functions";
 import { diffGameplans, readGameplan, type GameplanDoc } from "@/lib/competition/gameplan";
 import { readRules } from "@/lib/competition/rules";
 import { zoneLabel } from "@/lib/competition/event-timeline";
@@ -34,6 +34,7 @@ const STATUS: Record<string, string> = {
 export function GameplanSection({ prep, onChanged }: { prep: any; onChanged: () => void }) {
   const act = useServerFn(gameplanActionFn);
   const share = useServerFn(shareWithCoachFn);
+  const draftCues = useServerFn(draftCompetitionCuesFn);
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState(false);
   const comp = prep.competition;
@@ -109,6 +110,7 @@ export function GameplanSection({ prep, onChanged }: { prep: any; onChanged: () 
         initial={plan}
         rules={rules}
         who="coach"
+        onDraftCues={()=>draftCues({data:{competitionId:comp.id}})}
         saving={run.isPending}
         onCancel={() => setEditing(false)}
         onSave={(p, mode) => run.mutate({ action: mode === "approve" ? "approve" : "save_draft", plan: p })}

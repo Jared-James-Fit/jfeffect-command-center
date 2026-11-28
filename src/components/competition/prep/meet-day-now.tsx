@@ -157,7 +157,7 @@ export function MeetDayNow({
       {view.lift && cuesFor(data, view.lift).length ? (
         <p className="text-[14px]" data-meet-cues>
           <span className="text-muted-foreground">Cues: </span>
-          {cuesFor(data, view.lift).join(" · ")}
+          <span className="block space-y-1">{cuesFor(data, view.lift).map((cue,i)=><span className="block" key={i}>· {cue}</span>)}</span>
         </p>
       ) : null}
       {who === "coach" && <PrepReferences key={competitionId} competitionId={competitionId} />}
