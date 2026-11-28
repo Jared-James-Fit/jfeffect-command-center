@@ -199,7 +199,7 @@ export async function loadPrep(
   const limit = classLimitKg(comp.weight_class);
   const bodyweight = info.bodyweightKg ?? (comp.weigh_in_kg != null ? Number(comp.weigh_in_kg) : null) ?? opts.brief?.inputs?.bodyweightAvg ?? null;
   const states: Record<string, ItemState> = { ...(await formChecklistStates(sb, comp.client_id, String(comp.meet_date))), ...readChecklistStates(comp.checklist) };
-  const liftPrep = await import("./prep-evidence.server").then(m=>m.readPrepRequestStatus(sb,comp.client_id,competitionId)).catch(()=>undefined);
+  const liftPrep = await import("./prep-evidence.server").then(m=>m.readPrepRequestStatus(sb,comp.client_id,competitionId)).then(x=>({...x,cuesApproved:!!approved&&Object.values(plan.cues??{}).some(v=>v.length>0)})).catch(()=>undefined);
   const items = buildChecklist({
     liftPrep,
     today,

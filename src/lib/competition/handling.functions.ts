@@ -943,3 +943,25 @@ export const draftCompetitionCuesFn = createServerFn({method:"POST"})
    }
    throw new Error("Cleo couldn't organize these cues. You can still edit them manually.");
  });
+
+/** A coach-only assessment for the exact submitted lift. Pins do not imply review. */
+export const reviewCompetitionPrepLiftFn=createServerFn({method:"POST"})
+ .middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({competitionId:uuid,submissionId:uuid,itemId:z.string().max(120),fingerprint:z.string().length(64).optional(),pinned:z.boolean().optional(),review:z.object({rpe:z.number().min(0).max(10).nullable(),notes:z.string().max(2000)}).optional()}).parse(d))
+ .handler(async({data,context})=>{
+   await staffRole(context.supabase,context.userId);
+   const {sb,comp}=await reachCompetition(context,data.competitionId);
+   const {readPrepEvidence}=await import("./prep-evidence.server");
+   const evidence=await readPrepEvidence(sb,comp.client_id,comp.id);
+   const lift=evidence.lifts.find((l:any)=>l.submissionId===data.submissionId&&l.itemId===data.itemId);
+   if(!lift)throw new Error("Lift not found in this competition.");
+   const patch:Record<string,unknown>={submission_id:data.submissionId,item_id:data.itemId};
+   if(typeof data.pinned==="boolean")patch.pinned=data.pinned;
+   if(data.review){
+     if(data.fingerprint!==lift.fingerprint)throw new Error("This lift changed. Refresh before reviewing.");
+     Object.assign(patch,{fingerprint:lift.fingerprint,coach_rpe:data.review.rpe,notes:data.review.notes,reviewed_at:new Date().toISOString(),reviewed_by:context.userId});
+   }
+   if(!data.review&&typeof data.pinned!=="boolean")throw new Error("No change requested.");
+   const {error}=await sb.from("nf_prep_lift_reviews").upsert(patch,{onConflict:"submission_id,item_id",defaultToNull:false});
+   if(error)throw error;
+   return {ok:true};
+ });
