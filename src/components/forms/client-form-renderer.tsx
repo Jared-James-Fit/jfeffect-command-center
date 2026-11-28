@@ -464,7 +464,6 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
 
   async function handleSubmit() {
     if (!submission) return;
-    if (Object.values(busyQ).some(Boolean)) throw new Error("Finish uploading your lifts first.");
     const visible = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
     const missing = visible.filter((q) => q.required && !answeredNow(q));
     const off = visible.filter((q) => q.question_type === "number" && numberIssue(q, local[q.id]));
@@ -862,7 +861,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                   : `Submit ${form.title}`)}
             </ActionButton>
             <p className="mt-2 px-1 text-center text-[13px] leading-snug text-muted-foreground" data-form-after-submit>
-              {form.allow_updates ? "Your coach sees it in your chat, and you can keep updating it after." : "Your answers go to your coach in your chat."}
+              {liftCount ? "Submit what you have. You can add missing lifts later. Keep this screen open until pending uploads finish." : form.allow_updates ? "Your coach sees it in your chat, and you can keep updating it after." : "Your answers go to your coach in your chat."}
             </p>
           </section>
         )}
