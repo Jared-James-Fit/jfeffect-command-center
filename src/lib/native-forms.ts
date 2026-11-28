@@ -506,7 +506,7 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
   // filled it in twice.
   if (!period && !competitionId) {
     const [{ data: lastRows }, { data: asked }] = await Promise.all([
-      db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).order("created_at", { ascending: false }).limit(1),
+      (prepForm ? db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).is("competition_id",null) : db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId)).order("created_at", { ascending: false }).limit(1),
       db.from("nf_assignments").select("created_at, updated_at, settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle(),
     ]);
     const last = lastRows?.[0];

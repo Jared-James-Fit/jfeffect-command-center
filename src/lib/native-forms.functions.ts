@@ -363,6 +363,7 @@ export const sendNativeFormFn = createServerFn({ method: "POST" })
     for (const clientId of clientIds) {
       const settings: Record<string, unknown> = { ...(settingsBy.get(clientId) ?? {}) };
       if (prepForm && competition) settings.competition_id = competition.id;
+      else if (prepForm && !competition) { delete settings.competition_id; delete settings.meet; }
       if (meet) settings.meet = meet;
       if (typeof data.reminders === "boolean") settings.reminders = data.reminders;
       const last = latestBy.get(clientId);

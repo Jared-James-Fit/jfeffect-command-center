@@ -13,7 +13,7 @@ export type LiftDraftItem = { id: string; title: string; instructions: string };
 export type LiftDraftGroup = { id: string; exercise: string; items: LiftDraftItem[] };
 export type LiftRequestDraft = { title: string; instructions: string; groups: LiftDraftGroup[] };
 const newId = () => crypto.randomUUID();
-export function makeLiftDraft(template: LiftRequestTemplate, id = newId): LiftRequestDraft {
+export function makeLiftDraft(template: LiftRequestTemplate, id: () => string = newId): LiftRequestDraft {
   const preset = LIFT_REQUEST_TEMPLATES[template];
   return {
     title: preset.title, instructions: "",
