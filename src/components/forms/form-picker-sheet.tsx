@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, Check, Copy, Eye, Loader2, MoreHorizontal, Plus, Search, Send, Star } from "lucide-react";
+import { Bell, Check, Copy, Dumbbell, Eye, Loader2, MoreHorizontal, Plus, Search, Send, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   useRecentSends,
   useToggleFavorite,
   useUpcomingMeets,
+  usePrepCompetitions,
 } from "@/lib/form-library.queries";
 import { sendNativeFormFn } from "@/lib/native-forms.functions";
 import { duplicateForm, getForm, listQuestions, upsertForm, type NfForm, type NfQuestion } from "@/lib/native-forms";
@@ -40,6 +41,7 @@ import type { ChatSendAttachment } from "@/components/chat-send-menu";
 const FormEditorDialog = lazyWithRetry(() =>
   import("@/route-pages/_authenticated/admin/native-forms").then((m) => ({ default: m.FormEditorDialog })),
 );
+const LiftRequestBuilder = lazyWithRetry(() => import("@/components/forms/lift-request-builder").then(m=>({default:m.LiftRequestBuilder})));
 const NewFormFlow = lazyWithRetry(() => import("@/components/forms/new-form-flow").then((m) => ({ default: m.NewFormFlow })));
 
 /**
@@ -82,8 +84,10 @@ export function FormPickerSheet({
   const [preview, setPreview] = useState<{ form: NfForm; questions: NfQuestion[] } | null>(null);
   const [editing, setEditing] = useState<NfForm | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingLift, setCreatingLift] = useState(false);
   const [meetPick, setMeetPick] = useState<{ name: string; date: string | null; weight_class: string | null } | null>(null);
   const [reminders, setReminders] = useState(true);
+  const [competitionId,setCompetitionId]=useState<string>("");
 
   const recentIds = useMemo(() => new Set(recent.map((r) => r.form_id)), [recent]);
   const suggestedIds = suggestions.map((s) => s.formId);
@@ -95,6 +99,9 @@ export function FormPickerSheet({
   const categories = useMemo(() => libraryCategories(forms), [forms]);
   const selected = forms.find((f) => f.id === selectedId) ?? null;
   const isMeet = selected?.form_type === MEET_CHECKLIST_FORM_TYPE;
+  const prepForm = selected?.settings?.lift_request === true || selected?.settings?.competition_cue_profile === true;
+  const {data:competitions=[],isLoading:loadingCompetitions}=usePrepCompetitions(single,open&&prepForm);
+  useEffect(()=>{setCompetitionId("");},[selectedId,single,open]);
   const { data: meets = [] } = useUpcomingMeets(single, open && isMeet);
 
   // A fresh open starts clean; the meet picks itself when there's one coming up.
@@ -140,7 +147,7 @@ export function FormPickerSheet({
   }
 
   async function handleSend() {
-    if (!selected) return;
+    if (!selected || sending) return;
     setSending(true);
     try {
       const r = await send({
@@ -149,15 +156,18 @@ export function FormPickerSheet({
           clientIds,
           meet: isMeet && meetPick ? meetPick : null,
           reminders: isMeet ? reminders : undefined,
+          competitionId: prepForm && single && competitionId ? competitionId : undefined,
         },
       });
+      const chosenMeet = competitions.find(c=>c.id===competitionId);
       await onAttach(
         {
           kind: "form_request",
           type: "link",
           // Through the portal page so a Fillout link gets the client's identity (buildFilloutUrl).
-          url: `/portal/check-ins/${selected.id}`,
+          url: `/portal/check-ins/${selected.id}${prepForm ? `?competition=${encodeURIComponent(competitionId||"general")}` : ""}`,
           form_id: selected.id,
+          ...(prepForm ? {competition_id: competitionId||null, competition_name:chosenMeet?.name??null,competition_date:chosenMeet?.meet_date??null}:{}),
           assignment_client_ids: clientIds,
           request_title: selected.title,
           request_note: note.trim() || undefined,
@@ -228,6 +238,10 @@ export function FormPickerSheet({
               <span className="grid h-8 w-8 place-items-center rounded-full bg-muted"><Plus className="h-4 w-4" /></span>
               Create a new form
             </button>
+            <button type="button" onClick={()=>setCreatingLift(true)} className="flex min-h-[52px] w-full items-center gap-3 border-t border-border/60 px-4 text-left text-[15px] font-semibold active:bg-muted">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-muted"><Dumbbell className="h-4 w-4" /></span>
+              Lift request
+            </button>
             {isLoading && <p className="px-4 py-3 text-sm text-muted-foreground">Loading your forms…</p>}
             {!isLoading && list.length === 0 && (
               <p className="px-4 py-6 text-center text-[14px] text-muted-foreground">
@@ -290,6 +304,7 @@ export function FormPickerSheet({
 
           {selected && (
             <div className="space-y-3 border-t border-border bg-background px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3" data-form-picker-send>
+              {prepForm && single && <label className="block space-y-1 text-sm font-medium">Competition (optional)<select className="w-full min-h-11 rounded-lg border bg-background px-3 text-base" value={competitionId} onChange={e=>setCompetitionId(e.target.value)}><option value="">{loadingCompetitions?"Loading competitions…":"General coaching"}</option>{competitions.map(c=><option key={c.id} value={c.id}>{c.name}{c.meet_date?" · "+c.meet_date:""}</option>)}</select></label>}
               {isMeet && single && (
                 <div className="space-y-2">
                   <p className="text-[13px] font-semibold">Which meet is it for?</p>
@@ -329,6 +344,10 @@ export function FormPickerSheet({
       </Sheet>
 
       {preview && <NativeFormPreviewDialog open onClose={() => setPreview(null)} form={preview.form} questions={preview.questions} />}
+      {creatingLift && <Suspense fallback={null}><LiftRequestBuilder onClose={()=>setCreatingLift(false)} onCreated={async form=>{
+        await qc.invalidateQueries({queryKey:FORM_LIBRARY_KEY});
+        setQuery(""); setTab("all"); setSelectedId(form.id); setCreatingLift(false);
+      }} /></Suspense>}
       {(editing || creating) && (
         <Suspense fallback={null}>
           {editing ? (

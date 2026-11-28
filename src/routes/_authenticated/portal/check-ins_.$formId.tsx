@@ -9,6 +9,7 @@ import { ClientFormRenderer } from "@/components/forms/client-form-renderer";
 // which only redirects to Messages, where check-ins are sent and answered).
 
 export const Route = createFileRoute("/_authenticated/portal/check-ins_/$formId")({
+  validateSearch: (search:Record<string,unknown>)=>({competition:typeof search.competition==="string"?search.competition:undefined}),
   component: FormRoutePage,
   errorComponent: FormRouteError,
   notFoundComponent: FormRouteNotFound,
@@ -16,7 +17,9 @@ export const Route = createFileRoute("/_authenticated/portal/check-ins_/$formId"
 
 function FormRoutePage() {
   const { formId } = Route.useParams();
-  return <ClientFormRenderer formId={formId} />;
+  const {competition}=Route.useSearch();
+  const competitionId=competition==="general"?null:competition;
+  return <ClientFormRenderer key={formId+":"+(competition??"default")} formId={formId} competitionId={competitionId} />;
 }
 
 function FormRouteError({ error, reset }: { error: Error; reset: () => void }) {

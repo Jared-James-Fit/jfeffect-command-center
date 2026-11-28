@@ -197,6 +197,26 @@ export async function upsertForm(input: Partial<NfForm> & { id?: string }) {
   return data.id as string;
 }
 
+/** Materialize a customized lift request only after the coach finishes the builder. */
+export async function createLiftRequestDraft(draft: import("@/lib/lift-request-template").LiftRequestDraft) {
+  const { liftRequestQuestions, LIFT_REQUEST_CATEGORY } = await import("@/lib/lift-request-template");
+  const questions = liftRequestQuestions(draft);
+  const id = await upsertForm({
+    title: draft.title.trim(),
+    description: [draft.instructions.trim(), "Submit what you have. You can add or update lifts later."].filter(Boolean).join("\n\n"),
+    form_type: "check_in", recurrence: "none", active: false, kind: "native", open_style: "embed",
+    visibility: "selected", category: LIFT_REQUEST_CATEGORY, allow_updates: true,
+    button_label: "Submit available lifts", requires_client_identity: true, settings: { lift_request: true },
+  });
+  const { error } = await db.from("nf_questions").insert(questions.map(q=>({...q,form_id:id})));
+  if (error) {
+    // Never activate or send an incomplete draft.
+    await db.from("nf_forms").delete().eq("id",id);
+    throw error;
+  }
+  return id;
+}
+
 export async function duplicateForm(formId: string) {
   const form = await getForm(formId);
   if (!form) throw new Error("Form not found");
@@ -466,21 +486,37 @@ function dayToNum(day: string): number {
   return map[day] ?? 1;
 }
 
-export async function getOrCreateCurrentSubmission(form: NfForm, clientId: string) {
+export async function getOrCreateCurrentSubmission(form: NfForm, clientId: string, requestedCompetitionId?: string | null) {
   const period = form.recurrence === "none" ? null : currentPeriodStart(form.recurrence, form.recurrence_day);
+  const prepForm = form.settings?.lift_request === true || form.settings?.competition_cue_profile === true;
+  let competitionId: string | null = null;
+  if (prepForm) {
+    const { data: assignment, error } = await db.from("nf_assignments").select("settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle();
+    if (error) throw error;
+    const settings = assignment?.settings ?? {};
+    const current = settings.competition_id ?? null;
+    if (requestedCompetitionId !== undefined && requestedCompetitionId !== current && !Object.prototype.hasOwnProperty.call(settings.prep_competitions ?? {}, requestedCompetitionId ?? "general")) throw new Error("This request was not assigned for that competition.");
+    competitionId = requestedCompetitionId === undefined ? current : requestedCompetitionId;
+    if (competitionId) {
+      const { data: existing, error: readError } = await db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).eq("competition_id", competitionId).maybeSingle();
+      if (readError) throw readError;
+      if (existing) return existing as NfSubmission;
+    }
+  }
   // A one-off form they were asked for (the Nutrition Update Request): once
   // it's sent it stays sent, shown as submitted, until it's asked for again.
   // A blank copy right after Submit read as "it didn't go through", so people
   // filled it in twice.
-  if (!period) {
+  if (!period && !competitionId) {
     const [{ data: lastRows }, { data: asked }] = await Promise.all([
-      db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).order("created_at", { ascending: false }).limit(1),
+      (prepForm ? db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).is("competition_id",null) : db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId)).order("created_at", { ascending: false }).limit(1),
       db.from("nf_assignments").select("created_at, updated_at, settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle(),
     ]);
     const last = lastRows?.[0];
     if (last && last.status !== "in_progress") {
       // A form they keep updating (a meet checklist) stays the same copy when it's sent again
       // (a nudge), until the coach sends it for something new (another meet: settings.new_copy_since).
+      if (prepForm) return last as NfSubmission;
       if (form.allow_updates) {
         const fresh = (asked as any)?.settings?.new_copy_since;
         if (!fresh || String(last.created_at) >= String(fresh)) return last as NfSubmission;
@@ -490,6 +526,7 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
   let q = db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId);
   if (period) q = q.eq("period_start", period);
   else q = q.in("status", ["in_progress"]);
+  if (prepForm) q = competitionId ? q.eq("competition_id", competitionId) : q.is("competition_id", null);
   const { data: existing } = await q.order("created_at", { ascending: false }).limit(1);
   const found = existing?.[0];
   if (found && (found.status === "in_progress" || form.recurrence !== "none")) return found as NfSubmission;
@@ -517,9 +554,15 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
       status: "in_progress",
       form_version_id: formVersionId,
       form_version_number: formVersionNumber,
+      ...(competitionId ? {competition_id:competitionId} : {}),
     })
     .select("*")
     .single();
+  if (error?.code === "23505" && competitionId) {
+    const {data: winner, error: retryError} = await db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id",clientId).eq("competition_id",competitionId).single();
+    if (retryError) throw retryError;
+    return winner as NfSubmission;
+  }
   if (error) throw error;
   return created as NfSubmission;
 }

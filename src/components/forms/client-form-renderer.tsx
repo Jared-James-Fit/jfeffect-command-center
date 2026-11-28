@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { groupLiftQuestions, liftQuestionMeta } from "@/lib/lift-request-template";
+import { ExistingLiftPicker } from "./existing-lift-picker";
+import { readOriginalRecordingDate } from "@/lib/video-edit/recorded-date";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
 import { useNavigate, Link } from "@tanstack/react-router";
@@ -57,6 +60,7 @@ import type { UnitValue } from "@/lib/form-prefill";
 export type ClientFormRendererProps = {
   /** Form to render. */
   formId: string;
+  competitionId?: string | null;
   /** True when hosted inside a sheet/modal — hides the page chrome. */
   embedded?: boolean;
   /** Called instead of navigating back when embedded. */
@@ -77,7 +81,7 @@ function isUnitValue(v: unknown): v is UnitValue {
 }
 const todayLocal = () => new Date().toLocaleDateString("en-CA");
 
-export function ClientFormRenderer({ formId, embedded = false, onClose }: ClientFormRendererProps) {
+export function ClientFormRenderer({ formId, competitionId, embedded = false, onClose }: ClientFormRendererProps) {
   const portalUserId = usePortalUserId();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -135,15 +139,15 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   // schedule, birth year, weigh-ins, when they train. Each source is read only when a question asks.
   const prefillQs = useMemo(() => questions.filter((q) => questionPrefill(q)), [questions]);
   const { data: prefillProfile, isFetched: prefillFetched } = useQuery({
-    queryKey: ["form-prefill-profile", client?.id, formId],
+    queryKey: ["form-prefill-profile", client?.id, formId, competitionId===undefined?"default":competitionId],
     enabled: !!client?.id && prefillQs.length > 0,
-    queryFn: () => loadPrefillProfile(client!.id, (client as any)?.user_id ?? portalUserId, formId, new Set(prefillQs.map((q) => questionPrefill(q)!))),
+    queryFn: () => loadPrefillProfile(client!.id, (client as any)?.user_id ?? portalUserId, formId, new Set(prefillQs.map((q) => questionPrefill(q)!)), competitionId),
   });
 
-  const { data: submission } = useQuery({
-    queryKey: ["nf-current-submission", formId, client?.id],
+  const { data: submission, isError: submissionError, refetch: retrySubmission } = useQuery({
+    queryKey: ["nf-current-submission", formId, client?.id, competitionId===undefined?"default":competitionId],
     enabled: !!form && !!client?.id,
-    queryFn: () => getOrCreateCurrentSubmission(form!, client!.id),
+    queryFn: () => getOrCreateCurrentSubmission(form!, client!.id, competitionId),
   });
 
   // NB: no `= []` default here — a fresh array every render re-fires the
@@ -175,6 +179,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   }, [answersRaw]);
 
   const [local, setLocal] = useState<Record<string, any>>({});
+  const [openLift, setOpenLift] = useState<string | null>(null);
+  const liftDateEdited = useRef(new Set<string>());
+  const liftMetadata = useRef(new Map<string, { recorded_at: string; source: string; corrected?: boolean }>());
   // Start from the saved answers when they change, and only then: React can re-run this effect
   // with the form's state kept (a part below it suspending after the first paint), and a reset
   // then wiped answers just prefilled or typed.
@@ -188,6 +195,11 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       // a number kept with its unit (value_json {unit}) is { value, unit } on screen
       if (j && typeof j === "object" && !Array.isArray(j) && typeof j.unit === "string") {
         base[a.question_id] = { value: a.value_number == null ? "" : String(a.value_number), unit: j.unit === "kg" ? "kg" : "lb" };
+        continue;
+      }
+      if (j && typeof j === "object" && !Array.isArray(j) && j.recording_metadata) {
+        liftMetadata.current.set(a.question_id, j.recording_metadata);
+        base[a.question_id] = a.value_text ?? "";
         continue;
       }
       base[a.question_id] = a.value_json ?? a.value_text ?? a.value_number ?? "";
@@ -219,6 +231,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       payload.value_json = raw ?? [];
     } else {
       payload.value_text = raw == null ? null : String(raw);
+      if (q.question_type === "date" && liftMetadata.current.has(q.id)) payload.value_json = { recording_metadata: liftMetadata.current.get(q.id) };
     }
     inFlight.current += 1;
     setSaveState("saving");
@@ -237,8 +250,13 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     saveChains.current.set(q.id, next);
     return next;
   }
-  function saveAnswer(q: NfQuestion, raw: any, opts: { defer?: boolean } = {}) {
+  function saveAnswer(q: NfQuestion, raw: any, opts: { defer?: boolean; detected?: boolean } = {}) {
     if (!submission) return;
+    if (liftQuestionMeta(q)?.field === "date" && !opts.detected) {
+      liftDateEdited.current.add(q.id);
+      const meta = liftMetadata.current.get(q.id);
+      if (meta) liftMetadata.current.set(q.id, {...meta, corrected:true});
+    }
     setLocal((s) => ({ ...s, [q.id]: raw }));
     setFlagged((f) => (f.has(q.id) ? new Set([...f].filter((id) => id !== q.id)) : f));
     if (readOnly) return;
@@ -364,12 +382,29 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     return { ok: true as const, video: res.video };
   };
 
+  // Only an explicit capture tag may prefill the performed date. Never use File.lastModified.
+  function suggestRecordingDate(q: NfQuestion, file: File) {
+    const group = liftQuestionMeta(q);
+    if (!group || group.field !== "video") return;
+    const dateQ = questions.find(other => {
+      const m = liftQuestionMeta(other);
+      return m?.item_id === group.item_id && m.field === "date";
+    });
+    if (!dateQ || answeredNow(dateQ) || liftDateEdited.current.has(dateQ.id)) return;
+    void readOriginalRecordingDate(file).then(meta => {
+      if (!meta || liftDateEdited.current.has(dateQ.id) || liftMetadata.current.has(dateQ.id)) return;
+      liftMetadata.current.set(dateQ.id, { recorded_at: meta.recordedAt, source: meta.source });
+      void saveAnswer(dateQ, meta.date, {detected:true});
+    }).catch(()=>{ /* Missing metadata is normal. */ });
+  }
+
   async function handleFileUpload(q: NfQuestion, file: File) {
     if (!submission || !client) return;
     setBusyQ((s) => ({ ...s, [q.id]: "uploading" }));
     try {
       const read = await readVideo(file);
       if (!read.ok) return;
+      suggestRecordingDate(q, file);
       await uploadFormFile({ clientId: client.id, submissionId: submission.id, questionId: q.id, file, video: read.video });
       toast.success("Uploaded");
       qc.invalidateQueries({ queryKey: ["nf-files", submission.id] });
@@ -424,6 +459,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   function answeredNow(q: NfQuestion): boolean {
     if (q.question_type === "checklist") return checklistAnswered(visibleItems(checklistItems(q), liveAnswers), local[q.id], !!q.required);
     if (q.question_type === "ranking") return rankItemsFor(q).length > 0 || isAnswered(q, local[q.id], files);
+    if (liftQuestionMeta(q)?.field === "video" && typeof local[q.id] === "string" && /^(set|lift):[0-9a-f-]{36}$/i.test(local[q.id])) return true;
     return isAnswered(q, local[q.id], files);
   }
 
@@ -498,6 +534,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     );
   }
 
+  if (submissionError) return <div className="mx-auto max-w-md space-y-3 p-5"><p className="text-sm text-muted-foreground">This request could not be opened. Please try again.</p><Button onClick={()=>void retrySubmission()}>Retry</Button><Button variant="ghost" onClick={closeOrBack}>Back</Button></div>;
   if (!form || !submission || waitingOnAsk) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
@@ -526,8 +563,11 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   }
 
   const shownQuestions = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
+  const liftGroups = groupLiftQuestions(shownQuestions);
+  const liftCount = liftGroups.reduce((n,g)=>n+g.items.length,0);
+  const liftsProvided = liftGroups.reduce((n,g)=>n+g.items.filter(i=>i.questions.some(q=>q.question_type!=="info"&&answeredNow(q))).length,0);
   const checklists = shownQuestions.filter((q) => q.question_type === "checklist");
-  const progress = checklists.length
+  const progress = liftCount ? {done:liftsProvided,total:liftCount} : checklists.length
     ? checklistTotals(checklists, local, liveAnswers)
     : formProgress(shownQuestions.filter((q) => q.required).map((q) => ({ answered: answeredNow(q) })));
   // Everything marked Still need, critical first: what's left to sort before the meet.
@@ -591,7 +631,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
         {meet && <MeetLine name={meet.meetName} date={meet.meetDate} />}
         {stillToSort.length > 0 && <StillToSort rows={stillToSort} onGo={goTo} />}
 
-        {!readOnly && <ProgressLine done={progress.done} total={progress.total} noun={checklists.length ? "checked" : "required"} save={saveState} />}
+        {!readOnly && <ProgressLine done={progress.done} total={progress.total} noun={liftCount ? "lifts" : checklists.length ? "checked" : "required"} save={saveState} />}
 
         {carried && !readOnly && (
           <p className="rounded-xl bg-muted px-3.5 py-2.5 text-[14px]" data-form-carried>
@@ -599,7 +639,42 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           </p>
         )}
 
-        {shownQuestions.map((q) => {
+        {liftGroups.map(group=><section key={group.exercise} className="space-y-2">
+          <h3 className="px-1 text-base font-semibold">{group.exercise}</h3>
+          {group.items.map(item=>{
+            const fields=item.questions.filter(q=>q.question_type!=="info");
+            const heading=item.questions.find(q=>q.question_type==="info");
+            const open=openLift===item.id || fields.some(q=>flagged.has(q.id));
+            const provided=fields.some(answeredNow);
+            const weight=fields.find(q=>liftQuestionMeta(q)?.field==="weight");
+            const rpe=fields.find(q=>liftQuestionMeta(q)?.field==="rpe");
+            const summary=[weight&&answeredNow(weight)?answerShown(weight,local[weight.id]):null,rpe&&answeredNow(rpe)?`@${answerShown(rpe,local[rpe.id])}`:null].filter(Boolean).join(" · ");
+            return <div key={item.id} className="overflow-hidden rounded-xl border bg-card">
+              <button type="button" aria-expanded={open} onClick={()=>setOpenLift(v=>v===item.id?null:item.id)} className="flex min-h-[58px] w-full items-center gap-3 px-3 py-2 text-left">
+                <div className="min-w-0 flex-1"><div className="font-semibold">{item.title}</div><div className="text-sm text-muted-foreground">{summary || (provided?"Provided":"Add lift")}</div></div>
+                {provided&&<Check className="h-4 w-4 text-success" />}
+                <span aria-hidden className="text-muted-foreground">{open?"−":"+"}</span>
+              </button>
+              {open&&<div className="space-y-3 border-t p-3">
+                {heading?.help_text&&<p className="text-sm text-muted-foreground">{heading.help_text}</p>}
+                {fields.map(q=>{
+                  const meta=liftQuestionMeta(q);
+                  const label=({video:"Video",weight:"Weight",reps:"Reps",rpe:"RPE",date:"Date performed",notes:"Notes (optional)"} as Record<string,string>)[meta?.field??""]??q.label;
+                  const units=questionUnits(q);
+                  const cur:UnitValue=isUnitValue(local[q.id])?local[q.id]:{value:local[q.id]==null?"":String(local[q.id]),unit:units?.[0]??"kg"};
+                  const issue=q.question_type==="number"?numberIssue(q,local[q.id]):null;
+                  return <div key={q.id} id={`q-${q.id}`} className="space-y-1.5">
+                    <p className="text-sm font-medium">{label}</p>
+                    {units&&q.question_type==="number"?<UnitNumberInput value={cur} units={units} readOnly={!!readOnly} onChange={(next,typed)=>saveAnswer(q,next,{defer:typed})} onDone={()=>void flushSaves(q.id)}/>:<QuestionInput q={q} value={local[q.id]} files={files.filter(f=>f.question_id===q.id)} readOnly={!!readOnly} busy={busyQ[q.id]} onChange={(v,typed)=>saveAnswer(q,v,{defer:typed})} onDone={()=>void flushSaves(q.id)} onUpload={file=>handleFileUpload(q,file)} onRemove={id=>handleFileRemove(q,id)} onReplace={(id,file)=>handleFileReplace(q,id,file)}/>}
+                    {meta?.field==="video"&&client?.id&&<ExistingLiftPicker clientId={client.id} value={typeof local[q.id]==="string"?local[q.id]:""} disabled={!!readOnly||!!busyQ[q.id]} onPick={clip=>{void saveAnswer(q,clip?.ref??"");if(!clip)return;for(const field of fields){const m=liftQuestionMeta(field);if(!m||answeredNow(field))continue;if(m.field==="weight"&&clip.weight){void saveAnswer(field,clip.weight);}if(m.field==="reps"&&clip.reps!=null)void saveAnswer(field,clip.reps);if(m.field==="rpe"&&clip.rpe!=null)void saveAnswer(field,clip.rpe);if(m.field==="date"&&clip.date)void saveAnswer(field,clip.date);if(m.field==="notes"&&clip.notes)void saveAnswer(field,clip.notes);}}}/>}
+                    {issue&&<p className="text-sm text-destructive">{issue}</p>}
+                  </div>;
+                })}
+              </div>}
+            </div>;
+          })}
+        </section>)}
+        {shownQuestions.filter(q=>!liftQuestionMeta(q)).map((q) => {
           if (q.question_type === "info") {
             return (
               <section key={q.id} id={`q-${q.id}`} className="px-1 pt-2" data-form-question="info">
@@ -766,7 +841,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
               </button>
             ) : (
               progress.total > 0 &&
-              !checklists.length && (
+              !checklists.length && !liftCount && (
                 <p className="mb-2.5 flex items-center gap-1.5 px-1 text-[14px] text-muted-foreground" data-form-complete>
                   <Check className="h-4 w-4 text-success" aria-hidden /> Every required question is answered
                 </p>
@@ -788,7 +863,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                   : `Submit ${form.title}`)}
             </ActionButton>
             <p className="mt-2 px-1 text-center text-[13px] leading-snug text-muted-foreground" data-form-after-submit>
-              {form.allow_updates ? "Your coach sees it in your chat, and you can keep updating it after." : "Your answers go to your coach in your chat."}
+              {liftCount ? "Submit what you have. You can add missing lifts later. Keep this screen open until pending uploads finish." : form.allow_updates ? "Your coach sees it in your chat, and you can keep updating it after." : "Your answers go to your coach in your chat."}
             </p>
           </section>
         )}
@@ -844,9 +919,9 @@ function QuestionHead({ q, n, mark }: { q: NfQuestion; n: number; mark: Required
 }
 
 /** How far along they are (required questions, or a checklist's items) and whether it's saved. Never fixed over the form. */
-function ProgressLine({ done, total, noun, save }: { done: number; total: number; noun: "required" | "checked"; save: "idle" | "saving" | "saved" | "error" }) {
+function ProgressLine({ done, total, noun, save }: { done: number; total: number; noun: "required" | "checked" | "lifts"; save: "idle" | "saving" | "saved" | "error" }) {
   const all = total > 0 && done >= total;
-  const count = total === 0 ? null : noun === "checked" ? `${done} of ${total} checked` : all ? `All ${total} required answered` : `${done} of ${total} required`;
+  const count = total === 0 ? null : noun === "lifts" ? `${done} of ${total} lifts provided` : noun === "checked" ? `${done} of ${total} checked` : all ? `All ${total} required answered` : `${done} of ${total} required`;
   return (
     <div className="px-1" data-form-progress>
       <div className="flex items-center justify-between gap-3 text-[13px] leading-none text-muted-foreground">
@@ -925,7 +1000,7 @@ function QuestionCard({ q, index, flagged, mark, children }: { q: NfQuestion; in
  * coach sent it with (the assignment's settings), their next meet prep, or
  * their own Competition Calendar answers (meet-checklist.ts pickMeet).
  */
-async function loadMeetGuess(clientId: string, formId: string) {
+async function loadMeetGuess(clientId: string, formId: string, competitionId?: string|null) {
   const db = supabase as any;
   const today = todayLocal();
   const [{ data: assignment }, { data: preps }, { data: lastPlan }] = await Promise.all([
@@ -949,7 +1024,9 @@ async function loadMeetGuess(clientId: string, formId: string) {
     ]);
     if (qs?.length) plan = competitionPlanFromAnswers(qs, answers);
   }
-  const sent = (assignment?.settings as any)?.meet ?? null;
+  const settings=(assignment?.settings as any)??{};
+  if(competitionId!==undefined){if(competitionId===null)return null;return settings.prep_competitions?.[competitionId]??(settings.competition_id===competitionId?settings.meet:null)??null;}
+  const sent = settings.meet ?? null;
   return pickMeet({ sent, preps: preps ?? [], plan }, today);
 }
 
@@ -969,7 +1046,7 @@ function rememberedValue(q: NfQuestion, prev: NfAnswer): unknown {
  * Everything the form's synced questions read (form-prefill.ts), each source only when a question
  * asks for it, with the client's own login (RLS), so a coach previewing sees what the client would.
  */
-async function loadPrefillProfile(clientId: string, userId: string | null | undefined, formId: string, keys: Set<PrefillKey>): Promise<PrefillProfile | null> {
+async function loadPrefillProfile(clientId: string, userId: string | null | undefined, formId: string, keys: Set<PrefillKey>, competitionId?:string|null): Promise<PrefillProfile | null> {
   const db = supabase as any;
   const today = todayLocal();
   const wants = (...k: PrefillKey[]) => k.some((x) => keys.has(x));
@@ -995,7 +1072,7 @@ async function loadPrefillProfile(clientId: string, userId: string | null | unde
   // Unknown (lookup failed) is null, so nothing gets pre-answered.
   const has_nutrition_plan = !plans || plans.error ? null : ((plans.data ?? []) as any[]).some((t) => (t.nutrition_target_days ?? []).length > 0);
   const [meet, bodyweight, recent] = await Promise.all([
-    wants("meet_name", "meet_date", "meet_weight_class") ? loadMeetGuess(clientId, formId).catch(() => null) : Promise.resolve(null),
+    wants("meet_name", "meet_date", "meet_weight_class") ? loadMeetGuess(clientId, formId, competitionId).catch(() => null) : Promise.resolve(null),
     wants("bodyweight") ? loadLatestWeighIn(clientId, userId).catch(() => null) : Promise.resolve(null),
     wants("weight_class") ? loadRecentBodyweight(clientId, userId).catch(() => null) : Promise.resolve(null),
   ]);

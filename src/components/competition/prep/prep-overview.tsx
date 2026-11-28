@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CleoAvatar } from "@/components/summer/cleo-avatar";
 import { HANDLING_WORD, PAYMENT_WORD } from "@/lib/competition/handling";
 import { HandlingSheet } from "./handling-sheets";
+import { PrepReferences } from "./prep-references";
 import { ReadinessWord, countdown, dayWords } from "./prep-ui";
 
 export type PrepSection = "overview" | "gameplan" | "timeline" | "checklist";
@@ -85,6 +86,7 @@ export function PrepOverview({
       </section>
 
       {extra}
+      <PrepReferences key={comp.id} competitionId={comp.id} />
 
       {prep.changes.length ? (
         <section className="rounded-2xl border border-border bg-card p-4" data-info-changes>

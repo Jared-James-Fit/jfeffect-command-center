@@ -101,7 +101,7 @@ export async function readLocalClientForms(db: Db, clientId: string, question: s
   const explicitId = question.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i)?.[0];
   const normalized = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const requested = normalized(question);
-  const search = /competition (?:setup|intake)/i.test(question) ? "Competition Setup" : /goals\s*(?:&|and)\s*(?:intake|setup)/i.test(question) ? "Goals & Intake" : undefined;
+  const search = /cue profile|coaching cues/i.test(question) ? "Competition Cue Profile" : /competition (?:setup|intake)/i.test(question) ? "Competition Setup" : /goals\s*(?:&|and)\s*(?:intake|setup)/i.test(question) ? "Goals & Intake" : undefined;
   const list = await readCoachForms(db, "submissions", { client_id: clientId, search, limit: 20 }, clientId);
   const native = checked(await db.from("nf_submissions").select("id,form_id,submitted_at,created_at,form:form_id(title)").eq("client_id",clientId).not("submitted_at","is",null).order("submitted_at",{ascending:false}).limit(200),"client forms");
   const matched = native.filter(s => explicitId ? s.id === explicitId : search ? normalized(s.form?.title ?? "") === normalized(search) : s.form?.title && requested.includes(normalized(s.form.title)));

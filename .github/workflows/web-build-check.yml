@@ -48,5 +48,8 @@ jobs:
       - name: Run POV identity and parity regression tests
         run: npm test -- src/test/pov-passive-activity.test.ts src/test/pov-scoped-reads.test.ts
 
+      - name: Run prep request regression tests
+        run: npm test -- src/test/lift-request-template.test.ts src/test/lift-recorded-date.test.ts
+
       - name: Build production app
         run: npm run build

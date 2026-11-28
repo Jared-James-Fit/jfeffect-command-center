@@ -25,6 +25,9 @@ export type ChatSendAttachment = {
   type: "link";
   url: string;
   form_id?: string;
+  competition_id?: string | null;
+  competition_name?: string | null;
+  competition_date?: string | null;
   template_id?: string;
   recipe_id?: string;
   assignment_client_ids?: string[];
