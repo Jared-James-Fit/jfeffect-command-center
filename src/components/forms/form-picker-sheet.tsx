@@ -28,6 +28,7 @@ import {
   useRecentSends,
   useToggleFavorite,
   useUpcomingMeets,
+  usePrepCompetitions,
 } from "@/lib/form-library.queries";
 import { sendNativeFormFn } from "@/lib/native-forms.functions";
 import { duplicateForm, getForm, listQuestions, upsertForm, type NfForm, type NfQuestion } from "@/lib/native-forms";
@@ -86,6 +87,7 @@ export function FormPickerSheet({
   const [creatingLift, setCreatingLift] = useState(false);
   const [meetPick, setMeetPick] = useState<{ name: string; date: string | null; weight_class: string | null } | null>(null);
   const [reminders, setReminders] = useState(true);
+  const [competitionId,setCompetitionId]=useState<string>("");
 
   const recentIds = useMemo(() => new Set(recent.map((r) => r.form_id)), [recent]);
   const suggestedIds = suggestions.map((s) => s.formId);
@@ -97,6 +99,9 @@ export function FormPickerSheet({
   const categories = useMemo(() => libraryCategories(forms), [forms]);
   const selected = forms.find((f) => f.id === selectedId) ?? null;
   const isMeet = selected?.form_type === MEET_CHECKLIST_FORM_TYPE;
+  const prepForm = selected?.settings?.lift_request === true || selected?.settings?.competition_cue_profile === true;
+  const {data:competitions=[],isLoading:loadingCompetitions}=usePrepCompetitions(single,open&&prepForm);
+  useEffect(()=>{setCompetitionId("");},[selectedId,single,open]);
   const { data: meets = [] } = useUpcomingMeets(single, open && isMeet);
 
   // A fresh open starts clean; the meet picks itself when there's one coming up.
@@ -151,6 +156,7 @@ export function FormPickerSheet({
           clientIds,
           meet: isMeet && meetPick ? meetPick : null,
           reminders: isMeet ? reminders : undefined,
+          competitionId: prepForm && single && competitionId ? competitionId : undefined,
         },
       });
       await onAttach(
@@ -296,6 +302,7 @@ export function FormPickerSheet({
 
           {selected && (
             <div className="space-y-3 border-t border-border bg-background px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3" data-form-picker-send>
+              {prepForm && single && <label className="block space-y-1 text-sm font-medium">Competition (optional)<select className="w-full min-h-11 rounded-lg border bg-background px-3 text-base" value={competitionId} onChange={e=>setCompetitionId(e.target.value)}><option value="">{loadingCompetitions?"Loading competitions…":"General coaching"}</option>{competitions.map(c=><option key={c.id} value={c.id}>{c.name}{c.meet_date?" · "+c.meet_date:""}</option>)}</select></label>}
               {isMeet && single && (
                 <div className="space-y-2">
                   <p className="text-[13px] font-semibold">Which meet is it for?</p>

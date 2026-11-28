@@ -35,6 +35,7 @@ export type LibraryForm = {
   is_template?: boolean | null;
   form_type?: string | null;
   allow_updates?: boolean | null;
+  settings?: Record<string,unknown> | null;
   created_at: string;
   updated_at?: string | null;
 };

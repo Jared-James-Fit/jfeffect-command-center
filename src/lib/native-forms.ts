@@ -488,11 +488,23 @@ function dayToNum(day: string): number {
 
 export async function getOrCreateCurrentSubmission(form: NfForm, clientId: string) {
   const period = form.recurrence === "none" ? null : currentPeriodStart(form.recurrence, form.recurrence_day);
+  const prepForm = form.settings?.lift_request === true || form.settings?.competition_cue_profile === true;
+  let competitionId: string | null = null;
+  if (prepForm) {
+    const { data: assignment, error } = await db.from("nf_assignments").select("settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle();
+    if (error) throw error;
+    competitionId = assignment?.settings?.competition_id ?? null;
+    if (competitionId) {
+      const { data: existing, error: readError } = await db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).eq("competition_id", competitionId).maybeSingle();
+      if (readError) throw readError;
+      if (existing) return existing as NfSubmission;
+    }
+  }
   // A one-off form they were asked for (the Nutrition Update Request): once
   // it's sent it stays sent, shown as submitted, until it's asked for again.
   // A blank copy right after Submit read as "it didn't go through", so people
   // filled it in twice.
-  if (!period) {
+  if (!period && !competitionId) {
     const [{ data: lastRows }, { data: asked }] = await Promise.all([
       db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).order("created_at", { ascending: false }).limit(1),
       db.from("nf_assignments").select("created_at, updated_at, settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle(),
@@ -510,6 +522,7 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
   let q = db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId);
   if (period) q = q.eq("period_start", period);
   else q = q.in("status", ["in_progress"]);
+  if (prepForm) q = competitionId ? q.eq("competition_id", competitionId) : q.is("competition_id", null);
   const { data: existing } = await q.order("created_at", { ascending: false }).limit(1);
   const found = existing?.[0];
   if (found && (found.status === "in_progress" || form.recurrence !== "none")) return found as NfSubmission;
@@ -537,9 +550,15 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
       status: "in_progress",
       form_version_id: formVersionId,
       form_version_number: formVersionNumber,
+      ...(competitionId ? {competition_id:competitionId} : {}),
     })
     .select("*")
     .single();
+  if (error?.code === "23505" && competitionId) {
+    const {data: winner, error: retryError} = await db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id",clientId).eq("competition_id",competitionId).single();
+    if (retryError) throw retryError;
+    return winner as NfSubmission;
+  }
   if (error) throw error;
   return created as NfSubmission;
 }

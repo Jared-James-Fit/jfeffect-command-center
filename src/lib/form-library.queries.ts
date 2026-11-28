@@ -21,7 +21,7 @@ export function useLibraryForms(enabled = true) {
     queryFn: async (): Promise<LibraryForm[]> => {
       const { data, error } = await db
         .from("nf_forms")
-        .select("id, title, description, category, kind, active, archived, owner_id, shared, is_template, form_type, allow_updates, created_at, updated_at")
+        .select("id, title, description, category, kind, active, archived, owner_id, shared, is_template, form_type, allow_updates, settings, created_at, updated_at")
         .order("title");
       if (error) throw error;
       return (data ?? []) as LibraryForm[];
@@ -177,4 +177,12 @@ export function useUpcomingMeets(clientId: string | null | undefined, enabled = 
       return out.sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(0, 5);
     },
   });
+}
+
+export function usePrepCompetitions(clientId: string | null | undefined, enabled: boolean) {
+  return useQuery({queryKey:["prep-form-competitions",clientId],enabled:!!clientId&&enabled,staleTime:60_000,queryFn:async()=>{
+    const {data,error}=await db.from("competitions").select("id,name,meet_date").eq("client_id",clientId).order("meet_date",{ascending:false}).limit(30);
+    if(error)throw error;
+    return (data??[]) as {id:string;name:string;meet_date:string|null}[];
+  }});
 }

@@ -295,6 +295,7 @@ export const deleteNativeForms = createServerFn({ method: "POST" })
 const SendSchema = z.object({
   formId: z.string().uuid(),
   clientIds: z.array(z.string().uuid()).min(1).max(1000),
+  competitionId: z.string().uuid().nullable().optional(),
   /** The meet a checklist is for (picked when sending). */
   meet: z
     .object({
@@ -324,12 +325,20 @@ export const sendNativeFormFn = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await getAssignmentAccess(context.userId, clientIds);
     const { data: form, error: formErr } = await (context.supabase as any)
       .from("nf_forms")
-      .select("id, title, active, archived, allow_updates, form_type")
+      .select("id, title, active, archived, allow_updates, form_type, settings")
       .eq("id", data.formId)
       .maybeSingle();
     if (formErr) throw new Error(formErr.message);
     if (!form || form.archived) throw new Error("That form isn't in your library.");
     const admin = supabaseAdmin as any;
+    const prepForm = form.settings?.lift_request === true || form.settings?.competition_cue_profile === true;
+    let competition: any = null;
+    if (data.competitionId) {
+      if (!prepForm || clientIds.length !== 1) throw new Error("Choose one athlete for this competition.");
+      const {data: row, error} = await admin.from("competitions").select("id,client_id,name,meet_date,weight_class").eq("id",data.competitionId).eq("client_id",clientIds[0]).maybeSingle();
+      if (error || !row) throw new Error("Competition not found for this athlete.");
+      competition = row;
+    }
     // A draft is switched on when it's sent: a client can't open an inactive form.
     if (!form.active) {
       const { error } = await admin.from("nf_forms").update({ active: true }).eq("id", form.id);
@@ -337,7 +346,7 @@ export const sendNativeFormFn = createServerFn({ method: "POST" })
     }
 
     const now = new Date().toISOString();
-    const meet = data.meet && (data.meet.name || data.meet.date) ? { name: data.meet.name ?? null, date: data.meet.date ?? null, weight_class: data.meet.weight_class ?? null } : null;
+    const meet = competition ? {name:competition.name,date:competition.meet_date,weight_class:competition.weight_class ?? null} : data.meet && (data.meet.name || data.meet.date) ? { name: data.meet.name ?? null, date: data.meet.date ?? null, weight_class: data.meet.weight_class ?? null } : null;
     const [{ data: existing }, { data: lastSubs }, { data: qs }] = await Promise.all([
       admin.from("nf_assignments").select("client_id, settings").eq("form_id", form.id).in("client_id", clientIds),
       form.allow_updates
@@ -353,10 +362,11 @@ export const sendNativeFormFn = createServerFn({ method: "POST" })
     const rows = [];
     for (const clientId of clientIds) {
       const settings: Record<string, unknown> = { ...(settingsBy.get(clientId) ?? {}) };
+      if (prepForm && competition) settings.competition_id = competition.id;
       if (meet) settings.meet = meet;
       if (typeof data.reminders === "boolean") settings.reminders = data.reminders;
       const last = latestBy.get(clientId);
-      if (form.allow_updates && last && last.status !== "in_progress") {
+      if (form.allow_updates && last && last.status !== "in_progress" && !competition) {
         let newCopy = Date.now() - Date.parse(last.created_at) > 45 * 86_400_000;
         if (meet) {
           const { meetFacts } = await import("@/lib/meet-checklist");
