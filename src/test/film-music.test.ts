@@ -60,12 +60,30 @@ describe("the cameras keep the music playing by themselves", () => {
     expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
     expect(cam).toContain("Pauses your music while you film.");
     expect(cam).toContain("data-film-mic");
-    expect(cam).toContain("Music may pause while recording.");
-    expect(cam).toContain("Music continues · No recorded audio");
+    expect(cam).toContain("Audio recording OFF");
+    expect(cam).toContain("Music keeps playing, but your video will have no sound.");
+    expect(cam).toContain("Tap the mic to record sound.");
+    expect(cam).toContain("Audio recording ON");
+    expect(cam).toContain("Video captures sound, but your music may stop playing.");
+    expect(cam).toContain("Tap the mic to keep music playing.");
     expect(cam).toContain("Microphone unavailable · No audio");
     expect(cam).toContain("Microphone interrupted · Audio may be missing");
     expect(cam).toContain('a.readyState === "live" && a.enabled && !a.muted');
     expect(cam).toContain('["mute", "unmute", "ended"]');
+  });
+
+  it("the audio warning floats under the mic, gives time to read, and never moves the set information", () => {
+    expect(cam).toContain('showAudioHint = useCallback((duration = 8000)');
+    expect(cam).toContain("let duration = 12000");
+    expect(cam).toContain('localStorage.getItem("jf-film-audio-hint-seen-v1")');
+    expect(cam).toContain("audioHintOpened.current");
+    expect(cam).toContain('clearTimeout(audioHintTimer.current)');
+    expect(cam).toContain('if (panel) hideAudioHint();');
+    expect(cam).toContain('hideAudioHint();\n    setPanel(false);');
+    expect(cam).toContain('!recording && !startingRef.current && !panel && !audioIssue');
+    expect(cam).toContain('pointer-events-none absolute right-0 top-full');
+    expect(cam).toContain('duration-[250ms] motion-reduce:transition-none');
+    expect(cam).toContain('data-film-audio-issue');
   });
 
   it("the Crew studio's held clips follow the same setting, read when the clip starts", () => {
