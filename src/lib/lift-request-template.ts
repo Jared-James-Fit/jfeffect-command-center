@@ -58,3 +58,21 @@ export function liftRequestQuestions(draft: LiftRequestDraft): QuestionDraft[] {
   }
   return out;
 }
+
+export type LiftQuestionMeta = {item_id:string;exercise:string;title:string;field:string};
+export function liftQuestionMeta(q:Pick<NfQuestion,"validation">):LiftQuestionMeta|null {
+  const v=q.validation?.lift_request as Partial<LiftQuestionMeta>|undefined;
+  return v&&typeof v.item_id==="string"&&typeof v.exercise==="string"&&typeof v.title==="string"&&typeof v.field==="string"?v as LiftQuestionMeta:null;
+}
+export function groupLiftQuestions(questions:NfQuestion[]) {
+  const groups=new Map<string,{exercise:string;items:Array<{id:string;title:string;questions:NfQuestion[]}>}>();
+  for(const q of questions){
+    const m=liftQuestionMeta(q); if(!m)continue;
+    let g=groups.get(m.exercise);
+    if(!g){g={exercise:m.exercise,items:[]};groups.set(m.exercise,g);}
+    let i=g.items.find(i=>i.id===m.item_id);
+    if(!i){i={id:m.item_id,title:m.title,questions:[]};g.items.push(i);}
+    i.questions.push(q);
+  }
+  return [...groups.values()];
+}
