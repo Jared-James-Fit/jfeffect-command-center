@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { ChevronDown, Grid3x3, Images, Mic, MicOff, RefreshCcw, Ruler, Timer, X, Zap, ZapOff } from "lucide-react";
+import { ChevronDown, Grid3x3, Images, Mic, MicOff, RefreshCcw, Ruler, Timer, TriangleAlert, X, Zap, ZapOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { baseMediaType } from "@/lib/community";
@@ -151,6 +151,7 @@ export function FilmCamera({
   const [audioIssue, setAudioIssue] = useState<string | null>(null);
   const [micLive, setMicLive] = useState(false);
   const audioHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioHintOpened = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -164,15 +165,33 @@ export function FilmCamera({
   settingsRef.current = settings;
 
   const recording = recordingAt != null;
-  const showAudioHint = useCallback(() => {
+  const hideAudioHint = useCallback(() => {
+    if (audioHintTimer.current) clearTimeout(audioHintTimer.current);
+    audioHintTimer.current = null;
+    setAudioHint(false);
+  }, []);
+  const showAudioHint = useCallback((duration = 8000) => {
     if (audioHintTimer.current) clearTimeout(audioHintTimer.current);
     setAudioHint(true);
-    audioHintTimer.current = setTimeout(() => setAudioHint(false), 3000);
+    audioHintTimer.current = setTimeout(() => {
+      audioHintTimer.current = null;
+      setAudioHint(false);
+    }, duration);
   }, []);
   useEffect(() => {
-    if (status === "live" && !purpose) showAudioHint();
-    return () => { if (audioHintTimer.current) clearTimeout(audioHintTimer.current); };
-  }, [status, purpose, showAudioHint]);
+    if (status !== "live" || (purpose && !pd?.video) || audioHintOpened.current) return;
+    audioHintOpened.current = true;
+    // First visit gets longer to read; switching lenses is not another visit.
+    let duration = 12000;
+    try {
+      if (localStorage.getItem("jf-film-audio-hint-seen-v1")) duration = 8000;
+      localStorage.setItem("jf-film-audio-hint-seen-v1", "1");
+    } catch { /* camera still works with storage disabled */ }
+    showAudioHint(duration);
+  }, [status, purpose, pd?.video, showAudioHint]);
+  useEffect(() => () => {
+    if (audioHintTimer.current) clearTimeout(audioHintTimer.current);
+  }, []);
   // the capture camera's hold let go before filming had started
   const releasedEarly = useRef(false);
   const track = () => streamRef.current?.getVideoTracks()[0] ?? null;
@@ -203,7 +222,8 @@ export function FilmCamera({
     if ("sound" in next) {
       if (startingRef.current || recRef.current) return;
       setAudioIssue(null);
-      showAudioHint();
+      if (panel) hideAudioHint();
+      else showAudioHint();
     }
     setSettings((prev) => {
       const s = { ...prev, ...next };
@@ -441,7 +461,7 @@ export function FilmCamera({
     startingRef.current = true;
     setAudioIssue(null);
     setMicLive(false);
-    setAudioHint(false);
+    hideAudioHint();
     setPanel(false);
     const s = t.getSettings?.() ?? {};
     const w = s.width ?? dims.w;
@@ -982,7 +1002,7 @@ export function FilmCamera({
           ) : (
             <button
               type="button"
-              onClick={() => setPanel((o) => !o)}
+              onClick={() => { if (!panel) hideAudioHint(); setPanel((o) => !o); }}
               className="inline-flex h-9 items-center rounded-full bg-black/40 px-3 text-[13px] font-semibold tabular-nums active:scale-95"
               aria-label={`Camera settings: ${purpose ? `${CAPTURE_RATIO_LABEL[ratio]}, ` : ""}${label || FILM_QUALITIES[shown.quality].label}`}
               aria-expanded={panel}
@@ -996,6 +1016,7 @@ export function FilmCamera({
           )}
           <div className="flex shrink-0 items-center justify-end gap-1">
             {canVideo && status === "live" && (
+              <div className="relative shrink-0">
               <button
                 type="button"
                 disabled={recording}
@@ -1007,6 +1028,30 @@ export function FilmCamera({
               >
                 {(recording ? micLive : settings.sound) ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5 text-white/75" />}
               </button>
+              {!recording && !startingRef.current && !panel && !audioIssue && !(settings.sound && micBlocked) && (
+                <div
+                  role="status"
+                  aria-hidden={!audioHint}
+                  data-film-audio-hint={audioHint ? "visible" : "hidden"}
+                  className={cn(
+                    "pointer-events-none absolute right-0 top-full z-10 mt-2 w-[232px] max-w-[calc(100vw-6rem)] rounded-xl bg-black/85 p-2.5 text-left text-white shadow-lg backdrop-blur-sm transition-opacity duration-[250ms] motion-reduce:transition-none",
+                    audioHint ? "opacity-100" : "opacity-0",
+                  )}
+                >
+                  <span aria-hidden className="absolute -top-2 right-3 h-0 w-0 border-x-8 border-b-8 border-x-transparent border-b-black/85" />
+                  <div className="flex items-center gap-1.5 text-[13px] font-semibold leading-tight">
+                    {settings.sound ? <Mic className="h-4 w-4 shrink-0" aria-hidden /> : <TriangleAlert className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />}
+                    {settings.sound ? "Audio recording ON" : "Audio recording OFF"}
+                  </div>
+                  <p className="mt-1 text-[12px] leading-snug">
+                    {settings.sound ? "Video captures sound, but your music may stop playing." : "Music keeps playing, but your video will have no sound."}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-snug text-white/75">
+                    {settings.sound ? "Tap the mic to keep music playing." : "Tap the mic to record sound."}
+                  </p>
+                </div>
+              )}
+              </div>
             )}
             {purpose ? (
               // the flash: the back camera's light for a moment (on while it films), the screen for a selfie; never where it can't fire
@@ -1034,9 +1079,9 @@ export function FilmCamera({
             )}
           </div>
         </div>
-        {canVideo && (audioIssue || (!recording && settings.sound && micBlocked) || (audioHint && !recording && !panel)) && (
-          <p role="status" data-film-audio-hint className="mt-1 text-center text-[11px] leading-tight text-white/85">
-            {audioIssue ?? (settings.sound && micBlocked ? "Microphone blocked · Open settings to allow" : settings.sound ? "Music may pause while recording." : "Music continues · No recorded audio")}
+        {canVideo && (audioIssue || (!recording && settings.sound && micBlocked)) && (
+          <p role="status" data-film-audio-issue className="mt-1 text-center text-[11px] leading-tight text-white/85">
+            {audioIssue ?? "Microphone blocked · Open settings to allow"}
           </p>
         )}
         {title && !recording && <p className="mt-1 truncate text-center text-[13px] font-medium text-white/80">{title}</p>}
