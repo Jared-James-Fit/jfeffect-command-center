@@ -9,7 +9,7 @@ begin
     if not exists(select 1 from public.competitions c where c.id=new.competition_id and c.client_id=new.client_id) then
       raise exception 'Competition does not belong to this athlete';
     end if;
-    if not exists(select 1 from public.nf_assignments a where a.form_id=new.form_id and a.client_id=new.client_id and a.settings->>'competition_id'=new.competition_id::text) then
+    if not exists(select 1 from public.nf_assignments a where a.form_id=new.form_id and a.client_id=new.client_id and (a.settings->>'competition_id'=new.competition_id::text or coalesce(a.settings->'prep_competitions','{}'::jsonb) ? new.competition_id::text)) then
       raise exception 'Competition is not assigned to this form';
     end if;
   end if;

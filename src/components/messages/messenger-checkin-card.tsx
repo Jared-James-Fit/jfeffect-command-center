@@ -1360,6 +1360,9 @@ export function CheckinAnswersSheet({
  */
 export function FormRequestChatCard({
   formId,
+  competitionId,
+  competitionName,
+  competitionDate,
   title,
   note,
   clientId,
@@ -1367,6 +1370,9 @@ export function FormRequestChatCard({
   sentAt,
 }: {
   formId: string;
+  competitionId?: string|null;
+  competitionName?: string|null;
+  competitionDate?: string|null;
   title?: string | null;
   note?: string | null;
   clientId: string;
@@ -1376,39 +1382,52 @@ export function FormRequestChatCard({
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const { data: status, isLoading } = useQuery({
-    queryKey: ["chat-form-request-status", formId, clientId, sentAt ?? null],
+    queryKey: ["chat-form-request-status", formId, clientId, sentAt ?? null,competitionId===undefined?"default":competitionId],
     staleTime: 15_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { supabase } = await import("@/integrations/supabase/client");
       const db = supabase as any;
+      let subsQuery=db.from("nf_submissions").select("id, status, submitted_at, reviewed_at, created_at, answers_updated_at").eq("form_id",formId).eq("client_id",clientId);
+      if(competitionId!==undefined)subsQuery=competitionId?subsQuery.eq("competition_id",competitionId):subsQuery.is("competition_id",null);
       const [{ data }, { data: form }, { data: asg }] = await Promise.all([
-        db
-          .from("nf_submissions")
-          .select("id, status, submitted_at, reviewed_at, created_at, answers_updated_at")
-          .eq("form_id", formId)
-          .eq("client_id", clientId)
-          .order("created_at", { ascending: false })
-          .limit(12),
-        db.from("nf_forms").select("form_type, allow_updates").eq("id", formId).maybeSingle(),
+        subsQuery.order("created_at",{ascending:false}).limit(12),
+        db.from("nf_forms").select("form_type, allow_updates, settings").eq("id", formId).maybeSingle(),
         db.from("nf_assignments").select("settings").eq("form_id", formId).eq("client_id", clientId).maybeSingle(),
       ]);
       const subs = (data ?? []) as Array<{ id: string; status: string; submitted_at: string | null; reviewed_at: string | null; created_at: string; answers_updated_at: string | null }>;
       const keepsUpdating = !!form?.allow_updates;
+      const sub=keepsUpdating ? updatingCardSubmission(subs) : requestCardSubmission(subs, sentAt);
+      const liftRequest=form?.settings?.lift_request===true;
+      const prepForm=liftRequest||form?.settings?.competition_cue_profile===true;
+      let liftProgress:{done:number;total:number}|null=null;
+      if(liftRequest){
+        const {data:questions}=await db.from("nf_questions").select("id,validation,question_type").eq("form_id",formId).is("archived_at",null);
+        const map=new Map<string,string>((questions??[]).filter((q:any)=>q.validation?.lift_request?.item_id&&q.question_type!=="info").map((q:any)=>[q.id,q.validation.lift_request.item_id]));
+        const total=new Set(map.values()).size;
+        const provided=new Set<string>();
+        if(sub&&(role==="client"||sub.status!=="in_progress")){
+          const [a,v]=await Promise.all([db.from("nf_answers").select("question_id,value_text,value_number").eq("submission_id",sub.id),db.from("nf_files").select("question_id").eq("submission_id",sub.id)]);
+          for(const answer of a.data??[]){if(answer.value_number!==null||String(answer.value_text??"").trim()){const item=map.get(answer.question_id);if(item)provided.add(item);}}
+          for(const file of v.data??[]){const item=map.get(file.question_id);if(item)provided.add(item);}
+        }
+        if(total)liftProgress={done:provided.size,total};
+      }
       return {
+        prepForm,liftRequest,liftProgress,
         // The answer to THIS request is one sent after it, whenever its draft
         // was started (requestCardSubmission); else a draft being filled in. A
         // form they keep updating is one copy across nudges.
-        sub: keepsUpdating ? updatingCardSubmission(subs) : requestCardSubmission(subs, sentAt),
+        sub,
         keepsUpdating,
         isMeet: form?.form_type === MEET_CHECKLIST_FORM_TYPE,
-        sentMeet: ((asg?.settings as any)?.meet ?? null) as { name?: string | null; date?: string | null } | null,
+        sentMeet: (competitionId!==undefined ? (competitionId?{name:competitionName??null,date:competitionDate??null}:null) : (asg?.settings as any)?.meet ?? null) as { name?: string | null; date?: string | null } | null,
       };
     },
   });
   const sub = status?.sub ?? null;
   const keepsUpdating = !!status?.keepsUpdating;
-  const { data: ready } = useFormReadiness(sub?.id, formId, { enabled: keepsUpdating || !!status?.isMeet });
+  const { data: ready } = useFormReadiness(sub?.id, formId, { enabled: !status?.prepForm && (keepsUpdating || !!status?.isMeet) });
   const done = !!sub && sub.status !== "in_progress";
   const started = !!sub && sub.status === "in_progress";
   const isNutrition = formId === NUTRITION_FORM_ID;
@@ -1450,7 +1469,7 @@ export function FormRequestChatCard({
               )}
             </div>
             <div className={cn("mt-0.5 text-[13px]", FORM_MUTED)}>
-              {role === "admin"
+              {status?.liftProgress && (role==="client"||done) ? `${status.liftProgress.done} of ${status.liftProgress.total} lifts provided` : role === "admin"
                 ? ready && (done || started)
                   ? readinessLine(ready.readiness)
                   : coachLine
@@ -1504,7 +1523,7 @@ export function FormRequestChatCard({
             onClick={() => setOpen(true)}
             data-card-update
           >
-            {ready && ready.readiness.issues.some((i) => i.kind === "need") ? "Update checklist · still to sort" : "Update checklist"} <ChevronRight className="ml-1 h-4 w-4" />
+            {status?.prepForm ? (status.liftRequest?"Update lifts":"Update cue profile") : ready && ready.readiness.issues.some((i) => i.kind === "need") ? "Update checklist · still to sort" : "Update checklist"} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
       </div>
@@ -1526,6 +1545,7 @@ export function FormRequestChatCard({
       {role === "client" && open && (
         <ClientFormSheet
           formId={formId}
+          competitionId={competitionId}
           title={heading}
           open={open}
           onOpenChange={(v) => {

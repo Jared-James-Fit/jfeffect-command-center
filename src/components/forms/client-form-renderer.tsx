@@ -60,6 +60,7 @@ import type { UnitValue } from "@/lib/form-prefill";
 export type ClientFormRendererProps = {
   /** Form to render. */
   formId: string;
+  competitionId?: string | null;
   /** True when hosted inside a sheet/modal — hides the page chrome. */
   embedded?: boolean;
   /** Called instead of navigating back when embedded. */
@@ -80,7 +81,7 @@ function isUnitValue(v: unknown): v is UnitValue {
 }
 const todayLocal = () => new Date().toLocaleDateString("en-CA");
 
-export function ClientFormRenderer({ formId, embedded = false, onClose }: ClientFormRendererProps) {
+export function ClientFormRenderer({ formId, competitionId, embedded = false, onClose }: ClientFormRendererProps) {
   const portalUserId = usePortalUserId();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -138,15 +139,15 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   // schedule, birth year, weigh-ins, when they train. Each source is read only when a question asks.
   const prefillQs = useMemo(() => questions.filter((q) => questionPrefill(q)), [questions]);
   const { data: prefillProfile, isFetched: prefillFetched } = useQuery({
-    queryKey: ["form-prefill-profile", client?.id, formId],
+    queryKey: ["form-prefill-profile", client?.id, formId, competitionId===undefined?"default":competitionId],
     enabled: !!client?.id && prefillQs.length > 0,
-    queryFn: () => loadPrefillProfile(client!.id, (client as any)?.user_id ?? portalUserId, formId, new Set(prefillQs.map((q) => questionPrefill(q)!))),
+    queryFn: () => loadPrefillProfile(client!.id, (client as any)?.user_id ?? portalUserId, formId, new Set(prefillQs.map((q) => questionPrefill(q)!)), competitionId),
   });
 
-  const { data: submission } = useQuery({
-    queryKey: ["nf-current-submission", formId, client?.id],
+  const { data: submission, isError: submissionError, refetch: retrySubmission } = useQuery({
+    queryKey: ["nf-current-submission", formId, client?.id, competitionId===undefined?"default":competitionId],
     enabled: !!form && !!client?.id,
-    queryFn: () => getOrCreateCurrentSubmission(form!, client!.id),
+    queryFn: () => getOrCreateCurrentSubmission(form!, client!.id, competitionId),
   });
 
   // NB: no `= []` default here — a fresh array every render re-fires the
@@ -533,6 +534,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     );
   }
 
+  if (submissionError) return <div className="mx-auto max-w-md space-y-3 p-5"><p className="text-sm text-muted-foreground">This request could not be opened. Please try again.</p><Button onClick={()=>void retrySubmission()}>Retry</Button><Button variant="ghost" onClick={closeOrBack}>Back</Button></div>;
   if (!form || !submission || waitingOnAsk) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
@@ -998,7 +1000,7 @@ function QuestionCard({ q, index, flagged, mark, children }: { q: NfQuestion; in
  * coach sent it with (the assignment's settings), their next meet prep, or
  * their own Competition Calendar answers (meet-checklist.ts pickMeet).
  */
-async function loadMeetGuess(clientId: string, formId: string) {
+async function loadMeetGuess(clientId: string, formId: string, competitionId?: string|null) {
   const db = supabase as any;
   const today = todayLocal();
   const [{ data: assignment }, { data: preps }, { data: lastPlan }] = await Promise.all([
@@ -1022,7 +1024,9 @@ async function loadMeetGuess(clientId: string, formId: string) {
     ]);
     if (qs?.length) plan = competitionPlanFromAnswers(qs, answers);
   }
-  const sent = (assignment?.settings as any)?.meet ?? null;
+  const settings=(assignment?.settings as any)??{};
+  if(competitionId!==undefined){if(competitionId===null)return null;return settings.prep_competitions?.[competitionId]??(settings.competition_id===competitionId?settings.meet:null)??null;}
+  const sent = settings.meet ?? null;
   return pickMeet({ sent, preps: preps ?? [], plan }, today);
 }
 
@@ -1042,7 +1046,7 @@ function rememberedValue(q: NfQuestion, prev: NfAnswer): unknown {
  * Everything the form's synced questions read (form-prefill.ts), each source only when a question
  * asks for it, with the client's own login (RLS), so a coach previewing sees what the client would.
  */
-async function loadPrefillProfile(clientId: string, userId: string | null | undefined, formId: string, keys: Set<PrefillKey>): Promise<PrefillProfile | null> {
+async function loadPrefillProfile(clientId: string, userId: string | null | undefined, formId: string, keys: Set<PrefillKey>, competitionId?:string|null): Promise<PrefillProfile | null> {
   const db = supabase as any;
   const today = todayLocal();
   const wants = (...k: PrefillKey[]) => k.some((x) => keys.has(x));
@@ -1068,7 +1072,7 @@ async function loadPrefillProfile(clientId: string, userId: string | null | unde
   // Unknown (lookup failed) is null, so nothing gets pre-answered.
   const has_nutrition_plan = !plans || plans.error ? null : ((plans.data ?? []) as any[]).some((t) => (t.nutrition_target_days ?? []).length > 0);
   const [meet, bodyweight, recent] = await Promise.all([
-    wants("meet_name", "meet_date", "meet_weight_class") ? loadMeetGuess(clientId, formId).catch(() => null) : Promise.resolve(null),
+    wants("meet_name", "meet_date", "meet_weight_class") ? loadMeetGuess(clientId, formId, competitionId).catch(() => null) : Promise.resolve(null),
     wants("bodyweight") ? loadLatestWeighIn(clientId, userId).catch(() => null) : Promise.resolve(null),
     wants("weight_class") ? loadRecentBodyweight(clientId, userId).catch(() => null) : Promise.resolve(null),
   ]);

@@ -609,6 +609,9 @@ function AttachmentView({
     return (
       <FormRequestChatCard
         formId={a.form_id}
+        competitionId={a.competition_id}
+        competitionName={a.competition_name}
+        competitionDate={a.competition_date}
         title={a.request_title ?? null}
         note={a.request_note ?? null}
         clientId={clientId}

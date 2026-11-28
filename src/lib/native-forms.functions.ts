@@ -362,12 +362,20 @@ export const sendNativeFormFn = createServerFn({ method: "POST" })
     const rows = [];
     for (const clientId of clientIds) {
       const settings: Record<string, unknown> = { ...(settingsBy.get(clientId) ?? {}) };
-      if (prepForm && competition) settings.competition_id = competition.id;
-      else if (prepForm && !competition) { delete settings.competition_id; delete settings.meet; }
+      if (prepForm) {
+        // Keep all previously sent meet contexts; a later send must not retarget an old chat card.
+        const history: Record<string,unknown> = {...((settings.prep_competitions ?? {}) as Record<string,unknown>)};
+        const previous = typeof settings.competition_id === "string" ? settings.competition_id : "general";
+        if (settingsBy.has(clientId) && !(previous in history)) history[previous] = settings.meet ?? null;
+        history[competition?.id ?? "general"] = meet;
+        settings.prep_competitions = history;
+        if (competition) settings.competition_id = competition.id;
+        else { delete settings.competition_id; delete settings.meet; }
+      }
       if (meet) settings.meet = meet;
       if (typeof data.reminders === "boolean") settings.reminders = data.reminders;
       const last = latestBy.get(clientId);
-      if (form.allow_updates && last && last.status !== "in_progress" && !competition) {
+      if (!prepForm && form.allow_updates && last && last.status !== "in_progress" && !competition) {
         let newCopy = Date.now() - Date.parse(last.created_at) > 45 * 86_400_000;
         if (meet) {
           const { meetFacts } = await import("@/lib/meet-checklist");

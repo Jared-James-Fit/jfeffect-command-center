@@ -8,11 +8,13 @@ import { ClientFormRenderer } from "@/components/forms/client-form-renderer";
  */
 export function ClientFormSheet({
   formId,
+  competitionId,
   title,
   open,
   onOpenChange,
 }: {
   formId: string | null;
+  competitionId?: string | null;
   title?: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -31,7 +33,7 @@ export function ClientFormSheet({
           </SheetTitle>
         </SheetHeader>
         {formId && open && (
-          <ClientFormRenderer formId={formId} embedded onClose={() => onOpenChange(false)} />
+          <ClientFormRenderer key={formId+":"+(competitionId??"default")} formId={formId} competitionId={competitionId} embedded onClose={() => onOpenChange(false)} />
         )}
       </SheetContent>
     </Sheet>

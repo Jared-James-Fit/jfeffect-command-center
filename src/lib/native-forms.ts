@@ -486,14 +486,17 @@ function dayToNum(day: string): number {
   return map[day] ?? 1;
 }
 
-export async function getOrCreateCurrentSubmission(form: NfForm, clientId: string) {
+export async function getOrCreateCurrentSubmission(form: NfForm, clientId: string, requestedCompetitionId?: string | null) {
   const period = form.recurrence === "none" ? null : currentPeriodStart(form.recurrence, form.recurrence_day);
   const prepForm = form.settings?.lift_request === true || form.settings?.competition_cue_profile === true;
   let competitionId: string | null = null;
   if (prepForm) {
     const { data: assignment, error } = await db.from("nf_assignments").select("settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle();
     if (error) throw error;
-    competitionId = assignment?.settings?.competition_id ?? null;
+    const settings = assignment?.settings ?? {};
+    const current = settings.competition_id ?? null;
+    if (requestedCompetitionId !== undefined && requestedCompetitionId !== current && !Object.prototype.hasOwnProperty.call(settings.prep_competitions ?? {}, requestedCompetitionId ?? "general")) throw new Error("This request was not assigned for that competition.");
+    competitionId = requestedCompetitionId === undefined ? current : requestedCompetitionId;
     if (competitionId) {
       const { data: existing, error: readError } = await db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).eq("competition_id", competitionId).maybeSingle();
       if (readError) throw readError;
@@ -513,6 +516,7 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
     if (last && last.status !== "in_progress") {
       // A form they keep updating (a meet checklist) stays the same copy when it's sent again
       // (a nudge), until the coach sends it for something new (another meet: settings.new_copy_since).
+      if (prepForm) return last as NfSubmission;
       if (form.allow_updates) {
         const fresh = (asked as any)?.settings?.new_copy_since;
         if (!fresh || String(last.created_at) >= String(fresh)) return last as NfSubmission;

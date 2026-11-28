@@ -147,7 +147,7 @@ export function FormPickerSheet({
   }
 
   async function handleSend() {
-    if (!selected) return;
+    if (!selected || sending) return;
     setSending(true);
     try {
       const r = await send({
@@ -159,13 +159,15 @@ export function FormPickerSheet({
           competitionId: prepForm && single && competitionId ? competitionId : undefined,
         },
       });
+      const chosenMeet = competitions.find(c=>c.id===competitionId);
       await onAttach(
         {
           kind: "form_request",
           type: "link",
           // Through the portal page so a Fillout link gets the client's identity (buildFilloutUrl).
-          url: `/portal/check-ins/${selected.id}`,
+          url: `/portal/check-ins/${selected.id}${prepForm ? `?competition=${encodeURIComponent(competitionId||"general")}` : ""}`,
           form_id: selected.id,
+          ...(prepForm ? {competition_id: competitionId||null, competition_name:chosenMeet?.name??null,competition_date:chosenMeet?.meet_date??null}:{}),
           assignment_client_ids: clientIds,
           request_title: selected.title,
           request_note: note.trim() || undefined,
