@@ -895,16 +895,26 @@ export const getCompetitionPrepEvidenceFn = createServerFn({method:"POST"})
    return readPrepEvidence(sb,comp.client_id,comp.id);
  });
 export const getCompetitionPrepVideoFn = createServerFn({method:"POST"})
- .middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({competitionId:uuid,fileId:uuid}).parse(d))
+ .middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({competitionId:uuid,fileId:z.string().regex(/^(?:(?:set|lift):)?[0-9a-f-]{36}$/i)}).parse(d))
  .handler(async({data,context})=>{
    await staffRole(context.supabase,context.userId);
    const {sb,comp}=await reachCompetition(context,data.competitionId);
    const {readPrepEvidence}=await import("./prep-evidence.server");
    const evidence=await readPrepEvidence(sb,comp.client_id,comp.id);
    if(!evidence.lifts.some((l:any)=>l.videoIds.includes(data.fileId)))throw new Error("Video not found for this competition.");
-   const {data:file,error}=await sb.from("nf_files").select("storage_path").eq("id",data.fileId).single();
-   if(error||!file)throw new Error("Video unavailable.");
-   const {data:signed,error:signError}=await sb.storage.from("form-uploads").createSignedUrl(file.storage_path,600);
+   let path:string|null=null,bucket="form-uploads";
+   if(data.fileId.startsWith("set:")){
+     const {data:v}=await sb.from("pl_set_videos").select("storage_path").eq("id",data.fileId.slice(4)).eq("client_id",comp.client_id).is("deleted_at",null).maybeSingle();
+     path=v?.storage_path??null;bucket="message-attachments";
+   }else if(data.fileId.startsWith("lift:")){
+     const {data:v}=await sb.from("lift_videos").select("video_storage_path").eq("id",data.fileId.slice(5)).eq("client_id",comp.client_id).neq("status","Archived").maybeSingle();
+     path=v?.video_storage_path??null;bucket="lift-videos";
+   }else{
+     const {data:v}=await sb.from("nf_files").select("storage_path").eq("id",data.fileId).maybeSingle();
+     path=v?.storage_path??null;
+   }
+   if(!path)throw new Error("Video unavailable.");
+   const {data:signed,error:signError}=await sb.storage.from(bucket).createSignedUrl(path,600);
    if(signError||!signed)throw new Error("Could not open video.");
    return {url:signed.signedUrl};
  });

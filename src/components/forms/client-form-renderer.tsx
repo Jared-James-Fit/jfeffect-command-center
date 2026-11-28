@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { groupLiftQuestions, liftQuestionMeta } from "@/lib/lift-request-template";
+import { ExistingLiftPicker } from "./existing-lift-picker";
 import { readOriginalRecordingDate } from "@/lib/video-edit/recorded-date";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
@@ -457,11 +458,13 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   function answeredNow(q: NfQuestion): boolean {
     if (q.question_type === "checklist") return checklistAnswered(visibleItems(checklistItems(q), liveAnswers), local[q.id], !!q.required);
     if (q.question_type === "ranking") return rankItemsFor(q).length > 0 || isAnswered(q, local[q.id], files);
+    if (liftQuestionMeta(q)?.field === "video" && typeof local[q.id] === "string" && /^(set|lift):[0-9a-f-]{36}$/i.test(local[q.id])) return true;
     return isAnswered(q, local[q.id], files);
   }
 
   async function handleSubmit() {
     if (!submission) return;
+    if (Object.values(busyQ).some(Boolean)) throw new Error("Finish uploading your lifts first.");
     const visible = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
     const missing = visible.filter((q) => q.required && !answeredNow(q));
     const off = visible.filter((q) => q.question_type === "number" && numberIssue(q, local[q.id]));
@@ -662,6 +665,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                   return <div key={q.id} id={`q-${q.id}`} className="space-y-1.5">
                     <p className="text-sm font-medium">{label}</p>
                     {units&&q.question_type==="number"?<UnitNumberInput value={cur} units={units} readOnly={!!readOnly} onChange={(next,typed)=>saveAnswer(q,next,{defer:typed})} onDone={()=>void flushSaves(q.id)}/>:<QuestionInput q={q} value={local[q.id]} files={files.filter(f=>f.question_id===q.id)} readOnly={!!readOnly} busy={busyQ[q.id]} onChange={(v,typed)=>saveAnswer(q,v,{defer:typed})} onDone={()=>void flushSaves(q.id)} onUpload={file=>handleFileUpload(q,file)} onRemove={id=>handleFileRemove(q,id)} onReplace={(id,file)=>handleFileReplace(q,id,file)}/>}
+                    {meta?.field==="video"&&client?.id&&<ExistingLiftPicker clientId={client.id} value={typeof local[q.id]==="string"?local[q.id]:""} disabled={!!readOnly||!!busyQ[q.id]} onPick={clip=>{void saveAnswer(q,clip?.ref??"");if(!clip)return;for(const field of fields){const m=liftQuestionMeta(field);if(!m||answeredNow(field))continue;if(m.field==="weight"&&clip.weight){void saveAnswer(field,clip.weight);}if(m.field==="reps"&&clip.reps!=null)void saveAnswer(field,clip.reps);if(m.field==="rpe"&&clip.rpe!=null)void saveAnswer(field,clip.rpe);if(m.field==="date"&&clip.date)void saveAnswer(field,clip.date);}}}/>}
                     {issue&&<p className="text-sm text-destructive">{issue}</p>}
                   </div>;
                 })}

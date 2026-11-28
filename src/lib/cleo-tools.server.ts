@@ -686,6 +686,17 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
 
+    competition_prep_evidence: tool({
+      description:"Read submitted lift requests and original athlete cue profiles for an exact competition. Use this for final prep, attempt evidence, coaching cues and cue organization. Preserve source submission IDs. Organize internal and spoken cues, phase, and silence preferences without inventing them. Never claim to have watched a video.",
+      inputSchema:z.object({client_id:clientId,competition_id:z.string().uuid()}),
+      execute:safe("competition prep evidence",async({client_id,competition_id})=>{
+        await clientRow(db,client_id);
+        const {data:comp,error}=await db.from("competitions").select("id").eq("id",competition_id).eq("client_id",client_id).maybeSingle();
+        if(error||!comp)throw Error("Competition not visible for this client.");
+        const {prepEvidenceText}=await import("@/lib/competition/prep-evidence.server");
+        return prepEvidenceText(db,client_id,competition_id);
+      })
+    }),
     check_ins: tool({
       description: "A client's recent weekly check-ins and form submissions with their answers, workout feedback with pain flags, and what's still waiting for review.",
       inputSchema: z.object({ client_id: clientId, limit: z.number().int().min(1).max(8).default(3) }),

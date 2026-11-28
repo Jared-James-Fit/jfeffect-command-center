@@ -62,6 +62,7 @@ export type PrepFacts = {
   payment: "not_set" | "waived" | "link" | "paid" | "refunded" | null;
   /** ticks from the athlete or coach, and the Meet Day checklist form's answers, by key */
   states: Record<string, ItemState>;
+  liftPrep?: {requested:boolean;submitted:boolean;reviewed:boolean;cueRequested:boolean;cueSubmitted:boolean};
 };
 
 export type PrepItem = {
@@ -112,6 +113,9 @@ const DEFS: Def[] = [
   { key: "kit", label: "Gear on the federation's approved list", stage: "early", priority: "important", owner: "athlete", dueDays: 7, remind: [10], applies: PL },
   { key: "rules", label: "Rules and commands reviewed", stage: "early", priority: "optional", owner: "athlete", dueDays: 3, applies: PL },
 
+  { key: "prep_lifts", label: "Requested prep lifts submitted", stage: "early", priority: "important", owner: "athlete", dueDays: 7, applies: f=>PL(f)&&!!f.liftPrep?.requested, auto:f=>f.liftPrep?.submitted??null },
+  { key: "prep_lifts_review", label: "Prep lifts reviewed", stage: "early", priority: "important", owner: "coach", dueDays: 5, applies: f=>PL(f)&&!!f.liftPrep?.requested, auto:f=>f.liftPrep?.reviewed??null },
+  { key: "cue_profile", label: "Competition cue profile shared", stage: "early", priority: "important", owner: "athlete", dueDays: 5, applies: f=>PL(f)&&!!f.liftPrep?.cueRequested, auto:f=>f.liftPrep?.cueSubmitted??null },
   // travel and packing
   { key: "travel", label: "Travel booked", stage: "travel", priority: (f) => (f.travel === "fly" ? "critical" : "important"), owner: "athlete", dueDays: 21, remind: [28, 14], applies: (f) => f.travel === "fly" || f.travel === "drive" },
   { key: "accommodation", label: "Accommodation booked", stage: "travel", priority: "important", owner: "athlete", dueDays: 14, remind: [21, 10], applies: (f) => f.travel === "fly" || f.travel === "drive" },

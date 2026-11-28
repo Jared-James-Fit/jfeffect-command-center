@@ -11,7 +11,7 @@ export type LocalTopic =
 export type LocalIntent = { topics: LocalTopic[]; action: boolean; days: number | null; date?: string; exercise?: string; followup?: boolean };
 
 const TOPICS: Array<[LocalTopic, RegExp]> = [
-  ["forms", /\b(?:forms?|questionnaires?|submissions?|competition (?:setup|intake)|goals\s*(?:&|and)\s*(?:intake|setup)|intake answers?|what (?:did|has) (?:she|he|they) (?:answer|answered|fill out|filled out))\b/],
+  ["forms", /\b(?:cue profiles?|coaching cues?|lift requests?|final prep review|forms?|questionnaires?|submissions?|competition (?:setup|intake)|goals\s*(?:&|and)\s*(?:intake|setup)|intake answers?|what (?:did|has) (?:she|he|they) (?:answer|answered|fill out|filled out))\b/],
   ["setup", /\b(?:onboarding|intake|account setup|coaching setup|setup checklist|profile setup|what(?:'s| is) (?:still )?(?:missing|left|outstanding)|account access|sign.?in|agreements?|forms? (?:left|missing)|(?:setup|checklist) (?:status|complete|missing|outstanding)|outstanding setup)\b/],
   ["attempts", /\b(?:attempt(?:s| selection| plan| numbers| weights| rationale)?|openers?|game\s?plan|(?:a )?temp selection|atempt selection|attemt selection)\b/],
   ["competition", /\b(?:competition|meet(?:s| day| prep)?|weigh.?in|flight|weight class|federation|openipf|openpowerlifting|handling)\b/],
