@@ -8,7 +8,8 @@
  *      exercise at it (the same fill-down as a typed weight);
  *   4. a swipe left takes a set out: Delete one they added (or a warm-up),
  *      Skip one of the program's (it stays in their plan), with Undo;
- *   5. (a coaching client's) the camera sends a set or warm-up to the coach.
+ *   5. (a coaching client's) the camera sends a set or warm-up to the coach;
+ *      working-set clips are prepared for the workout's Crew film unless Coach only.
  * It opens by itself once per account, the first time someone logs their own
  * workout after it shipped (`workout_view_prefs.logging_tips_at`, see
  * use-workout-view.ts), and any time from the logger's "Log faster" button or
@@ -45,8 +46,8 @@ const STEPS: Step[] = [
   },
   {
     key: "video",
-    title: "Film a set for your coach",
-    body: "Tap the camera on any set or warm-up. It goes to your coach's chat while you keep logging.",
+    title: "Film a set for your coach & Crew",
+    body: "Tap the camera on any set or warm-up. Your coach gets the video while you log. Working-set clips are prepared and posted to Crew after your workout, unless you choose Coach only.",
   },
 ];
 
